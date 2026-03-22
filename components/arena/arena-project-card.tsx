@@ -13,6 +13,12 @@ const healthColors: Record<Project['health'], string> = {
   red: 'bg-red-500',
 }
 
+const healthTextColors: Record<Project['health'], string> = {
+  green: 'text-emerald-500',
+  yellow: 'text-amber-500',
+  red: 'text-red-500',
+}
+
 const healthLabels: Record<Project['health'], string> = {
   green: 'On track',
   yellow: 'Needs attention',
@@ -48,7 +54,7 @@ export function ArenaProjectCard({ project }: ArenaProjectCardProps) {
         )}
       </div>
       <div className="mt-3 pt-3 border-t border-[#1e1e2e] flex items-center justify-between">
-        <span className={`text-xs ${healthColors[project.health].replace('bg-', 'text-')}`}>
+        <span className={`text-xs ${healthTextColors[project.health]}`}>
           {healthLabels[project.health]}
         </span>
         <span className="text-xs text-[#94a3b8] group-hover:text-indigo-400 transition-colors">

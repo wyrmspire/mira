@@ -23,6 +23,7 @@ interface DrillState {
 
 const STEPS = ['intent', 'success_metric', 'scope', 'path', 'priority', 'decision'] as const
 type Step = (typeof STEPS)[number]
+const CHOICE_ADVANCE_DELAY_MS = 300
 
 export default function DrillPage() {
   return (
@@ -139,19 +140,19 @@ function DrillContent() {
               label="Small"
               description="A week or less. Ship fast."
               selected={state.scope === 'small'}
-              onClick={() => { setState({ ...state, scope: 'small' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, scope: 'small' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
             />
             <GiantChoiceButton
               label="Medium"
               description="Two to four weeks. Needs a plan."
               selected={state.scope === 'medium'}
-              onClick={() => { setState({ ...state, scope: 'medium' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, scope: 'medium' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
             />
             <GiantChoiceButton
               label="Large"
               description="Over a month. Be careful."
               selected={state.scope === 'large'}
-              onClick={() => { setState({ ...state, scope: 'large' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, scope: 'large' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
               variant="danger"
             />
           </StepChoice>
@@ -166,19 +167,19 @@ function DrillContent() {
               label="Solo"
               description="You build it yourself."
               selected={state.executionPath === 'solo'}
-              onClick={() => { setState({ ...state, executionPath: 'solo' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, executionPath: 'solo' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
             />
             <GiantChoiceButton
               label="Assisted"
               description="You lead, AI or others help."
               selected={state.executionPath === 'assisted'}
-              onClick={() => { setState({ ...state, executionPath: 'assisted' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, executionPath: 'assisted' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
             />
             <GiantChoiceButton
               label="Delegated"
               description="Handed off to someone else."
               selected={state.executionPath === 'delegated'}
-              onClick={() => { setState({ ...state, executionPath: 'delegated' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, executionPath: 'delegated' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
               variant="ice"
             />
           </StepChoice>
@@ -193,21 +194,21 @@ function DrillContent() {
               label="Now"
               description="This is urgent and important."
               selected={state.urgency === 'now'}
-              onClick={() => { setState({ ...state, urgency: 'now' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, urgency: 'now' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
               variant="success"
             />
             <GiantChoiceButton
               label="Later"
               description="Good idea, wrong timing."
               selected={state.urgency === 'later'}
-              onClick={() => { setState({ ...state, urgency: 'later' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, urgency: 'later' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
               variant="ice"
             />
             <GiantChoiceButton
               label="Never"
               description="Honest answer: this won't happen."
               selected={state.urgency === 'never'}
-              onClick={() => { setState({ ...state, urgency: 'never' }); setTimeout(advance, 300) }}
+              onClick={() => { setState({ ...state, urgency: 'never' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
               variant="danger"
             />
           </StepChoice>

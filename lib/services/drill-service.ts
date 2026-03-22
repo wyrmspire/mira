@@ -12,7 +12,7 @@ export function saveDrillSession(data: Omit<DrillSession, 'id'>): DrillSession {
   const session: DrillSession = {
     ...data,
     id: `drill-${generateId()}`,
-    completedAt: new Date().toISOString(),
+    completedAt: data.completedAt ?? new Date().toISOString(),
   }
   sessions.push(session)
   return session

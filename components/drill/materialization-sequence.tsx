@@ -14,6 +14,8 @@ interface MaterializationSequenceProps {
   onComplete?: () => void
 }
 
+const STEP_TRANSITION_DELAY_MS = 600
+
 export function MaterializationSequence({ onComplete }: MaterializationSequenceProps) {
   const [currentStep, setCurrentStep] = useState(0)
 
@@ -27,7 +29,7 @@ export function MaterializationSequence({ onComplete }: MaterializationSequenceP
         }
         return prev + 1
       })
-    }, 600)
+    }, STEP_TRANSITION_DELAY_MS)
     return () => clearInterval(interval)
   }, [onComplete])
 
