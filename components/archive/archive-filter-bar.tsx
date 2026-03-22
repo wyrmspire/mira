@@ -8,8 +8,8 @@ interface ArchiveFilterBarProps {
 export function ArchiveFilterBar({ filter, onChange }: ArchiveFilterBarProps) {
   const options = [
     { value: 'all' as const, label: 'All' },
-    { value: 'shipped' as const, label: 'Trophy Room' },
-    { value: 'killed' as const, label: 'Graveyard' },
+    { value: 'shipped' as const, label: 'Shipped' },
+    { value: 'killed' as const, label: 'Removed' },
   ]
 
   return (

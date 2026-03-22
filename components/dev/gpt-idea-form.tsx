@@ -17,14 +17,14 @@ export function GPTIdeaForm() {
 
     const formData = new FormData(e.currentTarget)
     const payload = {
+      source: 'gpt',
       event: 'idea_captured',
       data: {
         title: formData.get('title'),
-        summary: formData.get('summary'),
-        body: formData.get('body'),
-        metadata: {
-          gpt_thread_id: `thread_${Math.random().toString(36).slice(2)}`,
-        },
+        rawPrompt: formData.get('rawPrompt'),
+        gptSummary: formData.get('gptSummary'),
+        vibe: formData.get('vibe') || undefined,
+        audience: formData.get('audience') || undefined,
       },
       timestamp: new Date().toISOString(),
     }
@@ -84,30 +84,55 @@ export function GPTIdeaForm() {
       </div>
 
       <div>
-        <label htmlFor="summary" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+        <label htmlFor="gptSummary" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
           GPT Summary (One-liner)
         </label>
         <input
           required
-          id="summary"
-          name="summary"
+          id="gptSummary"
+          name="gptSummary"
           placeholder="A short, catchy summary of the idea."
           className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors"
         />
       </div>
 
       <div>
-        <label htmlFor="body" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
-          Full Context (Markdown)
+        <label htmlFor="rawPrompt" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+          Raw Prompt / Full Context
         </label>
         <textarea
           required
-          id="body"
-          name="body"
-          rows={10}
-          placeholder="Paste the full GPT context here..."
+          id="rawPrompt"
+          name="rawPrompt"
+          rows={6}
+          placeholder="Paste the full GPT conversation or raw prompt here..."
           className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors font-mono text-sm"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="vibe" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+            Vibe (optional)
+          </label>
+          <input
+            id="vibe"
+            name="vibe"
+            placeholder="e.g., productivity"
+            className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors text-sm"
+          />
+        </div>
+        <div>
+          <label htmlFor="audience" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+            Audience (optional)
+          </label>
+          <input
+            id="audience"
+            name="audience"
+            placeholder="e.g., indie hackers"
+            className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors text-sm"
+          />
+        </div>
       </div>
 
       <button

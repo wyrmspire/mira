@@ -84,7 +84,7 @@ function DrillSuccessContent() {
                href={ROUTES.arenaProject(createdProject.id)}
                className="inline-flex items-center justify-center w-full px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/25 group"
              >
-               Go to Arena
+               View project
                <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
              </Link>
           </div>

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { AppShell } from '@/components/shell/app-shell'
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { EmptyState } from '@/components/common/empty-state'

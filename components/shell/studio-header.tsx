@@ -9,9 +9,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/send': 'Incoming Idea',
   '/drill': 'Drill',
   '/arena': 'In Progress',
-  '/icebox': 'Icebox',
-  '/shipped': 'Trophy Room',
-  '/killed': 'Graveyard',
+  '/icebox': 'On Hold',
+  '/shipped': 'Shipped',
+  '/killed': 'Removed',
   '/inbox': 'Inbox',
 }
 

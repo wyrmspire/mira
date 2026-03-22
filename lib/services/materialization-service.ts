@@ -22,8 +22,8 @@ export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<
   // W4: Create inbox event to notify about project promotion
   await createInboxEvent({
     type: 'project_promoted',
-    title: 'Project Promoted',
-    body: `"${idea.title}" has been promoted to the Arena with scope: ${drill.scope}.`,
+    title: 'Project created',
+    body: `"${idea.title}" is now in progress (scope: ${drill.scope}).`,
     severity: 'info',
     projectId: project.id,
     actionUrl: `/arena/${project.id}`,

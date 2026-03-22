@@ -6,9 +6,9 @@ import { ROUTES } from '@/lib/routes'
 
 const COMMANDS = [
   { label: 'Go to In Progress', href: ROUTES.arena },
-  { label: 'Go to Icebox', href: ROUTES.icebox },
+  { label: 'Go to On Hold', href: ROUTES.icebox },
   { label: 'Go to Inbox', href: ROUTES.inbox },
-  { label: 'Go to Trophy Room', href: ROUTES.shipped },
+  { label: 'Go to Shipped', href: ROUTES.shipped },
   { label: 'New Idea', href: ROUTES.send },
 ]
 

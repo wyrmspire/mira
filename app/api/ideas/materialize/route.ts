@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getIdeaById } from '@/lib/services/ideas-service'
 import { getDrillSessionByIdeaId } from '@/lib/services/drill-service'
 import { materializeIdea } from '@/lib/services/materialization-service'
+import { getProjects } from '@/lib/services/projects-service'
 import type { ApiResponse } from '@/types/api'
 import type { Project } from '@/types/project'
 
@@ -16,6 +17,15 @@ export async function POST(request: NextRequest) {
     const idea = await getIdeaById(ideaId)
     if (!idea) {
       return NextResponse.json<ApiResponse<never>>({ error: 'Idea not found' }, { status: 404 })
+    }
+
+    // Idempotency guard: if idea is already materialized, return existing project
+    if (idea.status === 'arena') {
+      const allProjects = await getProjects()
+      const existing = allProjects.find((p) => p.ideaId === ideaId)
+      if (existing) {
+        return NextResponse.json<ApiResponse<Project>>({ data: existing }, { status: 200 })
+      }
     }
 
     const drill = getDrillSessionByIdeaId(ideaId)

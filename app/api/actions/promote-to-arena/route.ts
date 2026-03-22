@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   if (await isArenaAtCapacity()) {
     return NextResponse.json<ApiResponse<never>>(
-      { error: 'Arena is at capacity. Ship or remove a project first.' },
+      { error: 'At capacity. Ship or remove a project first.' },
       { status: 409 }
     )
   }
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
 
   await createInboxEvent({
     type: 'project_promoted',
-    title: `Idea promoted to Arena: ${idea.title}`,
-    body: 'Idea status changed to arena — ready to build.',
+    title: `Idea started: ${idea.title}`,
+    body: 'Idea is now in progress.',
     timestamp: new Date().toISOString(),
     severity: 'success',
     read: false,

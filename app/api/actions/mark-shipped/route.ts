@@ -19,14 +19,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<ApiResponse<never>>({ error: 'Project not found' }, { status: 404 })
   }
 
-  createInboxEvent({
+  await createInboxEvent({
     type: 'project_shipped',
     title: `Project shipped: ${project.name}`,
-    body: 'Project has been marked as shipped. Great work!',
-    timestamp: new Date().toISOString(),
+    body: 'Project has been marked as shipped.',
     severity: 'success',
     projectId: project.id,
-    read: false,
+    actionUrl: '/shipped',
   })
 
   return NextResponse.json<ApiResponse<Project>>({ data: project })

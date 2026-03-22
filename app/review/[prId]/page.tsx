@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import { getPRById } from '@/lib/services/prs-service'
 import { getProjectById } from '@/lib/services/projects-service'

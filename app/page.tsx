@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'

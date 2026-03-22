@@ -1,5 +1,6 @@
 export type InboxEventType =
   | 'idea_captured'
+  | 'idea_deferred'
   | 'drill_completed'
   | 'project_promoted'
   | 'task_created'

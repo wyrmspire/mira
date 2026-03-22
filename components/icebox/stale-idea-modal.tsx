@@ -26,26 +26,26 @@ export function StaleIdeaModal({
         <div className="text-2xl mb-3">❄</div>
         <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">{title}</h3>
         <p className="text-sm text-amber-400 mb-4">
-          This has been frozen for {daysInIcebox} days. Time to decide.
+          This has been on hold for {daysInIcebox} days. Time to decide.
         </p>
         <div className="flex flex-col gap-2">
           <button
             onClick={onPromote}
             className="px-4 py-2.5 text-sm font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
           >
-            Promote to Arena
+            Start building
           </button>
           <button
             onClick={onDiscard}
             className="px-4 py-2.5 text-sm text-red-400/80 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
           >
-            Remove from Icebox
+            Remove this idea
           </button>
           <button
             onClick={onClose}
             className="px-4 py-2 text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
           >
-            Keep frozen
+            Keep on hold
           </button>
         </div>
       </div>

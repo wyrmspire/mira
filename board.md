@@ -4,7 +4,7 @@
 
 | Sprint | Focus | Tests | Status |
 |--------|-------|-------|--------|
-| (none) | — | — | — |
+| Sprint 1 | Make It Real (Local-First) | TSC ✅ Build ✅ | ✅ Complete |
 
 ---
 
@@ -51,16 +51,16 @@ Lane 6 (Visual QA + Polish): [W1] → [W2] → [W3] → [W4] → [W5] → [W6]
 | 🔵 Lane 3 | Send & Home Cockpit | `lanes/lane-3-send-home.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
 | 🟡 Lane 4 | Review & Merge Experience | `lanes/lane-4-review.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
 | 🟣 Lane 5 | Copy, Inbox & Dev Harness | `lanes/lane-5-copy-inbox-harness.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
-| 🏁 Lane 6 | Visual QA & Final Polish | `lanes/lane-6-visual-qa.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ |
+| 🏁 Lane 6 | Visual QA & Final Polish | `lanes/lane-6-visual-qa.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
 
 ---
 
 ## Pre-Flight Checklist
 
-- [ ] `npm install` succeeds
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run build` passes
-- [ ] Dev server starts (`npm run dev`)
+- [x] `npm install` succeeds
+- [x] `npx tsc --noEmit` passes
+- [x] `npm run build` passes
+- [x] Dev server starts (`npm run dev`)
 
 ## Handoff Protocol
 
@@ -79,4 +79,4 @@ Lane 6 (Visual QA + Polish): [W1] → [W2] → [W3] → [W4] → [W5] → [W6]
 | Lane 3 | ✅ | ✅ | All Lane 3 files clean; `npx tsc --noEmit` passes (exit 0); `npm run build` passes (exit 0) |
 | Lane 4 | ✅ | ✅ | Preview-dominant review page, real iframe PreviewFrame, wired Merge + Approve buttons, FixRequestBox persists, plain-language pane labels, reviewState VM. |
 | Lane 5 | ✅ | ✅ | Fixed all Lane 5 files; global build now passing after Lane 1 fixes. |
-| Lane 6 | ⬜ | ⬜ | |
+| Lane 6 | ✅ | ✅ | Full E2E QA: dev harness → send → drill → materialize → review → inbox. All lore-heavy labels replaced. Idempotency guard added. force-dynamic on all mutable pages. |

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getInboxEvents } from '@/lib/services/inbox-service'
 import { buildInboxViewModel } from '@/lib/view-models/inbox-view-model'
 import { AppShell } from '@/components/shell/app-shell'

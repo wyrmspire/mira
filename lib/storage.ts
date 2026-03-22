@@ -7,6 +7,7 @@ import type { PullRequest } from '@/types/pr'
 import type { InboxEvent } from '@/types/inbox'
 import type { DrillSession } from '@/types/drill'
 import { STORAGE_DIR, STORAGE_PATH } from '@/lib/constants'
+import { getSeedData } from '@/lib/seed-data'
 
 export interface StudioStore {
   ideas: Idea[]
@@ -30,9 +31,6 @@ function ensureDir(): void {
 export function readStore(): StudioStore {
   ensureDir()
   if (!fs.existsSync(FULL_STORAGE_PATH)) {
-    // Lazy import to avoid circular dependency at module load time
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getSeedData } = require('./seed-data') as { getSeedData: () => StudioStore }
     const seed = getSeedData()
     writeStore(seed)
     return seed

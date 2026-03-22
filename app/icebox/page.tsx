@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { getIdeas } from '@/lib/services/ideas-service'
 import { getProjects } from '@/lib/services/projects-service'
 import { buildIceboxViewModel } from '@/lib/view-models/icebox-view-model'

@@ -3,6 +3,7 @@ import type { InboxEvent } from '@/types/inbox'
 export function formatEventType(type: InboxEvent['type']): string {
   const labels: Record<InboxEvent['type'], string> = {
     idea_captured: 'Idea captured',
+    idea_deferred: 'Idea put on hold',
     drill_completed: 'Drill completed',
     project_promoted: 'Project promoted',
     task_created: 'Task created',

@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import { getProjectById } from '@/lib/services/projects-service'
 import { getTasksForProject } from '@/lib/services/tasks-service'

@@ -17,13 +17,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<ApiResponse<never>>({ error: 'Idea not found' }, { status: 404 })
   }
 
-  createInboxEvent({
+  await createInboxEvent({
     type: 'project_killed',
     title: `Idea removed: ${idea.title}`,
-    body: 'Idea was removed from the captured list.',
-    timestamp: new Date().toISOString(),
+    body: 'Idea was removed.',
     severity: 'info',
-    read: false,
+    actionUrl: '/killed',
   })
 
   return NextResponse.json<ApiResponse<Idea>>({ data: idea })

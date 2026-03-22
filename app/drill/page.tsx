@@ -296,7 +296,7 @@ function DrillContent() {
           <div>
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{"What's the call?"}</h2>
-              <p className="text-[#94a3b8]">Arena, Icebox, or Remove. No limbo.</p>
+              <p className="text-[#94a3b8]">Commit, hold, or remove. Every idea gets a clear decision.</p>
             </div>
             {errorMsg && (
               <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
@@ -310,14 +310,14 @@ function DrillContent() {
                 </div>
               )}
               <GiantChoiceButton
-                label="Commit to Arena"
+                label="Start building"
                 description="This gets built. Now."
                 onClick={() => handleDecision('arena')}
                 variant="success"
                 disabled={saving}
               />
               <GiantChoiceButton
-                label="Send to Icebox"
+                label="Put on hold"
                 description="Not now. Maybe later."
                 onClick={() => handleDecision('icebox')}
                 variant="ice"

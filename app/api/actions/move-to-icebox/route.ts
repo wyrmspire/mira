@@ -18,12 +18,11 @@ export async function POST(request: NextRequest) {
   }
 
   await createInboxEvent({
-    type: 'idea_captured',
+    type: 'idea_deferred',
     title: `Idea put on hold: ${idea.title}`,
-    body: 'Idea was moved to the Icebox.',
-    timestamp: new Date().toISOString(),
+    body: 'Idea was moved to On Hold.',
     severity: 'info',
-    read: false,
+    actionUrl: '/icebox',
   })
 
   return NextResponse.json<ApiResponse<Idea>>({ data: idea })
