@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
 
+import { COPY } from '@/lib/studio-copy'
+
 export const metadata: Metadata = {
   title: 'Mira Studio',
-  description: 'Chat is where ideas are born. Studio is where ideas are forced into truth.',
+  description: COPY.app.tagline,
 }
 
 export default function RootLayout({

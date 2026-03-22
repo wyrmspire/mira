@@ -4,11 +4,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ROUTES } from '@/lib/routes'
 
+import { COPY } from '@/lib/studio-copy'
+
 const NAV_ITEMS = [
   { label: 'Progress', href: ROUTES.arena, icon: '▶' },
-  { label: 'Icebox', href: ROUTES.icebox, icon: '❄' },
-  { label: 'Inbox', href: ROUTES.inbox, icon: '◎' },
-  { label: 'Done', href: ROUTES.shipped, icon: '✦' },
+  { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
+  { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
+  { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
 ]
 
 export function MobileNav() {

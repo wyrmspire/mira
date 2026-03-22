@@ -5,22 +5,24 @@ import { AppShell } from '@/components/shell/app-shell'
 import { EmptyState } from '@/components/common/empty-state'
 import { IceboxCard } from '@/components/icebox/icebox-card'
 
-export default function IceboxPage() {
-  const ideas = getIdeas()
-  const projects = getProjects()
+import { COPY } from '@/lib/studio-copy'
+
+export default async function IceboxPage() {
+  const ideas = await getIdeas()
+  const projects = await getProjects()
   const items = buildIceboxViewModel(ideas, projects)
 
   return (
     <AppShell>
       <div className="max-w-2xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#e2e8f0]">Icebox</h1>
-          <p className="text-sm text-[#94a3b8] mt-1">Deferred ideas and projects</p>
+          <h1 className="text-2xl font-bold text-[#e2e8f0]">{COPY.icebox.heading}</h1>
+          <p className="text-sm text-[#94a3b8] mt-1">{COPY.icebox.subheading}</p>
         </div>
 
         {items.length === 0 ? (
           <EmptyState
-            title="Nothing frozen"
+            title={COPY.icebox.empty}
             description="Ideas are either in play or gone. Nothing deferred right now."
             icon="❄"
           />

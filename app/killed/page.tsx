@@ -3,21 +3,23 @@ import { AppShell } from '@/components/shell/app-shell'
 import { EmptyState } from '@/components/common/empty-state'
 import { GraveyardCard } from '@/components/archive/graveyard-card'
 
-export default function KilledPage() {
-  const projects = getProjectsByState('killed')
+import { COPY } from '@/lib/studio-copy'
+
+export default async function KilledPage() {
+  const projects = await getProjectsByState('killed')
 
   return (
     <AppShell>
       <div className="max-w-2xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#e2e8f0]">Graveyard</h1>
-          <p className="text-sm text-[#94a3b8] mt-1">Removed projects</p>
+          <h1 className="text-2xl font-bold text-[#e2e8f0]">{COPY.killed.heading}</h1>
+          <p className="text-sm text-[#94a3b8] mt-1">Projects removed from focus</p>
         </div>
 
         {projects.length === 0 ? (
           <EmptyState
-            title="Nothing removed"
-            description="Good ideas die too — that's how focus works."
+            title={COPY.killed.empty}
+            description="Ideas that were put to rest live here."
             icon="†"
           />
         ) : (

@@ -2,6 +2,7 @@
   "name": "mira-studio",
   "version": "0.1.0",
   "private": true,
+  "description": "Your ideas, shaped and shipped.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

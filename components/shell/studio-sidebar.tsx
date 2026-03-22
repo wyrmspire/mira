@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ROUTES } from '@/lib/routes'
 
+import { COPY } from '@/lib/studio-copy'
+
 const NAV_ITEMS = [
-  { label: 'Inbox', href: ROUTES.inbox, icon: '◎' },
-  { label: 'In Progress', href: ROUTES.arena, icon: '▶' },
-  { label: 'Icebox', href: ROUTES.icebox, icon: '❄' },
-  { label: 'Shipped', href: ROUTES.shipped, icon: '✦' },
-  { label: 'Killed', href: ROUTES.killed, icon: '†' },
+  { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
+  { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
+  { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
+  { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
+  { label: COPY.killed.heading, href: ROUTES.killed, icon: '†' },
 ]
 
 export function StudioSidebar() {

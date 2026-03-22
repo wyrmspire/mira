@@ -1,10 +1,10 @@
-# No Limbo
+# Clear Decisions
 
 The central rule of Mira: **no limbo**.
 
 An idea is either:
-- **In play** (Arena)
-- **Frozen** (Icebox)
-- **Gone** (removed)
+- **In progress**
+- **On hold**
+- **Removed**
 
-There is no "maybe" shelf. The Icebox is not a maybe shelf — it has a timer. After 14 days, stale items prompt a decision.
+There is no "maybe" shelf. The "On hold" list has a timer — after 14 days, stale items prompt a decision.

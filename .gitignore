@@ -17,6 +17,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# initrep artefacts
-gitrdiff.md
-dump*.md
+# Local Data
+.local-data/

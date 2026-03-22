@@ -6,6 +6,8 @@ import { DrillLayout } from '@/components/drill/drill-layout'
 import { DrillProgress } from '@/components/drill/drill-progress'
 import { GiantChoiceButton } from '@/components/drill/giant-choice-button'
 import { ROUTES } from '@/lib/routes'
+import { IdeaContextCard } from '@/components/drill/idea-context-card'
+import type { Idea } from '@/types/idea'
 
 type Scope = 'small' | 'medium' | 'large'
 type ExecutionPath = 'solo' | 'assisted' | 'delegated'
@@ -43,6 +45,10 @@ function DrillContent() {
   const ideaId = searchParams.get('ideaId') ?? ''
 
   const [currentStep, setCurrentStep] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [idea, setIdea] = useState<Idea | null>(null)
+  const [fetchingIdea, setFetchingIdea] = useState(true)
   const [state, setState] = useState<DrillState>({
     intent: '',
     successMetric: '',
@@ -51,6 +57,29 @@ function DrillContent() {
     urgency: null,
     decision: null,
   })
+
+  useEffect(() => {
+    if (!ideaId) {
+      setFetchingIdea(false)
+      return
+    }
+
+    async function fetchIdea() {
+      try {
+        const res = await fetch('/api/ideas')
+        if (!res.ok) throw new Error('Failed to fetch ideas')
+        const data = await res.json()
+        const found = (data.data as Idea[]).find((i) => i.id === ideaId)
+        if (found) setIdea(found)
+      } catch (err) {
+        console.error('Error fetching idea for drill context:', err)
+      } finally {
+        setFetchingIdea(false)
+      }
+    }
+
+    fetchIdea()
+  }, [ideaId])
 
   const step = STEPS[currentStep]
   const totalSteps = STEPS.length
@@ -69,11 +98,13 @@ function DrillContent() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Enter' && canAdvance()) advance()
+      if (e.key === 'Enter' && step !== 'decision' && canAdvance() && !saving) {
+        advance()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
+  }, [currentStep, state, saving, step])
 
   function canAdvance(): boolean {
     if (step === 'intent') return state.intent.trim().length > 0
@@ -85,15 +116,61 @@ function DrillContent() {
     return false
   }
 
-  function handleDecision(decision: Decision) {
+  async function handleDecision(decision: Decision) {
     const newState = { ...state, decision }
     setState(newState)
-    if (decision === 'arena') {
-      router.push(`${ROUTES.drillSuccess}?ideaId=${ideaId}`)
-    } else if (decision === 'killed') {
-      router.push(`${ROUTES.drillEnd}?ideaId=${ideaId}`)
-    } else {
-      router.push(`${ROUTES.icebox}`)
+    await saveDrillAndNavigate(decision)
+  }
+
+  async function saveDrillAndNavigate(decision: Decision) {
+    setSaving(true)
+    setErrorMsg(null)
+
+    try {
+      const payload = {
+        ideaId,
+        intent: state.intent,
+        successMetric: state.successMetric,
+        scope: state.scope,
+        executionPath: state.executionPath,
+        urgencyDecision: state.urgency,
+        finalDisposition: decision,
+      }
+
+      const res = await fetch('/api/drill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to save drill session')
+      }
+
+      // W5: Update status before navigation for icebox/killed
+      if (decision === 'killed' || decision === 'icebox') {
+        const endpoint = decision === 'killed' ? '/api/actions/kill-idea' : '/api/actions/move-to-icebox'
+        const statusRes = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ideaId }),
+        })
+        if (!statusRes.ok) {
+          throw new Error(`Failed to update idea status to ${decision}`)
+        }
+      }
+
+      if (decision === 'arena') {
+        router.push(`${ROUTES.drillSuccess}?ideaId=${ideaId}`)
+      } else if (decision === 'killed') {
+        router.push(`${ROUTES.drillEnd}?ideaId=${ideaId}`)
+      } else {
+        router.push(ROUTES.icebox)
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message)
+      setSaving(false)
     }
   }
 
@@ -108,6 +185,8 @@ function DrillContent() {
       }
     >
       <div className="space-y-8">
+        {idea && <IdeaContextCard idea={idea} />}
+        
         {step === 'intent' && (
           <StepText
             question="What is this really?"
@@ -219,28 +298,41 @@ function DrillContent() {
               <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{"What's the call?"}</h2>
               <p className="text-[#94a3b8]">Arena, Icebox, or Remove. No limbo.</p>
             </div>
-            <div className="space-y-3">
+            {errorMsg && (
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {errorMsg}
+              </div>
+            )}
+            <div className="space-y-3 relative">
+              {saving && (
+                <div className="absolute inset-0 bg-[#0a0a0f]/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl border border-indigo-500/20">
+                  <span className="text-indigo-300 font-medium animate-pulse">Saving session…</span>
+                </div>
+              )}
               <GiantChoiceButton
                 label="Commit to Arena"
                 description="This gets built. Now."
                 onClick={() => handleDecision('arena')}
                 variant="success"
+                disabled={saving}
               />
               <GiantChoiceButton
                 label="Send to Icebox"
                 description="Not now. Maybe later."
                 onClick={() => handleDecision('icebox')}
                 variant="ice"
+                disabled={saving}
               />
               <GiantChoiceButton
                 label="Remove this idea"
                 description="It's not worth pursuing. Let it go."
                 onClick={() => handleDecision('killed')}
                 variant="danger"
+                disabled={saving}
               />
             </div>
             <div className="mt-6">
-              <button onClick={back} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors">
+              <button onClick={back} disabled={saving} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors disabled:opacity-50">
                 ← Back
               </button>
             </div>

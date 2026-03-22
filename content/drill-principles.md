@@ -1,6 +1,6 @@
-# Drill Principles
+# Definition Flow
 
-The Drill Tunnel forces clarity before commitment.
+The definition flow shapes clarity before commitment.
 
 ## The 6 questions
 
@@ -9,7 +9,7 @@ The Drill Tunnel forces clarity before commitment.
 3. **Scope** — Small, Medium, or Large. Be honest.
 4. **Execution path** — Solo, Assisted, or Delegated.
 5. **Priority** — Now, Later, or Never.
-6. **Decision** — Arena, Icebox, or Remove. No limbo.
+6. **Decision** — Start building, Put on hold, or Remove. No limbo.
 
 ## Why this works
 

@@ -1,13 +1,14 @@
 import type { Task } from '@/types/task'
 import type { PullRequest } from '@/types/pr'
-import { MOCK_TASKS, MOCK_PRS } from '@/lib/mock-data'
+import { getTasksForProject } from '@/lib/services/tasks-service'
+import { getPRsForProject } from '@/lib/services/prs-service'
 
 export async function fetchProjectTasks(projectId: string): Promise<Task[]> {
-  return MOCK_TASKS.filter((t) => t.projectId === projectId)
+  return getTasksForProject(projectId)
 }
 
 export async function fetchProjectPRs(projectId: string): Promise<PullRequest[]> {
-  return MOCK_PRS.filter((pr) => pr.projectId === projectId)
+  return getPRsForProject(projectId)
 }
 
 export async function mergePR(prId: string): Promise<boolean> {

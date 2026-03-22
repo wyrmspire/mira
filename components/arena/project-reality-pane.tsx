@@ -29,7 +29,7 @@ export function ProjectRealityPane({ prs, project }: ProjectRealityPaneProps) {
   return (
     <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide">Reality</h2>
+        <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide">Check It</h2>
         {openPRs.length > 0 && (
           <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">
             {openPRs.length} open PR{openPRs.length !== 1 ? 's' : ''}

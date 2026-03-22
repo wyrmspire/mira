@@ -1,10 +1,10 @@
 import type { InboxEvent } from '@/types/inbox'
-import { MOCK_INBOX } from '@/lib/mock-data'
+import { getInboxEvents, markRead } from '@/lib/services/inbox-service'
 
 export async function fetchInboxEvents(): Promise<InboxEvent[]> {
-  return MOCK_INBOX
+  return getInboxEvents()
 }
 
 export async function markEventRead(eventId: string): Promise<void> {
-  console.log(`[notifications-adapter] markEventRead called for ${eventId}`)
+  return markRead(eventId)
 }

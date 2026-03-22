@@ -1,5 +1,6 @@
 import type { Project } from '@/types/project'
 import { formatDate } from '@/lib/date'
+import { COPY } from '@/lib/studio-copy'
 
 interface TrophyCardProps {
   project: Project
@@ -10,7 +11,7 @@ export function TrophyCard({ project }: TrophyCardProps) {
     <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <span className="text-emerald-400 text-xs font-medium">Shipped</span>
+          <span className="text-emerald-400 text-xs font-medium">{COPY.shipped.heading}</span>
           <h3 className="text-lg font-semibold text-[#e2e8f0] mt-0.5">{project.name}</h3>
         </div>
         <span className="text-xl">✦</span>

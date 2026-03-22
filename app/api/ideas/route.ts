@@ -6,9 +6,9 @@ import type { Idea } from '@/types/idea'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status')
+  const status = searchParams.get('status') as any
 
-  const ideas = getIdeas()
+  const ideas = await getIdeas()
   const filtered = status ? ideas.filter((i) => i.status === status) : ideas
 
   return NextResponse.json<ApiResponse<Idea[]>>({ data: filtered })
@@ -25,6 +25,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const idea = createIdea(body)
+  const idea = await createIdea(body)
   return NextResponse.json<ApiResponse<Idea>>({ data: idea }, { status: 201 })
 }

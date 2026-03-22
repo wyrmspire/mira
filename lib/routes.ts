@@ -11,4 +11,5 @@ export const ROUTES = {
   killed: '/killed',
   review: (prId: string) => `/review/${prId}`,
   inbox: '/inbox',
+  devGptSend: '/dev/gpt-send',
 } as const

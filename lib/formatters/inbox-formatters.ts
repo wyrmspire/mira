@@ -12,6 +12,7 @@ export function formatEventType(type: InboxEvent['type']): string {
     merge_completed: 'Merge completed',
     project_shipped: 'Project shipped',
     project_killed: 'Project killed',
+    changes_requested: 'Changes requested',
   }
   return labels[type] ?? type
 }

@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const state = searchParams.get('state') as ProjectState | null
 
-  const projects = state ? getProjectsByState(state) : getProjects()
+  const projects = state ? await getProjectsByState(state) : await getProjects()
 
   return NextResponse.json<ApiResponse<Project[]>>({ data: projects })
 }

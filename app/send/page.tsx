@@ -1,15 +1,14 @@
 import { AppShell } from '@/components/shell/app-shell'
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { EmptyState } from '@/components/common/empty-state'
-import { CapturedIdeaCard } from '@/components/send/captured-idea-card'
+import { SendPageClient } from '@/components/send/send-page-client'
 import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 
-export default function SendPage() {
-  const ideas = getIdeasByStatus('captured')
-  const idea = ideas[0]
+export default async function SendPage() {
+  const ideas = await getIdeasByStatus('captured')
 
-  if (!idea) {
+  if (ideas.length === 0) {
     return (
       <AppShell>
         <EmptyState
@@ -30,10 +29,12 @@ export default function SendPage() {
     <AppShell>
       <div className="max-w-xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-[#e2e8f0] mb-1">Idea captured.</h1>
-          <p className="text-[#94a3b8] text-sm">Define it or let it go.</p>
+          <h1 className="text-2xl font-bold text-[#e2e8f0] mb-1">
+            {ideas.length} idea{ideas.length !== 1 ? 's' : ''} waiting
+          </h1>
+          <p className="text-[#94a3b8] text-sm">Define each one or let it go.</p>
         </div>
-        <CapturedIdeaCard idea={idea} />
+        <SendPageClient ideas={ideas} />
       </div>
     </AppShell>
   )

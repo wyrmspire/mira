@@ -1,31 +1,33 @@
 import type { Project, ProjectState } from '@/types/project'
-import { MOCK_PROJECTS } from '@/lib/mock-data'
+import { getCollection, saveCollection } from '@/lib/storage'
 import { generateId } from '@/lib/utils'
 import { MAX_ARENA_PROJECTS } from '@/lib/constants'
 
-const projects: Project[] = [...MOCK_PROJECTS]
-
-export function getProjects(): Project[] {
-  return projects
+export async function getProjects(): Promise<Project[]> {
+  return getCollection('projects')
 }
 
-export function getProjectById(id: string): Project | undefined {
+export async function getProjectById(id: string): Promise<Project | undefined> {
+  const projects = await getProjects()
   return projects.find((p) => p.id === id)
 }
 
-export function getProjectsByState(state: ProjectState): Project[] {
+export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
+  const projects = await getProjects()
   return projects.filter((p) => p.state === state)
 }
 
-export function getArenaProjects(): Project[] {
+export async function getArenaProjects(): Promise<Project[]> {
   return getProjectsByState('arena')
 }
 
-export function isArenaAtCapacity(): boolean {
-  return getArenaProjects().length >= MAX_ARENA_PROJECTS
+export async function isArenaAtCapacity(): Promise<boolean> {
+  const arena = await getArenaProjects()
+  return arena.length >= MAX_ARENA_PROJECTS
 }
 
-export function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Project {
+export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+  const projects = await getProjects()
   const project: Project = {
     ...data,
     id: `proj-${generateId()}`,
@@ -33,14 +35,19 @@ export function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedA
     updatedAt: new Date().toISOString(),
   }
   projects.push(project)
+  saveCollection('projects', projects)
   return project
 }
 
-export function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Project | null {
+export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
+  const projects = await getProjects()
   const project = projects.find((p) => p.id === id)
   if (!project) return null
+  
   project.state = state
   project.updatedAt = new Date().toISOString()
   if (extra) Object.assign(project, extra)
+  
+  saveCollection('projects', projects)
   return project
 }

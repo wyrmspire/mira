@@ -15,3 +15,6 @@ export const DRILL_STEPS = [
 ] as const
 
 export type DrillStep = (typeof DRILL_STEPS)[number]
+
+export const STORAGE_DIR = '.local-data'
+export const STORAGE_PATH = `${STORAGE_DIR}/studio.json`

@@ -1,5 +1,6 @@
 export type PRStatus = 'open' | 'merged' | 'closed'
 export type BuildState = 'pending' | 'running' | 'success' | 'failed'
+export type ReviewStatus = 'pending' | 'approved' | 'changes_requested' | 'merged'
 
 export interface PullRequest {
   id: string
@@ -11,6 +12,7 @@ export interface PullRequest {
   buildState: BuildState
   mergeable: boolean
   requestedChanges?: string
+  reviewStatus?: ReviewStatus
   number: number
   author: string
   createdAt: string

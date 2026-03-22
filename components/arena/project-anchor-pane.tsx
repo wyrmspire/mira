@@ -7,7 +7,7 @@ interface ProjectAnchorPaneProps {
 export function ProjectAnchorPane({ project }: ProjectAnchorPaneProps) {
   return (
     <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
-      <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-4">Anchor</h2>
+      <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-4">What This Is</h2>
       <h3 className="text-lg font-bold text-[#e2e8f0] mb-2">{project.name}</h3>
       <p className="text-sm text-[#94a3b8] leading-relaxed mb-4">{project.summary}</p>
       <div className="space-y-3">

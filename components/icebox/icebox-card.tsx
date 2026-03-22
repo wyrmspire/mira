@@ -1,4 +1,5 @@
 import type { IceboxItem } from '@/lib/view-models/icebox-view-model'
+import { COPY } from '@/lib/studio-copy'
 
 interface IceboxCardProps {
   item: IceboxItem
@@ -29,7 +30,7 @@ export function IceboxCard({ item }: IceboxCardProps) {
       <p className="text-sm text-[#94a3b8] line-clamp-2">{item.summary}</p>
       {item.isStale && (
         <p className="text-xs text-amber-400 mt-2">
-          Stale — time to decide.
+          {COPY.icebox.staleWarning.replace('{days}', String(item.daysInIcebox))}
         </p>
       )}
     </div>

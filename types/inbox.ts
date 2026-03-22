@@ -9,6 +9,7 @@ export type InboxEventType =
   | 'merge_completed'
   | 'project_shipped'
   | 'project_killed'
+  | 'changes_requested'
 
 export interface InboxEvent {
   id: string

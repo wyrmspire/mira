@@ -6,8 +6,8 @@ import { ActiveLimitBanner } from '@/components/arena/active-limit-banner'
 import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 
-export default function ArenaPage() {
-  const projects = getArenaProjects()
+export default async function ArenaPage() {
+  const projects = await getArenaProjects()
 
   return (
     <AppShell>

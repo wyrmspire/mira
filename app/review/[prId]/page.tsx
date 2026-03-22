@@ -8,7 +8,8 @@ import { PRSummaryCard } from '@/components/review/pr-summary-card'
 import { DiffSummary } from '@/components/review/diff-summary'
 import { BuildStatusChip } from '@/components/review/build-status-chip'
 import { FixRequestBox } from '@/components/review/fix-request-box'
-import { PreviewToolbar } from '@/components/review/preview-toolbar'
+import { MergeActions } from '@/components/review/merge-actions'
+import { PreviewFrame } from '@/components/arena/preview-frame'
 import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 
@@ -17,57 +18,64 @@ interface Props {
 }
 
 export default async function ReviewPage({ params }: Props) {
-  const pr = await getPRById(params.prId)
-  if (!pr) notFound()
+  const prResult = await getPRById(params.prId)
+  if (!prResult) notFound()
+  // After notFound(), TypeScript doesn't know execution stops, so we re-assign
+  const pr = prResult as NonNullable<typeof prResult>
 
-  const project = getProjectById(pr.projectId)
+  const project = await getProjectById(pr.projectId)
   const vm = buildReviewViewModel(pr, project)
+
+  const breadcrumb = (
+    <div className="flex items-center gap-2 text-sm">
+      {project && (
+        <>
+          <Link
+            href={ROUTES.arenaProject(project.id)}
+            className="text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+          >
+            ← {project.name}
+          </Link>
+          <span className="text-[#1e1e2e]">/</span>
+        </>
+      )}
+      <h1 className="font-medium text-[#e2e8f0]">Review PR #{pr.number}</h1>
+    </div>
+  )
+
+  const preview = <PreviewFrame previewUrl={pr.previewUrl} />
+
+  const sidebar = (
+    <>
+      <PRSummaryCard pr={pr} />
+
+      <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+        <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+          Build Status
+        </h3>
+        <BuildStatusChip state={pr.buildState} />
+      </div>
+
+      <DiffSummary />
+
+      <MergeActions
+        prId={pr.id}
+        canMerge={vm.canMerge}
+        currentStatus={pr.status}
+        reviewState={vm.reviewState}
+      />
+
+      <FixRequestBox prId={pr.id} existingRequest={pr.requestedChanges} />
+    </>
+  )
 
   return (
     <AppShell>
-      <div className="max-w-5xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          {project && (
-            <>
-              <Link
-                href={ROUTES.arenaProject(project.id)}
-                className="text-[#94a3b8] hover:text-[#e2e8f0] text-sm transition-colors"
-              >
-                ← {project.name}
-              </Link>
-              <span className="text-[#1e1e2e]">/</span>
-            </>
-          )}
-          <h1 className="text-sm font-medium text-[#e2e8f0]">Review PR #{pr.number}</h1>
-        </div>
-
+      <div className="max-w-7xl mx-auto">
         <SplitReviewLayout
-          left={
-            <>
-              <PRSummaryCard pr={pr} />
-              <DiffSummary />
-              {pr.previewUrl && <PreviewToolbar url={pr.previewUrl} />}
-            </>
-          }
-          right={
-            <>
-              <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
-                <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
-                  Build Status
-                </h3>
-                <BuildStatusChip state={pr.buildState} />
-                <div className="mt-4">
-                  <button
-                    disabled={!vm.canMerge}
-                    className="w-full px-4 py-2.5 text-sm font-medium bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Merge PR
-                  </button>
-                </div>
-              </div>
-              <FixRequestBox />
-            </>
-          }
+          breadcrumb={breadcrumb}
+          preview={preview}
+          sidebar={sidebar}
         />
       </div>
     </AppShell>

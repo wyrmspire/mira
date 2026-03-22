@@ -1,7 +1,7 @@
-import { MOCK_PROJECTS } from '@/lib/mock-data'
+import { getProjectById } from '@/lib/services/projects-service'
 
 export async function fetchPreviewUrl(projectId: string): Promise<string | null> {
-  const project = MOCK_PROJECTS.find((p) => p.id === projectId)
+  const project = await getProjectById(projectId)
   return project?.activePreviewUrl ?? null
 }
 

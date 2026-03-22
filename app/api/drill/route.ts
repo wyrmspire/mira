@@ -5,16 +5,23 @@ import type { ApiResponse } from '@/types/api'
 import type { DrillSession } from '@/types/drill'
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const validation = validateDrillPayload(body)
+  try {
+    const body = await request.json()
+    const validation = validateDrillPayload(body)
 
-  if (!validation.valid) {
+    if (!validation.valid) {
+      return NextResponse.json<ApiResponse<never>>(
+        { error: validation.errors?.join(', ') || 'Invalid payload' },
+        { status: 400 }
+      )
+    }
+
+    const session = saveDrillSession(body)
+    return NextResponse.json<ApiResponse<DrillSession>>({ data: session }, { status: 201 })
+  } catch (err: any) {
     return NextResponse.json<ApiResponse<never>>(
-      { error: validation.error },
-      { status: 400 }
+      { error: err.message || 'Error processing request' },
+      { status: 500 }
     )
   }
-
-  const session = saveDrillSession(body)
-  return NextResponse.json<ApiResponse<DrillSession>>({ data: session }, { status: 201 })
 }

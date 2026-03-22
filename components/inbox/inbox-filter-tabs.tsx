@@ -1,4 +1,4 @@
-'use client'
+import { COPY } from '@/lib/studio-copy'
 
 type Filter = 'all' | 'unread' | 'errors'
 
@@ -14,9 +14,9 @@ interface InboxFilterTabsProps {
 
 export function InboxFilterTabs({ filter, onChange, counts }: InboxFilterTabsProps) {
   const tabs: { value: Filter; label: string }[] = [
-    { value: 'all', label: `All${counts ? ` (${counts.all})` : ''}` },
-    { value: 'unread', label: `Unread${counts ? ` (${counts.unread})` : ''}` },
-    { value: 'errors', label: `Errors${counts ? ` (${counts.errors})` : ''}` },
+    { value: 'all', label: `${COPY.inbox.filters.all}${counts ? ` (${counts.all})` : ''}` },
+    { value: 'unread', label: `${COPY.inbox.filters.unread}${counts ? ` (${counts.unread})` : ''}` },
+    { value: 'errors', label: `${COPY.inbox.filters.errors}${counts ? ` (${counts.errors})` : ''}` },
   ]
 
   return (

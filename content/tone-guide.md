@@ -11,7 +11,7 @@ Mira speaks with precision. No fluff.
 
 ## Examples
 
-Good: "Idea captured. Define it or let it go."
+Good: "Idea captured. Decide what to do next."
 Bad: "Great news! Your idea has been saved to the system!"
 
 Good: "No active projects. Define an idea to get started."

@@ -1,22 +1,23 @@
 import type { Idea, IdeaStatus } from '@/types/idea'
-import { MOCK_IDEAS } from '@/lib/mock-data'
+import { getCollection, saveCollection } from '@/lib/storage'
 import { generateId } from '@/lib/utils'
 
-const ideas: Idea[] = [...MOCK_IDEAS]
-
-export function getIdeas(): Idea[] {
-  return ideas
+export async function getIdeas(): Promise<Idea[]> {
+  return getCollection('ideas')
 }
 
-export function getIdeaById(id: string): Idea | undefined {
+export async function getIdeaById(id: string): Promise<Idea | undefined> {
+  const ideas = await getIdeas()
   return ideas.find((i) => i.id === id)
 }
 
-export function getIdeasByStatus(status: IdeaStatus): Idea[] {
+export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
+  const ideas = await getIdeas()
   return ideas.filter((i) => i.status === status)
 }
 
-export function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Idea {
+export async function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Promise<Idea> {
+  const ideas = await getIdeas()
   const idea: Idea = {
     ...data,
     id: `idea-${generateId()}`,
@@ -24,12 +25,15 @@ export function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Ide
     status: 'captured',
   }
   ideas.push(idea)
+  saveCollection('ideas', ideas)
   return idea
 }
 
-export function updateIdeaStatus(id: string, status: IdeaStatus): Idea | null {
+export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
+  const ideas = await getIdeas()
   const idea = ideas.find((i) => i.id === id)
   if (!idea) return null
   idea.status = status
+  saveCollection('ideas', ideas)
   return idea
 }

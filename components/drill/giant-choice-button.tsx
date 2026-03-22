@@ -4,6 +4,7 @@ interface GiantChoiceButtonProps {
   selected?: boolean
   onClick: () => void
   variant?: 'default' | 'danger' | 'success' | 'ice'
+  disabled?: boolean
 }
 
 const variantStyles: Record<string, string> = {
@@ -26,15 +27,17 @@ export function GiantChoiceButton({
   selected = false,
   onClick,
   variant = 'default',
+  disabled = false,
 }: GiantChoiceButtonProps) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`w-full text-left p-5 rounded-xl border transition-all duration-200 ${
         selected
           ? selectedStyles[variant]
           : `bg-[#12121a] text-[#e2e8f0] ${variantStyles[variant]}`
-      }`}
+      } ${disabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
     >
       <div className="flex items-center gap-3">
         <div

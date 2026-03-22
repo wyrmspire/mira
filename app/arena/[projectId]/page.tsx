@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default async function ArenaProjectPage({ params }: Props) {
-  const project = getProjectById(params.projectId)
+  const project = await getProjectById(params.projectId)
   if (!project) notFound()
 
   const tasks = await getTasksForProject(project.id)
