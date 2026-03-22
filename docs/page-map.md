@@ -6,7 +6,7 @@
 | `/send` | SendPage | Review captured idea |
 | `/drill` | DrillPage | 6-step definition flow |
 | `/drill/success` | DrillSuccessPage | Materialization sequence |
-| `/drill/kill-path` | DrillKillPage | Removal confirmation |
+| `/drill/end` | DrillEndPage | Idea ended — preserves to Graveyard |
 | `/arena` | ArenaPage | Active projects list |
 | `/arena/[id]` | ArenaProjectPage | Three-pane project view |
 | `/icebox` | IceboxPage | Deferred items |

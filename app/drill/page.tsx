@@ -91,7 +91,7 @@ function DrillContent() {
     if (decision === 'arena') {
       router.push(`${ROUTES.drillSuccess}?ideaId=${ideaId}`)
     } else if (decision === 'killed') {
-      router.push(`${ROUTES.drillKill}?ideaId=${ideaId}`)
+      router.push(`${ROUTES.drillEnd}?ideaId=${ideaId}`)
     } else {
       router.push(`${ROUTES.icebox}`)
     }

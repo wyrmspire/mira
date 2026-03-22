@@ -3,7 +3,7 @@ export const ROUTES = {
   send: '/send',
   drill: '/drill',
   drillSuccess: '/drill/success',
-  drillKill: '/drill/kill-path',
+  drillEnd: '/drill/end',
   arena: '/arena',
   arenaProject: (id: string) => `/arena/${id}`,
   icebox: '/icebox',
