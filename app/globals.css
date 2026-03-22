@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --studio-bg: #0a0a0f;
+  --studio-surface: #12121a;
+  --studio-border: #1e1e2e;
+  --studio-accent: #6366f1;
+  --studio-text: #e2e8f0;
+  --studio-text-muted: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+  background: var(--studio-bg);
+  color: var(--studio-text);
+}
+
+::selection {
+  background: #6366f133;
+  color: #e2e8f0;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--studio-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--studio-border);
+  border-radius: 2px;
+}
