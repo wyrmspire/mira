@@ -1,11 +1,14 @@
 import fs from 'fs'
 import path from 'path'
+import os from 'os'
 import type { Idea } from '@/types/idea'
 import type { Project } from '@/types/project'
 import type { Task } from '@/types/task'
 import type { PullRequest } from '@/types/pr'
 import type { InboxEvent } from '@/types/inbox'
 import type { DrillSession } from '@/types/drill'
+import type { AgentRun } from '@/types/agent-run'
+import type { ExternalRef } from '@/types/external-ref'
 import { STORAGE_DIR, STORAGE_PATH } from '@/lib/constants'
 import { getSeedData } from '@/lib/seed-data'
 
@@ -16,6 +19,8 @@ export interface StudioStore {
   tasks: Task[]
   prs: PullRequest[]
   inbox: InboxEvent[]
+  agentRuns: AgentRun[]       // Sprint 2: GitHub workflow / Copilot runs
+  externalRefs: ExternalRef[] // Sprint 2: GitHub ↔ local entity mapping
 }
 
 // Full paths for fs operations
@@ -28,6 +33,12 @@ function ensureDir(): void {
   }
 }
 
+/** Defaults for keys added in Sprint 2 — ensures old JSON files auto-migrate. */
+const STORE_DEFAULTS: Pick<StudioStore, 'agentRuns' | 'externalRefs'> = {
+  agentRuns: [],
+  externalRefs: [],
+}
+
 export function readStore(): StudioStore {
   ensureDir()
   if (!fs.existsSync(FULL_STORAGE_PATH)) {
@@ -36,12 +47,17 @@ export function readStore(): StudioStore {
     return seed
   }
   const raw = fs.readFileSync(FULL_STORAGE_PATH, 'utf-8')
-  return JSON.parse(raw) as StudioStore
+  const parsed = JSON.parse(raw) as Partial<StudioStore>
+  // Auto-migrate: merge any missing keys introduced in later sprints
+  return { ...STORE_DEFAULTS, ...parsed } as StudioStore
 }
 
 export function writeStore(data: StudioStore): void {
   ensureDir()
-  fs.writeFileSync(FULL_STORAGE_PATH, JSON.stringify(data, null, 2), 'utf-8')
+  // Atomic write: write to a temp file then rename to avoid partial reads
+  const tmpPath = path.join(os.tmpdir(), `studio-${Date.now()}.tmp.json`)
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+  fs.renameSync(tmpPath, FULL_STORAGE_PATH)
 }
 
 export function getCollection<K extends keyof StudioStore>(name: K): StudioStore[K] {
@@ -54,3 +70,4 @@ export function saveCollection<K extends keyof StudioStore>(name: K, data: Studi
   store[name] = data
   writeStore(store)
 }
+

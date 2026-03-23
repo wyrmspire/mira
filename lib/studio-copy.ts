@@ -96,4 +96,18 @@ export const COPY = {
     cancel: 'Cancel',
     save: 'Save',
   },
+  github: {
+    heading: 'GitHub Integration',
+    connectionSuccess: 'Connected to GitHub',
+    connectionFailed: 'Could not connect to GitHub',
+    issueCreated: 'GitHub issue created',
+    workflowDispatched: 'Build started',
+    workflowFailed: 'Build failed',
+    prOpened: 'Pull request opened',
+    prMerged: 'Pull request merged',
+    copilotAssigned: 'Copilot is working on this',
+    syncFailed: 'GitHub sync failed',
+    mergeBlocked: 'Cannot merge — checks did not pass',
+    notLinked: 'Not linked to GitHub',
+  },
 }

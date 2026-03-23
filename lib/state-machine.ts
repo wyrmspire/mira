@@ -1,5 +1,6 @@
 import type { IdeaStatus } from '@/types/idea'
 import type { ProjectState } from '@/types/project'
+import type { ReviewStatus } from '@/types/pr'
 
 type IdeaTransition = {
   from: IdeaStatus
@@ -28,6 +29,12 @@ export const PROJECT_TRANSITIONS: ProjectTransition[] = [
   { from: 'arena', to: 'icebox', action: 'move_to_icebox' },
   { from: 'icebox', to: 'arena', action: 'promote_to_arena' },
   { from: 'icebox', to: 'killed', action: 'kill_from_icebox' },
+  // GitHub-backed transitions (project stays in arena but gains linkage / execution state)
+  { from: 'arena', to: 'arena', action: 'github_issue_created' },
+  { from: 'arena', to: 'arena', action: 'workflow_dispatched' },
+  { from: 'arena', to: 'arena', action: 'pr_received' },
+  // Merge = ship (optional auto-ship path when real GitHub PR merges)
+  { from: 'arena', to: 'shipped', action: 'github_pr_merged' },
 ]
 
 export function canTransitionIdea(from: IdeaStatus, action: string): boolean {
@@ -47,6 +54,43 @@ export function getNextIdeaState(from: IdeaStatus, action: string): IdeaStatus |
 
 export function getNextProjectState(from: ProjectState, action: string): ProjectState | null {
   const transition = PROJECT_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+
+// ---------------------------------------------------------------------------
+// PR State Machine
+// ---------------------------------------------------------------------------
+
+export type PRTransitionAction =
+  | 'open'
+  | 'request_changes'
+  | 'approve'
+  | 'merge'
+  | 'close'
+  | 'reopen'
+
+export const PR_TRANSITIONS: Array<{
+  from: ReviewStatus
+  to: ReviewStatus
+  action: PRTransitionAction
+}> = [
+  { from: 'pending', to: 'changes_requested', action: 'request_changes' },
+  { from: 'pending', to: 'approved', action: 'approve' },
+  { from: 'pending', to: 'merged', action: 'merge' },
+  { from: 'changes_requested', to: 'approved', action: 'approve' },
+  { from: 'changes_requested', to: 'merged', action: 'merge' },
+  { from: 'approved', to: 'merged', action: 'merge' },
+  { from: 'approved', to: 'changes_requested', action: 'request_changes' },
+]
+
+export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction): boolean {
+  return PR_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null {
+  const transition = PR_TRANSITIONS.find(
     (t) => t.from === from && t.action === action
   )
   return transition ? transition.to : null

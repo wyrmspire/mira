@@ -13,6 +13,7 @@ export async function createInboxEvent(data: {
   severity: InboxEvent['severity']
   projectId?: string
   actionUrl?: string
+  githubUrl?: string
   timestamp?: string
   read?: boolean
 }): Promise<InboxEvent> {
@@ -54,3 +55,27 @@ export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Pr
       return inbox
   }
 }
+
+/**
+ * Convenience wrapper for creating GitHub lifecycle inbox events.
+ * Sets `severity: 'info'` by default and passes through an optional `githubUrl`
+ * so consumers don't need to repeat the boilerplate.
+ */
+export async function createGitHubInboxEvent(params: {
+  type: InboxEventType
+  projectId: string
+  title: string
+  body: string
+  githubUrl?: string
+  severity?: InboxEvent['severity']
+}): Promise<InboxEvent> {
+  return createInboxEvent({
+    type: params.type,
+    projectId: params.projectId,
+    title: params.title,
+    body: params.body,
+    severity: params.severity ?? 'info',
+    githubUrl: params.githubUrl,
+  })
+}
+

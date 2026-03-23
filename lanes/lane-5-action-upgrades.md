@@ -19,7 +19,8 @@
 
 ---
 
-## W1 ⬜ — Expand inbox event types
+## W1 ✅ — Expand inbox event types
+- **Done**: Added 10 GitHub lifecycle event types to `InboxEventType` and `githubUrl?: string` to `InboxEvent` interface.
 
 Modify `types/inbox.ts`:
 
@@ -65,7 +66,8 @@ export interface InboxEvent {
 
 ---
 
-## W2 ⬜ — Add GitHub routes + copy
+## W2 ✅ — Add GitHub routes + copy
+- **Done**: Added 7 GitHub API/page routes to `lib/routes.ts` and a `github` copy section to `lib/studio-copy.ts`.
 
 Modify `lib/routes.ts`:
 
@@ -107,7 +109,8 @@ github: {
 
 ---
 
-## W3 ⬜ — Expand state machine for GitHub-backed transitions
+## W3 ✅ — Expand state machine for GitHub-backed transitions
+- **Done**: Added 4 GitHub-backed project transitions and a full PR state machine (`PR_TRANSITIONS`, `canTransitionPR`, `getNextPRState`) to `lib/state-machine.ts`.
 
 Modify `lib/state-machine.ts`:
 
@@ -149,7 +152,8 @@ Import `ReviewStatus` from `types/pr.ts`.
 
 ---
 
-## W4 ⬜ — Upgrade merge-pr action to check GitHub
+## W4 ✅ — Upgrade merge-pr action to check GitHub
+- **Done**: Merge route now checks `githubPrNumber`, validates mergeability via adapter (dynamic import for graceful degradation), and falls back to local-only merge if adapter unavailable.
 
 Modify `app/api/actions/merge-pr/route.ts`:
 
@@ -183,7 +187,8 @@ Import adapter methods. If adapter isn't available yet (other lane), add TODO wi
 
 ---
 
-## W5 ⬜ — Upgrade promote-to-arena to optionally create GitHub issue
+## W5 ✅ — Upgrade promote-to-arena to optionally create GitHub issue
+- **Done**: Route now accepts `createGithubIssue` flag; dynamically imports factory service and fires `github_connection_error` inbox event on failure — promotion never blocks.
 
 Modify `app/api/actions/promote-to-arena/route.ts`:
 
@@ -202,7 +207,8 @@ The `createGithubIssue` flag is optional — default false. This keeps the exist
 
 ---
 
-## W6 ⬜ — Upgrade mark-shipped to optionally close GitHub issue
+## W6 ✅ — Upgrade mark-shipped to optionally close GitHub issue
+- **Done**: mark-shipped now comments + closes linked GitHub issue via adapter (dynamic import, best-effort); local ship always succeeds.
 
 Modify `app/api/actions/mark-shipped/route.ts`:
 
@@ -220,7 +226,8 @@ After marking a project shipped:
 
 ---
 
-## W7 ⬜ — Inbox service enhancements + TSC
+## W7 ✅ — Inbox service enhancements + TSC
+- **Done**: Added `createGitHubInboxEvent` helper to `inbox-service.ts`; expanded `createInboxEvent` params to accept `githubUrl`; all Lane 5 files pass `npx tsc --noEmit` (only pre-existing Lane 4 errors remain).
 
 Modify `lib/services/inbox-service.ts`:
 

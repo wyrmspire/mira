@@ -46,11 +46,11 @@ Lane 6 (Integration):    [W1] → [W2] → [W3] → [W4] → [W5]               
 
 | Lane | Focus | File | Status |
 |------|-------|------|--------|
-| 🔴 Lane 1 | Foundation: Config, Types, Storage | `lanes/lane-1-foundation.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| 🟢 Lane 2 | GitHub Client Adapter | `lanes/lane-2-github-client.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ |
-| 🔵 Lane 3 | Webhook Pipeline | `lanes/lane-3-webhooks.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ |
-| 🟡 Lane 4 | GitHub Routes + Factory Services | `lanes/lane-4-github-routes.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| 🟣 Lane 5 | Action Upgrades + State Machine | `lanes/lane-5-action-upgrades.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
+| 🔴 Lane 1 | Foundation: Config, Types, Storage | `lanes/lane-1-foundation.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| 🟢 Lane 2 | GitHub Client Adapter | `lanes/lane-2-github-client.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+| 🔵 Lane 3 | Webhook Pipeline | `lanes/lane-3-webhooks.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+| 🟡 Lane 4 | GitHub Routes + Factory Services | `lanes/lane-4-github-routes.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| 🟣 Lane 5 | Action Upgrades + State Machine | `lanes/lane-5-action-upgrades.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
 | 🏁 Lane 6 | Integration + Proof of Loop | `lanes/lane-6-integration.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
 
 ---
@@ -75,9 +75,9 @@ Lane 6 (Integration):    [W1] → [W2] → [W3] → [W4] → [W5]               
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Lane 1 | ⬜ | ⬜ | |
-| Lane 2 | ⬜ | ⬜ | |
-| Lane 3 | ⬜ | ⬜ | |
-| Lane 4 | ⬜ | ⬜ | |
-| Lane 5 | ⬜ | ⬜ | |
+| Lane 1 | ✅ | ⬜ | All 7 work items complete |
+| Lane 2 | ✅ | ⬜ | 6 errors in other lanes' files; Lane 2 files clean |
+| Lane 3 | ✅ | ⬜ | Webhook real ingestion; Lane 3 files clean (errors elsewhere). |
+| Lane 4 | ✅ | ⬜ | |
+| Lane 5 | ✅ | ⬜ | Only Lane 4 errors (github-sync-service.ts) remain; Lane 5 files clean |
 | Lane 6 | ⬜ | ⬜ | |

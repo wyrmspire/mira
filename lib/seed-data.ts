@@ -191,5 +191,8 @@ export function getSeedData(): StudioStore {
         read: false,
       },
     ],
+    // Sprint 2: new collections (start empty)
+    agentRuns: [],
+    externalRefs: [],
   }
 }

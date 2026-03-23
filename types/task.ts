@@ -8,4 +8,9 @@ export interface Task {
   priority: 'low' | 'medium' | 'high'
   linkedPrId?: string
   createdAt: string
+  // GitHub integration fields (all optional)
+  githubIssueNumber?: number
+  githubIssueUrl?: string
+  source?: 'local' | 'github'
+  parentTaskId?: string
 }

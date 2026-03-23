@@ -13,7 +13,19 @@ export interface PullRequest {
   mergeable: boolean
   requestedChanges?: string
   reviewStatus?: ReviewStatus
+  /** Local sequential PR number (used before GitHub sync) */
   number: number
   author: string
   createdAt: string
+  // GitHub integration fields (all optional)
+  /** Real GitHub PR number — distinct from the local `number` field */
+  githubPrNumber?: number
+  githubPrUrl?: string
+  githubBranchRef?: string
+  headSha?: string
+  baseBranch?: string
+  checksUrl?: string
+  lastGithubSyncAt?: string
+  workflowRunId?: string
+  source?: 'local' | 'github'
 }

@@ -18,3 +18,30 @@ export type DrillStep = (typeof DRILL_STEPS)[number]
 
 export const STORAGE_DIR = '.local-data'
 export const STORAGE_PATH = `${STORAGE_DIR}/studio.json`
+
+// --- Sprint 2: GitHub execution modes ---
+
+export const EXECUTION_MODES = [
+  'copilot_issue_assignment',
+  'custom_workflow_dispatch',
+  'local_agent',
+] as const
+
+export type ExecutionMode = (typeof EXECUTION_MODES)[number]
+
+export const AGENT_RUN_KINDS = [
+  'prototype',
+  'fix_request',
+  'spec',
+  'research_summary',
+  'copilot_issue_assignment',
+] as const
+
+export const AGENT_RUN_STATUSES = [
+  'queued',
+  'running',
+  'succeeded',
+  'failed',
+  'blocked',
+] as const
+

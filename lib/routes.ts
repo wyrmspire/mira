@@ -12,4 +12,12 @@ export const ROUTES = {
   review: (prId: string) => `/review/${prId}`,
   inbox: '/inbox',
   devGptSend: '/dev/gpt-send',
+  // GitHub pages + API routes
+  githubPlayground: '/dev/github-playground',
+  githubTestConnection: '/api/github/test-connection',
+  githubCreateIssue: '/api/github/create-issue',
+  githubDispatchWorkflow: '/api/github/dispatch-workflow',
+  githubCreatePR: '/api/github/create-pr',
+  githubSyncPR: '/api/github/sync-pr',
+  githubMergePR: '/api/github/merge-pr',
 } as const

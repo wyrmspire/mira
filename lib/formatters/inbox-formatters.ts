@@ -14,6 +14,19 @@ export function formatEventType(type: InboxEvent['type']): string {
     project_shipped: 'Project shipped',
     project_killed: 'Project killed',
     changes_requested: 'Changes requested',
+    // GitHub lifecycle events
+    github_issue_created: 'GitHub issue created',
+    github_workflow_dispatched: 'Workflow dispatched',
+    github_workflow_failed: 'Workflow failed',
+    github_workflow_succeeded: 'Workflow succeeded',
+    github_pr_opened: 'GitHub PR opened',
+    github_pr_merged: 'GitHub PR merged',
+    github_review_requested: 'Review requested',
+    github_changes_requested: 'Changes requested on GitHub',
+    github_copilot_assigned: 'Copilot assigned',
+    github_sync_failed: 'GitHub sync failed',
+    github_connection_error: 'GitHub connection error',
   }
   return labels[type] ?? type
 }
+

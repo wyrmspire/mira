@@ -23,7 +23,8 @@
 
 ---
 
-## W1 ⬜ — GitHub config module
+## W1 ✅ — GitHub config module
+- **Done**: Created `lib/config/github.ts` exporting `getGitHubConfig()`, `isGitHubConfigured()`, `getRepoFullName()`, and `getRepoCoordinates()` with required-var validation that throws with a clear message in dev.
 
 Create `lib/config/github.ts`:
 
@@ -38,7 +39,8 @@ Create `lib/config/github.ts`:
 
 ---
 
-## W2 ⬜ — Expand Project type with GitHub fields
+## W2 ✅ — Expand Project type with GitHub fields
+- **Done**: Added 11 optional GitHub fields to `Project` (`githubIssueNumber`, `executionMode`, `copilotPrNumber`, etc.) — all optional so existing local-only projects remain valid.
 
 Modify `types/project.ts`:
 
@@ -64,7 +66,8 @@ All new fields are optional — existing local-only projects remain valid.
 
 ---
 
-## W3 ⬜ — Expand PullRequest type with GitHub metadata
+## W3 ✅ — Expand PullRequest type with GitHub metadata
+- **Done**: Added 9 optional GitHub fields to `PullRequest` (`githubPrNumber`, `headSha`, `source`, etc.) preserving the existing local `number` field.
 
 Modify `types/pr.ts`:
 
@@ -87,7 +90,8 @@ Keep existing `number` field (local PR number). `githubPrNumber` is the real Git
 
 ---
 
-## W4 ⬜ — Expand Task type + create GitHub event types
+## W4 ✅ — Expand Task type + create GitHub event types
+- **Done**: Added 4 optional GitHub fields to `Task`; created `types/github.ts` with `GitHubEventType`, `GitHubIssuePayload`, `GitHubPRPayload`, and `GitHubWorkflowRunPayload`.
 
 Modify `types/task.ts`:
 
@@ -126,7 +130,8 @@ export interface GitHubWorkflowRunPayload {
 
 ---
 
-## W5 ⬜ — Create AgentRun and ExternalRef types
+## W5 ✅ — Create AgentRun and ExternalRef types
+- **Done**: Created `types/agent-run.ts` with `AgentRun` interface (referencing `ExecutionMode` from constants) and `types/external-ref.ts` with `ExternalRef` interface for bidirectional provider mapping.
 
 Create `types/agent-run.ts`:
 ```ts
@@ -170,7 +175,8 @@ export interface ExternalRef {
 
 ---
 
-## W6 ⬜ — Extend storage and constants
+## W6 ✅ — Extend storage and constants
+- **Done**: Added `EXECUTION_MODES`, `ExecutionMode`, `AGENT_RUN_KINDS`, `AGENT_RUN_STATUSES` to `constants.ts`; extended `StudioStore` with `agentRuns`/`externalRefs`; upgraded `writeStore()` to atomic temp-file+rename; added auto-migration defaults in `readStore()`; updated `seed-data.ts` with empty arrays.
 
 Modify `lib/constants.ts`:
 
@@ -214,7 +220,8 @@ fs.renameSync(tmpPath, FULL_STORAGE_PATH)
 
 ---
 
-## W7 ⬜ — Create agent-runs and external-refs services + update .env.example
+## W7 ✅ — Create agent-runs and external-refs services + update .env.example
+- **Done**: Created `lib/services/agent-runs-service.ts` (createAgentRun, getAgentRun, getAgentRunsForProject, updateAgentRun, getLatestRunForProject, setAgentRunStatus) and `lib/services/external-refs-service.ts` (createExternalRef, getExternalRefsForEntity, findByExternalId, findByExternalNumber, deleteExternalRef); updated `.env.example` with all Sprint 2 GitHub env vars and comments.
 
 Create `lib/services/agent-runs-service.ts`:
 - `createAgentRun(data)` — generates ID, sets startedAt, persists

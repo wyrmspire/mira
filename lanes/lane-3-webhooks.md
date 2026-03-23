@@ -20,7 +20,8 @@
 
 ---
 
-## W1 ⬜ — Signature verification utility
+## W1 ✅ — Signature verification utility
+- **Done**: Implemented `verifyGitHubSignature` with timing-safe comparison.
 
 Create `lib/github/signature.ts`:
 
@@ -47,7 +48,8 @@ Notes:
 
 ---
 
-## W2 ⬜ — Expand webhook types
+## W2 ✅ — Expand webhook types
+- **Done**: Added `GitHubWebhookContext` and `GitHubWebhookHandler` types.
 
 Modify `types/webhook.ts`:
 
@@ -79,7 +81,8 @@ export type GitHubWebhookHandler = (ctx: GitHubWebhookContext) => Promise<void>
 
 ---
 
-## W3 ⬜ — Rewrite GitHub webhook route
+## W3 ✅ — Rewrite GitHub webhook route
+- **Done**: Implemented `route.ts` with signature verification and dispatch to `routeGitHubEvent`.
 
 Rewrite `app/api/webhook/github/route.ts`:
 
@@ -130,7 +133,8 @@ export async function POST(request: NextRequest) {
 
 ---
 
-## W4 ⬜ — Issue and PR event handlers
+## W4 ✅ — Issue and PR event handlers
+- **Done**: Implemented `handle-issue-event.ts` and `handle-pr-event.ts` with local store sync.
 
 Create `lib/github/handlers/handle-issue-event.ts`:
 
@@ -160,7 +164,8 @@ For `closed` with `merged=true`:
 
 ---
 
-## W5 ⬜ — Workflow run and PR review handlers
+## W5 ✅ — Workflow run and PR review handlers
+- **Done**: Implemented `handle-workflow-run-event.ts` and `handle-pr-review-event.ts`.
 
 Create `lib/github/handlers/handle-workflow-run-event.ts`:
 
@@ -184,7 +189,8 @@ For `submitted`:
 
 ---
 
-## W6 ⬜ — Event router + validator upgrades
+## W6 ✅ — Event router + validator upgrades
+- **Done**: Completed `lib/github/handlers/index.ts` and added `validateGitHubWebhookHeaders` to the validator. All systems wired for real GitHub ingestion.
 
 Create `lib/github/handlers/index.ts`:
 

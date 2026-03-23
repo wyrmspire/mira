@@ -14,7 +14,7 @@
 
 ---
 
-## W1 ⬜ — Install Octokit + create client module
+## W1 ✅ — Install Octokit + create client module
 
 Run `npm install @octokit/rest` to add the GitHub API library.
 
@@ -39,10 +39,11 @@ export function getGitHubClient(): Octokit {
 ```
 
 **Done when**: `lib/github/client.ts` exports `getGitHubClient()`, `@octokit/rest` is in `package.json` dependencies.
+- **Done**: Created `lib/github/client.ts` with singleton `getGitHubClient()` factory; `@octokit/rest` added to `package.json`.
 
 ---
 
-## W2 ⬜ — Rewrite adapter: repo + connectivity methods
+## W2 ✅ — Rewrite adapter: repo + connectivity methods
 
 Rewrite `lib/adapters/github-adapter.ts` from scratch. Remove old stub code entirely.
 
@@ -63,10 +64,11 @@ Each method should:
 - Handle errors with clear messages
 
 **Done when**: The three methods work against a real GitHub repo. Old stub code is gone.
+- **Done**: Adapter rewritten from scratch; `validateToken`, `getRepoInfo`, `getDefaultBranchName` added; old stubs removed.
 
 ---
 
-## W3 ⬜ — Issue methods
+## W3 ✅ — Issue methods
 
 Add to `lib/adapters/github-adapter.ts`:
 
@@ -94,10 +96,11 @@ export async function closeIssue(issueNumber: number): Promise<void>
 Use `GITHUB_OWNER` and `GITHUB_REPO` from env for all calls. Each method calls `getGitHubClient()` internally.
 
 **Done when**: All five issue methods compile and follow the async adapter pattern.
+- **Done**: All five issue methods (`createIssue`, `updateIssue`, `addIssueComment`, `addIssueLabels`, `closeIssue`) implemented.
 
 ---
 
-## W4 ⬜ — Pull request methods
+## W4 ✅ — Pull request methods
 
 Add to `lib/adapters/github-adapter.ts`:
 
@@ -139,10 +142,11 @@ export async function mergePullRequest(prNumber: number, params?: {
 For `createBranch`: use Octokit's `git.createRef()` endpoint. Get the SHA from the default branch head if `fromSha` is not provided.
 
 **Done when**: All PR methods compile and use real Octokit REST calls.
+- **Done**: All six PR/branch methods (`createBranch`, `createPullRequest`, `getPullRequest`, `listPullRequestsForRepo`, `addPullRequestComment`, `mergePullRequest`) implemented.
 
 ---
 
-## W5 ⬜ — Workflow / Actions methods
+## W5 ✅ — Workflow / Actions methods
 
 Add to `lib/adapters/github-adapter.ts`:
 
@@ -176,10 +180,11 @@ export async function listWorkflowRuns(params?: {
 ```
 
 **Done when**: Workflow methods compile. `dispatchWorkflow` uses Octokit's `actions.createWorkflowDispatch`.
+- **Done**: `dispatchWorkflow`, `getWorkflowRun`, and `listWorkflowRuns` implemented using real Octokit Actions API.
 
 ---
 
-## W6 ⬜ — Copilot handoff + auth boundary prep
+## W6 ✅ — Copilot handoff + auth boundary prep
 
 Add to `lib/adapters/github-adapter.ts`:
 
@@ -208,3 +213,4 @@ Also add a comment block at the top of the adapter documenting the auth boundary
 ```
 
 **Done when**: Copilot assignment method compiles. Auth boundary is documented. All adapter methods compile cleanly with `npx tsc --noEmit`.
+- **Done**: `assignCopilotToIssue` implemented with graceful try/catch fallback; auth boundary JSDoc block added at file top.
