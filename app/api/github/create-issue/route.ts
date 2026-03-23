@@ -2,10 +2,13 @@
  * app/api/github/create-issue/route.ts
  *
  * POST /api/github/create-issue
- * Body (option A): { projectId: string }
+ * Body (option A): { projectId: string, assignAgent?: boolean }
  *   → Creates issue from project via factory service
- * Body (option B): { title: string, body: string, labels?: string[] }
+ * Body (option B): { title: string, body: string, labels?: string[], assignAgent?: boolean }
  *   → Creates standalone issue directly
+ *
+ * When assignAgent is true, copilot-swe-agent is assigned at creation time
+ * (atomic handoff — coding agent starts working immediately).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -35,9 +38,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const assignAgent = body.assignAgent === true
+
     // Option A: project-based
     if (body.projectId && typeof body.projectId === 'string') {
-      const result = await createIssueFromProject(body.projectId)
+      const result = await createIssueFromProject(body.projectId, { assignAgent })
       return NextResponse.json<ApiResponse<typeof result>>({ data: result })
     }
 
@@ -52,6 +57,7 @@ export async function POST(request: NextRequest) {
         title: body.title,
         body: typeof body.body === 'string' ? body.body : '',
         labels: Array.isArray(body.labels) ? (body.labels as string[]) : undefined,
+        assignees: assignAgent ? ['copilot-swe-agent'] : undefined,
       })
 
       return NextResponse.json<ApiResponse<{ issueNumber: number; issueUrl: string }>>({

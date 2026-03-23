@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       }
 
       await createInboxEvent({
-        type: 'github_issue_created',
+        type: 'github_issue_closed',
         title: `GitHub issue #${githubIssueNumber} closed`,
         body: `Issue #${githubIssueNumber} was closed because the project was shipped.`,
         severity: 'info',

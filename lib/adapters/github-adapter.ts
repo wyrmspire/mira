@@ -10,27 +10,22 @@
  */
 
 import { getGitHubClient } from '@/lib/github/client'
+import { getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
 
 // ---------------------------------------------------------------------------
-// Env helpers
-// Read GITHUB_OWNER / GITHUB_REPO / GITHUB_DEFAULT_BRANCH directly from env.
-// TODO: swap these for lib/config/github.ts once Lane 1 is merged.
+// Env helpers — delegate to lib/config/github.ts (Lane 1)
 // ---------------------------------------------------------------------------
 
 function getOwner(): string {
-  const v = process.env.GITHUB_OWNER
-  if (!v) throw new Error('GITHUB_OWNER is not set')
-  return v
+  return getRepoCoordinates().owner
 }
 
 function getRepo(): string {
-  const v = process.env.GITHUB_REPO
-  if (!v) throw new Error('GITHUB_REPO is not set')
-  return v
+  return getRepoCoordinates().repo
 }
 
 function getDefaultBranch(): string {
-  return process.env.GITHUB_DEFAULT_BRANCH ?? 'main'
+  return getGitHubConfig().defaultBranch
 }
 
 // ---------------------------------------------------------------------------

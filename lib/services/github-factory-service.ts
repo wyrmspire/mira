@@ -62,7 +62,8 @@ function saveExternalRef(ref: Omit<ExternalRef, 'id' | 'createdAt'>): void {
  * Updates the project with the issue number + URL.
  */
 export async function createIssueFromProject(
-  projectId: string
+  projectId: string,
+  options?: { assignAgent?: boolean }
 ): Promise<{ issueNumber: number; issueUrl: string }> {
   requireGitHub()
 
@@ -80,12 +81,17 @@ export async function createIssueFromProject(
 
   const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
 
+  // Atomic handoff: assign copilot-swe-agent at creation time (not after)
+  // so the coding agent picks up the issue immediately.
+  const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
+
   const { data: issue } = await octokit.issues.create({
     owner,
     repo,
     title: project.name,
     body,
     labels,
+    assignees,
   })
 
   // Update project with GitHub issue linkage

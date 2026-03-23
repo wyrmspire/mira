@@ -62,8 +62,14 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (err) {
-      console.warn('[merge-pr] GitHub merge attempt failed, falling back to local-only:', err)
-      // Fall through — we still update the local record so the UI stays consistent.
+      // GitHub is source of truth for GitHub-linked PRs.
+      // Do NOT fall back to local success — that creates desync.
+      console.error('[merge-pr] GitHub merge failed:', err)
+      const message = err instanceof Error ? err.message : 'GitHub merge failed'
+      return NextResponse.json<ApiResponse<never>>(
+        { error: `GitHub merge failed: ${message}` },
+        { status: 502 }
+      )
     }
   }
 

@@ -1,4 +1,0 @@
-lib/services/github-sync-service.ts(154,21): error TS2304: Cannot find name 'updateAgentRun'.
-lib/services/github-sync-service.ts(163,18): error TS2304: Cannot find name 'createAgentRun'.
-lib/services/github-sync-service.ts(170,3): error TS2304: Cannot find name 'updateAgentRun'.
-lib/services/github-sync-service.ts(177,10): error TS2304: Cannot find name 'getAgentRun'.

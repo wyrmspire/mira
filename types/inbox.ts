@@ -13,6 +13,7 @@ export type InboxEventType =
   | 'changes_requested'
   // GitHub lifecycle events
   | 'github_issue_created'
+  | 'github_issue_closed'
   | 'github_workflow_dispatched'
   | 'github_workflow_failed'
   | 'github_workflow_succeeded'

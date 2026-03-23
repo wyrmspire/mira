@@ -16,6 +16,7 @@ export function formatEventType(type: InboxEvent['type']): string {
     changes_requested: 'Changes requested',
     // GitHub lifecycle events
     github_issue_created: 'GitHub issue created',
+    github_issue_closed: 'GitHub issue closed',
     github_workflow_dispatched: 'Workflow dispatched',
     github_workflow_failed: 'Workflow failed',
     github_workflow_succeeded: 'Workflow succeeded',
