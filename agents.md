@@ -48,6 +48,7 @@ app/
   killed/page.tsx       ← Removed projects
   dev/
     gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
+    github-playground/  ← Dev harness: test GitHub operations
   api/
     ideas/route.ts       ← GET/POST ideas
     ideas/materialize/   ← POST convert idea→project
@@ -62,9 +63,16 @@ app/
       mark-shipped/      ← POST
       kill-idea/         ← POST
       merge-pr/          ← POST
+    github/              ← GitHub-specific API routes
+      test-connection/   ← GET  validate token + repo access
+      create-issue/      ← POST create GitHub issue from project
+      create-pr/         ← POST create GitHub PR
+      dispatch-workflow/ ← POST trigger GitHub Actions workflow
+      sync-pr/           ← GET/POST sync PRs from GitHub
+      merge-pr/          ← POST merge real GitHub PR
     webhook/
       gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
-      github/route.ts    ← GitHub webhook receiver (stub)
+      github/route.ts    ← GitHub webhook receiver (real: signature-verified)
       vercel/route.ts    ← Vercel webhook receiver (stub)
 
 components/
@@ -80,29 +88,38 @@ components/
   dev/                   ← GPT send form, dev tools
 
 lib/
-  storage.ts             ← JSON file read/write for .local-data/
+  config/
+    github.ts            ← GitHub env config, validation, repo coordinates
+  github/
+    client.ts            ← Octokit wrapper, getGitHubClient()
+    signature.ts         ← HMAC-SHA256 webhook signature verification
+    handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
+  storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
   seed-data.ts           ← Initial seed records (replaces mock-data.ts)
-  state-machine.ts       ← Idea + project transition rules
+  state-machine.ts       ← Idea + project + PR transition rules
   studio-copy.ts         ← Central copy strings for all pages
-  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, enums, storage paths
+  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, storage paths
   routes.ts              ← Centralized route paths
   guards.ts              ← Type guards
   utils.ts               ← generateId helper
   date.ts                ← Date formatting
-  services/              ← ideas, projects, tasks, prs, inbox, drill, materialization services
-  adapters/              ← github, gpt, vercel, notifications adapters (stubs)
+  services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
+                           agent-runs, external-refs, github-factory, github-sync services
+  adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
   validators/            ← idea, project, drill, webhook validators
   view-models/           ← arena, icebox, inbox, review VMs
 
 types/
-  idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts
+  idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
+  agent-run.ts, external-ref.ts, github.ts
 
 content/                 ← Product copy markdown
 docs/                    ← Architecture docs
 
 .local-data/             ← JSON file persistence (gitignored, auto-seeded)
 lanes/                   ← Sprint lane files (sprint-specific)
+wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
 ```
 
 ---
@@ -133,8 +150,14 @@ Client components call `/api/*` endpoints. Server components can import services
 ### Review merge button must call the API
 The "Merge PR" button in `review/[prId]/page.tsx` must POST to `/api/actions/merge-pr`. Never mutate state directly from the component.
 
-### Webhook routes are stubs (except GPT)
-The GitHub and Vercel webhook handlers are stubs. The GPT webhook route is lightly functional — the local dev harness POSTs to it to simulate idea capture.
+### GitHub adapter is a real Octokit client
+`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter — never call Octokit directly from routes. The adapter reads credentials from `lib/config/github.ts` via `lib/github/client.ts`. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
+
+### GitHub webhook route verifies signatures
+The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`. Events are dispatched to per-event handlers in `lib/github/handlers/`.
+
+### Vercel webhook is still a stub
+Only the Vercel webhook handler remains a stub. GPT and GitHub webhooks are functional.
 
 ### `studio-copy.ts` is the single source for UI labels
 All user-facing text should come from this file. Some pages still hardcode strings — fix them when you see them.
@@ -184,9 +207,24 @@ Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should pr
 - ✅ `const ideas = storage.read('ideas')` (reads from `.local-data/studio.json`)
 - Why: Local data must survive server restarts. JSON file storage is the local persistence layer.
 
+### SOP-7: GitHub operations go through the adapter, never raw Octokit
+**Learned from**: Sprint 2 architecture
+
+- ❌ `const octokit = new Octokit(...)` in a route handler
+- ✅ `import { createIssue } from '@/lib/adapters/github-adapter'`
+- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes. Business logic stays untouched.
+
+### SOP-8: Don't call the adapter from routes — use services
+**Learned from**: Sprint 2 architecture
+
+- ❌ `import { createIssue } from '@/lib/adapters/github-adapter'` in a route
+- ✅ `import { createIssueFromProject } from '@/lib/services/github-factory-service'`
+- Why: Services orchestrate: load local data → call adapter → update local records → create inbox events. Routes stay thin.
+
 ---
 
 ## Lessons Learned (Changelog)
 
 - **2026-03-22**: Initial agents.md created during Sprint 1 boardinit.
 - **2026-03-22**: Added SOP-5 (API-first mutations) and SOP-6 (JSON file storage).
+- **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
