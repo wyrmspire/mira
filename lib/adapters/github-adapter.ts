@@ -336,12 +336,207 @@ export async function listWorkflowRuns(params?: {
 // W6 — Copilot handoff
 // ---------------------------------------------------------------------------
 
+/** Stable GraphQL node ID for the Copilot bot account. */
+const COPILOT_BOT_NODE_ID = 'BOT_kgDOC9w8XQ'
+
 /**
- * Assign Copilot coding agent to an issue.
- * This triggers Copilot to start working on the issue.
+ * Get the GraphQL node ID for an issue (needed for GraphQL mutations).
+ */
+export async function getIssueNodeId(issueNumber: number): Promise<string> {
+  const octokit = getGitHubClient()
+  const { data } = await octokit.issues.get({
+    owner: getOwner(),
+    repo: getRepo(),
+    issue_number: issueNumber,
+  })
+  return data.node_id
+}
+
+/**
+ * Assign Copilot coding agent via GraphQL with model selection.
  *
- * Wraps in try/catch — if Copilot is not available on this repo/plan,
- * we log a warning and return gracefully rather than crashing.
+ * Uses the `addAssigneesToAssignable` mutation with `agentAssignment`
+ * and the required `GraphQL-Features: issues_copilot_assignment_api_support` header.
+ *
+ * This is the most reliable way to trigger Copilot with a specific model.
+ */
+export async function assignCopilotViaGraphQL(params: {
+  issueNodeId: string
+  model?: string
+  customInstructions?: string
+  baseRef?: string
+}): Promise<{ success: boolean; assignees: string[] }> {
+  const config = getGitHubConfig()
+  const token = config.token
+
+  const query = `
+    mutation($input: AddAssigneesToAssignableInput!) {
+      addAssigneesToAssignable(input: $input) {
+        assignable {
+          ... on Issue {
+            number
+            assignees(first: 5) { nodes { login } }
+          }
+        }
+      }
+    }
+  `
+
+  const agentAssignment: Record<string, string> = {}
+  if (params.model) agentAssignment.customAgent = params.model
+  if (params.customInstructions) agentAssignment.customInstructions = params.customInstructions
+  if (params.baseRef) agentAssignment.baseRef = params.baseRef
+
+  const variables = {
+    input: {
+      assignableId: params.issueNodeId,
+      assigneeIds: [COPILOT_BOT_NODE_ID],
+      ...(Object.keys(agentAssignment).length > 0 ? { agentAssignment } : {}),
+    },
+  }
+
+  const res = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'GraphQL-Features': 'issues_copilot_assignment_api_support',
+    },
+    body: JSON.stringify({ query, variables }),
+  })
+
+  const data = await res.json()
+
+  if (data.errors) {
+    const msg = data.errors[0]?.message ?? 'Unknown GraphQL error'
+    throw new Error(`[github-adapter] assignCopilotViaGraphQL failed: ${msg}`)
+  }
+
+  const nodes = data.data.addAssigneesToAssignable.assignable.assignees.nodes
+  return {
+    success: true,
+    assignees: nodes.map((n: { login: string }) => n.login),
+  }
+}
+
+/**
+ * Trigger Copilot via PR-comment — the most reliable method.
+ *
+ * Flow:
+ * 1. Create branch `copilot/issue-<num>` from default branch
+ * 2. Create a draft PR linking to the issue
+ * 3. Post `@copilot` comment with task instructions
+ *
+ * This bypasses PAT/OAuth issues because @copilot mentions on PRs
+ * route through a different, more reliable product surface.
+ */
+export async function triggerCopilotViaPR(params: {
+  issueNumber: number
+  issueTitle: string
+  issueBody: string
+  model?: string
+  customInstructions?: string
+}): Promise<{ prNumber: number; prUrl: string; branchName: string }> {
+  const octokit = getGitHubClient()
+  const owner = getOwner()
+  const repo = getRepo()
+  const branchName = `copilot/issue-${params.issueNumber}`
+
+  // Step 1: Create branch from default branch
+  const { data: mainRef } = await octokit.git.getRef({
+    owner, repo, ref: `heads/${getDefaultBranch()}`,
+  })
+  const baseSha = mainRef.object.sha
+
+  await octokit.git.createRef({
+    owner, repo,
+    ref: `refs/heads/${branchName}`,
+    sha: baseSha,
+  })
+
+  // Step 2: Add a placeholder commit (PR needs at least 1 diff commit)
+  const taskContent = [
+    `# Copilot Task: Issue #${params.issueNumber}`,
+    '',
+    `**${params.issueTitle}**`,
+    '',
+    params.issueBody,
+    '',
+    `> This file was created to bootstrap the Copilot coding agent.`,
+  ].join('\n')
+
+  const { data: blob } = await octokit.git.createBlob({
+    owner, repo,
+    content: Buffer.from(taskContent).toString('base64'),
+    encoding: 'base64',
+  })
+
+  const { data: baseCommit } = await octokit.git.getCommit({
+    owner, repo, commit_sha: baseSha,
+  })
+
+  const { data: tree } = await octokit.git.createTree({
+    owner, repo,
+    base_tree: baseCommit.tree.sha,
+    tree: [{ path: '.copilot-task.md', mode: '100644', type: 'blob', sha: blob.sha }],
+  })
+
+  const { data: newCommit } = await octokit.git.createCommit({
+    owner, repo,
+    message: `chore: bootstrap Copilot task for issue #${params.issueNumber}`,
+    tree: tree.sha,
+    parents: [baseSha],
+  })
+
+  await octokit.git.updateRef({
+    owner, repo,
+    ref: `heads/${branchName}`,
+    sha: newCommit.sha,
+  })
+
+  // Step 3: Create draft PR
+  const prBody = [
+    `Resolves #${params.issueNumber}`,
+    '',
+    '---',
+    `**Issue:** ${params.issueTitle}`,
+    '',
+    params.issueBody,
+  ].join('\n')
+
+  const pr = await createPullRequest({
+    title: `[Copilot] ${params.issueTitle}`,
+    body: prBody,
+    head: branchName,
+    draft: true,
+  })
+
+  // Step 3: Trigger Copilot via @copilot mention
+  const commentParts = [
+    `@copilot Please work on this task.`,
+    '',
+    `## Instructions`,
+    params.issueBody,
+  ]
+  if (params.model) {
+    commentParts.push('', `**Preferred model:** ${params.model}`)
+  }
+  if (params.customInstructions) {
+    commentParts.push('', `## Additional Instructions`, params.customInstructions)
+  }
+
+  await addPullRequestComment(pr.number, commentParts.join('\n'))
+
+  return {
+    prNumber: pr.number,
+    prUrl: pr.url,
+    branchName,
+  }
+}
+
+/**
+ * @deprecated Use assignCopilotViaGraphQL() or triggerCopilotViaPR() instead.
+ * REST API silently drops Copilot assignees. Kept for backwards compatibility.
  */
 export async function assignCopilotToIssue(issueNumber: number): Promise<void> {
   try {

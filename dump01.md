@@ -1,3 +1,2532 @@
+    )
+  }
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  await octokit.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: workflowId,
+    ref: config.defaultBranch,
+    inputs: {
+      project_id: projectId,
+      project_name: project.name,
+      ...inputs,
+    },
+  })
+
+  // Update project workflow status
+  const store = readStore()
+  const projects = store.projects
+  const idx = projects.findIndex((p) => p.id === projectId)
+  if (idx !== -1) {
+    projects[idx] = {
+      ...projects[idx],
+      githubWorkflowStatus: 'queued',
+      updatedAt: new Date().toISOString(),
+    }
+  }
+  writeStore(store)
+
+  await createInboxEvent({
+    type: 'task_created',
+    title: `Workflow dispatched: ${workflowId}`,
+    body: `Prototype workflow triggered for "${project.name}".`,
+    severity: 'info',
+    projectId,
+  })
+}
+
+/**
+ * Create a GitHub PR from a project (manual path, not Copilot).
+ */
+export async function createPRFromProject(
+  projectId: string,
+  params: {
+    title: string
+    body: string
+    head: string
+    draft?: boolean
+  }
+): Promise<{ prNumber: number; prUrl: string }> {
+  requireGitHub()
+
+  const project = await getProjectById(projectId)
+  if (!project) throw new Error(`Project not found: ${projectId}`)
+
+  const config = getGitHubConfig()
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const { data: ghPR } = await octokit.pulls.create({
+    owner,
+    repo,
+    title: params.title,
+    body: params.body,
+    head: params.head,
+    base: config.defaultBranch,
+    draft: params.draft ?? false,
+  })
+
+  // Create local PR record
+  const localPR = await createPR({
+    projectId,
+    title: params.title,
+    branch: params.head,
+    status: 'open',
+    previewUrl: undefined,
+    buildState: 'pending',
+    mergeable: false,
+    reviewStatus: 'pending',
+    author: 'local',
+  })
+
+  // Update local PR with GitHub data
+  await updatePR(localPR.id, {
+    number: ghPR.number,
+  })
+
+  // Track external ref
+  saveExternalRef({
+    entityType: 'pr',
+    entityId: localPR.id,
+    provider: 'github',
+    externalId: String(ghPR.number),
+    externalNumber: ghPR.number,
+    url: ghPR.html_url,
+  })
+
+  // Update project with Copilot PR linkage
+  const store = readStore()
+  const projects = store.projects
+  const idx = projects.findIndex((p) => p.id === projectId)
+  if (idx !== -1) {
+    projects[idx] = {
+      ...projects[idx],
+      copilotPrNumber: ghPR.number,
+      copilotPrUrl: ghPR.html_url,
+      updatedAt: new Date().toISOString(),
+    }
+  }
+  writeStore(store)
+
+  await createInboxEvent({
+    type: 'pr_opened',
+    title: `PR #${ghPR.number} opened`,
+    body: `"${params.title}" is open and awaiting review.`,
+    severity: 'info',
+    projectId,
+    actionUrl: ghPR.html_url,
+  })
+
+  return { prNumber: ghPR.number, prUrl: ghPR.html_url }
+}
+
+/**
+ * Request revisions on a PR by adding a review comment.
+ */
+export async function requestRevision(
+  projectId: string,
+  prNumber: number,
+  message: string
+): Promise<void> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  await octokit.issues.createComment({
+    owner,
+    repo,
+    issue_number: prNumber,
+    body: `> ✏️ **Revision request from Mira Studio**\n\n${message}`,
+  })
+
+  // Find local PR and update requestedChanges
+  const prs = await getPRsForProject(projectId)
+  const pr = prs.find((p) => p.number === prNumber)
+  if (pr) {
+    await updatePR(pr.id, {
+      reviewStatus: 'changes_requested',
+      requestedChanges: message,
+    })
+  }
+
+  await createInboxEvent({
+    type: 'changes_requested',
+    title: `Changes requested on PR #${prNumber}`,
+    body: message.length > 120 ? `${message.slice(0, 120)}…` : message,
+    severity: 'warning',
+    projectId,
+  })
+}
+
+/**
+ * Merge a GitHub PR for a project (direct GitHub operation).
+ * For the /api/actions/merge-pr product action, see that route.
+ */
+export async function mergeProjectPR(
+  projectId: string,
+  prNumber: number,
+  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
+): Promise<{ sha: string; merged: boolean }> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  // Validate the PR exists and is mergeable
+  const { data: ghPR } = await octokit.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  })
+
+  if (ghPR.state !== 'open') {
+    throw new Error(`PR #${prNumber} is not open (state: ${ghPR.state})`)
+  }
+  if (ghPR.mergeable === false) {
+    throw new Error(`PR #${prNumber} is not mergeable (conflicts may exist)`)
+  }
+
+  const { data: mergeResult } = await octokit.pulls.merge({
+    owner,
+    repo,
+    pull_number: prNumber,
+    merge_method: mergeMethod,
+  })
+
+  // Update local PR record
+  const prs = await getPRsForProject(projectId)
+  const pr = prs.find((p) => p.number === prNumber)
+  if (pr) {
+    await updatePR(pr.id, { status: 'merged', reviewStatus: 'merged' })
+  }
+
+  await createInboxEvent({
+    type: 'merge_completed',
+    title: `PR #${prNumber} merged`,
+    body: `"${ghPR.title}" was merged successfully.`,
+    severity: 'success',
+    projectId,
+  })
+
+  return {
+    sha: mergeResult.sha ?? '',
+    merged: mergeResult.merged ?? false,
+  }
+}
+
+```
+
+### lib/services/github-sync-service.ts
+
+```typescript
+/**
+ * lib/services/github-sync-service.ts
+ *
+ * Pull GitHub state INTO local records.
+ * Used by webhook handlers (Lane 3) and manual sync routes (Lane 4).
+ *
+ * Each sync method:
+ *   1. Calls Octokit to get current GitHub state
+ *   2. Finds or creates local record
+ *   3. Updates fields from GitHub data
+ *   4. Logs what changed
+ *
+ * NOTE: agentRuns are stored via direct store access.
+ * TODO(Lane 1): refactor to agent-runs-service once that module ships.
+ */
+
+import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
+import { getGitHubClient } from '@/lib/github/client'
+import { getProjects } from '@/lib/services/projects-service'
+import { getPRsForProject, updatePR, createPR } from '@/lib/services/prs-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+import { readStore, writeStore } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+
+import type { PullRequest } from '@/types/pr'
+import type { AgentRun } from '@/types/agent-run'
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function requireGitHub(): void {
+  if (!isGitHubConfigured()) {
+    throw new Error(
+      '[github-sync] GitHub is not configured. Check .env.local and wiring.md.'
+    )
+  }
+}
+
+/** Find local PR by PR number across all projects. */
+async function findLocalPRByNumber(
+  prNumber: number
+): Promise<{ pr: PullRequest; projectId: string } | null> {
+  const projects = await getProjects()
+  for (const project of projects) {
+    const prs = await getPRsForProject(project.id)
+    const match = prs.find((pr) => pr.number === prNumber)
+    if (match) return { pr: match, projectId: project.id }
+  }
+  return null
+}
+
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Sync a single GitHub PR into the local PR record.
+ * Creates a new local record if none exists.
+ */
+export async function syncPullRequest(prNumber: number): Promise<PullRequest | null> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let ghPR: Awaited<ReturnType<typeof octokit.pulls.get>>['data']
+  try {
+    const res = await octokit.pulls.get({ owner, repo, pull_number: prNumber })
+    ghPR = res.data
+  } catch (err) {
+    console.error(`[github-sync] Pull request #${prNumber} not found on GitHub:`, err)
+    return null
+  }
+
+  const existing = await findLocalPRByNumber(prNumber)
+
+  // Derive status
+  const status: PullRequest['status'] =
+    ghPR.merged ? 'merged' : ghPR.state === 'closed' ? 'closed' : 'open'
+  const reviewStatus: PullRequest['reviewStatus'] =
+    ghPR.merged ? 'merged' : 'pending'
+
+  if (existing) {
+    const updated = await updatePR(existing.pr.id, {
+      title: ghPR.title,
+      branch: ghPR.head.ref,
+      status,
+      mergeable: ghPR.mergeable ?? false,
+      reviewStatus,
+    })
+    console.log(`[github-sync] Updated local PR ${existing.pr.id} from GitHub #${prNumber}`)
+    return updated
+  }
+
+  // Try to find a project by copilotPrNumber
+  const projects = await getProjects()
+  const linkedProject = projects.find((p) => p.copilotPrNumber === prNumber)
+  const projectId = linkedProject?.id ?? `unknown-${generateId()}`
+
+  const newPR = await createPR({
+    projectId,
+    title: ghPR.title,
+    branch: ghPR.head.ref,
+    status,
+    previewUrl: undefined,
+    buildState: 'pending',
+    mergeable: ghPR.mergeable ?? false,
+    reviewStatus,
+    author: ghPR.user?.login ?? 'unknown',
+  })
+
+  console.log(`[github-sync] Created local PR ${newPR.id} for GitHub #${prNumber}`)
+  return newPR
+}
+
+/**
+ * Sync a GitHub workflow run into the local agentRuns store.
+ * TODO(Lane 1): refactor to use agent-runs-service once available.
+ */
+export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let run: Awaited<ReturnType<typeof octokit.actions.getWorkflowRun>>['data']
+  try {
+    const res = await octokit.actions.getWorkflowRun({ owner, repo, run_id: runId })
+    run = res.data
+  } catch (err) {
+    console.error(`[github-sync] Workflow run #${runId} not found:`, err)
+    return null
+  }
+
+  const status: AgentRun['status'] =
+    run.status === 'completed'
+      ? run.conclusion === 'success'
+        ? 'succeeded'
+        : 'failed'
+      : run.status === 'in_progress'
+      ? 'running'
+      : 'queued'
+
+  const now = new Date().toISOString()
+
+  // TODO(Lane 1): replace with agent-runs-service once available
+  const store = readStore()
+  const agentRuns: AgentRun[] = (store as unknown as Record<string, unknown>).agentRuns as AgentRun[] ?? []
+  const existingIdx = agentRuns.findIndex(
+    (ar: AgentRun) => ar.githubWorkflowRunId === String(runId)
+  )
+
+  if (existingIdx !== -1) {
+    agentRuns[existingIdx] = {
+      ...agentRuns[existingIdx],
+      status,
+      finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
+      summary: run.conclusion ?? undefined,
+    }
+    ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
+    writeStore(store)
+    console.log(`[github-sync] Updated AgentRun for workflow run #${runId}`)
+    return agentRuns[existingIdx]
+  }
+
+  const newRun: AgentRun = {
+    id: `ar-${generateId()}`,
+    projectId: '',
+    kind: 'prototype',
+    status,
+    executionMode: 'delegated' as AgentRun['executionMode'],
+    triggeredBy: 'github',
+    githubWorkflowRunId: String(runId),
+    startedAt: run.created_at ?? now,
+    finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
+    summary: run.conclusion ?? undefined,
+  }
+
+  agentRuns.push(newRun)
+  ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
+  writeStore(store)
+  console.log(`[github-sync] Created AgentRun for workflow run #${runId}`)
+  return newRun
+}
+
+/**
+ * Sync a GitHub issue's state into the local project record.
+ */
+export async function syncIssue(issueNumber: number): Promise<void> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let issue: Awaited<ReturnType<typeof octokit.issues.get>>['data']
+  try {
+    const res = await octokit.issues.get({ owner, repo, issue_number: issueNumber })
+    issue = res.data
+  } catch (err) {
+    console.error(`[github-sync] Issue #${issueNumber} not found:`, err)
+    return
+  }
+
+  // Find local project linked to this issue
+  const store = readStore()
+  const projects = store.projects
+  const idx = projects.findIndex((p) => p.githubIssueNumber === issueNumber)
+
+  if (idx === -1) {
+    console.log(`[github-sync] No local project linked to issue #${issueNumber}`)
+    return
+  }
+
+  const before = projects[idx].githubWorkflowStatus
+  const issueState = issue.state
+
+  projects[idx] = {
+    ...projects[idx],
+    githubWorkflowStatus: issueState,
+    lastSyncedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  writeStore(store)
+
+  console.log(
+    `[github-sync] Issue #${issueNumber} synced. State: ${before} → ${issueState}`
+  )
+}
+
+/**
+ * Batch sync: pull all open PRs from GitHub for the configured repo.
+ * Note: pulls.list() doesn't return mergeable — use mergeable: false as default.
+ */
+export async function syncAllOpenPRs(): Promise<{ synced: number; created: number }> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const { data: openPRs } = await octokit.pulls.list({
+    owner,
+    repo,
+    state: 'open',
+    per_page: 100,
+  })
+
+  let synced = 0
+  let created = 0
+
+  for (const ghPR of openPRs) {
+    const existing = await findLocalPRByNumber(ghPR.number)
+    if (existing) {
+      await updatePR(existing.pr.id, {
+        title: ghPR.title,
+        branch: ghPR.head.ref,
+        status: 'open',
+        // mergeable not available from list — requires individual pulls.get call
+        // set to false conservatively; syncPullRequest(number) gets the accurate value
+      })
+      synced++
+    } else {
+      const projects = await getProjects()
+      const linked = projects.find((p) => p.copilotPrNumber === ghPR.number)
+      await createPR({
+        projectId: linked?.id ?? `unknown-${generateId()}`,
+        title: ghPR.title,
+        branch: ghPR.head.ref,
+        status: 'open',
+        previewUrl: undefined,
+        buildState: 'pending',
+        mergeable: false, // conservative default; accurate after syncPullRequest(number)
+        reviewStatus: 'pending',
+        author: ghPR.user?.login ?? 'unknown',
+      })
+      created++
+    }
+  }
+
+  console.log(`[github-sync] Batch sync complete: ${synced} updated, ${created} created`)
+  await createInboxEvent({
+    type: 'pr_opened',
+    title: `PR sync complete`,
+    body: `${synced} PRs updated, ${created} new PRs imported from GitHub.`,
+    severity: 'info',
+  })
+
+  return { synced, created }
+}
+
+```
+
+### lib/services/ideas-service.ts
+
+```typescript
+import type { Idea, IdeaStatus } from '@/types/idea'
+import { getCollection, saveCollection } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+
+export async function getIdeas(): Promise<Idea[]> {
+  return getCollection('ideas')
+}
+
+export async function getIdeaById(id: string): Promise<Idea | undefined> {
+  const ideas = await getIdeas()
+  return ideas.find((i) => i.id === id)
+}
+
+export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
+  const ideas = await getIdeas()
+  return ideas.filter((i) => i.status === status)
+}
+
+export async function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Promise<Idea> {
+  const ideas = await getIdeas()
+  const idea: Idea = {
+    ...data,
+    id: `idea-${generateId()}`,
+    createdAt: new Date().toISOString(),
+    status: 'captured',
+  }
+  ideas.push(idea)
+  saveCollection('ideas', ideas)
+  return idea
+}
+
+export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
+  const ideas = await getIdeas()
+  const idea = ideas.find((i) => i.id === id)
+  if (!idea) return null
+  idea.status = status
+  saveCollection('ideas', ideas)
+  return idea
+}
+
+```
+
+### lib/services/inbox-service.ts
+
+```typescript
+import type { InboxEvent, InboxEventType } from '@/types/inbox'
+import { getCollection, saveCollection } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+
+export async function getInboxEvents(): Promise<InboxEvent[]> {
+  return getCollection('inbox')
+}
+
+export async function createInboxEvent(data: {
+  type: InboxEventType
+  title: string
+  body: string
+  severity: InboxEvent['severity']
+  projectId?: string
+  actionUrl?: string
+  githubUrl?: string
+  timestamp?: string
+  read?: boolean
+}): Promise<InboxEvent> {
+  const inbox = await getInboxEvents()
+  const event: InboxEvent = {
+    ...data,
+    id: `evt-${generateId()}`,
+    timestamp: data.timestamp ?? new Date().toISOString(),
+    read: data.read ?? false,
+  }
+  inbox.push(event)
+  saveCollection('inbox', inbox)
+  return event
+}
+
+export async function markRead(eventId: string): Promise<void> {
+  const inbox = await getInboxEvents()
+  const event = inbox.find((e) => e.id === eventId)
+  if (event) {
+    event.read = true
+    saveCollection('inbox', inbox)
+  }
+}
+
+export async function getUnreadCount(): Promise<number> {
+  const inbox = await getInboxEvents()
+  return inbox.filter((e) => !e.read).length
+}
+
+export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Promise<InboxEvent[]> {
+  const inbox = await getInboxEvents()
+  switch (filter) {
+    case 'unread':
+      return inbox.filter((e) => !e.read)
+    case 'errors':
+      return inbox.filter((e) => e.severity === 'error')
+    case 'all':
+    default:
+      return inbox
+  }
+}
+
+/**
+ * Convenience wrapper for creating GitHub lifecycle inbox events.
+ * Sets `severity: 'info'` by default and passes through an optional `githubUrl`
+ * so consumers don't need to repeat the boilerplate.
+ */
+export async function createGitHubInboxEvent(params: {
+  type: InboxEventType
+  projectId: string
+  title: string
+  body: string
+  githubUrl?: string
+  severity?: InboxEvent['severity']
+}): Promise<InboxEvent> {
+  return createInboxEvent({
+    type: params.type,
+    projectId: params.projectId,
+    title: params.title,
+    body: params.body,
+    severity: params.severity ?? 'info',
+    githubUrl: params.githubUrl,
+  })
+}
+
+
+```
+
+### lib/services/materialization-service.ts
+
+```typescript
+import type { DrillSession } from '@/types/drill'
+import type { Project } from '@/types/project'
+import type { Idea } from '@/types/idea'
+import { createProject } from '@/lib/services/projects-service'
+import { updateIdeaStatus } from '@/lib/services/ideas-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+
+export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<Project> {
+  const project = await createProject({
+    ideaId: idea.id,
+    name: idea.title,
+    summary: idea.gptSummary,
+    state: 'arena',
+    health: 'green',
+    currentPhase: 'Getting started',
+    nextAction: 'Define first task',
+    activePreviewUrl: undefined,
+  })
+
+  await updateIdeaStatus(idea.id, 'arena')
+
+  // W4: Create inbox event to notify about project promotion
+  await createInboxEvent({
+    type: 'project_promoted',
+    title: 'Project created',
+    body: `"${idea.title}" is now in progress (scope: ${drill.scope}).`,
+    severity: 'info',
+    projectId: project.id,
+    actionUrl: `/arena/${project.id}`,
+  })
+
+  return project
+}
+
+```
+
+### lib/services/projects-service.ts
+
+```typescript
+import type { Project, ProjectState } from '@/types/project'
+import { getCollection, saveCollection } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+import { MAX_ARENA_PROJECTS } from '@/lib/constants'
+
+export async function getProjects(): Promise<Project[]> {
+  return getCollection('projects')
+}
+
+export async function getProjectById(id: string): Promise<Project | undefined> {
+  const projects = await getProjects()
+  return projects.find((p) => p.id === id)
+}
+
+export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
+  const projects = await getProjects()
+  return projects.filter((p) => p.state === state)
+}
+
+export async function getArenaProjects(): Promise<Project[]> {
+  return getProjectsByState('arena')
+}
+
+export async function isArenaAtCapacity(): Promise<boolean> {
+  const arena = await getArenaProjects()
+  return arena.length >= MAX_ARENA_PROJECTS
+}
+
+export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+  const projects = await getProjects()
+  const project: Project = {
+    ...data,
+    id: `proj-${generateId()}`,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+  projects.push(project)
+  saveCollection('projects', projects)
+  return project
+}
+
+export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
+  const projects = await getProjects()
+  const project = projects.find((p) => p.id === id)
+  if (!project) return null
+  
+  project.state = state
+  project.updatedAt = new Date().toISOString()
+  if (extra) Object.assign(project, extra)
+  
+  saveCollection('projects', projects)
+  return project
+}
+
+```
+
+### lib/services/prs-service.ts
+
+```typescript
+import type { PullRequest } from '@/types/pr'
+import { getCollection, saveCollection } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+
+export async function getPRsForProject(projectId: string): Promise<PullRequest[]> {
+  const prs = getCollection('prs')
+  return prs.filter((pr) => pr.projectId === projectId)
+}
+
+export async function getPRById(id: string): Promise<PullRequest | undefined> {
+  const prs = getCollection('prs')
+  return prs.find((pr) => pr.id === id)
+}
+
+export async function createPR(data: Omit<PullRequest, 'id' | 'createdAt' | 'number'>): Promise<PullRequest> {
+  const prs = getCollection('prs')
+  const lastPr = prs[prs.length - 1]
+  const nextNumber = lastPr ? lastPr.number + 1 : 1
+  
+  const pr: PullRequest = {
+    ...data,
+    id: `pr-${generateId()}`,
+    number: nextNumber,
+    createdAt: new Date().toISOString(),
+  }
+  prs.push(pr)
+  saveCollection('prs', prs)
+  return pr
+}
+
+export async function updatePR(id: string, updates: Partial<PullRequest>): Promise<PullRequest | null> {
+  const prs = getCollection('prs')
+  const index = prs.findIndex((pr) => pr.id === id)
+  if (index === -1) return null
+  
+  prs[index] = { ...prs[index], ...updates }
+  saveCollection('prs', prs)
+  return prs[index]
+}
+
+```
+
+### lib/services/tasks-service.ts
+
+```typescript
+import type { Task } from '@/types/task'
+import { getCollection, saveCollection } from '@/lib/storage'
+import { generateId } from '@/lib/utils'
+
+export async function getTasksForProject(projectId: string): Promise<Task[]> {
+  const tasks = getCollection('tasks')
+  return tasks.filter((t) => t.projectId === projectId)
+}
+
+export async function createTask(data: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
+  const tasks = getCollection('tasks')
+  const task: Task = {
+    ...data,
+    id: `task-${generateId()}`,
+    createdAt: new Date().toISOString(),
+  }
+  tasks.push(task)
+  saveCollection('tasks', tasks)
+  return task
+}
+
+export async function updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
+  const tasks = getCollection('tasks')
+  const index = tasks.findIndex((t) => t.id === id)
+  if (index === -1) return null
+  
+  tasks[index] = { ...tasks[index], ...updates }
+  saveCollection('tasks', tasks)
+  return tasks[index]
+}
+
+```
+
+### lib/state-machine.ts
+
+```typescript
+import type { IdeaStatus } from '@/types/idea'
+import type { ProjectState } from '@/types/project'
+import type { ReviewStatus } from '@/types/pr'
+
+type IdeaTransition = {
+  from: IdeaStatus
+  to: IdeaStatus
+  action: string
+}
+
+type ProjectTransition = {
+  from: ProjectState
+  to: ProjectState
+  action: string
+}
+
+export const IDEA_TRANSITIONS: IdeaTransition[] = [
+  { from: 'captured', to: 'drilling', action: 'start_drill' },
+  { from: 'drilling', to: 'arena', action: 'commit_to_arena' },
+  { from: 'drilling', to: 'icebox', action: 'send_to_icebox' },
+  { from: 'drilling', to: 'killed', action: 'kill_from_drill' },
+  { from: 'captured', to: 'icebox', action: 'defer_from_send' },
+  { from: 'captured', to: 'killed', action: 'kill_from_send' },
+]
+
+export const PROJECT_TRANSITIONS: ProjectTransition[] = [
+  { from: 'arena', to: 'shipped', action: 'mark_shipped' },
+  { from: 'arena', to: 'killed', action: 'kill_project' },
+  { from: 'arena', to: 'icebox', action: 'move_to_icebox' },
+  { from: 'icebox', to: 'arena', action: 'promote_to_arena' },
+  { from: 'icebox', to: 'killed', action: 'kill_from_icebox' },
+  // GitHub-backed transitions (project stays in arena but gains linkage / execution state)
+  { from: 'arena', to: 'arena', action: 'github_issue_created' },
+  { from: 'arena', to: 'arena', action: 'workflow_dispatched' },
+  { from: 'arena', to: 'arena', action: 'pr_received' },
+  // Merge = ship (optional auto-ship path when real GitHub PR merges)
+  { from: 'arena', to: 'shipped', action: 'github_pr_merged' },
+]
+
+export function canTransitionIdea(from: IdeaStatus, action: string): boolean {
+  return IDEA_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function canTransitionProject(from: ProjectState, action: string): boolean {
+  return PROJECT_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function getNextIdeaState(from: IdeaStatus, action: string): IdeaStatus | null {
+  const transition = IDEA_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+
+export function getNextProjectState(from: ProjectState, action: string): ProjectState | null {
+  const transition = PROJECT_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+
+// ---------------------------------------------------------------------------
+// PR State Machine
+// ---------------------------------------------------------------------------
+
+export type PRTransitionAction =
+  | 'open'
+  | 'request_changes'
+  | 'approve'
+  | 'merge'
+  | 'close'
+  | 'reopen'
+
+export const PR_TRANSITIONS: Array<{
+  from: ReviewStatus
+  to: ReviewStatus
+  action: PRTransitionAction
+}> = [
+  { from: 'pending', to: 'changes_requested', action: 'request_changes' },
+  { from: 'pending', to: 'approved', action: 'approve' },
+  { from: 'pending', to: 'merged', action: 'merge' },
+  { from: 'changes_requested', to: 'approved', action: 'approve' },
+  { from: 'changes_requested', to: 'merged', action: 'merge' },
+  { from: 'approved', to: 'merged', action: 'merge' },
+  { from: 'approved', to: 'changes_requested', action: 'request_changes' },
+]
+
+export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction): boolean {
+  return PR_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null {
+  const transition = PR_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+
+```
+
+### lib/storage.ts
+
+```typescript
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+import type { Idea } from '@/types/idea'
+import type { Project } from '@/types/project'
+import type { Task } from '@/types/task'
+import type { PullRequest } from '@/types/pr'
+import type { InboxEvent } from '@/types/inbox'
+import type { DrillSession } from '@/types/drill'
+import type { AgentRun } from '@/types/agent-run'
+import type { ExternalRef } from '@/types/external-ref'
+import { STORAGE_DIR, STORAGE_PATH } from '@/lib/constants'
+import { getSeedData } from '@/lib/seed-data'
+
+export interface StudioStore {
+  ideas: Idea[]
+  drillSessions: DrillSession[]
+  projects: Project[]
+  tasks: Task[]
+  prs: PullRequest[]
+  inbox: InboxEvent[]
+  agentRuns: AgentRun[]       // Sprint 2: GitHub workflow / Copilot runs
+  externalRefs: ExternalRef[] // Sprint 2: GitHub ↔ local entity mapping
+}
+
+// Full paths for fs operations
+const FULL_STORAGE_DIR = path.join(process.cwd(), STORAGE_DIR)
+const FULL_STORAGE_PATH = path.join(process.cwd(), STORAGE_PATH)
+
+function ensureDir(): void {
+  if (!fs.existsSync(FULL_STORAGE_DIR)) {
+    fs.mkdirSync(FULL_STORAGE_DIR, { recursive: true })
+  }
+}
+
+/** Defaults for keys added in Sprint 2 — ensures old JSON files auto-migrate. */
+const STORE_DEFAULTS: Pick<StudioStore, 'agentRuns' | 'externalRefs'> = {
+  agentRuns: [],
+  externalRefs: [],
+}
+
+export function readStore(): StudioStore {
+  ensureDir()
+  if (!fs.existsSync(FULL_STORAGE_PATH)) {
+    const seed = getSeedData()
+    writeStore(seed)
+    return seed
+  }
+  const raw = fs.readFileSync(FULL_STORAGE_PATH, 'utf-8')
+  const parsed = JSON.parse(raw) as Partial<StudioStore>
+  // Auto-migrate: merge any missing keys introduced in later sprints
+  return { ...STORE_DEFAULTS, ...parsed } as StudioStore
+}
+
+export function writeStore(data: StudioStore): void {
+  ensureDir()
+  // Atomic write: write to a temp file then rename to avoid partial reads
+  const tmpPath = path.join(os.tmpdir(), `studio-${Date.now()}.tmp.json`)
+  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+  fs.renameSync(tmpPath, FULL_STORAGE_PATH)
+}
+
+export function getCollection<K extends keyof StudioStore>(name: K): StudioStore[K] {
+  const store = readStore()
+  return store[name]
+}
+
+export function saveCollection<K extends keyof StudioStore>(name: K, data: StudioStore[K]): void {
+  const store = readStore()
+  store[name] = data
+  writeStore(store)
+}
+
+
+```
+
+### lib/studio-copy.ts
+
+```typescript
+export const COPY = {
+  app: {
+    name: 'Mira',
+    tagline: 'Your ideas, shaped and shipped.',
+  },
+  home: {
+    heading: 'Studio',
+    subheading: 'Your attention cockpit.',
+    sections: {
+      attention: 'Needs attention',
+      inProgress: 'In progress',
+      activity: 'Recent activity',
+    },
+    attentionCaughtUp: "You're all caught up.",
+    activitySeeAll: 'See all →',
+  },
+  send: {
+    heading: 'Ideas from GPT',
+    subheading: 'Review what arrived and decide what to do next.',
+    ctaPrimary: 'Define in Studio',
+    ctaIcebox: 'Put on hold',
+    ctaKill: 'Remove',
+  },
+  drill: {
+    heading: "Let's define this.",
+    progress: 'Step {current} of {total}',
+    steps: {
+      intent: {
+        question: 'What is this really?',
+        hint: 'Strip the excitement. What is the actual thing?',
+      },
+      success_metric: {
+        question: 'How do you know it worked?',
+        hint: "One metric. If you can't name it, the idea isn't ready.",
+      },
+      scope: {
+        question: 'How big is this?',
+        hint: 'Be honest. Scope creep starts here.',
+      },
+      path: {
+        question: 'How does this get built?',
+        hint: 'Solo, assisted, or fully delegated?',
+      },
+      priority: {
+        question: 'Does this belong now?',
+        hint: 'What would you not do if you commit to this?',
+      },
+      decision: {
+        question: "What's the call?",
+        hint: 'Commit, hold, or remove. Every idea gets a clear decision.',
+      },
+    },
+    cta: {
+      next: 'Next →',
+      back: '← Back',
+      commit: 'Start building',
+      icebox: 'Put on hold',
+      kill: 'Remove this idea',
+    },
+  },
+  arena: {
+    heading: 'In Progress',
+    empty: 'No active projects. Define an idea to get started.',
+    limitReached: "You're at capacity. Ship or remove something first.",
+    limitBanner: 'Active limit: {count}/{max}',
+  },
+  icebox: {
+    heading: 'On Hold',
+    subheading: 'Ideas and projects on pause',
+    empty: 'Nothing on hold right now.',
+    staleWarning: 'This idea has been here for {days} days. Time to decide.',
+  },
+  shipped: {
+    heading: 'Shipped',
+    empty: 'Nothing shipped yet.',
+  },
+  killed: {
+    heading: 'Removed',
+    empty: 'Nothing removed yet.',
+    resurrection: 'Restore',
+  },
+  inbox: {
+    heading: 'Inbox',
+    empty: 'No new events.',
+    filters: {
+      all: 'All',
+      unread: 'Unread',
+      errors: 'Errors',
+    },
+    markRead: 'Mark as read',
+  },
+  common: {
+    loading: 'Working...',
+    error: 'Something went wrong.',
+    confirm: 'Are you sure?',
+    cancel: 'Cancel',
+    save: 'Save',
+  },
+  github: {
+    heading: 'GitHub Integration',
+    connectionSuccess: 'Connected to GitHub',
+    connectionFailed: 'Could not connect to GitHub',
+    issueCreated: 'GitHub issue created',
+    workflowDispatched: 'Build started',
+    workflowFailed: 'Build failed',
+    prOpened: 'Pull request opened',
+    prMerged: 'Pull request merged',
+    copilotAssigned: 'Copilot is working on this',
+    syncFailed: 'GitHub sync failed',
+    mergeBlocked: 'Cannot merge — checks did not pass',
+    notLinked: 'Not linked to GitHub',
+  },
+}
+
+```
+
+### lib/utils.ts
+
+```typescript
+export function cn(...inputs: (string | undefined | null | boolean)[]): string {
+  return inputs
+    .flat()
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function generateId(): string {
+  return Math.random().toString(36).slice(2, 11)
+}
+
+```
+
+### lib/validators/drill-validator.ts
+
+```typescript
+import type { DrillSession } from '@/types/drill'
+
+export function validateDrillPayload(data: unknown): { valid: boolean; errors?: string[] } {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, errors: ['Invalid payload'] }
+  }
+  const d = data as Partial<DrillSession>
+  const errors: string[] = []
+
+  if (!d.ideaId || typeof d.ideaId !== 'string') errors.push('ideaId is required and must be a string')
+  if (!d.intent || typeof d.intent !== 'string') errors.push('intent is required and must be a string')
+  if (!d.successMetric || typeof d.successMetric !== 'string') errors.push('successMetric is required and must be a string')
+  
+  const validScopes = ['small', 'medium', 'large']
+  if (!d.scope || !validScopes.includes(d.scope)) errors.push('scope must be small, medium, or large')
+
+  const validPaths = ['solo', 'assisted', 'delegated']
+  if (!d.executionPath || !validPaths.includes(d.executionPath)) errors.push('executionPath must be solo, assisted, or delegated')
+
+  const validUrgencies = ['now', 'later', 'never']
+  if (!d.urgencyDecision || !validUrgencies.includes(d.urgencyDecision)) errors.push('urgencyDecision must be now, later, or never')
+
+  const validDispositions = ['arena', 'icebox', 'killed']
+  if (!d.finalDisposition || !validDispositions.includes(d.finalDisposition)) errors.push('finalDisposition must be arena, icebox, or killed')
+
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+  }
+}
+
+```
+
+### lib/validators/idea-validator.ts
+
+```typescript
+import type { Idea } from '@/types/idea'
+
+export function validateIdeaPayload(data: unknown): { valid: boolean; error?: string } {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: 'Invalid payload' }
+  }
+  const d = data as Partial<Idea>
+  if (!d.title || typeof d.title !== 'string') {
+    return { valid: false, error: 'Title is required' }
+  }
+  if (!d.rawPrompt || typeof d.rawPrompt !== 'string') {
+    return { valid: false, error: 'Raw prompt is required' }
+  }
+  return { valid: true }
+}
+
+```
+
+### lib/validators/project-validator.ts
+
+```typescript
+import type { Project } from '@/types/project'
+
+export function validateProjectPayload(data: unknown): { valid: boolean; error?: string } {
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: 'Invalid payload' }
+  }
+  const d = data as Partial<Project>
+  if (!d.name) return { valid: false, error: 'name is required' }
+  if (!d.ideaId) return { valid: false, error: 'ideaId is required' }
+  return { valid: true }
+}
+
+```
+
+### lib/validators/webhook-validator.ts
+
+```typescript
+import type { WebhookPayload } from '@/types/webhook'
+
+export function validateGitHubWebhookHeaders(headers: Headers): { valid: boolean; error?: string } {
+  const event = headers.get('x-github-event')
+  if (!event) return { valid: false, error: 'Missing x-github-event header' }
+  
+  // Signature is typically required in prod, but optional if SECRET not set in dev
+  // We'll let the route handle the actual check vs secret
+  return { valid: true }
+}
+
+export function validateWebhookPayload(data: unknown): { valid: boolean; error?: string } {
+
+  if (!data || typeof data !== 'object') {
+    return { valid: false, error: 'Invalid payload' }
+  }
+  const d = data as Partial<WebhookPayload>
+  if (!d.source) return { valid: false, error: 'source is required' }
+  if (!d.event) return { valid: false, error: 'event is required' }
+  return { valid: true }
+}
+
+```
+
+### lib/view-models/arena-view-model.ts
+
+```typescript
+import type { Project } from '@/types/project'
+import type { Task } from '@/types/task'
+import type { PullRequest } from '@/types/pr'
+
+export interface ArenaViewModel {
+  project: Project
+  tasks: Task[]
+  prs: PullRequest[]
+  openPRCount: number
+  blockedTaskCount: number
+  donePct: number
+}
+
+export function buildArenaViewModel(
+  project: Project,
+  tasks: Task[],
+  prs: PullRequest[]
+): ArenaViewModel {
+  const done = tasks.filter((t) => t.status === 'done').length
+  const blocked = tasks.filter((t) => t.status === 'blocked').length
+  const donePct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
+  const openPRs = prs.filter((pr) => pr.status === 'open').length
+
+  return {
+    project,
+    tasks,
+    prs,
+    openPRCount: openPRs,
+    blockedTaskCount: blocked,
+    donePct,
+  }
+}
+
+```
+
+### lib/view-models/icebox-view-model.ts
+
+```typescript
+import type { Idea } from '@/types/idea'
+import type { Project } from '@/types/project'
+import { daysSince } from '@/lib/date'
+import { STALE_ICEBOX_DAYS } from '@/lib/constants'
+
+export interface IceboxItem {
+  type: 'idea' | 'project'
+  id: string
+  title: string
+  summary: string
+  daysInIcebox: number
+  isStale: boolean
+  createdAt: string
+}
+
+export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): IceboxItem[] {
+  const iceboxIdeas: IceboxItem[] = ideas
+    .filter((i) => i.status === 'icebox')
+    .map((i) => ({
+      type: 'idea',
+      id: i.id,
+      title: i.title,
+      summary: i.gptSummary,
+      daysInIcebox: daysSince(i.createdAt),
+      isStale: daysSince(i.createdAt) >= STALE_ICEBOX_DAYS,
+      createdAt: i.createdAt,
+    }))
+
+  const iceboxProjects: IceboxItem[] = projects
+    .filter((p) => p.state === 'icebox')
+    .map((p) => ({
+      type: 'project',
+      id: p.id,
+      title: p.name,
+      summary: p.summary,
+      daysInIcebox: daysSince(p.updatedAt),
+      isStale: daysSince(p.updatedAt) >= STALE_ICEBOX_DAYS,
+      createdAt: p.updatedAt,
+    }))
+
+  return [...iceboxIdeas, ...iceboxProjects].sort(
+    (a, b) => b.daysInIcebox - a.daysInIcebox
+  )
+}
+
+```
+
+### lib/view-models/inbox-view-model.ts
+
+```typescript
+import type { InboxEvent } from '@/types/inbox'
+
+export interface InboxViewModel {
+  events: InboxEvent[]
+  unreadCount: number
+  errorCount: number
+}
+
+export function buildInboxViewModel(events: InboxEvent[]): InboxViewModel {
+  return {
+    events,
+    unreadCount: events.filter((e) => !e.read).length,
+    errorCount: events.filter((e) => e.severity === 'error').length,
+  }
+}
+
+```
+
+### lib/view-models/review-view-model.ts
+
+```typescript
+import type { PullRequest, ReviewStatus } from '@/types/pr'
+import type { Project } from '@/types/project'
+
+export interface ReviewViewModel {
+  pr: PullRequest
+  project?: Project
+  canMerge: boolean
+  reviewState: ReviewStatus
+}
+
+export function buildReviewViewModel(pr: PullRequest, project?: Project): ReviewViewModel {
+  let reviewState: ReviewStatus = 'pending'
+
+  if (pr.status === 'merged') {
+    reviewState = 'merged'
+  } else if (pr.reviewStatus) {
+    reviewState = pr.reviewStatus
+  } else if (pr.requestedChanges) {
+    reviewState = 'changes_requested'
+  }
+
+  return {
+    pr,
+    project,
+    canMerge: pr.status === 'open' && pr.buildState === 'success' && pr.mergeable,
+    reviewState,
+  }
+}
+
+```
+
+### .github/copilot-instructions.md
+
+```markdown
+# Copilot instructions for the Mira Studio repository.
+# The coding agent reads this file for context when working on issues.
+
+## Project Overview
+Mira Studio is a Next.js 14 (App Router) application for managing ideas
+from capture through execution. TypeScript strict mode, Tailwind CSS.
+
+## Key Conventions
+- All services read/write through `lib/storage.ts` to `.local-data/studio.json`
+- Client components use `fetch()` to call API routes — never import services directly
+- GitHub operations go through `lib/adapters/github-adapter.ts`
+- UI copy comes from `lib/studio-copy.ts`
+- Routes are centralized in `lib/routes.ts`
+
+## File Structure
+- `app/` — Next.js pages and API routes
+- `components/` — React components
+- `lib/` — Services, adapters, utilities
+- `types/` — TypeScript type definitions
+
+## Testing
+- `npx tsc --noEmit` for type checking
+- `npm run build` for production build verification
+
+```
+
+### .local-data/studio.json
+
+```json
+{
+  "agentRuns": [],
+  "externalRefs": [
+    {
+      "entityType": "project",
+      "entityId": "proj-001",
+      "provider": "github",
+      "externalId": "3",
+      "externalNumber": 3,
+      "url": "https://github.com/wyrmspire/mira/issues/3",
+      "id": "xref-n3vtg1d7b",
+      "createdAt": "2026-03-23T01:15:08.121Z"
+    }
+  ],
+  "ideas": [
+    {
+      "id": "idea-001",
+      "title": "AI-powered code review assistant",
+      "rawPrompt": "What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?",
+      "gptSummary": "A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.",
+      "vibe": "productivity",
+      "audience": "engineering teams",
+      "intent": "Reduce code review bottlenecks and maintain code quality at scale.",
+      "createdAt": "2026-03-22T00:13:00.000Z",
+      "status": "captured"
+    },
+    {
+      "id": "idea-002",
+      "title": "Team onboarding checklist builder",
+      "rawPrompt": "Build something to help companies create interactive onboarding flows for new hires",
+      "gptSummary": "A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.",
+      "vibe": "operations",
+      "audience": "HR teams and new employees",
+      "intent": "Cut onboarding time and reduce \"what do I do next\" anxiety.",
+      "createdAt": "2026-03-20T00:43:00.000Z",
+      "status": "icebox"
+    },
+    {
+      "title": "Loop Test - Delete Me",
+      "rawPrompt": "Testing the full idea capture to GitHub issue pipeline",
+      "gptSummary": "A test idea to verify the webhook-to-issue wiring works end to end.",
+      "vibe": "test",
+      "audience": "developers",
+      "intent": "verify pipeline",
+      "id": "idea-xnueptneh",
+      "createdAt": "2026-03-23T01:14:17.502Z",
+      "status": "arena"
+    }
+  ],
+  "drillSessions": [
+    {
+      "id": "drill-001",
+      "ideaId": "idea-001",
+      "intent": "Reduce code review bottlenecks and maintain code quality at scale.",
+      "successMetric": "PR review time drops by 40% in first month",
+      "scope": "medium",
+      "executionPath": "assisted",
+      "urgencyDecision": "now",
+      "finalDisposition": "arena",
+      "completedAt": "2026-03-22T00:23:00.000Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj-001",
+      "ideaId": "idea-003",
+      "name": "Mira Studio v1",
+      "summary": "The Vercel-hosted studio UI for managing ideas from capture to execution.",
+      "state": "arena",
+      "health": "green",
+      "currentPhase": "Core UI",
+      "nextAction": "Review open PRs",
+      "activePreviewUrl": "https://preview.vercel.app/mira-studio",
+      "createdAt": "2026-03-19T00:43:00.000Z",
+      "updatedAt": "2026-03-23T01:15:08.109Z",
+      "githubIssueNumber": 3,
+      "githubIssueUrl": "https://github.com/wyrmspire/mira/issues/3",
+      "githubOwner": "wyrmspire",
+      "githubRepo": "mira",
+      "lastSyncedAt": "2026-03-23T01:15:08.109Z"
+    },
+    {
+      "id": "proj-002",
+      "ideaId": "idea-004",
+      "name": "Custom GPT Intake Layer",
+      "summary": "The ChatGPT custom action that sends structured idea payloads to Mira.",
+      "state": "arena",
+      "health": "yellow",
+      "currentPhase": "Integration",
+      "nextAction": "Fix webhook auth",
+      "createdAt": "2026-03-15T00:43:00.000Z",
+      "updatedAt": "2026-03-21T00:43:00.000Z"
+    },
+    {
+      "id": "proj-003",
+      "ideaId": "idea-005",
+      "name": "Analytics Dashboard",
+      "summary": "Shipped product metrics for internal tracking.",
+      "state": "shipped",
+      "health": "green",
+      "currentPhase": "Shipped",
+      "nextAction": "",
+      "activePreviewUrl": "https://analytics.example.com",
+      "createdAt": "2026-02-20T00:43:00.000Z",
+      "updatedAt": "2026-03-17T00:43:00.000Z",
+      "shippedAt": "2026-03-17T00:43:00.000Z"
+    },
+    {
+      "id": "proj-004",
+      "ideaId": "idea-006",
+      "name": "Mobile App v2",
+      "summary": "Complete rebuild of mobile experience.",
+      "state": "killed",
+      "health": "red",
+      "currentPhase": "Killed",
+      "nextAction": "",
+      "createdAt": "2026-02-05T00:43:00.000Z",
+      "updatedAt": "2026-03-12T00:43:00.000Z",
+      "killedAt": "2026-03-12T00:43:00.000Z",
+      "killedReason": "Scope too large for current team. Web-first is the right call."
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-001",
+      "projectId": "proj-001",
+      "title": "Implement drill tunnel flow",
+      "status": "in_progress",
+      "priority": "high",
+      "createdAt": "2026-03-21T00:43:00.000Z"
+    },
+    {
+      "id": "task-002",
+      "projectId": "proj-001",
+      "title": "Build arena project card",
+      "status": "done",
+      "priority": "high",
+      "linkedPrId": "pr-001",
+      "createdAt": "2026-03-20T12:43:00.000Z"
+    },
+    {
+      "id": "task-003",
+      "projectId": "proj-001",
+      "title": "Wire API routes to mock data",
+      "status": "pending",
+      "priority": "medium",
+      "createdAt": "2026-03-21T12:43:00.000Z"
+    },
+    {
+      "id": "task-004",
+      "projectId": "proj-002",
+      "title": "Fix webhook signature validation",
+      "status": "blocked",
+      "priority": "high",
+      "createdAt": "2026-03-21T18:43:00.000Z"
+    }
+  ],
+  "prs": [
+    {
+      "id": "pr-001",
+      "projectId": "proj-001",
+      "title": "feat: arena project cards",
+      "branch": "feat/arena-cards",
+      "status": "merged",
+      "previewUrl": "https://preview.vercel.app/arena-cards",
+      "buildState": "success",
+      "mergeable": true,
+      "number": 12,
+      "author": "builder",
+      "createdAt": "2026-03-21T00:43:00.000Z"
+    },
+    {
+      "id": "pr-002",
+      "projectId": "proj-001",
+      "title": "feat: drill tunnel components",
+      "branch": "feat/drill-tunnel",
+      "status": "open",
+      "previewUrl": "https://preview.vercel.app/drill-tunnel",
+      "buildState": "running",
+      "mergeable": true,
+      "number": 14,
+      "author": "builder",
+      "createdAt": "2026-03-21T22:43:00.000Z"
+    }
+  ],
+  "inbox": [
+    {
+      "id": "evt-001",
+      "type": "idea_captured",
+      "title": "New idea arrived",
+      "body": "AI-powered code review assistant — ready for drill.",
+      "timestamp": "2026-03-22T00:13:00.000Z",
+      "severity": "info",
+      "actionUrl": "/send",
+      "read": false
+    },
+    {
+      "id": "evt-002",
+      "projectId": "proj-001",
+      "type": "pr_opened",
+      "title": "PR opened: feat/drill-tunnel",
+      "body": "A new pull request is ready for review.",
+      "timestamp": "2026-03-21T22:43:00.000Z",
+      "severity": "info",
+      "actionUrl": "/review/pr-002",
+      "read": false
+    },
+    {
+      "id": "evt-003",
+      "projectId": "proj-002",
+      "type": "build_failed",
+      "title": "Build failed: Custom GPT Intake",
+      "body": "Webhook auth integration is failing. Action needed.",
+      "timestamp": "2026-03-21T00:43:00.000Z",
+      "severity": "error",
+      "actionUrl": "/arena/proj-002",
+      "read": false
+    },
+    {
+      "type": "idea_captured",
+      "title": "New idea arrived from GPT",
+      "body": "\"Loop Test - Delete Me\" has been captured and is ready for definition.",
+      "timestamp": "2026-03-23T01:14:17.504Z",
+      "severity": "info",
+      "read": false,
+      "id": "evt-84w8kcd0x"
+    },
+    {
+      "type": "project_promoted",
+      "title": "Idea started: Loop Test - Delete Me",
+      "body": "Idea is now in progress.",
+      "timestamp": "2026-03-23T01:14:37.584Z",
+      "severity": "success",
+      "read": false,
+      "id": "evt-75ze7ecv4"
+    },
+    {
+      "type": "task_created",
+      "title": "GitHub issue created: #3",
+      "body": "Issue \"Mira Studio v1\" created at https://github.com/wyrmspire/mira/issues/3",
+      "severity": "info",
+      "projectId": "proj-001",
+      "actionUrl": "https://github.com/wyrmspire/mira/issues/3",
+      "id": "evt-djkcupctz",
+      "timestamp": "2026-03-23T01:15:08.132Z",
+      "read": false
+    },
+    {
+      "type": "github_issue_created",
+      "title": "GitHub Issue #3 opened",
+      "body": "Issue \"Mira Studio v1\" was opened on GitHub.",
+      "severity": "info",
+      "projectId": "proj-001",
+      "actionUrl": "/arena/proj-001",
+      "id": "evt-u56tjienc",
+      "timestamp": "2026-03-23T01:15:10.276Z",
+      "read": false
+    },
+    {
+      "type": "github_copilot_assigned",
+      "title": "Developer assigned",
+      "body": "Copilot was assigned to issue #3.",
+      "severity": "info",
+      "projectId": "proj-001",
+      "id": "evt-vb3n2pvi2",
+      "timestamp": "2026-03-23T01:24:01.489Z",
+      "read": false
+    },
+    {
+      "type": "github_copilot_assigned",
+      "title": "Developer assigned",
+      "body": "wyrmspire was assigned to issue #3.",
+      "severity": "info",
+      "projectId": "proj-001",
+      "id": "evt-pwt2uq0dz",
+      "timestamp": "2026-03-23T01:24:03.982Z",
+      "read": false
+    },
+    {
+      "type": "project_shipped",
+      "title": "GitHub Issue #3 closed",
+      "body": "The linked issue for \"Mira Studio v1\" was closed.",
+      "severity": "success",
+      "projectId": "proj-001",
+      "id": "evt-ygxqz9ktn",
+      "timestamp": "2026-03-23T01:46:53.183Z",
+      "read": false
+    }
+  ]
+}
+```
+
+### agents.md
+
+```markdown
+# Mira Studio — Agent Context
+
+> Standing context for any agent entering this repo. Not sprint-specific.
+
+---
+
+## Product Summary
+
+Mira is a Vercel-hosted Studio UI for managing ideas from capture through execution. Ideas arrive from a custom GPT via webhook (or locally via a dev harness), then flow through a clarification tunnel (Drill), become projects, get reviewed via PR previews, and are ultimately shipped or archived.
+
+**Core user journey:** Capture → Clarify → Build → Review → Ship/Archive
+
+**Local development model:** The user is the local dev. They brainstorm ideas locally in the app and test the full flow. The API endpoints are the same contract that a custom GPT will hit in production. In local mode, ideas are entered via a `/dev/gpt-send` harness page. PRs and previews are simulated with local records.
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|-------|------|
+| Framework | Next.js 14.2 (App Router) |
+| Language | TypeScript (strict) |
+| Styling | Tailwind CSS 3.4, dark studio theme |
+| Data | JSON file storage under `.local-data/` (survives server restarts) |
+| State logic | `lib/state-machine.ts` — idea + project transition tables |
+| Copy/Labels | `lib/studio-copy.ts` — centralized UI copy |
+| Routing | `lib/routes.ts` — centralized route map |
+
+---
+
+## Repo File Map
+
+```
+app/
+  page.tsx              ← Home / dashboard (attention cockpit)
+  layout.tsx            ← Root layout (html, body, globals.css)
+  globals.css           ← CSS custom props + tailwind directives
+  send/page.tsx         ← Incoming ideas from GPT (shows all captured ideas)
+  drill/page.tsx        ← 6-step idea clarification tunnel (client component)
+  drill/success/        ← Post-drill success screen
+  drill/end/            ← Post-drill kill screen
+  arena/page.tsx        ← Active projects list
+  arena/[projectId]/    ← Single project detail (3-pane)
+  review/[prId]/page.tsx← PR review page (preview-first)
+  inbox/page.tsx        ← Events feed (filterable, mark-read)
+  icebox/page.tsx       ← Deferred ideas + projects
+  shipped/page.tsx      ← Completed projects
+  killed/page.tsx       ← Removed projects
+  dev/
+    gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
+    github-playground/  ← Dev harness: test GitHub operations
+  api/
+    ideas/route.ts       ← GET/POST ideas
+    ideas/materialize/   ← POST convert idea→project
+    drill/route.ts       ← POST save drill session
+    projects/route.ts    ← GET projects
+    tasks/route.ts       ← GET tasks by project
+    prs/route.ts         ← GET/PATCH PRs by project
+    inbox/route.ts       ← GET/PATCH inbox events
+    actions/
+      promote-to-arena/  ← POST
+      move-to-icebox/    ← POST
+      mark-shipped/      ← POST
+      kill-idea/         ← POST
+      merge-pr/          ← POST
+    github/              ← GitHub-specific API routes
+      test-connection/   ← GET  validate token + repo access
+      create-issue/      ← POST create GitHub issue from project
+      create-pr/         ← POST create GitHub PR
+      dispatch-workflow/ ← POST trigger GitHub Actions workflow
+      sync-pr/           ← GET/POST sync PRs from GitHub
+      merge-pr/          ← POST merge real GitHub PR
+    webhook/
+      gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
+      github/route.ts    ← GitHub webhook receiver (real: signature-verified)
+      vercel/route.ts    ← Vercel webhook receiver (stub)
+
+components/
+  shell/                 ← AppShell, StudioSidebar, StudioHeader, MobileNav, CommandBar
+  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, etc.
+  send/                  ← CapturedIdeaCard, DefineInStudioHero, IdeaSummaryPanel
+  drill/                 ← DrillLayout, DrillProgress, GiantChoiceButton, MaterializationSequence
+  arena/                 ← ArenaProjectCard, ActiveLimitBanner, PreviewFrame, ProjectPanes, etc.
+  review/                ← SplitReviewLayout, PRSummaryCard, DiffSummary, BuildStatusChip, FixRequestBox, PreviewToolbar
+  inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
+  icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
+  archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
+  dev/                   ← GPT send form, dev tools
+
+lib/
+  config/
+    github.ts            ← GitHub env config, validation, repo coordinates
+  github/
+    client.ts            ← Octokit wrapper, getGitHubClient()
+    signature.ts         ← HMAC-SHA256 webhook signature verification
+    handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
+  storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
+  seed-data.ts           ← Initial seed records (replaces mock-data.ts)
+  state-machine.ts       ← Idea + project + PR transition rules
+  studio-copy.ts         ← Central copy strings for all pages
+  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, storage paths
+  routes.ts              ← Centralized route paths
+  guards.ts              ← Type guards
+  utils.ts               ← generateId helper
+  date.ts                ← Date formatting
+  services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
+                           agent-runs, external-refs, github-factory, github-sync services
+  adapters/              ← github (real Octokit client), gpt, vercel, notifications
+  formatters/            ← idea, project, pr, inbox formatters
+  validators/            ← idea, project, drill, webhook validators
+  view-models/           ← arena, icebox, inbox, review VMs
+
+types/
+  idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
+  agent-run.ts, external-ref.ts, github.ts
+
+content/                 ← Product copy markdown
+docs/                    ← Architecture docs
+
+.local-data/             ← JSON file persistence (gitignored, auto-seeded)
+lanes/                   ← Sprint lane files (sprint-specific)
+wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
+```
+
+---
+
+## Commands
+
+```bash
+npm install          # install dependencies
+npm run dev          # start dev server (next dev)
+npm run build        # production build (next build)
+npm run lint         # eslint
+npx tsc --noEmit     # type check
+```
+
+---
+
+## Common Pitfalls
+
+### Data persistence is JSON-file based
+All services read/write through `lib/storage.ts` to `.local-data/studio.json`. Data survives server restarts. If the file doesn't exist, it auto-seeds from `lib/seed-data.ts`. **Do not** import mock arrays directly — always go through service functions.
+
+### Drill page is a client component
+`app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
+
+### All data mutations must go through API routes
+Client components call `/api/*` endpoints. Server components can import services directly. This ensures the same contract works for both the UI and the future custom GPT.
+
+### Review merge button must call the API
+The "Merge PR" button in `review/[prId]/page.tsx` must POST to `/api/actions/merge-pr`. Never mutate state directly from the component.
+
+### GitHub adapter is a real Octokit client
+`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter — never call Octokit directly from routes. The adapter reads credentials from `lib/config/github.ts` via `lib/github/client.ts`. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
+
+### GitHub webhook route verifies signatures
+The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`. Events are dispatched to per-event handlers in `lib/github/handlers/`.
+
+### Vercel webhook is still a stub
+Only the Vercel webhook handler remains a stub. GPT and GitHub webhooks are functional.
+
+### `studio-copy.ts` is the single source for UI labels
+All user-facing text should come from this file. Some pages still hardcode strings — fix them when you see them.
+
+### Route naming vs. internal naming
+Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should present these in friendlier terms: "In Progress" / "On Hold" / "Removed" / "Shipped".
+
+---
+
+## SOPs
+
+### SOP-1: Always use `lib/routes.ts` for navigation
+**Learned from**: Initial scaffolding
+
+- ❌ `href="/arena"` (hardcoded)
+- ✅ `href={ROUTES.arena}` (centralized)
+
+### SOP-2: All UI copy goes through `lib/studio-copy.ts`
+**Learned from**: Sprint 1 UX audit
+
+- ❌ `<h1>Trophy Room</h1>` (inline string)
+- ✅ `<h1>{COPY.shipped.heading}</h1>` (centralized copy)
+
+### SOP-3: State transitions go through `lib/state-machine.ts`
+**Learned from**: Initial architecture
+
+- ❌ Manually setting `idea.status = 'arena'` in a page
+- ✅ Use `getNextIdeaState(idea.status, 'commit_to_arena')` to validate transition
+
+### SOP-4: Never push/pull from git
+**Learned from**: Multi-agent coordination
+
+- ❌ `git push`, `git pull`, `git merge`
+- ✅ Only modify files. Coordinator handles version control.
+
+### SOP-5: All data mutations go through API routes
+**Learned from**: GPT contract compatibility
+
+- ❌ Calling `updateIdeaStatus()` directly from a client component
+- ✅ `fetch('/api/actions/kill-idea', { method: 'POST', body: ... })`
+- Why: The custom GPT will hit the same `/api/*` endpoints. The UI must exercise the same contract.
+
+### SOP-6: Use `lib/storage.ts` for all persistence
+**Learned from**: In-memory data loss on server restart
+
+- ❌ `const ideas: Idea[] = [...MOCK_IDEAS]` (module-level array, lost on restart)
+- ✅ `const ideas = storage.read('ideas')` (reads from `.local-data/studio.json`)
+- Why: Local data must survive server restarts. JSON file storage is the local persistence layer.
+
+### SOP-7: GitHub operations go through the adapter, never raw Octokit
+**Learned from**: Sprint 2 architecture
+
+- ❌ `const octokit = new Octokit(...)` in a route handler
+- ✅ `import { createIssue } from '@/lib/adapters/github-adapter'`
+- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes. Business logic stays untouched.
+
+### SOP-8: Don't call the adapter from routes — use services
+**Learned from**: Sprint 2 architecture
+
+- ❌ `import { createIssue } from '@/lib/adapters/github-adapter'` in a route
+- ✅ `import { createIssueFromProject } from '@/lib/services/github-factory-service'`
+- Why: Services orchestrate: load local data → call adapter → update local records → create inbox events. Routes stay thin.
+
+---
+
+## Lessons Learned (Changelog)
+
+- **2026-03-22**: Initial agents.md created during Sprint 1 boardinit.
+- **2026-03-22**: Added SOP-5 (API-first mutations) and SOP-6 (JSON file storage).
+- **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
+
+```
+
+### board.md
+
+```markdown
+# Mira Studio — Sprint Board
+
+## Sprint History
+
+| Sprint | Focus | Tests | Status |
+|--------|-------|-------|--------|
+| Sprint 1 | Make It Real (Local-First) | TSC ✅ Build ✅ | ✅ Complete |
+
+---
+
+## Sprint 2 — GitHub Factory (Token-First)
+
+> Replace stub seams with a real GitHub-backed execution loop. Prove the full irrigation path: **idea → project → GitHub issue → Copilot/workflow → PR appears → merge from app**. Use PAT now, design for GitHub App later. Supabase persistence deferred to Sprint 3.
+
+### Dependency Graph
+
+```
+Lane 1 (Foundation):     [W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← TYPES + CONFIG
+Lane 2 (GitHub Client):  [W1] → [W2] → [W3] → [W4] → [W5] → [W6]         ← ADAPTER
+Lane 3 (Webhooks):       [W1] → [W2] → [W3] → [W4] → [W5] → [W6]         ← INGESTION
+Lane 4 (Routes+Services):[W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← API LAYER
+Lane 5 (Action Upgrades):[W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← WIRING
+                   ↓ all five complete ↓
+Lane 6 (Integration):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← PROOF
+```
+
+**Lanes 1–5 are fully parallel** — zero file conflicts between them.
+**Lane 6 runs AFTER** Lanes 1–5 are merged. Lane 6 resolves cross-lane integration and proves the loop.
+
+---
+
+### Sprint 2 Ownership Zones
+
+| Zone | Files | Lane |
+|------|-------|------|
+| Config + types + storage | `lib/config/github.ts` [NEW], `types/project.ts`, `types/pr.ts`, `types/task.ts`, `types/agent-run.ts` [NEW], `types/external-ref.ts` [NEW], `types/github.ts` [NEW], `lib/constants.ts`, `lib/storage.ts`, `lib/services/agent-runs-service.ts` [NEW], `lib/services/external-refs-service.ts` [NEW], `.env.example` | Lane 1 |
+| GitHub Octokit client | `lib/adapters/github-adapter.ts` [REWRITE], `lib/github/client.ts` [NEW], `package.json` (octokit install only) | Lane 2 |
+| Webhook pipeline | `app/api/webhook/github/route.ts` [REWRITE], `lib/github/handlers/*` [NEW], `lib/github/signature.ts` [NEW], `lib/validators/webhook-validator.ts`, `types/webhook.ts` | Lane 3 |
+| GitHub API routes + services | `app/api/github/*` [NEW], `lib/services/github-factory-service.ts` [NEW], `lib/services/github-sync-service.ts` [NEW], `app/dev/github-playground/page.tsx` [NEW] | Lane 4 |
+| Action upgrades + state machine + inbox | `app/api/actions/merge-pr/route.ts`, `app/api/actions/promote-to-arena/route.ts`, `app/api/actions/mark-shipped/route.ts`, `lib/state-machine.ts`, `types/inbox.ts`, `lib/services/inbox-service.ts`, `lib/studio-copy.ts`, `lib/routes.ts` | Lane 5 |
+| Integration + proof | All files (read + targeted fixes) | Lane 6 |
+
+---
+
+### Lane Status
+
+| Lane | Focus | File | Status |
+|------|-------|------|--------|
+| 🔴 Lane 1 | Foundation: Config, Types, Storage | `lanes/lane-1-foundation.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| 🟢 Lane 2 | GitHub Client Adapter | `lanes/lane-2-github-client.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+| 🔵 Lane 3 | Webhook Pipeline | `lanes/lane-3-webhooks.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+| 🟡 Lane 4 | GitHub Routes + Factory Services | `lanes/lane-4-github-routes.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| 🟣 Lane 5 | Action Upgrades + State Machine | `lanes/lane-5-action-upgrades.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| 🏁 Lane 6 | Integration + Proof of Loop | `lanes/lane-6-integration.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
+
+---
+
+## Pre-Flight Checklist
+
+- [ ] `npm install` succeeds
+- [ ] `npx tsc --noEmit` passes
+- [ ] `npm run build` passes
+- [ ] Dev server starts (`npm run dev`)
+- [ ] `wiring.md` env vars added by user
+
+## Handoff Protocol
+
+1. Mark W items ⬜→🟡→✅ as you go
+2. Run `npx tsc --noEmit` before marking ✅ on your final W item
+3. **DO NOT open the browser or perform visual checks** in Lanes 1–5. Lane 6 handles all visual QA.
+4. Never touch files owned by other lanes (see Ownership Zones above)
+5. Never push/pull from git
+
+## Test Summary
+
+| Lane | TSC | Build | Notes |
+|------|-----|-------|-------|
+| Lane 1 | ✅ | ⬜ | All 7 work items complete |
+| Lane 2 | ✅ | ⬜ | 6 errors in other lanes' files; Lane 2 files clean |
+| Lane 3 | ✅ | ⬜ | Webhook real ingestion; Lane 3 files clean (errors elsewhere). |
+| Lane 4 | ✅ | ⬜ | |
+| Lane 5 | ✅ | ⬜ | Only Lane 4 errors (github-sync-service.ts) remain; Lane 5 files clean |
+| Lane 6 | ⬜ | ⬜ | |
+
+```
+
+### content/drill-principles.md
+
+```markdown
+# Definition Flow
+
+The definition flow shapes clarity before commitment.
+
+## The 6 questions
+
+1. **Intent** — What is this really? Strip the excitement.
+2. **Success metric** — How do you know it worked? One number.
+3. **Scope** — Small, Medium, or Large. Be honest.
+4. **Execution path** — Solo, Assisted, or Delegated.
+5. **Priority** — Now, Later, or Never.
+6. **Decision** — Start building, Put on hold, or Remove. No limbo.
+
+## Why this works
+
+Ideas feel bigger in your head than they are. The drill forces you to say the quiet part out loud.
+
+```
+
+### content/no-limbo.md
+
+```markdown
+# Clear Decisions
+
+The central rule of Mira: **no limbo**.
+
+An idea is either:
+- **In progress**
+- **On hold**
+- **Removed**
+
+There is no "maybe" shelf. The "On hold" list has a timer — after 14 days, stale items prompt a decision.
+
+```
+
+### content/onboarding.md
+
+```markdown
+# Onboarding
+
+Welcome to Mira Studio.
+
+## How it works
+
+1. **Captured** — Ideas arrive from GPT or the dev harness.
+2. **Defined** — You shape the idea by answering 6 focused questions.
+3. **In Progress** — Active projects (max 3) live here.
+4. **On Hold** — Projects on pause wait here.
+5. **Archive** — Completed projects are Shipped; others are Removed.
+
+## The rule
+
+Every idea gets a clear decision. No limbo.
+
+```
+
+### content/tone-guide.md
+
+```markdown
+# Tone Guide
+
+Mira speaks with precision. No fluff.
+
+## Principles
+
+- **Direct** — Say the thing. No softening.
+- **Short** — One line where one line works.
+- **Honest** — "This idea has been here for 14 days. Time to decide." Not "Hey, just checking in!"
+- **No celebration** — "Committed." Not "Amazing! You're doing great!"
+
+## Examples
+
+Good: "Idea captured. Decide what to do next."
+Bad: "Great news! Your idea has been saved to the system!"
+
+Good: "No active projects. Define an idea to get started."
+Bad: "Looks like you don't have any projects yet. Why not create one?"
+
+```
+
+### docs/future-ideas.md
+
+```markdown
+# Future Ideas
+
+## Auth layer
+- Simple auth via NextAuth or a custom JWT approach
+- Single-user initially (it's a personal studio)
+
+## Real GitHub integration
+- Replace mock adapter with actual GitHub API calls
+- Issue creation from tasks
+- PR status via webhooks
+
+## Real Vercel integration
+- Deployment status via Vercel API
+- Preview URL auto-detection
+
+## Persistence
+- Replace in-memory arrays with a real DB (Turso/PlanetScale/Postgres)
+- Or use Vercel KV for simple key/value storage
+
+## AI features
+- GPT summary of drill session
+- Auto-task generation from project scope
+- Intelligent staleness warnings
+
+```
+
+### docs/page-map.md
+
+```markdown
+# Page Map
+
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/` | HomePage | Dashboard / redirect |
+| `/send` | SendPage | Review captured idea |
+| `/drill` | DrillPage | 6-step definition flow |
+| `/drill/success` | DrillSuccessPage | Materialization sequence |
+| `/drill/end` | DrillEndPage | Idea ended — preserves to Graveyard |
+| `/arena` | ArenaPage | Active projects list |
+| `/arena/[id]` | ArenaProjectPage | Three-pane project view |
+| `/icebox` | IceboxPage | Deferred items |
+| `/shipped` | ShippedPage | Trophy room |
+| `/killed` | KilledPage | Graveyard |
+| `/review/[id]` | ReviewPage | PR review |
+| `/inbox` | InboxPage | Event feed |
+
+```
+
+### docs/product-overview.md
+
+```markdown
+# Mira Studio — Product Overview
+
+Mira is a Vercel-hosted Studio UI for managing ideas from conception through execution.
+
+## The problem
+
+Ideas die in chat. They get lost, deprioritized, or never defined clearly enough to build.
+
+## The solution
+
+A five-zone system that forces every idea through a decision:
+
+1. **Send** — Ideas arrive from GPT via webhook.
+2. **Drill** — 6 questions force clarity before commitment.
+3. **Arena** — Active projects (max 3) with task and PR visibility.
+4. **Icebox** — Deferred ideas with a staleness timer.
+5. **Archive** — Trophy Room (shipped) and Graveyard (removed).
+
+## The rule
+
+No limbo. Every idea is in play, frozen, or gone.
+
+```
+
+### docs/state-model.md
+
+```markdown
+# State Model
+
+## Idea states
+
+```
+captured → drilling → arena
+captured → icebox
+captured → killed
+drilling → icebox
+drilling → killed
+```
+
+## Project states
+
+```
+arena → shipped
+arena → killed
+arena → icebox
+icebox → arena
+icebox → killed
+```
+
+## The no-limbo rule
+
+Every idea or project must be in exactly one state. No ambiguity.
+
+```
+
+### docs/ui-principles.md
+
+```markdown
+# UI Principles
+
+## Dark, dense, functional
+
+- Background: `#0a0a0f` (near black)
+- Surface: `#12121a`
+- Borders: `#1e1e2e`
+- Text: `#e2e8f0`
+- Muted: `#94a3b8`
+- Accent: `#6366f1` (indigo)
+
+## No chrome
+
+Minimize decoration. Every element earns its place.
+
+## Keyboard first
+
+Cmd+K command bar. Enter to advance in drill. ESC to dismiss.
+
+## Mobile aware
+
+Sidebar on desktop, bottom nav on mobile.
+
+```
+
+### gitr.sh
+
+```bash
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Usage: ./gitr.sh "commit message here"
+# Stages, commits, and pushes current branch.
+# It will NOT auto-rebase on push failure.
+
+msg=${1:-"chore: update"}
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z "${repo_root}" ]]; then
+    echo "ERROR: Not a git repository."
+    exit 1
+fi
+cd "${repo_root}"
+
+if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
+    echo "ERROR: Rebase/merge in progress. Resolve it first."
+    exit 1
+fi
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "${branch}" == "HEAD" ]]; then
+    echo "ERROR: Detached HEAD. Checkout a branch first."
+    exit 1
+fi
+
+remote="origin"
+
+echo "Repo: ${repo_root}"
+echo "Branch: ${branch}"
+echo "Staging changes..."
+
+if ! git add -A; then
+    echo "WARN: git add -A failed. Retrying with safer staging."
+    git add -u
+    while IFS= read -r path; do
+        base=$(basename "$path")
+        lower=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')
+        case "$lower" in
+            nul|con|prn|aux|com[1-9]|lpt[1-9])
+                echo "Skipping reserved path on Windows: $path"
+                continue
+                ;;
+        esac
+        git add -- "$path" || echo "Skipping unstageable path: $path"
+    done < <(git ls-files --others --exclude-standard)
+fi
+
+if git diff --cached --quiet; then
+    echo "No staged changes to commit."
+else
+    echo "Committing: ${msg}"
+    git commit -m "${msg}"
+fi
+
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+    echo "Pushing to ${remote}/${branch}..."
+    if git push "${remote}" "${branch}"; then
+        echo "Push succeeded."
+        exit 0
+    fi
+else
+    echo "Pushing and setting upstream ${remote}/${branch}..."
+    if git push -u "${remote}" "${branch}"; then
+        echo "Push succeeded."
+        exit 0
+    fi
+fi
+
+echo "Push failed (likely non-fast-forward)."
+echo "Run this manually:"
+echo "  git fetch ${remote}"
+echo "  git log --oneline --graph --decorate --max-count=20 --all"
+echo "  git push"
+exit 1
+
+```
+
+### gitrdif.sh
+
+```bash
+#!/bin/bash
+
+# gitrdif.sh - Generate a diff between local and remote branch
+# Output: gitrdiff.md in the project root
+
+# Get current branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Fetch latest from remote without merging
+echo "Fetching latest from origin/$BRANCH..."
+git fetch origin "$BRANCH" 2>/dev/null
+
+# Check if remote branch exists
+if ! git rev-parse --verify "origin/$BRANCH" > /dev/null 2>&1; then
+    echo "Remote branch origin/$BRANCH not found. Using origin/main..."
+    REMOTE_BRANCH="origin/main"
+else
+    REMOTE_BRANCH="origin/$BRANCH"
+fi
+
+# Output file
+OUTPUT="gitrdiff.md"
+
+# Generate the diff
+echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
+
+{
+    echo "# Git Diff Report"
+    echo ""
+    echo "**Generated**: $(date)"
+    echo ""
+    echo "**Local Branch**: $BRANCH"
+    echo ""
+    echo "**Comparing Against**: $REMOTE_BRANCH"
+    echo ""
+    echo "---"
+    echo ""
+    
+    # NEW: Show uncommitted changes first (working directory)
+    echo "## Uncommitted Changes (working directory)"
+    echo ""
+    echo "### Modified/Staged Files"
+    echo ""
+    echo '```'
+    git status --short 2>/dev/null || echo "(clean)"
+    echo '```'
+    echo ""
+    
+    # Check if there are any uncommitted changes
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        echo "### Uncommitted Diff"
+        echo ""
+        echo '```diff'
+        git diff 2>/dev/null
+        git diff --cached 2>/dev/null
+        echo '```'
+        echo ""
+    fi
+    
+    # NEW: Show contents of untracked files (new files not yet staged)
+    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
+    if [ -n "$UNTRACKED" ]; then
+        echo "### New Untracked Files"
+        echo ""
+        for file in $UNTRACKED; do
+            # Skip binary files and very large files
+            if [ -f "$file" ]; then
+                # Checking if it's a text file
+                if command -v file >/dev/null 2>&1; then
+                    if ! file "$file" | grep -q text; then
+                        continue
+                    fi
+                fi
+                
+                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
+                if [ "$LINES" -lt 500 ]; then
+                    echo "#### \`$file\`"
+                    echo ""
+                    echo '```'
+                    cat "$file" 2>/dev/null
+                    echo '```'
+                    echo ""
+                else
+                    echo "#### \`$file\` ($LINES lines - truncated)"
+                    echo ""
+                    echo '```'
+                    head -100 "$file" 2>/dev/null
+                    echo "... ($LINES total lines)"
+                    echo '```'
+                    echo ""
+                fi
+            fi
+        done
+    fi
+    
+    echo "---"
+    echo ""
+    
+    # NEW: Show changes from the last pull/merge if applicable
+    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
+        VAL_HEAD=$(git rev-parse HEAD)
+        VAL_ORIG=$(git rev-parse ORIG_HEAD)
+        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
+            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
+            echo ""
+            echo "These are the changes that recently came into your branch."
+            echo ""
+            echo '```diff'
+            git diff ORIG_HEAD HEAD --stat 2>/dev/null
+            echo '```'
+            echo ""
+            echo '```diff'
+            # Limit full diff to avoid massive files
+            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
+            echo "... (truncated to 1000 lines)"
+            echo '```'
+            echo ""
+            echo "---"
+            echo ""
+        fi
+    fi
+
+    # Show commits that are different
+    echo "## Commits Ahead (local changes not on remote)"
+    echo ""
+    echo '```'
+    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "## Commits Behind (remote changes not pulled)"
+    echo ""
+    echo '```'
+    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    
+    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
+    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
+    
+    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
+        echo "## Status: Up to Date"
+        echo ""
+        echo "Your local branch is even with **$REMOTE_BRANCH**."
+        echo "No unpushed commits."
+        echo ""
+    fi
+    echo "## File Changes (YOUR UNPUSHED CHANGES)"
+    echo ""
+    echo '```'
+    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    echo "## Full Diff of Your Unpushed Changes"
+    echo ""
+    echo "Green (+) = lines you ADDED locally"
+    echo "Red (-) = lines you REMOVED locally"
+    echo ""
+    echo '```diff'
+    git diff "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no diff)"
+    echo '```'
+    
+} > "$OUTPUT"
+
+echo "Done! Created $OUTPUT"
+echo ""
+echo "Summary:"
+echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
+echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
+
+```
+
+### gitrdiff.md
+
+```markdown
 # Git Diff Report
 
 **Generated**: Sun, Mar 22, 2026  8:54:52 PM
@@ -5004,3 +7533,468 @@ Red (-) = lines you REMOVED locally
 
 ```diff
 ```
+
+```
+
+### gpt-schema.md
+
+```markdown
+# Mira Studio — Custom GPT Configuration
+
+> Paste the **OpenAPI schema** into your Custom GPT's **Actions** tab.
+> Paste the **System Instructions** into the **Instructions** field.
+
+---
+
+## 1. OpenAPI Schema (Actions)
+
+Paste this into **Actions → Import from Schema**:
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Mira Studio API
+  description: Send brainstormed ideas to Mira Studio for capture, clarification, and execution.
+  version: 1.0.0
+servers:
+  - url: https://mira.mytsapi.us
+    description: Mira Studio (tunneled to local dev)
+paths:
+  /api/webhook/gpt:
+    post:
+      operationId: sendIdea
+      summary: Send a brainstormed idea to Mira Studio
+      description: >
+        Captures a new idea from the GPT conversation. The idea will appear
+        in Mira Studio's Send page, ready for the user to drill (clarify)
+        and promote to a project.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - source
+                - event
+                - data
+              properties:
+                source:
+                  type: string
+                  enum: [gpt]
+                  description: Always "gpt" for Custom GPT webhook calls.
+                event:
+                  type: string
+                  enum: [idea_captured]
+                  description: Always "idea_captured" when sending a new idea.
+                data:
+                  type: object
+                  required:
+                    - title
+                    - rawPrompt
+                    - gptSummary
+                  properties:
+                    title:
+                      type: string
+                      description: >
+                        A short, punchy title for the idea (3-8 words).
+                        Example: "AI-Powered Recipe Scaler"
+                    rawPrompt:
+                      type: string
+                      description: >
+                        The raw user input that sparked the idea. Copy the
+                        user's words as faithfully as possible.
+                    gptSummary:
+                      type: string
+                      description: >
+                        Your structured summary of the idea. Include what
+                        it does, who it's for, and why it matters. 2-4
+                        sentences.
+                    vibe:
+                      type: string
+                      description: >
+                        The energy/aesthetic of the idea. Examples:
+                        "playful", "enterprise", "minimal", "bold",
+                        "cozy", "cyberpunk". Pick the one that fits best.
+                    audience:
+                      type: string
+                      description: >
+                        Who this is for. Examples: "indie devs",
+                        "busy parents", "small business owners",
+                        "content creators". Be specific.
+                    intent:
+                      type: string
+                      description: >
+                        What the user wants to achieve. Examples:
+                        "ship a side project", "automate a workflow",
+                        "learn something new", "solve a pain point".
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp of when the idea was captured.
+      responses:
+        "201":
+          description: Idea captured successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    description: The created idea object
+                  message:
+                    type: string
+                    example: Idea captured
+        "400":
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+```
+
+---
+
+## 2. System Instructions
+
+Paste this into the Custom GPT's **Instructions** field:
+
+```
+You are Mira — a creative brainstorming partner who helps capture and shape ideas.
+
+YOUR ROLE:
+- Have a natural conversation with the user about their ideas
+- Ask clarifying questions to understand what they're building and why
+- When an idea feels solid enough, package it up and send it to Mira Studio
+
+HOW A SESSION WORKS:
+1. The user describes an idea, problem, or thing they want to build
+2. You ask 2-3 follow-up questions (what does it do? who's it for? what's the vibe?)
+3. Once you have enough context, use the sendIdea action to capture it
+4. Confirm to the user that the idea was sent to Mira Studio
+
+WHEN YOU CALL sendIdea:
+- title: Make it punchy and memorable (3-8 words)
+- rawPrompt: Copy the user's original words faithfully
+- gptSummary: Write a clear 2-4 sentence summary of what, who, and why
+- vibe: Pick a single word that captures the aesthetic energy
+- audience: Be specific about who this serves
+- intent: What does the user want to achieve?
+- timestamp: Use the current ISO 8601 time
+
+IMPORTANT RULES:
+- Do NOT send the idea until you've asked at least one follow-up question
+- Do NOT make up details the user didn't mention — ask instead
+- Do NOT send duplicate ideas — if the user refines, send the refined version
+- When the idea is captured, tell the user: "Sent to Mira Studio! Open the app to start drilling."
+- Keep the conversation warm, direct, and free of jargon
+- You can capture multiple ideas in one session
+
+TONE:
+- Friendly and energetic, like a smart friend who gets excited about ideas
+- Direct — don't pad with filler
+- Match the user's energy level
+```
+
+---
+
+## 3. GPT Settings
+
+| Setting | Value |
+|---------|-------|
+| **Name** | Mira |
+| **Description** | Brainstorm ideas and send them to Mira Studio for execution. |
+| **Conversation starters** | "I have an idea for an app", "Help me brainstorm something", "I want to build..." |
+| **Authentication** | None (webhook is unauthenticated — fine for dev tunnel) |
+| **Privacy Policy** | Not needed for personal use |
+
+---
+
+## 4. Testing
+
+After setting up the GPT:
+
+1. Open ChatGPT and start a conversation with your Mira GPT
+2. Describe an idea
+3. The GPT will ask follow-up questions, then call `sendIdea`
+4. Open `https://mira.mytsapi.us` — the idea should appear in the Send page
+5. Drill it, promote it to a project, and the GitHub factory takes over
+
+---
+
+## 5. Payload Example
+
+Here's what the GPT sends when it captures an idea:
+
+```json
+{
+  "source": "gpt",
+  "event": "idea_captured",
+  "data": {
+    "title": "AI-Powered Recipe Scaler",
+    "rawPrompt": "I want an app that takes a recipe and scales it for any number of servings, accounting for cooking time changes",
+    "gptSummary": "A web app that intelligently scales recipes beyond simple multiplication. It adjusts cooking times, pan sizes, and ingredient ratios that don't scale linearly (like spices and leavening agents). Built for home cooks who want to batch-cook or reduce recipes.",
+    "vibe": "cozy",
+    "audience": "home cooks who meal prep",
+    "intent": "ship a useful side project"
+  },
+  "timestamp": "2026-03-22T20:00:00Z"
+}
+```
+
+```
+
+### lanes/lane-1-foundation.md
+
+```markdown
+# 🔴 Lane 1 — Foundation: Config, Types, Storage
+
+> Build the typed foundation every other lane imports from. GitHub config, expanded domain types, new entity types, and storage extensions.
+
+---
+
+## Files Owned
+
+| File | Action |
+|------|--------|
+| `lib/config/github.ts` | NEW |
+| `types/project.ts` | MODIFY |
+| `types/pr.ts` | MODIFY |
+| `types/task.ts` | MODIFY |
+| `types/agent-run.ts` | NEW |
+| `types/external-ref.ts` | NEW |
+| `types/github.ts` | NEW |
+| `lib/constants.ts` | MODIFY |
+| `lib/storage.ts` | MODIFY |
+| `lib/services/agent-runs-service.ts` | NEW |
+| `lib/services/external-refs-service.ts` | NEW |
+| `.env.example` | MODIFY |
+
+---
+
+## W1 ✅ — GitHub config module
+- **Done**: Created `lib/config/github.ts` exporting `getGitHubConfig()`, `isGitHubConfigured()`, `getRepoFullName()`, and `getRepoCoordinates()` with required-var validation that throws with a clear message in dev.
+
+Create `lib/config/github.ts`:
+
+- Read env vars: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_DEFAULT_BRANCH`, `GITHUB_WEBHOOK_SECRET`
+- Optional env vars: `GITHUB_WORKFLOW_PROTOTYPE`, `GITHUB_WORKFLOW_FIX_REQUEST`, `GITHUB_LABEL_PREFIX`, `APP_BASE_URL`
+- Export typed config object with validation
+- Fail loudly in dev if required vars are missing (throw with clear message)
+- Centralize repo coordinates: `getRepoFullName()`, `getRepoCoordinates()`
+- Add `isGitHubConfigured(): boolean` helper for graceful degradation
+
+**Done when**: `lib/config/github.ts` exports validated typed config, importable from any lane.
+
+---
+
+## W2 ✅ — Expand Project type with GitHub fields
+- **Done**: Added 11 optional GitHub fields to `Project` (`githubIssueNumber`, `executionMode`, `copilotPrNumber`, etc.) — all optional so existing local-only projects remain valid.
+
+Modify `types/project.ts`:
+
+Add optional fields:
+```ts
+githubOwner?: string
+githubRepo?: string
+githubIssueNumber?: number
+githubIssueUrl?: string
+executionMode?: ExecutionMode  // import from constants
+githubWorkflowStatus?: string
+copilotAssignedAt?: string
+copilotPrNumber?: number
+copilotPrUrl?: string
+lastSyncedAt?: string
+githubInstallationId?: string   // placeholder for GitHub App
+githubRepoFullName?: string     // placeholder for GitHub App
+```
+
+All new fields are optional — existing local-only projects remain valid.
+
+**Done when**: `types/project.ts` compiles with new optional fields, no existing code breaks.
+
+---
+
+## W3 ✅ — Expand PullRequest type with GitHub metadata
+- **Done**: Added 9 optional GitHub fields to `PullRequest` (`githubPrNumber`, `headSha`, `source`, etc.) preserving the existing local `number` field.
+
+Modify `types/pr.ts`:
+
+Add optional fields:
+```ts
+githubPrNumber?: number
+githubPrUrl?: string
+githubBranchRef?: string
+headSha?: string
+baseBranch?: string
+checksUrl?: string
+lastGithubSyncAt?: string
+workflowRunId?: string
+source?: 'local' | 'github'
+```
+
+Keep existing `number` field (local PR number). `githubPrNumber` is the real GitHub PR number.
+
+**Done when**: `types/pr.ts` compiles with new optional fields.
+
+---
+
+## W4 ✅ — Expand Task type + create GitHub event types
+- **Done**: Added 4 optional GitHub fields to `Task`; created `types/github.ts` with `GitHubEventType`, `GitHubIssuePayload`, `GitHubPRPayload`, and `GitHubWorkflowRunPayload`.
+
+Modify `types/task.ts`:
+
+Add optional fields:
+```ts
+githubIssueNumber?: number
+githubIssueUrl?: string
+source?: 'local' | 'github'
+parentTaskId?: string
+```
+
+Create `types/github.ts` — shared GitHub-specific types:
+```ts
+export type GitHubEventType = 'issues' | 'issue_comment' | 'pull_request' | 'pull_request_review' | 'workflow_run' | 'push'
+
+export interface GitHubIssuePayload {
+  action: string
+  issue: { number: number; title: string; html_url: string; state: string; assignee?: { login: string } }
+  repository: { full_name: string; owner: { login: string }; name: string }
+}
+
+export interface GitHubPRPayload {
+  action: string
+  pull_request: { number: number; title: string; html_url: string; state: string; head: { sha: string; ref: string }; base: { ref: string }; draft: boolean; mergeable?: boolean }
+  repository: { full_name: string; owner: { login: string }; name: string }
+}
+
+export interface GitHubWorkflowRunPayload {
+  action: string
+  workflow_run: { id: number; name: string; status: string; conclusion: string | null; html_url: string; head_sha: string }
+  repository: { full_name: string; owner: { login: string }; name: string }
+}
+```
+
+**Done when**: Both type files compile cleanly.
+
+---
+
+## W5 ✅ — Create AgentRun and ExternalRef types
+- **Done**: Created `types/agent-run.ts` with `AgentRun` interface (referencing `ExecutionMode` from constants) and `types/external-ref.ts` with `ExternalRef` interface for bidirectional provider mapping.
+
+Create `types/agent-run.ts`:
+```ts
+export type AgentRunKind = 'prototype' | 'fix_request' | 'spec' | 'research_summary' | 'copilot_issue_assignment'
+export type AgentRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'blocked'
+
+export interface AgentRun {
+  id: string
+  projectId: string
+  taskId?: string
+  kind: AgentRunKind
+  status: AgentRunStatus
+  executionMode: ExecutionMode  // from constants
+  triggeredBy: string
+  githubWorkflowRunId?: string
+  githubIssueNumber?: number
+  startedAt: string
+  finishedAt?: string
+  summary?: string
+  error?: string
+}
+```
+
+Create `types/external-ref.ts`:
+```ts
+export type ExternalProvider = 'github' | 'vercel' | 'supabase'
+
+export interface ExternalRef {
+  id: string
+  entityType: 'project' | 'pr' | 'task' | 'agent_run'
+  entityId: string
+  provider: ExternalProvider
+  externalId: string
+  externalNumber?: number
+  url?: string
+  createdAt: string
+}
+```
+
+**Done when**: Both new type files export their interfaces cleanly with `import type` working.
+
+---
+
+## W6 ✅ — Extend storage and constants
+- **Done**: Added `EXECUTION_MODES`, `ExecutionMode`, `AGENT_RUN_KINDS`, `AGENT_RUN_STATUSES` to `constants.ts`; extended `StudioStore` with `agentRuns`/`externalRefs`; upgraded `writeStore()` to atomic temp-file+rename; added auto-migration defaults in `readStore()`; updated `seed-data.ts` with empty arrays.
+
+Modify `lib/constants.ts`:
+
+Add:
+```ts
+export const EXECUTION_MODES = ['copilot_issue_assignment', 'custom_workflow_dispatch', 'local_agent'] as const
+export type ExecutionMode = (typeof EXECUTION_MODES)[number]
+
+export const AGENT_RUN_KINDS = ['prototype', 'fix_request', 'spec', 'research_summary', 'copilot_issue_assignment'] as const
+export const AGENT_RUN_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'blocked'] as const
+```
+
+Modify `lib/storage.ts`:
+
+Import `AgentRun` and `ExternalRef` types. Extend `StudioStore`:
+```ts
+export interface StudioStore {
+  ideas: Idea[]
+  drillSessions: DrillSession[]
+  projects: Project[]
+  tasks: Task[]
+  prs: PullRequest[]
+  inbox: InboxEvent[]
+  agentRuns: AgentRun[]        // NEW
+  externalRefs: ExternalRef[]  // NEW
+}
+```
+
+Update `getSeedData()` in `lib/seed-data.ts` to include empty arrays for `agentRuns` and `externalRefs` as defaults. Wait — `lib/seed-data.ts` is not in our ownership zone explicitly, but storage.ts creates the seed. Adjust: update the fallback in `readStore()` to merge missing keys with defaults so existing `.local-data/studio.json` files auto-migrate.
+
+**Also**: Use temp-file + rename pattern for atomic writes in `writeStore()`:
+```ts
+import os from 'os'
+// write to temp, then rename
+const tmpPath = FULL_STORAGE_PATH + '.tmp'
+fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+fs.renameSync(tmpPath, FULL_STORAGE_PATH)
+```
+
+**Done when**: `StudioStore` has `agentRuns` and `externalRefs`, writes are atomic, old JSON files auto-migrate.
+
+---
+
+## W7 ✅ — Create agent-runs and external-refs services + update .env.example
+- **Done**: Created `lib/services/agent-runs-service.ts` (createAgentRun, getAgentRun, getAgentRunsForProject, updateAgentRun, getLatestRunForProject, setAgentRunStatus) and `lib/services/external-refs-service.ts` (createExternalRef, getExternalRefsForEntity, findByExternalId, findByExternalNumber, deleteExternalRef); updated `.env.example` with all Sprint 2 GitHub env vars and comments.
+
+Create `lib/services/agent-runs-service.ts`:
+- `createAgentRun(data)` — generates ID, sets startedAt, persists
+- `getAgentRun(id)` — by ID
+- `getAgentRunsForProject(projectId)` — filter by project
+- `updateAgentRun(id, updates)` — partial update
+- `getLatestRunForProject(projectId)` — most recent run
+
+Create `lib/services/external-refs-service.ts`:
+- `createExternalRef(data)` — persists
+- `getExternalRefsForEntity(entityType, entityId)` — lookup
+- `findByExternalId(provider, externalId)` — reverse lookup (GitHub ID → local entity)
+- `deleteExternalRef(id)`
+
+Modify `.env.example` — add all new GitHub env vars with placeholder values and comments.
+
+**Done when**: Both services r/w through storage, `.env.example` documents all env vars.
+
+```
+
+### lanes/lane-1-persistence.md
+
+```markdown

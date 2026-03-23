@@ -20,4 +20,5 @@ export const ROUTES = {
   githubCreatePR: '/api/github/create-pr',
   githubSyncPR: '/api/github/sync-pr',
   githubMergePR: '/api/github/merge-pr',
+  githubTriggerAgent: '/api/github/trigger-agent',
 } as const

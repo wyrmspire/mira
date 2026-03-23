@@ -1,0 +1,66 @@
+
+> mira-studio@0.1.0 build
+> next build
+
+  ▲ Next.js 14.2.29
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/31) ...
+   Generating static pages (7/31) 
+   Generating static pages (15/31) 
+   Generating static pages (23/31) 
+ ✓ Generating static pages (31/31)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    3.19 kB          99 kB
+├ ○ /_not-found                          873 B            88 kB
+├ ƒ /api/actions/kill-idea               0 B                0 B
+├ ƒ /api/actions/mark-shipped            0 B                0 B
+├ ƒ /api/actions/merge-pr                0 B                0 B
+├ ƒ /api/actions/move-to-icebox          0 B                0 B
+├ ƒ /api/actions/promote-to-arena        0 B                0 B
+├ ƒ /api/drill                           0 B                0 B
+├ ƒ /api/github/create-issue             0 B                0 B
+├ ƒ /api/github/create-pr                0 B                0 B
+├ ƒ /api/github/dispatch-workflow        0 B                0 B
+├ ƒ /api/github/merge-pr                 0 B                0 B
+├ ƒ /api/github/sync-pr                  0 B                0 B
+├ ƒ /api/github/test-connection          0 B                0 B
+├ ƒ /api/ideas                           0 B                0 B
+├ ƒ /api/ideas/materialize               0 B                0 B
+├ ƒ /api/inbox                           0 B                0 B
+├ ƒ /api/projects                        0 B                0 B
+├ ƒ /api/prs                             0 B                0 B
+├ ƒ /api/tasks                           0 B                0 B
+├ ƒ /api/webhook/github                  0 B                0 B
+├ ƒ /api/webhook/gpt                     0 B                0 B
+├ ƒ /api/webhook/vercel                  0 B                0 B
+├ ƒ /arena                               3.19 kB          99 kB
+├ ƒ /arena/[projectId]                   3.19 kB          99 kB
+├ ○ /dev/github-playground               2.97 kB        98.8 kB
+├ ○ /dev/gpt-send                        4.23 kB         100 kB
+├ ○ /drill                               4.1 kB         91.2 kB
+├ ○ /drill/end                           175 B            96 kB
+├ ○ /drill/kill-path                     138 B          87.3 kB
+├ ○ /drill/success                       1.85 kB        97.7 kB
+├ ƒ /icebox                              3.18 kB          99 kB
+├ ƒ /inbox                               4.47 kB         100 kB
+├ ƒ /killed                              3.18 kB          99 kB
+├ ƒ /review/[prId]                       4.88 kB         101 kB
+├ ƒ /send                                4.49 kB         100 kB
+└ ƒ /shipped                             3.18 kB          99 kB
++ First Load JS shared by all            87.1 kB
+  ├ chunks/117-c264931d1ca5a9b9.js       31.6 kB
+  ├ chunks/fd9d1056-1aae0987937804d3.js  53.6 kB
+  └ other shared chunks (total)          1.89 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
