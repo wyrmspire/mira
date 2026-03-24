@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getIdeas, createIdea } from '@/lib/services/ideas-service'
-import { validateIdeaPayload } from '@/lib/validators/idea-validator'
+import { validateIdeaPayload, normalizeIdeaPayload } from '@/lib/validators/idea-validator'
 import type { ApiResponse } from '@/types/api'
 import type { Idea } from '@/types/idea'
 
@@ -25,6 +25,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const idea = await createIdea(body)
+  // Normalize camelCase (from GPT) to snake_case (for DB)
+  const normalized = normalizeIdeaPayload(body)
+  const idea = await createIdea(normalized)
   return NextResponse.json<ApiResponse<Idea>>({ data: idea }, { status: 201 })
 }

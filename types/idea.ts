@@ -9,11 +9,11 @@ export type IdeaStatus =
 export interface Idea {
   id: string
   title: string
-  rawPrompt: string
-  gptSummary: string
+  raw_prompt: string
+  gpt_summary: string
   vibe: string
   audience: string
   intent: string
-  createdAt: string
+  created_at: string
   status: IdeaStatus
 }

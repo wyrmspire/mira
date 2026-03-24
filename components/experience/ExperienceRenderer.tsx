@@ -9,10 +9,18 @@ import { ROUTES } from '@/lib/routes';
 import { COPY } from '@/lib/studio-copy';
 import QuestionnaireStep from './steps/QuestionnaireStep';
 import LessonStep from './steps/LessonStep';
+import ChallengeStep from './steps/ChallengeStep';
+import PlanBuilderStep from './steps/PlanBuilderStep';
+import ReflectionStep from './steps/ReflectionStep';
+import EssayTasksStep from './steps/EssayTasksStep';
 
-// Register built-in renderers
+// Register all built-in renderers
 registerRenderer('questionnaire', QuestionnaireStep as any);
 registerRenderer('lesson', LessonStep as any);
+registerRenderer('challenge', ChallengeStep as any);
+registerRenderer('plan_builder', PlanBuilderStep as any);
+registerRenderer('reflection', ReflectionStep as any);
+registerRenderer('essay_tasks', EssayTasksStep as any);
 
 interface ExperienceRendererProps {
   instance: ExperienceInstance;

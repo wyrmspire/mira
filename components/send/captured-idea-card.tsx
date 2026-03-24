@@ -18,16 +18,16 @@ export function CapturedIdeaCard({ idea, onHold, onRemove }: CapturedIdeaCardPro
         {/* Header: title + timestamp */}
         <div className="flex items-start justify-between gap-4 mb-3">
           <h2 className="text-xl font-bold text-[#e2e8f0] leading-snug">{idea.title}</h2>
-          <TimePill dateString={idea.createdAt} />
+          <TimePill dateString={idea.created_at} />
         </div>
 
         {/* GPT Summary */}
-        <p className="text-sm text-[#cbd5e1] mb-4 leading-relaxed">{idea.gptSummary}</p>
+        <p className="text-sm text-[#cbd5e1] mb-4 leading-relaxed">{idea.gpt_summary}</p>
 
         {/* Raw prompt as blockquote */}
-        {idea.rawPrompt && (
+        {idea.raw_prompt && (
           <blockquote className="border-l-2 border-[#2e2e42] pl-3 mb-4">
-            <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.rawPrompt}&rdquo;</p>
+            <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.raw_prompt}&rdquo;</p>
           </blockquote>
         )}
 

@@ -22,11 +22,11 @@ export function IdeaContextCard({ idea }: IdeaContextCardProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h4 className="text-[10px] font-bold text-[#4b5563] uppercase tracking-wider mb-2">Original Brainstorm</h4>
-            <p className="text-[#94a3b8] text-sm italic line-clamp-3">"{idea.rawPrompt}"</p>
+            <p className="text-[#94a3b8] text-sm italic line-clamp-3">"{idea.raw_prompt}"</p>
           </div>
           <div>
             <h4 className="text-[10px] font-bold text-[#4b5563] uppercase tracking-wider mb-2">GPT Summary</h4>
-            <p className="text-[#94a3b8] text-sm leading-relaxed">{idea.gptSummary}</p>
+            <p className="text-[#94a3b8] text-sm leading-relaxed">{idea.gpt_summary}</p>
           </div>
         </div>
 

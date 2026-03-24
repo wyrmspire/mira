@@ -17,12 +17,12 @@ export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
   return ideas.filter((i) => i.status === status)
 }
 
-export async function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Promise<Idea> {
+export async function createIdea(data: Omit<Idea, 'id' | 'created_at' | 'status'>): Promise<Idea> {
   const adapter = getStorageAdapter()
   const idea: Idea = {
     ...data,
     id: generateId(),
-    createdAt: new Date().toISOString(),
+    created_at: new Date().toISOString(),
     status: 'captured',
   }
   return adapter.saveItem<Idea>('ideas', idea)

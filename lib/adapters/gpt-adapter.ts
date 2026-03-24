@@ -9,11 +9,11 @@ export interface GPTIdeaPayload {
   intent?: string
 }
 
-export function parseGPTPayload(payload: GPTIdeaPayload): Omit<Idea, 'id' | 'createdAt' | 'status'> {
+export function parseGPTPayload(payload: GPTIdeaPayload): Omit<Idea, 'id' | 'created_at' | 'status'> {
   return {
     title: payload.title,
-    rawPrompt: payload.rawPrompt,
-    gptSummary: payload.gptSummary,
+    raw_prompt: payload.rawPrompt,
+    gpt_summary: payload.gptSummary,
     vibe: payload.vibe ?? 'unknown',
     audience: payload.audience ?? 'unknown',
     intent: payload.intent ?? '',

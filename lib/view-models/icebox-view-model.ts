@@ -20,10 +20,10 @@ export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): Icebox
       type: 'idea',
       id: i.id,
       title: i.title,
-      summary: i.gptSummary,
-      daysInIcebox: daysSince(i.createdAt),
-      isStale: daysSince(i.createdAt) >= STALE_ICEBOX_DAYS,
-      createdAt: i.createdAt,
+      summary: i.gpt_summary,
+      daysInIcebox: daysSince(i.created_at),
+      isStale: daysSince(i.created_at) >= STALE_ICEBOX_DAYS,
+      createdAt: i.created_at,
     }))
 
   const iceboxProjects: IceboxItem[] = projects
