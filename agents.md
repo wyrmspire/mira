@@ -6,11 +6,19 @@
 
 ## Product Summary
 
-Mira is a Vercel-hosted Studio UI for managing ideas from capture through execution. Ideas arrive from a custom GPT via webhook (or locally via a dev harness), then flow through a clarification tunnel (Drill), become projects, get reviewed via PR previews, and are ultimately shipped or archived.
+Mira is an experience engine disguised as a studio. Users talk to a Custom GPT ("Mira"), which proposes typed **Experiences** — structured modules the user lives through inside the app. Experiences can be persistent (go through a review pipeline) or ephemeral (injected instantly). A coding agent *realizes* these experiences against typed schemas and pushes them through GitHub. The frontend renders experiences from schema, not from hardcoded pages.
 
-**Core user journey:** Capture → Clarify → Build → Review → Ship/Archive
+**Core entities:**
+- **Experience** — the central noun. Can be a questionnaire, lesson, challenge, plan builder, reflection, or essay+tasks.
+- **Realization** — the internal build object (replaces "project" for code-execution contexts). Maps to GitHub issues/PRs.
+- **Resolution** — typed object on every experience controlling depth, mode, time scope, and intensity.
+- **Re-entry Contract** — per-experience hook that defines how GPT re-enters with awareness.
 
-**Local development model:** The user is the local dev. They brainstorm ideas locally in the app and test the full flow. The API endpoints are the same contract that a custom GPT will hit in production. In local mode, ideas are entered via a `/dev/gpt-send` harness page. PRs and previews are simulated with local records.
+**Two parallel truths:**
+- Runtime truth lives in Supabase (what the user did)
+- Realization truth lives in GitHub (what the coder built)
+
+**Local development model:** The user is the local dev. API endpoints are the same contract the Custom GPT hits in production. In local mode, ideas are entered via `/dev/gpt-send` harness. JSON file fallback via `.local-data/studio.json` works when Supabase is not configured.
 
 ---
 
@@ -21,10 +29,13 @@ Mira is a Vercel-hosted Studio UI for managing ideas from capture through execut
 | Framework | Next.js 14.2 (App Router) |
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS 3.4, dark studio theme |
-| Data | JSON file storage under `.local-data/` (survives server restarts) |
-| State logic | `lib/state-machine.ts` — idea + project transition tables |
+| Database | Supabase (Postgres) — canonical runtime store |
+| Fallback data | JSON file storage under `.local-data/` (survives server restarts) |
+| State logic | `lib/state-machine.ts` — idea + project + experience + PR transition tables |
 | Copy/Labels | `lib/studio-copy.ts` — centralized UI copy |
 | Routing | `lib/routes.ts` — centralized route map |
+| GitHub | `@octokit/rest` via `lib/adapters/github-adapter.ts` |
+| Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
 
 ---
 
@@ -46,6 +57,7 @@ app/
   icebox/page.tsx       ← Deferred ideas + projects
   shipped/page.tsx      ← Completed projects
   killed/page.tsx       ← Removed projects
+  workspace/            ← [NEW Sprint 3] Lived experience surface
   dev/
     gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
     github-playground/  ← Dev harness: test GitHub operations
@@ -57,6 +69,10 @@ app/
     tasks/route.ts       ← GET tasks by project
     prs/route.ts         ← GET/PATCH PRs by project
     inbox/route.ts       ← GET/PATCH inbox events
+    experiences/         ← [NEW Sprint 3] experience CRUD + inject
+    interactions/        ← [NEW Sprint 3] event telemetry
+    synthesis/           ← [NEW Sprint 3] compressed state for GPT
+    gpt/state/           ← [NEW Sprint 3] GPT re-entry endpoint
     actions/
       promote-to-arena/  ← POST
       move-to-icebox/    ← POST
@@ -81,10 +97,11 @@ components/
   send/                  ← CapturedIdeaCard, DefineInStudioHero, IdeaSummaryPanel
   drill/                 ← DrillLayout, DrillProgress, GiantChoiceButton, MaterializationSequence
   arena/                 ← ArenaProjectCard, ActiveLimitBanner, PreviewFrame, ProjectPanes, etc.
-  review/                ← SplitReviewLayout, PRSummaryCard, DiffSummary, BuildStatusChip, FixRequestBox, PreviewToolbar
+  review/                ← SplitReviewLayout, PRSummaryCard, DiffSummary, BuildStatusChip, etc.
   inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
   icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
   archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
+  experience/            ← [NEW Sprint 3] ExperienceRenderer, step renderers
   dev/                   ← GPT send form, dev tools
 
 lib/
@@ -94,17 +111,22 @@ lib/
     client.ts            ← Octokit wrapper, getGitHubClient()
     signature.ts         ← HMAC-SHA256 webhook signature verification
     handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
+  supabase/              ← [NEW Sprint 3] Supabase client + adapter
+    client.ts            ← Server-side Supabase client
+    browser.ts           ← Browser-side Supabase client
   storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
-  seed-data.ts           ← Initial seed records (replaces mock-data.ts)
-  state-machine.ts       ← Idea + project + PR transition rules
+  storage-adapter.ts     ← [NEW Sprint 3] Adapter interface for storage backends
+  seed-data.ts           ← Initial seed records
+  state-machine.ts       ← Idea + project + experience + PR transition rules
   studio-copy.ts         ← Central copy strings for all pages
-  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, storage paths
+  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, experience classes
   routes.ts              ← Centralized route paths
   guards.ts              ← Type guards
   utils.ts               ← generateId helper
   date.ts                ← Date formatting
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
-                           agent-runs, external-refs, github-factory, github-sync services
+                           agent-runs, external-refs, github-factory, github-sync,
+                           experience, interaction, synthesis services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
   validators/            ← idea, project, drill, webhook validators
@@ -112,13 +134,15 @@ lib/
 
 types/
   idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
-  agent-run.ts, external-ref.ts, github.ts
+  agent-run.ts, external-ref.ts, github.ts,
+  experience.ts [NEW Sprint 3], interaction.ts [NEW Sprint 3], synthesis.ts [NEW Sprint 3]
 
 content/                 ← Product copy markdown
 docs/                    ← Architecture docs
 
 .local-data/             ← JSON file persistence (gitignored, auto-seeded)
 lanes/                   ← Sprint lane files (sprint-specific)
+roadmap.md               ← Product roadmap (experience engine evolution)
 wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
 ```
 
@@ -138,32 +162,36 @@ npx tsc --noEmit     # type check
 
 ## Common Pitfalls
 
-### Data persistence is JSON-file based
-All services read/write through `lib/storage.ts` to `.local-data/studio.json`. Data survives server restarts. If the file doesn't exist, it auto-seeds from `lib/seed-data.ts`. **Do not** import mock arrays directly — always go through service functions.
+### Data persistence has two backends
+`lib/storage.ts` is the legacy JSON file store. In Sprint 3+, Supabase becomes the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the JSON file fallback activates automatically. **Do not** call `fs` directly from services — always go through the adapter.
 
 ### Drill page is a client component
 `app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
 
 ### All data mutations must go through API routes
-Client components call `/api/*` endpoints. Server components can import services directly. This ensures the same contract works for both the UI and the future custom GPT.
+Client components call `/api/*` endpoints. Server components can import services directly. This ensures the same contract works for both the UI and the Custom GPT.
 
-### Review merge button must call the API
-The "Merge PR" button in `review/[prId]/page.tsx` must POST to `/api/actions/merge-pr`. Never mutate state directly from the component.
+### The central noun is Experience, not PR
+The user-facing language is "Approve Experience" / "Publish", not "Merge PR". Internally a realization may map to a PR, but the UI never exposes that. See `roadmap.md` for the full approval language table.
 
 ### GitHub adapter is a real Octokit client
-`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter — never call Octokit directly from routes. The adapter reads credentials from `lib/config/github.ts` via `lib/github/client.ts`. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
+`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
 
 ### GitHub webhook route verifies signatures
-The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`. Events are dispatched to per-event handlers in `lib/github/handlers/`.
-
-### Vercel webhook is still a stub
-Only the Vercel webhook handler remains a stub. GPT and GitHub webhooks are functional.
+The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`.
 
 ### `studio-copy.ts` is the single source for UI labels
 All user-facing text should come from this file. Some pages still hardcode strings — fix them when you see them.
 
 ### Route naming vs. internal naming
 Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should present these in friendlier terms: "In Progress" / "On Hold" / "Removed" / "Shipped".
+
+### Experience has two instance types
+`persistent` = goes through proposal → realization → review → publish pipeline.
+`ephemeral` = GPT creates directly via `/api/experiences/inject`, renders instantly, skips review.
+
+### Resolution object is mandatory on all experience instances
+Every experience carries a `resolution` JSONB field: `{ depth, mode, timeScope, intensity }`. This controls renderer chrome, coder spec shape, and GPT entry mode. Never create an experience instance without a resolution.
 
 ---
 
@@ -200,26 +228,40 @@ Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should pr
 - ✅ `fetch('/api/actions/kill-idea', { method: 'POST', body: ... })`
 - Why: The custom GPT will hit the same `/api/*` endpoints. The UI must exercise the same contract.
 
-### SOP-6: Use `lib/storage.ts` for all persistence
+### SOP-6: Use `lib/storage.ts` (or adapter) for all persistence
 **Learned from**: In-memory data loss on server restart
 
 - ❌ `const ideas: Idea[] = [...MOCK_IDEAS]` (module-level array, lost on restart)
-- ✅ `const ideas = storage.read('ideas')` (reads from `.local-data/studio.json`)
-- Why: Local data must survive server restarts. JSON file storage is the local persistence layer.
+- ✅ `const ideas = storage.read('ideas')` (reads from persistent store)
+- Why: Data must survive server restarts. The storage adapter handles backend selection.
 
 ### SOP-7: GitHub operations go through the adapter, never raw Octokit
 **Learned from**: Sprint 2 architecture
 
 - ❌ `const octokit = new Octokit(...)` in a route handler
 - ✅ `import { createIssue } from '@/lib/adapters/github-adapter'`
-- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes. Business logic stays untouched.
+- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes.
 
 ### SOP-8: Don't call the adapter from routes — use services
 **Learned from**: Sprint 2 architecture
 
 - ❌ `import { createIssue } from '@/lib/adapters/github-adapter'` in a route
 - ✅ `import { createIssueFromProject } from '@/lib/services/github-factory-service'`
-- Why: Services orchestrate: load local data → call adapter → update local records → create inbox events. Routes stay thin.
+- Why: Services orchestrate: load data → call adapter → update records → create events. Routes stay thin.
+
+### SOP-9: Supabase operations go through services, never raw client calls in routes
+**Learned from**: Sprint 3 architecture
+
+- ❌ `const { data } = await supabase.from('experience_instances').select('*')` in a route handler
+- ✅ `import { getExperienceInstances } from '@/lib/services/experience-service'`
+- Why: Same principle as SOP-8. Services own the query logic; routes are thin dispatch layers.
+
+### SOP-10: Every experience instance must carry a resolution object
+**Learned from**: Sprint 3 architecture
+
+- ❌ Creating an experience_instance with no resolution field
+- ✅ Always include `resolution: { depth, mode, timeScope, intensity }` — even for ephemeral
+- Why: Resolution controls renderer chrome, coder spec shape, and GPT entry behavior. Without it, the system drifts.
 
 ---
 
@@ -228,3 +270,4 @@ Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should pr
 - **2026-03-22**: Initial agents.md created during Sprint 1 boardinit.
 - **2026-03-22**: Added SOP-5 (API-first mutations) and SOP-6 (JSON file storage).
 - **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
+- **2026-03-23**: Sprint 3 boardinit — Runtime Foundation. Added SOP-9 (Supabase through services), SOP-10 (resolution mandatory). Updated product summary to experience-engine model. Added Supabase to tech stack. Updated repo map with experience, interaction, synthesis files. Updated SOP-6 with adapter pattern.
