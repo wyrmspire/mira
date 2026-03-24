@@ -1,5 +1,6 @@
 // types/synthesis.ts
-import { ExperienceInstance, ReentryContract } from './experience';
+import { ExperienceInstance } from './experience';
+import { ActiveReentryPrompt } from '@/lib/experience/reentry-engine';
 
 export type FacetType =
   | 'interest'
@@ -34,8 +35,9 @@ export interface ProfileFacet {
 
 export interface GPTStatePacket {
   latestExperiences: ExperienceInstance[];
-  activeReentryPrompts: ReentryContract[];
+  activeReentryPrompts: ActiveReentryPrompt[];
   frictionSignals: { instanceId: string; level: FrictionLevel }[];
   suggestedNext: string[];
   synthesisSnapshot: SynthesisSnapshot | null;
+  proposedExperiences: ExperienceInstance[];
 }

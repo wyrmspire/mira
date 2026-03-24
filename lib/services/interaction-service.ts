@@ -5,7 +5,7 @@ import { generateId } from '@/lib/utils'
 export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
   const adapter = getStorageAdapter()
   const event: InteractionEvent = {
-    id: `evnt-${generateId()}`,
+    id: generateId(),
     instance_id: data.instanceId,
     step_id: data.stepId || null,
     event_type: data.eventType,
@@ -23,14 +23,13 @@ export async function getInteractionsByInstance(instanceId: string): Promise<Int
 export async function createArtifact(data: { instanceId: string; artifactType: string; title: string; content: string; metadata: any }): Promise<Artifact> {
   const adapter = getStorageAdapter()
   const artifact: Artifact = {
-    id: `art-${generateId()}`,
+    id: generateId(),
     instance_id: data.instanceId,
     artifact_type: data.artifactType,
     title: data.title,
     content: data.content,
     metadata: data.metadata || {},
-    created_at: new Date().toISOString()
-  } as Artifact
+  }
   return adapter.saveItem<Artifact>('artifacts', artifact)
 }
 

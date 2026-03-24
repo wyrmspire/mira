@@ -37,7 +37,7 @@ export async function createExperienceInstance(data: Omit<ExperienceInstance, 'i
   const adapter = getStorageAdapter()
   const instance: ExperienceInstance = {
     ...data,
-    id: `exp-${generateId()}`,
+    id: generateId(),
     created_at: new Date().toISOString()
   } as ExperienceInstance
 
@@ -59,7 +59,73 @@ export async function createExperienceStep(data: Omit<ExperienceStep, 'id'>): Pr
   const adapter = getStorageAdapter()
   const step: ExperienceStep = {
     ...data,
-    id: `step-${generateId()}`
+    id: generateId()
   } as ExperienceStep
   return adapter.saveItem<ExperienceStep>('experience_steps', step)
+}
+
+import { ExperienceTransitionAction, canTransitionExperience, getNextExperienceState } from '@/lib/state-machine'
+
+export async function transitionExperienceStatus(id: string, action: ExperienceTransitionAction): Promise<ExperienceInstance | null> {
+  const instance = await getExperienceInstanceById(id)
+  if (!instance) return null
+
+  if (!canTransitionExperience(instance.status, action)) {
+    console.error(`Invalid experience transition from ${instance.status} with action ${action}`)
+    return null
+  }
+
+  const nextStatus = getNextExperienceState(instance.status, action)
+  if (!nextStatus) return null
+
+  const updates: Partial<ExperienceInstance> = { status: nextStatus }
+
+  if (action === 'publish') {
+    updates.published_at = new Date().toISOString()
+  }
+
+  return updateExperienceInstance(id, updates)
+}
+
+export async function getActiveExperiences(userId: string): Promise<ExperienceInstance[]> {
+  const experiences = await getExperienceInstances({ userId, instanceType: 'persistent' })
+  return experiences.filter(exp => ['active', 'published'].includes(exp.status))
+}
+
+export async function getCompletedExperiences(userId: string): Promise<ExperienceInstance[]> {
+  return getExperienceInstances({ userId, status: 'completed' })
+}
+
+export async function getEphemeralExperiences(userId: string): Promise<ExperienceInstance[]> {
+  return getExperienceInstances({ userId, instanceType: 'ephemeral' })
+}
+
+export async function getProposedExperiences(userId: string): Promise<ExperienceInstance[]> {
+  const experiences = await getExperienceInstances({ userId, instanceType: 'persistent' })
+  return experiences.filter(exp => 
+    ['proposed', 'drafted', 'ready_for_review', 'approved'].includes(exp.status)
+  )
+}
+
+export async function getResumeStepIndex(instanceId: string): Promise<number> {
+  const { getInteractionsByInstance } = await import('./interaction-service')
+  const interactions = await getInteractionsByInstance(instanceId)
+  
+  // Find highest step_id from task_completed events
+  const completions = interactions.filter(i => i.event_type === 'task_completed')
+  if (completions.length === 0) return 0
+
+  // Map back to step orders. step_id in interaction might be the UUID.
+  // We need to fetch steps to map UUID -> order.
+  const steps = await getExperienceSteps(instanceId)
+  const completedStepIds = new Set(completions.map(c => c.step_id))
+  
+  let highestOrder = -1
+  for (const step of steps) {
+    if (completedStepIds.has(step.id)) {
+      highestOrder = Math.max(highestOrder, step.step_order)
+    }
+  }
+
+  return Math.min(highestOrder + 1, steps.length - 1)
 }

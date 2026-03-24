@@ -26,12 +26,34 @@ Idea capture, 6-step drill, promote/ship lifecycle, JSON file persistence via `l
 
 Real Octokit adapter (`lib/adapters/github-adapter.ts`), signature-verified webhook pipeline (`lib/github/`), issue creation, PR creation, coding agent assignment (Copilot), workflow dispatch, factory/sync services, action upgrades with GitHub-aware state machine. Lanes 1–5 all TSC-clean. Lane 6 (integration proof) still open.
 
+### ✅ Sprint 3 — Foundation Pivot: DB + Experience Types (Complete)
+
+Supabase is live (project `bbdhhlungcjqzghwovsx`). 16 Mira-specific tables deployed. Storage adapter pattern in place (`lib/storage-adapter.ts`) with JSON fallback. Experience type system (`types/experience.ts`, `types/interaction.ts`, `types/synthesis.ts`), experience state machine, services (experience, interaction, synthesis), and all API routes operational. GPT re-entry endpoint (`/api/gpt/state`) returns compressed state packets. 6 Tier 1 templates seeded. Dev user seeded. All verification criteria pass.
+
+### ✅ Sprint 4 — Experience Renderer + Library (Complete)
+
+Renderer registry (`lib/experience/renderer-registry.tsx`), workspace page (`/workspace/[instanceId]`), library page (`/library`), experience cards, step renderers (Questionnaire, Lesson, Challenge, Plan Builder, Reflection, Essay+Tasks), interaction recording via `useInteractionCapture` hook, resolution-driven chrome levels, re-entry engine, persistent experience lifecycle (proposed → active → completed), and home page surfaces for active/proposed experiences. All verification criteria pass.
+
+### 🔄 Current Phase — GPT Connection + Data-First Experience Testing
+
+The GPT Custom instructions and OpenAPI schema are defined in `openschema.md`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
+- Fetch user state (`getGPTState`)
+- Create ephemeral experiences (`injectEphemeral`)
+- Propose persistent experiences (`createPersistentExperience`)
+- Capture raw ideas (`captureIdea`)
+- List existing experiences (`listExperiences`)
+
+**Strategic direction:** Prove the GPT-created experience loop works before expanding the coder. The coder capability exists (GitHub factory from Sprint 2) but is deliberately deferred. The current focus is whether the system can create durable, stateful, action-producing experiences that feel meaningfully better than plain chat.
+
 ### Current Architecture Snapshot
 
 ```
 GPT (Custom GPT "Mira")
-  ↓ webhook
+  ↓ OpenAPI actions (7 endpoints)
+  ↓ via Cloudflare tunnel (mira.mytsapi.us)
 Mira Studio (Next.js 14, App Router)
+  ├── workspace/  ← lived experience surface (renders typed modules)
+  ├── library/    ← all experiences: active, completed, proposed
   ├── send/       ← captured ideas
   ├── drill/      ← 6-step clarification
   ├── arena/      ← active projects (max 3)
@@ -41,14 +63,24 @@ Mira Studio (Next.js 14, App Router)
   ├── killed/     ← removed
   └── api/        ← endpoints for GPT + GitHub webhooks
         ↕
-GitHub (Octokit, webhooks, Actions)
+Supabase (Postgres — canonical runtime store)
+  ├── experience_templates (6 seeded)
+  ├── experience_instances
+  ├── experience_steps
+  ├── interaction_events
+  ├── synthesis_snapshots
+  └── 10 more tables...
         ↕
-.local-data/studio.json (JSON file persistence)
+GitHub (realization substrate — deferred)
+  ├── webhook at /api/webhook/github
+  └── factory services ready but not in active use
 ```
 
-**What works:** capture → drill → materialize → arena → GitHub issue → agent build → PR → merge → ship.
+**What works:** GPT → create experience → user lives it in workspace → interactions recorded → GPT can re-enter with awareness. Full lifecycle for both ephemeral and persistent experiences.
 
-**What's missing:** runtime experience memory, modular experience rendering, lived-experience tracking, GPT re-entry with awareness, a real database, spontaneity.
+**What's being tested:** Does this create a living experience, or is it just chat wearing a costume? Can the system create structure that persists, change behavior, reconstruct reality on return, and generate forward pressure?
+
+**What's next:** Prove the experience loop, then give the coder enough context to participate when it gets instructions from the GPT or from the experience itself.
 
 ---
 
@@ -417,92 +449,202 @@ Idea capture, drill, promote, ship lifecycle. Local JSON persistence. Inbox even
 
 Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent assignment. Factory/sync services.
 
----
+### ✅ Sprint 3 — Foundation Pivot: DB + Experience Types (Complete)
 
-### 🔲 Sprint 3 — Foundation Pivot: DB + Experience Types
+Supabase live. 16 Mira tables deployed. Storage adapter pattern. Experience type system. All API routes. GPT re-entry endpoint. 6 templates + dev user seeded.
 
-> **Goal:** Stand up the canonical runtime database and introduce the Experience as the central entity — without breaking existing working routes.
+### ✅ Sprint 4 — Experience Renderer + Library (Complete)
 
-#### Phase 3A — Supabase Setup + Migration Layer
-
-| # | Work Item | Detail |
-|---|-----------|--------|
-| 1 | Create Supabase project | New project in existing org. Configure env vars. |
-| 2 | Schema migration: preserved entities | `ideas`, `drill_sessions`, `agent_runs`, `external_refs` → Supabase tables matching current TypeScript types. Add `users` table (single-user seed). |
-| 3 | Schema migration: evolved entities | `projects` → `realizations` table (preserving all current fields + adding `experience_instance_id`). `prs` → `realization_reviews`. `inbox` → `timeline_events`. |
-| 4 | Schema migration: new experience tables | `experience_templates`, `experience_instances` (with `resolution`, `reentry`, `instance_type`, `friction_level`, `previous_experience_id`, `next_suggested_ids`), `experience_steps`, `interaction_events`, `artifacts`, `synthesis_snapshots`, `profile_facets`, `conversations`. |
-| 5 | Supabase client setup | Install `@supabase/supabase-js`. Create `lib/supabase/client.ts` (server) and `lib/supabase/browser.ts` (client). |
-| 6 | Storage adapter pattern | Create `lib/storage-adapter.ts` interface. Implement `SupabaseStorageAdapter`. Keep `JsonFileStorageAdapter` as fallback. `lib/storage.ts` delegates to configured adapter. |
-| 7 | Service layer refactor | Update all services in `lib/services/` to go through the storage adapter. No service should import `fs` directly anymore. |
-| 8 | Seed migration | Port `lib/seed-data.ts` data into Supabase seed SQL. Keep JSON fallback for offline dev. |
-| 9 | RLS policies | Enable Row Level Security on all tables. Single-user policies initially (match `auth.uid()` or service role). |
-| 10 | Env wiring | Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` to `.env.example` and `wiring.md`. |
-
-#### Phase 3B — Experience Type System
-
-| # | Work Item | Detail |
-|---|-----------|--------|
-| 1 | New types | `types/experience.ts`: `ExperienceTemplate`, `ExperienceInstance`, `ExperienceStep`, `ExperienceClass`, `ExperienceStatus`, `Resolution`, `ReentryContract`. `types/interaction.ts`: `InteractionEvent`, `Artifact`. `types/synthesis.ts`: `SynthesisSnapshot`, `ProfileFacet`. |
-| 2 | Experience state machine | Add `EXPERIENCE_TRANSITIONS` to `lib/state-machine.ts`: `proposed → drafted → ready_for_review → approved → published → active → completed → archived`. Also `superseded` for versioning. Ephemeral: `injected → active → completed → archived`. |
-| 3 | Experience services | `lib/services/experience-service.ts`: CRUD for templates, instances, steps. `lib/services/interaction-service.ts`: event recording. `lib/services/synthesis-service.ts`: snapshot creation + friction computation + facet extraction. |
-| 4 | Experience API routes | `app/api/experiences/route.ts` (GET/POST templates + instances). `app/api/experiences/[id]/steps/route.ts`. `app/api/experiences/inject/route.ts` (POST ephemeral — GPT direct-create). `app/api/interactions/route.ts` (POST events). `app/api/synthesis/route.ts` (GET compressed state for GPT). |
-| 5 | GPT re-entry endpoint | `app/api/gpt/state/route.ts`: returns compressed packet (latest experiences, outcomes, artifacts, active re-entry prompts, friction signals, suggested next). Add to Custom GPT schema. |
-| 6 | Update `studio-copy.ts` | Add experience-language copy. "Approve Experience", "Publish", "Preview Experience". Keep all existing copy working. |
-| 7 | Update `routes.ts` | Add `ROUTES.workspace`, `ROUTES.library`, `ROUTES.timeline`, `ROUTES.profile`. Keep all existing routes. |
-
-#### Phase 3 Verification
-- `npx tsc --noEmit` passes
-- `npm run build` passes
-- Existing idea → drill → arena flow still works via JSON fallback
-- Supabase tables exist and accept writes via service layer
-- `/api/experiences` returns empty array
-- `/api/experiences/inject` creates an ephemeral instance
-- `/api/gpt/state` returns a valid (empty) synthesis packet
+Renderer registry. Workspace page. Library page. 6 step renderers. Interaction recording. Resolution-driven chrome. Re-entry engine. Persistent lifecycle. Home page surfaces.
 
 ---
 
-### 🔲 Sprint 4 — Experience Renderer System
+### 🔄 Sprint 5 — Data-First Experience Testing (Current)
 
-> **Goal:** Frontend becomes modular. The app can render typed experience modules from schema, including ephemeral experiences that appear instantly.
+> **Goal:** Prove the GPT-created experience loop works. The system must create durable, stateful, action-producing experiences that feel meaningfully better than plain chat. No new infrastructure — just honest testing.
+
+> **Strategic context:** The original roadmap envisioned GPT → Coder → App → User → DB → GPT. The instructions for that loop got too long. We've simplified: GPT creates experiences directly. The coder capability exists but is parked. We test whether GPT-authored experiences are good enough, then decide if/when the coder adds value.
+
+#### Phase 5A — GPT Connection
 
 | # | Work Item | Detail |
 |---|-----------|--------|
-| 1 | Renderer architecture | `components/experience/ExperienceRenderer.tsx` — receives an `ExperienceInstance` + steps + resolution, delegates to step renderers. Resolution controls chrome level (light = minimal, heavy = full scaffolding). |
-| 2 | Step renderer registry | `lib/experience/renderer-registry.ts` — maps `step_type` to React component. Extensible without touching core code. |
-| 3 | Tier 1 step renderers | `components/experience/steps/QuestionnaireStep.tsx`, `LessonStep.tsx`, `ChallengeStep.tsx`, `PlanBuilderStep.tsx`, `ReflectionStep.tsx`, `EssayTaskStep.tsx`. |
-| 4 | Workspace page | `app/workspace/[instanceId]/page.tsx` — loads experience instance + steps from API, renders via `ExperienceRenderer`. Handles both persistent and ephemeral. Tracks interactions client-side. |
-| 5 | Library page | `app/library/page.tsx` — lists all experience instances. Filterable by status: active, completed, paused, suggested, archived. Ephemeral experiences show in a separate "moments" section. |
-| 6 | Experience cards | `components/library/ExperienceCard.tsx` — rich card showing progress, type icon, resolution badge, last interaction, next step, graph links (previous/next). |
-| 7 | Interaction recording | Workspace page POSTs `interaction_events` on: step view, answer submit, task complete, skip, time-on-step. Same contract for persistent and ephemeral. |
-| 8 | Template seeding | Seed 6 Tier 1 templates into `experience_templates` with `config_schema` definitions. |
-| 9 | Ephemeral rendering | Ephemeral experiences render with minimal chrome (no review banner, no approval gate). Resolution `depth: light` triggers streamlined layout. |
+| 1 | Custom GPT instructions | Written. See `openschema.md` Part 1. Defines Mira's personality, the 6 experience types, step payload formats, re-entry behavior, resolution semantics. |
+| 2 | OpenAPI schema | Written. See `openschema.md` Part 2. 7 endpoints: `getGPTState`, `injectEphemeral`, `createPersistentExperience`, `listExperiences`, `captureIdea`, `getLatestSynthesis`, `recordInteraction`. |
+| 3 | GPT configuration | Create the Custom GPT on ChatGPT, paste instructions + schema, point at `https://mira.mytsapi.us`. |
+| 4 | Verification | GPT calls `getGPTState` successfully. GPT creates an ephemeral experience that renders in the app. |
 
-#### Sprint 4 Verification
-- Workspace page renders a seeded questionnaire experience
-- Step completion writes interaction events to Supabase
-- Library page shows all experience instances with correct status
-- Renderer registry correctly routes to per-type components
-- Ephemeral experience renders with minimal chrome
-- Resolution object controls renderer chrome level
+#### Phase 5B — Experience Quality Testing
+
+Run 3 flows and score each on 5 criteria:
+
+**Flow 1: Planning** — Take a vague idea → see if it becomes a real experience with shape.
+- Looking for: compression, clarity, sequence, persistence
+
+**Flow 2: Execution** — Use it to actually do something in the real world.
+- Looking for: friction reduction, accountability, next-step quality, movement
+
+**Flow 3: Re-entry** — Leave, do something, come back later.
+- Looking for: memory continuity, state reconstruction, intelligent next move, aliveness
+
+**5-point scorecard (per flow):**
+1. Was it more useful than plain chat?
+2. Did it create a real object or path?
+3. Did it make me do something?
+4. Did re-entry feel continuous?
+5. Did it generate momentum?
+
+#### Failure modes to watch for
+
+| Mode | Description |
+|------|-------------|
+| Chat with extra steps | Looks structured, but nothing really changed |
+| Pretty persistence | Stuff is saved, but not meaningfully used |
+| Question treadmill | Keeps asking good questions instead of creating action |
+| Flat re-entry | Remembers facts, but not momentum |
+| No bite | Helps, but never pushes |
+
+#### Phase 5C — Quality Signal → Next Sprint Decision
+
+Based on testing results:
+
+| Signal | Next Move |
+|--------|-----------|
+| Structure ✅ State ✅ Behavior ✅ | Move to Sprint 6 (Chaining + Spontaneity) |
+| Structure ✅ State ✅ Behavior ❌ | Focus sprint on: stronger escalation logic, better next-action generation, challenge/pressure mechanics, more assertive re-entry |
+| Structure ✅ State ❌ | Fix synthesis/re-entry engine before moving forward |
+| Structure ❌ | Fix renderer/step quality before anything else |
+
+The coder gets involved when:
+- GPT-authored experiences are proven useful
+- Coder would create experiences that are genuinely impossible for GPT alone (complex branching, real-time data, multi-media, interactive simulations)
+- The coder has enough context to participate (user profile, capability map, experience history)
 
 ---
 
-### 🔲 Sprint 5 — Proposal → Realization → Review Pipeline
+### 🔲 Sprint 6 — Proposal → Realization → Coder Pipeline (Deferred)
 
-> **Goal:** Generated experiences go through a reviewable pipeline before going live. Ephemeral experiences bypass this entirely.
+> **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
+>
+> **Prerequisite:** Sprint 5 testing proves the experience loop works but identifies specific gaps that only a coder can fill.
+>
+> **Key insight:** The GPT doesn't just "assign" work to the coder — it writes a living spec that IS the coder's instructions. The spec lives as a GitHub Issue. The frontend can also edit it. This makes the issue a contract between GPT, user, and coder.
 
 | # | Work Item | Detail |
 |---|-----------|--------|
 | 1 | Proposal endpoint | `app/api/experiences/propose/route.ts` — GPT calls this with `{ experienceType, goal, resolution, reentry, sections, taskCount, whyNow }`. Creates a proposed experience instance (persistent). |
 | 2 | Realization record | When coder picks up a proposal, a `realization` record is created linking `experience_instance_id` to GitHub PR (if applicable). |
-| 3 | Review UI evolution | Refactor `/review/[id]` to support both legacy PR reviews and new experience reviews. User-facing buttons: Preview Experience · Approve · Request Changes · Publish. |
-| 4 | Publish flow | "Publish" = merge PR (if GitHub-backed) + set experience status to `published` + activate in workspace + fire re-entry contract registration. |
-| 5 | Supersede/versioning | When a new version of an experience is published, old version moves to `superseded`. User sees latest in library. |
-| 6 | Realization status tracking | `realization_reviews` table tracks: `drafted → ready_for_review → approved → published`. Maps to PR states internally. |
-| 7 | Arena evolution | `/arena` shows both active realizations and active experiences. Two panes or unified view. |
+| 3 | **Coder instruction issue** | GPT creates a GitHub Issue that serves as the coder's custom instructions. The issue body contains: experience schema, step payloads, resolution constraints, rendering requirements, and acceptance criteria. This is the coder's "prompt" — structured, not free-form. |
+| 4 | **Issue-as-living-spec** | The frontend surfaces the instruction issue in the review UI. The user can edit it before the coder starts (add constraints, change resolution, tweak step content). GPT can also update it mid-flight if the user refines their request. The issue is a 3-way contract: GPT writes it, user refines it, coder executes it. |
+| 5 | **Coder schema contract** | Define a structured schema for the issue body — not free-text markdown. Something parseable: YAML front-matter or a JSON code block that the coder agent can read programmatically. This is effectively a "coder OpenAPI" — the coder knows exactly what fields to read, what to build, and what to validate against. |
+| 6 | Review UI evolution | Refactor `/review/[id]` to support both legacy PR reviews and new experience reviews. User-facing buttons: Preview Experience · Approve · Request Changes · Publish. |
+| 7 | Publish flow | "Publish" = merge PR (if GitHub-backed) + set experience status to `published` + activate in workspace + fire re-entry contract registration. |
+| 8 | Supersede/versioning | When a new version of an experience is published, old version moves to `superseded`. User sees latest in library. |
+| 9 | Realization status tracking | `realization_reviews` table tracks: `drafted → ready_for_review → approved → published`. Maps to PR states internally. |
+| 10 | Arena evolution | `/arena` shows both active realizations and active experiences. Two panes or unified view. |
+| 11 | Coder context generation | Give the coder enough context to participate: user profile, capability map, experience history. See Sprint 9. |
 
-#### Sprint 5 Verification
-- GPT can POST a proposal that appears in review queue
+#### Coder Instruction Flow (New Architecture)
+
+```
+GPT conversation
+  ↓ "User wants a complex interactive experience"
+  ↓
+GPT calls propose endpoint
+  ↓ Creates experience_instance (status: proposed)
+  ↓ Creates GitHub Issue with structured spec
+  ↓
+┌──────────────────────────────────────────────────────┐
+│  GitHub Issue = Coder Instructions                    │
+│                                                       │
+│  --- coder-spec ---                                   │
+│  experience_type: challenge                           │
+│  template_id: b0000000-...                            │
+│  resolution:                                          │
+│    depth: heavy                                       │
+│    mode: build                                        │
+│    timeScope: multi_day                               │
+│    intensity: high                                    │
+│  steps:                                               │
+│    - type: lesson                                     │
+│      title: "Understanding the domain"                │
+│      rendering: "needs custom visualization"          │
+│    - type: challenge                                  │
+│      title: "Build a prototype"                       │
+│      rendering: "needs code editor widget"            │
+│  acceptance_criteria:                                 │
+│    - All steps render without fallback                │
+│    - Custom visualizations load real data             │
+│    - Interaction events fire correctly                │
+│  --- end spec ---                                     │
+│                                                       │
+│  Context: [link to user profile]                      │
+│  Capability map: [link to renderer registry]          │
+│  Related experiences: [links]                         │
+└──────────────────────────────────────────────────────┘
+  ↓                          ↑
+  ↓ Coder reads spec         ↑ User edits via frontend
+  ↓ Builds experience        ↑ GPT updates if user refines
+  ↓ Opens PR                 ↑
+  ↓                          ↑
+  ↓ PR links back to issue   ↑
+  ↓ Review in app UI         ↑
+  ↓ Approve → Publish        ↑
+  ↓                          ↑
+  → Experience goes live ←───┘
+```
+
+#### Issue as state and memory (not just instructions)
+
+> **Note:** We don't know the best shape for this yet. The core idea is that the GitHub Issue isn't just a one-shot spec — it's the coder's **working memory** during execution. The issue body starts as instructions, but the coder can update it as it works:
+>
+> - Append a "progress" section as steps are built
+> - Log which renderers it created, which step payloads it validated
+> - Flag blockers or questions for the user/GPT to answer
+> - Mark acceptance criteria as met/unmet
+>
+> This turns the issue into a **live contract** — the coder writes to it, the GPT reads from it, the user can see what's happening in real-time.
+>
+> We may also be able to **trigger GitHub Actions workflows** or **dispatch events** to the coder when the user approves/modifies/requests changes. The webhook pipeline from Sprint 2 already supports `dispatch-workflow` — the question is how to wire it so the coder gets kicked off automatically when a spec is ready.
+>
+> The best implementation pattern is TBD. Could be: issue comments for progress, issue body for state, labels for status. Could be something else entirely. This will become clearer once Sprint 5 testing is done and we know what the coder actually needs to do.
+
+#### DB-aware coder workflows
+
+> **Key idea:** The coder doesn't have to work blind. Supabase secrets (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) are already stored in GitHub Actions environment secrets. This means a GitHub Actions workflow can query the live database during execution.
+>
+> This opens up a powerful pattern: **"based on what's in the database, do this."**
+>
+> Examples:
+> - Coder reads the user's existing experiences from Supabase to understand what renderers and step types have already been used → avoids duplicating work, builds on existing patterns
+> - Coder reads the spec issue + checks the `experience_templates` table to validate that the requested step types actually exist, and falls back or creates new ones if needed
+> - Coder reads `interaction_events` to understand how users have engaged with similar experiences → tailors the new experience based on real usage data
+> - Coder reads `synthesis_snapshots` to understand the user's current goals/direction → makes the experience feel personally relevant
+> - On completion, coder writes the new experience instance + steps directly to Supabase (not just a PR with code) → the experience goes live without a deploy
+>
+> This makes the coder a **living participant** in the system, not just a code generator. It can read the DB, understand context, build something appropriate, and write results back — all within a single GitHub Actions run.
+>
+> **Infrastructure already in place:**
+> - ✅ Supabase secrets in GitHub Actions env
+> - ✅ `dispatch-workflow` endpoint exists (`/api/github/dispatch-workflow`)
+> - ✅ Webhook handlers for `workflow_run` events exist (`lib/github/handlers/handle-workflow-run-event.ts`)
+> - 🔲 Workflow YAML that actually uses the secrets to query Supabase
+> - 🔲 Coder agent that knows how to read/write experience data
+
+#### Why issue-as-instructions matters
+
+1. **The coder never guesses.** Every experience spec is an explicit, parseable contract.
+2. **The user has agency.** They can see and edit the spec before the coder starts.
+3. **The GPT can iterate.** If the user says "actually make it harder," GPT updates the issue body.
+4. **Traceability.** The issue history shows every change to the spec — who changed what and when.
+5. **The coder can have its own "schema."** Just like the GPT has an OpenAPI schema for API calls, the coder can have a structured spec schema for what it reads from issues. Both are typed contracts.
+6. **The issue is working memory.** The coder can write progress back to it. The GPT and user can read it. The issue becomes the shared context for the entire realization.
+
+#### Sprint 6 Verification
+- GPT can POST a proposal that creates both an experience instance AND a GitHub Issue with structured spec
+- User can view and edit the coder spec from the frontend review UI
+- GPT can update the issue body via API when the user refines their request
+- Coder agent can parse the structured spec from the issue body
 - Proposal can be approved and published via the UI
 - Published experience appears in library and workspace with active re-entry contract
 - Legacy PR merge flow still works
@@ -510,7 +652,7 @@ Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent a
 
 ---
 
-### 🔲 Sprint 6 — Chained Experiences + Spontaneity
+### 🔲 Sprint 7 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -519,14 +661,14 @@ Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent a
 | 1 | Experience graph wiring | Use `previous_experience_id` and `next_suggested_ids` on instances to build chains. Library shows "continue" and "related" links. |
 | 2 | Progression rules | `lib/experience/progression-rules.ts` — defines chains: Questionnaire → Plan Builder → Challenge. Resolution carries forward or escalates. |
 | 3 | Ephemeral injection system | GPT can inject ephemeral experiences at any time: trend alerts, micro-challenges, quick prompts. These appear as interruptive cards in the workspace or as toast-like prompts. |
-| 4 | Re-entry engine | `lib/experience/reentry-engine.ts` — evaluates re-entry contracts on active instances. Fires triggers on completion, time, or inactivity. Surfaces prompts to GPT state endpoint. |
+| 4 | Re-entry engine hardening | `lib/experience/reentry-engine.ts` already exists. Harden: add time-based triggers, manual triggers, better inactivity detection. |
 | 5 | Weekly loops | Recurring experience instances (e.g., weekly reflection). Same template, new instance, linked via graph. |
 | 6 | Friction synthesis | Compute `friction_level` during synthesis snapshot creation. GPT uses this to adjust future proposals. |
 | 7 | Follow-up prompts | After experience completion, re-entry contract surfaces in next GPT session as prioritized suggestion. |
 | 8 | Timeline page | `app/timeline/page.tsx` — chronological view of GPT proposals, realizations, completions, ephemerals, suggestions. |
 | 9 | Profile page | `app/profile/page.tsx` — compiled view of interests, goals, efforts, patterns, skill trajectory. Read-only, derived from facets. |
 
-#### Sprint 6 Verification
+#### Sprint 7 Verification
 - Completing a Questionnaire surfaces a Plan Builder suggestion via graph
 - GPT can inject an ephemeral challenge that renders instantly
 - Re-entry contract fires after completion and shows in GPT state
@@ -537,9 +679,9 @@ Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent a
 
 ---
 
-### 🔲 Sprint 7 — GitHub Hardening
+### 🔲 Sprint 8 — GitHub Hardening + GitHub App
 
-> **Goal:** Make the realization side production-serious.
+> **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
 | # | Work Item | Detail |
 |---|-----------|--------|
@@ -547,11 +689,12 @@ Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent a
 | 2 | Schema checks | CI check that validates `config_schema` against step renderer contract. |
 | 3 | PR comment summaries | Auto-comment on PRs with experience summary + resolution profile + preview link. |
 | 4 | Selective issue creation | Issues only for large realizations. Small experiences skip issues entirely. Ephemeral never touches GitHub. |
-| 5 | GitHub App migration path | Design doc for replacing PAT with GitHub App. Per-installation trust model. |
+| 5 | **GitHub App implementation** | Replace PAT with a proper GitHub App. Per-installation trust model. This is required for production — PAT auth doesn't scale and is a security liability. The App gets its own permissions scope (issues, PRs, webhooks, Actions dispatch) and can be installed on specific repos. `lib/github/client.ts` is already designed as the auth boundary — only that file changes. |
+| 6 | **Webhook migration** | Currently using Cloudflare tunnel + raw HMAC webhook. In production, the webhook receiver needs to handle GitHub App webhook format. The signature verification in `lib/github/signature.ts` may need updates for App-style payloads. |
 
 ---
 
-### 🔲 Sprint 8 — Personalization + Coder Knowledge
+### 🔲 Sprint 9 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -566,6 +709,43 @@ Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent a
 | 7 | Capability map | `docs/coder-context/capability-map.md` — what renderers exist, what step types are supported, what endpoints are available. |
 
 ---
+
+### 🔲 Sprint 10 — Production Deployment
+
+> **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
+>
+> **Reality check:** Right now everything runs on `localhost:3000` with a Cloudflare tunnel (`mira.mytsapi.us`). That works for dev and GPT testing, but for real use we need:
+> - The app hosted somewhere permanent (Vercel)
+> - Webhooks that don't depend on a local machine being on
+> - Auth that isn't a hardcoded user ID
+> - The GPT pointing at a real URL, not a tunnel
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | **Vercel deployment** | Deploy Next.js app to Vercel. Environment variables for Supabase, GitHub token/app credentials. Vercel project setup, domain config. |
+| 2 | **GPT server URL update** | Update the OpenAPI schema `servers` URL from `https://mira.mytsapi.us` to the production Vercel URL. Re-configure the Custom GPT. |
+| 3 | **Webhook endpoint hardening** | `/api/webhook/github` currently expects to receive events via tunnel. In production it receives events directly from GitHub. May need to update signature verification, handle GitHub App webhook format. The existing `app/api/webhook/vercel/route.ts` stub needs to be implemented if Vercel deploy hooks are needed. |
+| 4 | **Edge function evaluation** | Determine if any API routes need to run as Vercel Edge Functions or Supabase Edge Functions. Candidates: `/api/gpt/state` (latency-sensitive, called at every GPT conversation start), `/api/experiences/inject` (needs to be fast for ephemeral experiences), `/api/interactions` (high-volume telemetry). Trade-off: edge functions have limitations (no Node.js APIs, different runtime) vs. serverless functions (slower cold starts). |
+| 5 | **Supabase Edge Functions** | If the coder pipeline needs server-side orchestration that can't run in Vercel serverless (long-running, needs to call GitHub API + Supabase in sequence), a Supabase Edge Function may be the right place. Use case: "on experience approval, dispatch coder workflow, create realization record, update issue status" — that's a multi-step side effect that shouldn't block the UI. |
+| 6 | **Auth system** | Replace `DEFAULT_USER_ID` with real auth. Options: Supabase Auth (email/magic link), or just a simple API key for the GPT. The GPT needs to authenticate somehow — either a shared secret header or OAuth. |
+| 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
+| 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
+
+#### Key decisions to make before Sprint 10
+
+| Question | Options | Impact |
+|----------|---------|--------|
+| Edge functions: Vercel or Supabase? | Vercel Edge (fast, limited runtime) vs Supabase Edge (Deno, can be longer-running) vs plain serverless (slower, full Node.js) | Affects which routes can run where |
+| GPT auth in production? | Shared secret header, OAuth, or Supabase Auth token | Affects OpenAPI schema `security` section |
+| Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects Sprint 6 + 8 architecture |
+| Custom domain? | `mira.mytsapi.us` via Vercel, or new domain | Affects GPT config + webhook registration |
+
+#### Sprint 10 Verification
+- App is live on Vercel at a permanent URL
+- GPT Actions point at production URL and all 10 endpoints work
+- GitHub webhooks deliver to production without tunnel dependency
+- Local dev mode still works with tunnel for testing
+- No hardcoded `DEFAULT_USER_ID` in production paths
 
 ## Refactoring Rules
 
@@ -610,9 +790,16 @@ These rules govern how we evolve the existing codebase without breaking it.
 - [ ] Auth strategy: Supabase Auth (email/magic link) or stay single-user with service role key?
 - [ ] Should the JSON fallback persist permanently for offline dev, or sunset after DB migration?
 - [ ] How does the DSL for experience specs evolve — YAML in issue body, or structured JSON via API?
+- [ ] Should the coder spec schema live in the issue body (YAML front-matter), a separate `.coder-spec.yml` file in the PR, or a dedicated Supabase table? Trade-off: issue body is visible + editable by all 3 parties (GPT, user, coder), but file-in-repo is version-controlled.
+- [ ] Should the frontend have a spec editor UI, or is editing the issue body directly sufficient?
 - [ ] What's the right compression strategy for GPT re-entry packets? (token budget vs. signal)
 - [ ] Should Tier 1 experience templates be hardcoded or editable via admin UI?
 - [ ] Should ephemeral experiences have a separate library section ("Moments") or inline with persistent?
+- [ ] How does the coder agent get triggered? GitHub Actions workflow dispatch on approval, or external agent polling for issues with a specific label? Or GitHub Copilot coding agent assignment?
+- [ ] Should the issue serve as working memory (coder writes progress back to issue body/comments) or should state live in Supabase with the issue as a read-only spec?
+- [ ] Vercel Edge Functions vs Supabase Edge Functions vs plain serverless — which routes need edge performance?
+- [ ] What auth does the GPT use in production? Shared secret, OAuth, or Supabase Auth token in the header?
+- [ ] If the coder can write directly to Supabase, does the experience even need a PR/deploy? Or can the coder create experience_instances + steps directly in the DB and they go live immediately? (Code changes still need PRs, but pure data experiences might not.)
 
 ---
 

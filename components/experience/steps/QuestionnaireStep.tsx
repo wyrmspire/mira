@@ -1,22 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
 
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: {
-    questions: Array<{
-      id: string;
-      label: string;
-      type: 'text' | 'choice' | 'scale';
-      options?: string[];
-    }>;
-  };
+interface QuestionPayload {
+  questions: Array<{
+    id: string;
+    label: string;
+    type: 'text' | 'choice' | 'scale';
+    options?: string[];
+  }>;
 }
 
 interface QuestionnaireStepProps {
@@ -27,6 +20,7 @@ interface QuestionnaireStepProps {
 
 export default function QuestionnaireStep({ step, onComplete, onSkip }: QuestionnaireStepProps) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const payload = step.payload as QuestionPayload;
 
   const handleInputChange = (questionId: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -37,7 +31,7 @@ export default function QuestionnaireStep({ step, onComplete, onSkip }: Question
     onComplete({ answers });
   };
 
-  const isComplete = step.payload.questions.every((q) => !!answers[q.id]);
+  const isComplete = payload.questions.every((q) => !!answers[q.id]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -46,7 +40,7 @@ export default function QuestionnaireStep({ step, onComplete, onSkip }: Question
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {step.payload.questions.map((q) => (
+        {payload.questions.map((q) => (
           <div key={q.id} className="space-y-3">
             <label className="block text-lg font-medium text-[#94a3b8]">{q.label}</label>
             

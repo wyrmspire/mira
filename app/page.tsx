@@ -3,10 +3,14 @@ export const dynamic = 'force-dynamic'
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'
+import { getActiveExperiences, getProposedExperiences } from '@/lib/services/experience-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 import { formatRelativeTime } from '@/lib/date'
+import { COPY } from '@/lib/studio-copy'
+import HomeExperienceAction from '@/components/experience/HomeExperienceAction'
 import type { Project } from '@/types/project'
 import type { InboxEvent } from '@/types/inbox'
 
@@ -41,6 +45,9 @@ export default async function HomePage() {
   const allEvents = await getInboxEvents()
   const recentEvents = allEvents.slice(0, 3)
 
+  const proposedExperiences = await getProposedExperiences(DEFAULT_USER_ID)
+  const activeExperiences = await getActiveExperiences(DEFAULT_USER_ID)
+
   const needsAttentionProjects = arenaProjects.filter(
     (p) => p.health === 'red' || p.health === 'yellow'
   )
@@ -55,7 +62,53 @@ export default async function HomePage() {
           <p className="text-[#64748b] text-sm">Your attention cockpit.</p>
         </div>
 
-        {/* ── Section 1: Needs Attention ── */}
+        {/* ── Section 0: Suggested Experiences ── */}
+        {proposedExperiences.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4">
+              {COPY.home.suggestedSection}
+            </h2>
+            <div className="space-y-3">
+              {proposedExperiences.map((exp) => (
+                <div 
+                  key={exp.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl hover:bg-indigo-500/10 transition-colors"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#f1f5f9] truncate">{exp.title}</span>
+                    <span className="text-xs text-[#94a3b8] truncate">{exp.goal}</span>
+                  </div>
+                  <HomeExperienceAction id={exp.id} isProposed={true} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 1: Active Journeys ── */}
+        {activeExperiences.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4">
+              {COPY.home.activeSection}
+            </h2>
+            <div className="space-y-3">
+              {activeExperiences.map((exp) => (
+                <div 
+                  key={exp.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-emerald-500/30 transition-colors"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#f1f5f9] truncate">{exp.title}</span>
+                    <span className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-tight">{exp.status}</span>
+                  </div>
+                  <HomeExperienceAction id={exp.id} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 2: Needs Attention ── */}
         <section>
           <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-4">
             Needs attention

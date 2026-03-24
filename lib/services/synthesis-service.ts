@@ -13,7 +13,7 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
   const summary = `Synthesized context from ${interactions.length} interactions in ${sourceType} ${sourceId}.`
   
   const snapshot: SynthesisSnapshot = {
-    id: `snap-${generateId()}`,
+    id: generateId(),
     user_id: userId,
     source_type: sourceType,
     source_id: sourceId,
@@ -33,16 +33,18 @@ export async function getLatestSnapshot(userId: string): Promise<SynthesisSnapsh
   return snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
 }
 
+import { evaluateReentryContracts } from '@/lib/experience/reentry-engine'
+
 export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacket> {
   const experiences = await getExperienceInstances({ userId })
   
-  // Collect active reentry prompts
-  const activeReentryPrompts: ReentryContract[] = []
-  experiences.forEach(exp => {
-    if (exp.reentry && (exp.status === 'active' || exp.status === 'completed')) {
-      activeReentryPrompts.push(exp.reentry)
-    }
-  })
+  // Call re-entry engine
+  const activeReentryPrompts = await evaluateReentryContracts(userId)
+
+  // Get proposed experiences for context
+  const proposedExperiences = experiences.filter(exp => 
+    ['proposed', 'drafted', 'ready_for_review', 'approved'].includes(exp.status)
+  )
 
   // Compute friction signals from experience status/metadata
   const frictionSignals = experiences
@@ -55,10 +57,11 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
   const snapshot = await getLatestSnapshot(userId)
 
   return {
-    latestExperiences: experiences.slice(0, 5),
+    latestExperiences: experiences.slice(0, 5).map(e => ({ ...e } as ExperienceInstance)),
     activeReentryPrompts,
     frictionSignals,
     suggestedNext: experiences[0]?.next_suggested_ids || [],
-    synthesisSnapshot: snapshot
+    synthesisSnapshot: snapshot,
+    proposedExperiences: proposedExperiences.slice(0, 3).map(e => ({ ...e } as ExperienceInstance))
   }
 }

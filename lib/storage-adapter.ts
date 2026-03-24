@@ -129,19 +129,14 @@ export class JsonFileStorageAdapter implements StorageAdapter {
   }
 }
 
-let activeAdapter: StorageAdapter | null = null
-
 export function getStorageAdapter(): StorageAdapter {
-  if (activeAdapter) return activeAdapter
-
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (supabaseUrl && supabaseKey) {
-    activeAdapter = new SupabaseStorageAdapter()
+    return new SupabaseStorageAdapter()
   } else {
-    activeAdapter = new JsonFileStorageAdapter()
+    console.warn('[StorageAdapter] Supabase not configured, using JSON fallback.')
+    return new JsonFileStorageAdapter()
   }
-
-  return activeAdapter
 }

@@ -1,12 +1,12 @@
 # LearnIO Project Code Dump
-Generated: Mon, Mar 23, 2026  5:41:11 PM
+Generated: Mon, Mar 23, 2026  9:37:44 PM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 182
+- **Files selected:** 211
 
 ## Project Overview
 
@@ -45,6 +45,9 @@ app/api/actions/merge-pr/route.ts
 app/api/actions/move-to-icebox/route.ts
 app/api/actions/promote-to-arena/route.ts
 app/api/drill/route.ts
+app/api/experiences/[id]/status/route.ts
+app/api/experiences/inject/route.ts
+app/api/experiences/route.ts
 app/api/github/create-issue/route.ts
 app/api/github/create-pr/route.ts
 app/api/github/dispatch-workflow/route.ts
@@ -52,11 +55,14 @@ app/api/github/merge-pr/route.ts
 app/api/github/sync-pr/route.ts
 app/api/github/test-connection/route.ts
 app/api/github/trigger-agent/route.ts
+app/api/gpt/state/route.ts
 app/api/ideas/materialize/route.ts
 app/api/ideas/route.ts
 app/api/inbox/route.ts
+app/api/interactions/route.ts
 app/api/projects/route.ts
 app/api/prs/route.ts
+app/api/synthesis/route.ts
 app/api/tasks/route.ts
 app/api/webhook/github/route.ts
 app/api/webhook/gpt/route.ts
@@ -74,13 +80,16 @@ app/icebox/page.tsx
 app/inbox/page.tsx
 app/killed/page.tsx
 app/layout.tsx
+app/library/LibraryClient.tsx
+app/library/page.tsx
 app/page.tsx
 app/review/[prId]/page.tsx
 app/send/page.tsx
 app/shipped/page.tsx
+app/workspace/[instanceId]/page.tsx
+app/workspace/[instanceId]/WorkspaceClient.tsx
 board.md
 build-lane6.txt
-c:miratsc-errors.txt
 components/archive/archive-filter-bar.tsx
 components/archive/graveyard-card.tsx
 components/archive/trophy-card.tsx
@@ -108,6 +117,11 @@ components/drill/drill-progress.tsx
 components/drill/giant-choice-button.tsx
 components/drill/idea-context-card.tsx
 components/drill/materialization-sequence.tsx
+components/experience/ExperienceCard.tsx
+components/experience/ExperienceRenderer.tsx
+components/experience/HomeExperienceAction.tsx
+components/experience/steps/LessonStep.tsx
+components/experience/steps/QuestionnaireStep.tsx
 components/icebox/icebox-card.tsx
 components/icebox/stale-idea-modal.tsx
 components/icebox/triage-actions.tsx
@@ -162,6 +176,10 @@ lib/adapters/vercel-adapter.ts
 lib/config/github.ts
 lib/constants.ts
 lib/date.ts
+lib/experience/CAPTURE_CONTRACT.md
+lib/experience/interaction-events.ts
+lib/experience/reentry-engine.ts
+lib/experience/renderer-registry.tsx
 lib/formatters/idea-formatters.ts
 lib/formatters/inbox-formatters.ts
 lib/formatters/pr-formatters.ts
@@ -174,22 +192,32 @@ lib/github/handlers/handle-workflow-run-event.ts
 lib/github/handlers/index.ts
 lib/github/signature.ts
 lib/guards.ts
+lib/hooks/useInteractionCapture.ts
 lib/routes.ts
 lib/seed-data.ts
 lib/services/agent-runs-service.ts
 lib/services/drill-service.ts
+lib/services/experience-service.ts
 lib/services/external-refs-service.ts
 lib/services/github-factory-service.ts
 lib/services/github-sync-service.ts
 lib/services/ideas-service.ts
 lib/services/inbox-service.ts
+lib/services/interaction-service.ts
 lib/services/materialization-service.ts
 lib/services/projects-service.ts
 lib/services/prs-service.ts
+lib/services/synthesis-service.ts
 lib/services/tasks-service.ts
 lib/state-machine.ts
 lib/storage.ts
+lib/storage-adapter.ts
 lib/studio-copy.ts
+lib/supabase/browser.ts
+lib/supabase/client.ts
+lib/supabase/migrations/001_preserved_entities.sql
+lib/supabase/migrations/002_evolved_entities.sql
+lib/supabase/migrations/003_experience_tables.sql
 lib/utils.ts
 lib/validators/drill-validator.ts
 lib/validators/idea-validator.ts
@@ -201,7 +229,6 @@ lib/view-models/inbox-view-model.ts
 lib/view-models/review-view-model.ts
 next.config.mjs
 next-env.d.ts
-nul
 package.json
 postcss.config.js
 printcode.sh
@@ -210,18 +237,20 @@ README.md
 roadmap.md
 start.sh
 tailwind.config.ts
-tsc-lane6.txt
 tsconfig.json
 tsconfig.tsbuildinfo
 types/agent-run.ts
 types/api.ts
 types/drill.ts
+types/experience.ts
 types/external-ref.ts
 types/github.ts
 types/idea.ts
 types/inbox.ts
+types/interaction.ts
 types/pr.ts
 types/project.ts
+types/synthesis.ts
 types/task.ts
 types/webhook.ts
 wiring.md
@@ -266,10 +295,14 @@ export const dynamic = 'force-dynamic'
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'
+import { getActiveExperiences, getProposedExperiences } from '@/lib/services/experience-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 import { formatRelativeTime } from '@/lib/date'
+import { COPY } from '@/lib/studio-copy'
+import HomeExperienceAction from '@/components/experience/HomeExperienceAction'
 import type { Project } from '@/types/project'
 import type { InboxEvent } from '@/types/inbox'
 
@@ -304,6 +337,9 @@ export default async function HomePage() {
   const allEvents = await getInboxEvents()
   const recentEvents = allEvents.slice(0, 3)
 
+  const proposedExperiences = await getProposedExperiences(DEFAULT_USER_ID)
+  const activeExperiences = await getActiveExperiences(DEFAULT_USER_ID)
+
   const needsAttentionProjects = arenaProjects.filter(
     (p) => p.health === 'red' || p.health === 'yellow'
   )
@@ -318,7 +354,53 @@ export default async function HomePage() {
           <p className="text-[#64748b] text-sm">Your attention cockpit.</p>
         </div>
 
-        {/* ── Section 1: Needs Attention ── */}
+        {/* ── Section 0: Suggested Experiences ── */}
+        {proposedExperiences.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-4">
+              {COPY.home.suggestedSection}
+            </h2>
+            <div className="space-y-3">
+              {proposedExperiences.map((exp) => (
+                <div 
+                  key={exp.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl hover:bg-indigo-500/10 transition-colors"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#f1f5f9] truncate">{exp.title}</span>
+                    <span className="text-xs text-[#94a3b8] truncate">{exp.goal}</span>
+                  </div>
+                  <HomeExperienceAction id={exp.id} isProposed={true} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 1: Active Journeys ── */}
+        {activeExperiences.length > 0 && (
+          <section>
+            <h2 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-4">
+              {COPY.home.activeSection}
+            </h2>
+            <div className="space-y-3">
+              {activeExperiences.map((exp) => (
+                <div 
+                  key={exp.id}
+                  className="flex items-center justify-between gap-4 px-5 py-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-emerald-500/30 transition-colors"
+                >
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-[#f1f5f9] truncate">{exp.title}</span>
+                    <span className="text-[10px] font-mono text-emerald-500/70 uppercase tracking-tight">{exp.status}</span>
+                  </div>
+                  <HomeExperienceAction id={exp.id} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 2: Needs Attention ── */}
         <section>
           <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-4">
             Needs attention
@@ -474,6 +556,7 @@ export default async function HomePage() {
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
+    "@supabase/supabase-js": "^2.100.0",
     "next": "14.2.29",
     "react": "^18",
     "react-dom": "^18"
@@ -927,6 +1010,183 @@ export async function POST(request: NextRequest) {
       { error: err.message || 'Error processing request' },
       { status: 500 }
     )
+  }
+}
+
+```
+
+### app/api/experiences/[id]/status/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { transitionExperienceStatus } from '@/lib/services/experience-service'
+import { ExperienceTransitionAction } from '@/lib/state-machine'
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+  
+  try {
+    const { action } = await request.json() as { action: ExperienceTransitionAction }
+
+    if (!action) {
+      return NextResponse.json({ error: 'Action is required' }, { status: 400 })
+    }
+
+    const updated = await transitionExperienceStatus(id, action)
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Invalid transition or instance not found' }, { status: 422 })
+    }
+
+    return NextResponse.json(updated)
+  } catch (error: any) {
+    console.error('Failed to transition experience:', error)
+    return NextResponse.json({ error: error.message || 'Failed to transition experience' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/experiences/inject/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { createExperienceInstance, createExperienceStep, ExperienceInstance } from '@/lib/services/experience-service'
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { templateId, userId, title, goal, resolution, steps } = body
+
+    if (!templateId || !userId || !resolution || !Array.isArray(steps)) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: templateId, userId, resolution, steps[]' 
+      }, { status: 400 })
+    }
+
+    // Ephemeral skips the realization pipeline and goes straight to injected
+    const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
+      user_id: userId,
+      template_id: templateId,
+      idea_id: null,
+      title: title || 'Ephemeral Experience',
+      goal: goal || '',
+      instance_type: 'ephemeral',
+      status: 'injected',
+      resolution,
+      reentry: null,
+      previous_experience_id: null,
+      next_suggested_ids: [],
+      friction_level: null,
+      source_conversation_id: null,
+      generated_by: null,
+      realization_id: null,
+      published_at: null
+    }
+
+    const instance = await createExperienceInstance(instanceData)
+
+    // Create steps in sequence
+    for (let i = 0; i < steps.length; i++) {
+      const stepData = steps[i]
+      await createExperienceStep({
+        instance_id: instance.id,
+        step_order: i,
+        step_type: stepData.type || stepData.step_type,
+        title: stepData.title || '',
+        payload: stepData.payload || {},
+        completion_rule: stepData.completion_rule
+      })
+    }
+
+    return NextResponse.json(instance, { status: 201 })
+  } catch (error: any) {
+    console.error('Failed to inject experience:', error)
+    return NextResponse.json({ error: error.message || 'Failed to inject experience' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/experiences/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { getExperienceInstances, createExperienceInstance, ExperienceStatus, InstanceType, ExperienceInstance } from '@/lib/services/experience-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const status = searchParams.get('status') as ExperienceStatus | null
+  const type = searchParams.get('type') as InstanceType | null
+  const userId = searchParams.get('userId') || DEFAULT_USER_ID
+
+  try {
+    const filters: any = { userId }
+    if (status) filters.status = status
+    if (type) filters.instanceType = type
+
+    const instances = await getExperienceInstances(filters)
+    return NextResponse.json(instances)
+  } catch (error) {
+    console.error('Failed to fetch experiences:', error)
+    return NextResponse.json({ error: 'Failed to fetch experiences' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { templateId, userId, title, goal, resolution, reentry, previousExperienceId, steps } = body
+
+    if (!templateId || !userId || !resolution) {
+      return NextResponse.json({ error: 'Missing required fields: templateId, userId, resolution' }, { status: 400 })
+    }
+
+    const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
+      user_id: userId,
+      template_id: templateId,
+      idea_id: null,
+      title: title || 'Untitled Experience',
+      goal: goal || '',
+      instance_type: 'persistent',
+      status: 'proposed',
+      resolution,
+      reentry: reentry || null,
+      previous_experience_id: previousExperienceId || null,
+      next_suggested_ids: [],
+      friction_level: null,
+      source_conversation_id: null,
+      generated_by: null,
+      realization_id: null,
+      published_at: null
+    }
+
+    const instance = await createExperienceInstance(instanceData)
+
+    // Create steps if provided
+    if (steps && Array.isArray(steps)) {
+      const { createExperienceStep } = await import('@/lib/services/experience-service')
+      for (let i = 0; i < steps.length; i++) {
+        const stepData = steps[i]
+        await createExperienceStep({
+          instance_id: instance.id,
+          step_order: i,
+          step_type: stepData.type,
+          title: stepData.title,
+          payload: stepData.payload,
+          completion_rule: stepData.completion_rule || null
+        })
+      }
+    }
+
+    return NextResponse.json(instance, { status: 201 })
+  } catch (error: any) {
+    console.error('Failed to create experience:', error)
+    return NextResponse.json({ error: error.message || 'Failed to create experience' }, { status: 500 })
   }
 }
 
@@ -1587,6 +1847,28 @@ export async function POST(request: Request) {
 
 ```
 
+### app/api/gpt/state/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('userId') || DEFAULT_USER_ID
+
+  try {
+    const packet = await buildGPTStatePacket(userId)
+    return NextResponse.json(packet)
+  } catch (error) {
+    console.error('Failed to build GPT state packet:', error)
+    return NextResponse.json({ error: 'Failed to build GPT state packet' }, { status: 500 })
+  }
+}
+
+```
+
 ### app/api/ideas/materialize/route.ts
 
 ```typescript
@@ -1696,6 +1978,37 @@ export async function PATCH(request: Request) {
 
 ```
 
+### app/api/interactions/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { recordInteraction } from '@/lib/services/interaction-service'
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json()
+    const { instanceId, stepId, eventType, eventPayload } = body
+
+    if (!instanceId || !eventType) {
+      return NextResponse.json({ error: 'Missing required fields: instanceId, eventType' }, { status: 400 })
+    }
+
+    const event = await recordInteraction({
+      instanceId,
+      stepId,
+      eventType,
+      eventPayload: eventPayload || {}
+    })
+
+    return NextResponse.json(event, { status: 201 })
+  } catch (error: any) {
+    console.error('Failed to record interaction:', error)
+    return NextResponse.json({ error: error.message || 'Failed to record interaction' }, { status: 500 })
+  }
+}
+
+```
+
 ### app/api/projects/route.ts
 
 ```typescript
@@ -1772,6 +2085,31 @@ export async function PATCH(request: NextRequest) {
   }
 
   return NextResponse.json<ApiResponse<PullRequest>>({ data: updated })
+}
+
+```
+
+### app/api/synthesis/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { getLatestSnapshot } from '@/lib/services/synthesis-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('userId') || DEFAULT_USER_ID
+
+  try {
+    const snapshot = await getLatestSnapshot(userId)
+    if (!snapshot) {
+      return NextResponse.json({ message: 'No synthesis snapshot found' }, { status: 404 })
+    }
+    return NextResponse.json(snapshot)
+  } catch (error) {
+    console.error('Failed to fetch synthesis snapshot:', error)
+    return NextResponse.json({ error: 'Failed to fetch synthesis snapshot' }, { status: 500 })
+  }
 }
 
 ```
@@ -3355,6 +3693,219 @@ export default async function KilledPage() {
 
 ```
 
+### app/library/LibraryClient.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import type { ExperienceInstance } from '@/types/experience';
+import ExperienceCard from '@/components/experience/ExperienceCard';
+import { COPY } from '@/lib/studio-copy';
+import { ROUTES } from '@/lib/routes';
+
+interface LibraryClientProps {
+  active: ExperienceInstance[];
+  completed: ExperienceInstance[];
+  moments: ExperienceInstance[];
+  proposed: ExperienceInstance[];
+}
+
+export default function LibraryClient({ 
+  active, 
+  completed, 
+  moments, 
+  proposed 
+}: LibraryClientProps) {
+  const router = useRouter();
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  const handleAcceptAndStart = async (id: string) => {
+    setLoadingId(id);
+    try {
+      // Step 1: Approve
+      let res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      if (!res.ok) throw new Error('Failed to approve');
+
+      // Step 2: Publish
+      res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish' }),
+      });
+      if (!res.ok) throw new Error('Failed to publish');
+
+      // Step 3: Activate
+      res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate' }),
+      });
+      if (!res.ok) throw new Error('Failed to activate');
+
+      // Navigate to workspace
+      router.push(ROUTES.workspace(id));
+      router.refresh();
+    } catch (error) {
+      console.error('Workflow failed:', error);
+      alert('Could not start journey. Please try again.');
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const Section = ({ title, empty, items, children }: { 
+    title: string; 
+    empty: string; 
+    items: ExperienceInstance[];
+    children: (item: ExperienceInstance) => React.ReactNode;
+  }) => {
+    if (items.length === 0) return null;
+    return (
+      <section className="mb-16">
+        <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-6 px-1">
+          {title}
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map(children)}
+        </div>
+      </section>
+    );
+  };
+
+  return (
+    <div>
+      {/* Suggestions (Pending Review) */}
+      <Section 
+        title={COPY.library.reviewSection} 
+        empty={COPY.library.emptyReview} 
+        items={proposed}
+      >
+        {(instance) => (
+          <ExperienceCard key={instance.id} instance={instance}>
+            <button 
+              onClick={() => handleAcceptAndStart(instance.id)}
+              disabled={!!loadingId}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50"
+            >
+              {loadingId === instance.id ? (
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <span>{COPY.library.acceptAndStart}</span>
+              )}
+            </button>
+          </ExperienceCard>
+        )}
+      </Section>
+
+      {/* Active Journeys */}
+      <Section 
+        title={COPY.library.activeSection} 
+        empty={COPY.library.emptyActive} 
+        items={active}
+      >
+        {(instance) => (
+          <ExperienceCard key={instance.id} instance={instance}>
+            <Link 
+              href={ROUTES.workspace(instance.id)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500/10 text-indigo-400 rounded-xl font-bold hover:bg-indigo-500/20 transition-all border border-indigo-500/20"
+            >
+              {COPY.library.enter}
+            </Link>
+          </ExperienceCard>
+        )}
+      </Section>
+
+      {/* Completed Experiences */}
+      <Section 
+        title={COPY.library.completedSection} 
+        empty={COPY.library.emptyCompleted} 
+        items={completed}
+      >
+        {(instance) => (
+          <ExperienceCard key={instance.id} instance={instance} />
+        )}
+      </Section>
+
+      {/* Moments (Ephemeral) */}
+      <Section 
+        title={COPY.library.momentsSection} 
+        empty={COPY.library.emptyMoments} 
+        items={moments}
+      >
+        {(instance) => (
+          <ExperienceCard key={instance.id} instance={instance}>
+             {instance.status !== 'completed' && (
+               <Link 
+                 href={ROUTES.workspace(instance.id)}
+                 className="w-full mt-2 py-2 text-center text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  Enter Moment →
+                </Link>
+             )}
+          </ExperienceCard>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+```
+
+### app/library/page.tsx
+
+```tsx
+import { AppShell } from '@/components/shell/app-shell';
+import { 
+  getActiveExperiences, 
+  getCompletedExperiences, 
+  getEphemeralExperiences, 
+  getProposedExperiences 
+} from '@/lib/services/experience-service';
+import { DEFAULT_USER_ID } from '@/lib/constants';
+import LibraryClient from './LibraryClient';
+import { COPY } from '@/lib/studio-copy';
+
+export const dynamic = 'force-dynamic';
+
+export default async function LibraryPage() {
+  const userId = DEFAULT_USER_ID;
+
+  // Parallel fetch for all sections
+  const [active, completed, moments, proposed] = await Promise.all([
+    getActiveExperiences(userId),
+    getCompletedExperiences(userId),
+    getEphemeralExperiences(userId),
+    getProposedExperiences(userId),
+  ]);
+
+  return (
+    <AppShell>
+      <div className="max-w-5xl mx-auto pb-20 px-4 md:px-8">
+        <header className="mb-12">
+          <h1 className="text-4xl font-bold text-[#f1f5f9] mb-2">{COPY.library.heading}</h1>
+          <p className="text-[#94a3b8] tracking-tight">{COPY.library.subheading}</p>
+        </header>
+
+        <LibraryClient 
+          active={active}
+          completed={completed}
+          moments={moments}
+          proposed={proposed}
+        />
+      </div>
+    </AppShell>
+  );
+}
+
+```
+
 ### app/review/[prId]/page.tsx
 
 ```tsx
@@ -3536,6 +4087,69 @@ export default async function ShippedPage() {
       </div>
     </AppShell>
   )
+}
+
+```
+
+### app/workspace/[instanceId]/page.tsx
+
+```tsx
+import { notFound } from 'next/navigation';
+import { getExperienceInstanceById } from '@/lib/services/experience-service';
+import WorkspaceClient from './WorkspaceClient';
+
+export const dynamic = 'force-dynamic';
+
+interface WorkspacePageProps {
+  params: {
+    instanceId: string;
+  };
+}
+
+export default async function WorkspacePage({ params }: WorkspacePageProps) {
+  const { instanceId } = params;
+
+  // Fetch instance + steps from the service
+  const data = await getExperienceInstanceById(instanceId);
+
+  if (!data) {
+    notFound();
+  }
+
+  const { steps, ...instance } = data;
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0f] text-[#e2e8f0]">
+      <WorkspaceClient instance={instance} steps={steps} />
+    </div>
+  );
+}
+
+```
+
+### app/workspace/[instanceId]/WorkspaceClient.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import ExperienceRenderer from '@/components/experience/ExperienceRenderer';
+import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
+
+interface WorkspaceClientProps {
+  instance: ExperienceInstance;
+  steps: ExperienceStep[];
+}
+
+export default function WorkspaceClient({ instance, steps }: WorkspaceClientProps) {
+  return (
+    <div className="flex flex-col min-h-screen">
+      <ExperienceRenderer 
+        instance={instance} 
+        steps={steps} 
+      />
+    </div>
+  );
 }
 
 ```
@@ -4836,6 +5450,592 @@ export function MaterializationSequence({ onComplete }: MaterializationSequenceP
 
 ```
 
+### components/experience/ExperienceCard.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import type { ExperienceInstance } from '@/types/experience';
+import { COPY } from '@/lib/studio-copy';
+
+interface ExperienceCardProps {
+  instance: ExperienceInstance;
+  onAction?: (action: string) => void;
+  children?: React.ReactNode;
+}
+
+export default function ExperienceCard({ instance, onAction, children }: ExperienceCardProps) {
+  const isPersistent = instance.instance_type === 'persistent';
+  
+  if (!isPersistent) {
+    // Moment card (ephemeral)
+    return (
+      <div className="flex flex-col p-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-indigo-500/30 transition-colors group">
+        <div className="flex justify-between items-start mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a4a6a]">
+            {COPY.experience.ephemeral}
+          </span>
+          {instance.status === 'completed' && (
+            <span className="text-[10px] font-bold text-emerald-400 uppercase">Done</span>
+          )}
+        </div>
+        <h3 className="text-sm font-semibold text-[#e2e8f0] mb-3 truncate group-hover:text-indigo-300 transition-colors">
+          {instance.title}
+        </h3>
+        {children}
+      </div>
+    );
+  }
+
+  // Journey card (persistent)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'proposed':
+      case 'drafted':
+      case 'ready_for_review':
+        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      case 'approved':
+      case 'published':
+        return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+      case 'active':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      case 'completed':
+        return 'bg-[#1e1e2e] text-[#94a3b8] border-[#33334d]';
+      default:
+        return 'bg-[#1e1e2e] text-[#4a4a6a] border-[#1e1e2e]';
+    }
+  };
+
+  const getDepthColor = (depth: string) => {
+    switch (depth) {
+      case 'light': return 'text-sky-400';
+      case 'medium': return 'text-indigo-400';
+      case 'heavy': return 'text-violet-400';
+      default: return 'text-[#4a4a6a]';
+    }
+  };
+
+  return (
+    <div className="flex flex-col p-5 bg-[#0d0d18] border border-[#1e1e2e] rounded-2xl hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-indigo-500/5">
+      <div className="flex justify-between items-start mb-4">
+        <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getStatusColor(instance.status)}`}>
+          {instance.status}
+        </div>
+        <div className={`text-[10px] font-mono uppercase tracking-tighter ${getDepthColor(instance.resolution.depth)}`}>
+          {instance.resolution.depth}
+        </div>
+      </div>
+
+      <h3 className="text-lg font-bold text-[#f1f5f9] mb-2 group-hover:text-indigo-300 transition-colors">
+        {instance.title}
+      </h3>
+      
+      <p className="text-sm text-[#94a3b8] line-clamp-2 mb-6 min-h-[40px]">
+        {instance.goal}
+      </p>
+
+      <div className="mt-auto">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/experience/ExperienceRenderer.tsx
+
+```tsx
+'use client';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
+import type { ExperienceInstance, ExperienceStep, Resolution } from '@/types/experience';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
+import { COPY } from '@/lib/studio-copy';
+import QuestionnaireStep from './steps/QuestionnaireStep';
+import LessonStep from './steps/LessonStep';
+
+// Register built-in renderers
+registerRenderer('questionnaire', QuestionnaireStep as any);
+registerRenderer('lesson', LessonStep as any);
+
+interface ExperienceRendererProps {
+  instance: ExperienceInstance;
+  steps: ExperienceStep[];
+}
+
+export default function ExperienceRenderer({ instance, steps }: ExperienceRendererProps) {
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const prevStepRef = useRef<string | null>(null);
+
+  const capture = useInteractionCapture(instance.id);
+
+  const currentStep = steps[currentStepIndex];
+  const totalSteps = steps.length;
+  const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
+
+  // Track experience start on mount
+  useEffect(() => {
+    capture.trackExperienceStart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track step view and time-on-step when step changes
+  useEffect(() => {
+    if (!currentStep) return;
+
+    // End timer for previous step
+    if (prevStepRef.current) {
+      capture.endStepTimer(prevStepRef.current);
+    }
+
+    // Start tracking new step
+    capture.trackStepView(currentStep.id);
+    capture.startStepTimer(currentStep.id);
+    prevStepRef.current = currentStep.id;
+
+    // Cleanup: end timer on unmount
+    return () => {
+      if (prevStepRef.current) {
+        capture.endStepTimer(prevStepRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStepIndex]);
+
+  const handleCompleteStep = (payload?: unknown) => {
+    // Guard against non-serializable payloads (e.g., React SyntheticEvents leaked from onClick)
+    const safePayload = (payload && typeof payload === 'object' && !('nativeEvent' in (payload as any)))
+      ? payload as Record<string, any>
+      : undefined;
+
+    capture.trackComplete(currentStep.id, safePayload);
+
+    if (currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+    } else {
+      capture.endStepTimer(currentStep.id);
+      capture.trackExperienceComplete();
+      // Transition instance status to 'completed' in DB
+      fetch(`/api/experiences/${instance.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete' }),
+      }).catch((err) => console.warn('[ExperienceRenderer] Failed to mark completed:', err));
+      setIsCompleted(true);
+    }
+  };
+
+  const handleSkipStep = () => {
+    capture.trackSkip(currentStep.id);
+    
+    if (currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex((prev) => prev + 1);
+    }
+  };
+
+  const StepComponent = getRenderer(currentStep?.step_type);
+
+  if (isCompleted) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center">
+        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div>
+          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
+          <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
+        </div>
+        <div className="flex flex-col items-center gap-6">
+          <Link 
+            href={ROUTES.library}
+            className="px-10 py-4 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/10"
+          >
+            {COPY.completion.returnToLibrary}
+          </Link>
+          <p className="text-[#4a4a6a] text-sm font-medium">{COPY.completion.returnToChat}</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { depth } = instance.resolution;
+
+  return (
+    <div className="w-full h-full flex flex-col items-center">
+      {/* Full Header (Heavy Depth) */}
+      {depth === 'heavy' && (
+        <div className="w-full bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-[#1e1e2e] sticky top-0 z-10 px-6 py-8">
+          <div className="max-w-3xl mx-auto space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-sm font-bold uppercase tracking-widest text-indigo-400 mb-1">Active Experience</h1>
+                <h2 className="text-3xl font-bold text-white tracking-tight">{instance.title}</h2>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-mono text-[#475569] block mb-1">PROGRESS</span>
+                <span className="text-xl font-mono text-indigo-400">{currentStepIndex + 1} / {totalSteps}</span>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs text-[#475569]">
+                <span>Goal: {instance.goal}</span>
+                <span>{progressPercent}% Complete</span>
+              </div>
+              <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden border border-[#33334d]">
+                <div 
+                  className="h-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)] transition-all duration-700 ease-out" 
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Bar + Title (Medium Depth) */}
+      {depth === 'medium' && (
+        <div className="w-full max-w-3xl px-6 py-6 border-b border-[#1e293b]/50">
+          <div className="space-y-4">
+            <div className="flex justify-between items-end border-b border-indigo-500/20 pb-2">
+              <h1 className="text-lg font-bold text-indigo-100">{instance.title}</h1>
+              <span className="text-[10px] font-mono text-[#64748b]">STEP {currentStepIndex + 1} OF {totalSteps}</span>
+            </div>
+            <div className="h-1 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-indigo-500 transition-all duration-500" 
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* No Header (Light Depth) — renders nothing */}
+
+      {/* Main Experience Surface */}
+      <main className={`w-full max-w-2xl px-6 py-12 flex-grow ${depth === 'light' ? 'flex items-center justify-center min-h-[60vh]' : ''}`}>
+        {currentStep ? (
+          <StepComponent 
+            step={currentStep} 
+            onComplete={handleCompleteStep} 
+            onSkip={handleSkipStep} 
+          />
+        ) : (
+          <div className="text-[#94a3b8] italic">Initializing experience steps…</div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+```
+
+### components/experience/HomeExperienceAction.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/lib/routes';
+import { COPY } from '@/lib/studio-copy';
+
+interface HomeExperienceActionProps {
+  id: string;
+  isProposed?: boolean;
+}
+
+export default function HomeExperienceAction({ id, isProposed }: HomeExperienceActionProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  const handleAcceptAndStart = async () => {
+    setLoading(true);
+    try {
+      // Step 1: Approve
+      let res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
+      if (!res.ok) throw new Error('Failed to approve');
+
+      // Step 2: Publish
+      res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'publish' }),
+      });
+      if (!res.ok) throw new Error('Failed to publish');
+
+      // Step 3: Activate
+      res = await fetch(`/api/experiences/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate' }),
+      });
+      if (!res.ok) throw new Error('Failed to activate');
+
+      router.push(ROUTES.workspace(id));
+      router.refresh();
+    } catch (error) {
+      console.error('Workflow failed:', error);
+      alert('Could not start journey. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isProposed) {
+    return (
+      <button 
+        onClick={handleAcceptAndStart}
+        disabled={loading}
+        className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
+      >
+        {loading ? 'Starting...' : COPY.library.acceptAndStart + ' →'}
+      </button>
+    );
+  }
+
+  return (
+    <button 
+      onClick={() => router.push(ROUTES.workspace(id))}
+      className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
+    >
+      {COPY.library.enter} →
+    </button>
+  );
+}
+
+```
+
+### components/experience/steps/LessonStep.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
+
+interface LessonPayload {
+  sections: Array<{
+    heading: string;
+    body: string;
+    type?: 'text' | 'callout' | 'checkpoint';
+  }>;
+}
+
+interface LessonStepProps {
+  step: ExperienceStep;
+  onComplete: () => void;
+  onSkip: () => void;
+}
+
+export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps) {
+  const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
+  const payload = step.payload as LessonPayload;
+
+  const handleCheckpoint = (index: number) => {
+    setCheckpoints((prev) => ({ ...prev, [index]: true }));
+  };
+
+  const isComplete = payload.sections.every(
+    (s, i) => s.type !== 'checkpoint' || checkpoints[i]
+  );
+
+  return (
+    <div className="space-y-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
+      <div className="mb-8">
+        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{step.title}</h2>
+      </div>
+
+      <div className="space-y-10">
+        {payload.sections.map((section, idx) => (
+          <div key={idx} className={`relative ${section.type === 'callout' ? 'p-6 bg-indigo-500/5 border-l-2 border-indigo-500 rounded-r-xl' : ''}`}>
+            {section.heading && (
+              <h3 className="text-xl font-semibold text-[#e2e8f0] mb-3">{section.heading}</h3>
+            )}
+            
+            <p className="text-lg leading-relaxed text-[#94a3b8] whitespace-pre-wrap">
+              {section.body}
+            </p>
+
+            {section.type === 'checkpoint' && (
+              <div className="mt-6 flex items-center justify-center border border-dashed border-[#33334d] p-6 rounded-xl">
+                {checkpoints[idx] ? (
+                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                    <span className="w-6 h-6 rounded-full bg-emerald-400/20 flex items-center justify-center">✓</span>
+                    Understood
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleCheckpoint(idx)}
+                    className="px-6 py-2 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30 hover:bg-indigo-500/30 transition-all font-medium"
+                  >
+                    Got it
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
+          <button
+            onClick={onSkip}
+            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
+          >
+            Skip for now
+          </button>
+          
+          <button
+            onClick={() => onComplete()}
+            disabled={!isComplete}
+            className="px-10 py-3 bg-indigo-600/20 text-indigo-100 rounded-xl text-sm font-bold hover:bg-indigo-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-600/30 shadow-lg shadow-indigo-900/10"
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/experience/steps/QuestionnaireStep.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
+
+interface QuestionPayload {
+  questions: Array<{
+    id: string;
+    label: string;
+    type: 'text' | 'choice' | 'scale';
+    options?: string[];
+  }>;
+}
+
+interface QuestionnaireStepProps {
+  step: ExperienceStep;
+  onComplete: (payload: { answers: Record<string, string> }) => void;
+  onSkip: () => void;
+}
+
+export default function QuestionnaireStep({ step, onComplete, onSkip }: QuestionnaireStepProps) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const payload = step.payload as QuestionPayload;
+
+  const handleInputChange = (questionId: string, value: string) => {
+    setAnswers((prev) => ({ ...prev, [questionId]: value }));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onComplete({ answers });
+  };
+
+  const isComplete = payload.questions.every((q) => !!answers[q.id]);
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{step.title}</h2>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {payload.questions.map((q) => (
+          <div key={q.id} className="space-y-3">
+            <label className="block text-lg font-medium text-[#94a3b8]">{q.label}</label>
+            
+            {q.type === 'text' && (
+              <textarea
+                value={answers[q.id] || ''}
+                onChange={(e) => handleInputChange(q.id, e.target.value)}
+                placeholder="Type your answer…"
+                rows={3}
+                className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-xl px-4 py-3 text-[#e2e8f0] placeholder-[#94a3b8]/50 focus:outline-none focus:border-indigo-500/40 transition-colors resize-none"
+              />
+            )}
+
+            {q.type === 'choice' && (
+              <div className="grid grid-cols-1 gap-2">
+                {q.options?.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => handleInputChange(q.id, option)}
+                    className={`px-4 py-3 rounded-xl border text-left transition-all ${
+                      answers[q.id] === option
+                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300'
+                        : 'bg-[#12121a] border-[#1e1e2e] text-[#94a3b8] hover:border-[#33334d]'
+                    }`}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {q.type === 'scale' && (
+              <div className="flex justify-between items-center bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
+                {[1, 2, 3, 4, 5].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleInputChange(q.id, val.toString())}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center border transition-all ${
+                      answers[q.id] === val.toString()
+                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
+                        : 'bg-[#1a1a2e] border-[#33334d] text-[#64748b] hover:border-indigo-500/30'
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div className="flex items-center justify-between pt-4">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+          >
+            Skip for now
+          </button>
+          
+          <button
+            type="submit"
+            disabled={!isComplete}
+            className="px-8 py-3 bg-indigo-500/20 text-indigo-300 rounded-xl text-sm font-bold hover:bg-indigo-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-500/20"
+          >
+            Next Step →
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+```
+
 ### components/icebox/icebox-card.tsx
 
 ```tsx
@@ -5994,6 +7194,7 @@ import { COPY } from '@/lib/studio-copy'
 
 const NAV_ITEMS = [
   { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
+  { label: COPY.library.heading, href: ROUTES.library, icon: '◇' },
   { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
   { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
   { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
@@ -6797,1204 +7998,3 @@ export type ExecutionMode = (typeof EXECUTION_MODES)[number]
 export const AGENT_RUN_KINDS = [
   'prototype',
   'fix_request',
-  'spec',
-  'research_summary',
-  'copilot_issue_assignment',
-] as const
-
-export const AGENT_RUN_STATUSES = [
-  'queued',
-  'running',
-  'succeeded',
-  'failed',
-  'blocked',
-] as const
-
-
-```
-
-### lib/date.ts
-
-```typescript
-export function formatRelativeTime(dateString: string): string {
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
-
-  if (diffMinutes < 1) return 'just now'
-  if (diffMinutes < 60) return `${diffMinutes}m ago`
-  if (diffHours < 24) return `${diffHours}h ago`
-  if (diffDays === 1) return 'yesterday'
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  })
-}
-
-export function daysSince(dateString: string): number {
-  const date = new Date(dateString)
-  const now = new Date()
-  return Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
-}
-
-```
-
-### lib/formatters/idea-formatters.ts
-
-```typescript
-import type { Idea } from '@/types/idea'
-
-export function formatIdeaStatus(status: Idea['status']): string {
-  const labels: Record<Idea['status'], string> = {
-    captured: 'Captured',
-    drilling: 'In Drill',
-    arena: 'In Progress',
-    icebox: 'Icebox',
-    shipped: 'Shipped',
-    killed: 'Killed',
-  }
-  return labels[status] ?? status
-}
-
-```
-
-### lib/formatters/inbox-formatters.ts
-
-```typescript
-import type { InboxEvent } from '@/types/inbox'
-
-export function formatEventType(type: InboxEvent['type']): string {
-  const labels: Record<InboxEvent['type'], string> = {
-    idea_captured: 'Idea captured',
-    idea_deferred: 'Idea put on hold',
-    drill_completed: 'Drill completed',
-    project_promoted: 'Project promoted',
-    task_created: 'Task created',
-    pr_opened: 'PR opened',
-    preview_ready: 'Preview ready',
-    build_failed: 'Build failed',
-    merge_completed: 'Merge completed',
-    project_shipped: 'Project shipped',
-    project_killed: 'Project killed',
-    changes_requested: 'Changes requested',
-    // GitHub lifecycle events
-    github_issue_created: 'GitHub issue created',
-    github_issue_closed: 'GitHub issue closed',
-    github_workflow_dispatched: 'Workflow dispatched',
-    github_workflow_failed: 'Workflow failed',
-    github_workflow_succeeded: 'Workflow succeeded',
-    github_pr_opened: 'GitHub PR opened',
-    github_pr_merged: 'GitHub PR merged',
-    github_review_requested: 'Review requested',
-    github_changes_requested: 'Changes requested on GitHub',
-    github_copilot_assigned: 'Copilot assigned',
-    github_sync_failed: 'GitHub sync failed',
-    github_connection_error: 'GitHub connection error',
-  }
-  return labels[type] ?? type
-}
-
-
-```
-
-### lib/formatters/pr-formatters.ts
-
-```typescript
-import type { PullRequest } from '@/types/pr'
-
-export function formatBuildState(state: PullRequest['buildState']): string {
-  const labels: Record<PullRequest['buildState'], string> = {
-    pending: 'Pending',
-    running: 'Building',
-    success: 'Build passed',
-    failed: 'Build failed',
-  }
-  return labels[state] ?? state
-}
-
-export function formatPRStatus(status: PullRequest['status']): string {
-  const labels: Record<PullRequest['status'], string> = {
-    open: 'Open',
-    merged: 'Merged',
-    closed: 'Closed',
-  }
-  return labels[status] ?? status
-}
-
-```
-
-### lib/formatters/project-formatters.ts
-
-```typescript
-import type { Project } from '@/types/project'
-
-export function formatProjectState(state: Project['state']): string {
-  const labels: Record<Project['state'], string> = {
-    arena: 'In Progress',
-    icebox: 'Icebox',
-    shipped: 'Shipped',
-    killed: 'Killed',
-  }
-  return labels[state] ?? state
-}
-
-export function formatProjectHealth(health: Project['health']): string {
-  const labels: Record<Project['health'], string> = {
-    green: 'On track',
-    yellow: 'Needs attention',
-    red: 'Blocked',
-  }
-  return labels[health] ?? health
-}
-
-```
-
-### lib/github/client.ts
-
-```typescript
-import { Octokit } from '@octokit/rest'
-
-let _client: Octokit | null = null
-
-/**
- * Returns the singleton Octokit client, initialised from GITHUB_TOKEN.
- * Throws if the token is not set.
- *
- * Future: this becomes the boundary for GitHub App auth.
- * export function getGitHubClientForInstallation(installationId: number): Octokit { ... }
- */
-export function getGitHubClient(): Octokit {
-  if (!_client) {
-    const token = process.env.GITHUB_TOKEN
-    if (!token) throw new Error('GITHUB_TOKEN is not set')
-    _client = new Octokit({ auth: token })
-  }
-  return _client
-}
-
-```
-
-### lib/github/handlers/handle-issue-event.ts
-
-```typescript
-import { GitHubWebhookContext } from '@/types/webhook'
-import { getProjects, updateProjectState } from '@/lib/services/projects-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-
-export async function handleIssueEvent(ctx: GitHubWebhookContext): Promise<void> {
-  const { action, rawPayload } = ctx
-  const issue = rawPayload.issue as any
-  if (!issue) return
-
-  const issueNumber = issue.number
-  const projects = await getProjects()
-  const project = projects.find((p) => p.githubIssueNumber === issueNumber)
-
-  if (!project) {
-    console.log(`[webhook/github] No local project found for issue #${issueNumber}`)
-    return
-  }
-
-  console.log(`[webhook/github] Handling issue.${action} for project ${project.id}`)
-
-  switch (action) {
-    case 'opened':
-    case 'reopened':
-      // Status remains 'arena' or similar, but maybe log it
-      await createInboxEvent({
-        type: 'github_issue_created',
-        title: `GitHub Issue #${issueNumber} ${action}`,
-        body: `Issue "${issue.title}" was ${action} on GitHub.`,
-        severity: 'info',
-        projectId: project.id,
-        actionUrl: `/arena/${project.id}`
-      })
-      break
-
-    case 'closed':
-      // If we use issue closure as a signal for project status, update it.
-      // For now, just create an inbox event.
-      await createInboxEvent({
-        type: 'project_shipped', // mapped loosely
-        title: `GitHub Issue #${issueNumber} closed`,
-        body: `The linked issue for "${project.name}" was closed.`,
-        severity: 'success',
-        projectId: project.id
-      })
-      break
-
-    case 'assigned':
-      const assignee = (rawPayload.assignee as any)?.login
-      if (assignee) {
-        await createInboxEvent({
-          type: 'github_copilot_assigned',
-          title: 'Developer assigned',
-          body: `${assignee} was assigned to issue #${issueNumber}.`,
-          severity: 'info',
-          projectId: project.id
-        })
-      }
-      break
-
-    default:
-      console.log(`[webhook/github] Action ${action} for issue ${issueNumber} not specifically handled.`)
-  }
-}
-
-```
-
-### lib/github/handlers/handle-pr-event.ts
-
-```typescript
-import { GitHubWebhookContext } from '@/types/webhook'
-import { getProjects } from '@/lib/services/projects-service'
-import { createPR, updatePR, getPRsForProject } from '@/lib/services/prs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import type { PullRequest } from '@/types/pr'
-import type { InboxEventType } from '@/types/inbox'
-
-export async function handlePREvent(ctx: GitHubWebhookContext): Promise<void> {
-  const { action, rawPayload, repositoryFullName } = ctx
-  const pr = rawPayload.pull_request as any
-  if (!pr) return
-
-  console.log(`[webhook/github] Handling pull_request.${action} for PR #${pr.number} in ${repositoryFullName}`)
-
-  // Search for the project this PR belongs to
-  const projects = await getProjects()
-  
-  // Try to find the project by repo name first.
-  // Then try to refine by looking for the issue number in the PR body (e.g., "Fixes #123")
-  const repoProjects = projects.filter(
-    (p) => 
-      (p.githubRepoFullName === repositoryFullName) || 
-      (p.githubRepo && repositoryFullName.endsWith(p.githubRepo))
-  )
-
-  let project = repoProjects.find(p => {
-    const issueNumStr = p.githubIssueNumber?.toString()
-    return pr.body?.includes(`#${issueNumStr}`) || pr.title?.includes(`#${issueNumStr}`)
-  })
-  
-  // Fallback: if there's only one active project in the repo, assume it's that one
-  if (!project && repoProjects.length === 1) {
-    project = repoProjects[0]
-  }
-
-  if (!project) {
-    console.log(`[webhook/github] PR #${pr.number} could not be accurately linked to a local project.`)
-    return
-  }
-
-  const existingPRs = await getPRsForProject(project.id)
-  const existingPR = existingPRs.find((p: PullRequest) => p.number === pr.number)
-
-  switch (action) {
-    case 'opened':
-    case 'reopened':
-    case 'ready_for_review':
-      if (existingPR) {
-        await updatePR(existingPR.id, {
-          status: pr.state === 'open' ? 'open' : (pr.merged ? 'merged' : 'closed'),
-          title: pr.title,
-          branch: pr.head.ref,
-          author: pr.user.login,
-          mergeable: pr.mergeable ?? true,
-        })
-      } else {
-        const newPR = await createPR({
-          projectId: project.id,
-          title: pr.title,
-          branch: pr.head.ref,
-          status: 'open',
-          author: pr.user.login,
-          buildState: 'pending',
-          mergeable: pr.mergeable ?? true,
-          previewUrl: '', // To be updated by deployment webhooks
-        })
-        await updatePR(newPR.id, { number: pr.number })
-      }
-
-      await createInboxEvent({
-        type: 'github_pr_opened' as InboxEventType,
-        title: `PR #${pr.number} ${action}`,
-        body: `New pull request "${pr.title}" for project "${project.name}".`,
-        severity: 'info',
-        projectId: project.id,
-        actionUrl: `/review/${pr.number}` // Or however the review page is keyed
-      })
-      break
-
-    case 'closed':
-      if (existingPR) {
-        const isMerged = pr.merged === true
-        await updatePR(existingPR.id, {
-          status: isMerged ? 'merged' : 'closed',
-          mergeable: false,
-        })
-
-        await createInboxEvent({
-          type: isMerged ? 'github_pr_merged' : 'project_killed',
-          title: `PR #${pr.number} ${isMerged ? 'merged' : 'closed'}`,
-          body: `Pull request "${pr.title}" was ${isMerged ? 'merged' : 'closed without merging'}.`,
-          severity: isMerged ? 'success' : 'warning',
-          projectId: project.id
-        })
-      }
-      break
-
-    case 'synchronize':
-      if (existingPR) {
-        await updatePR(existingPR.id, {
-          buildState: 'running', // Assume a new build starts on synchronize
-        })
-      }
-      break
-
-    default:
-      console.log(`[webhook/github] PR action ${action} not explicitly handled.`)
-  }
-}
-
-```
-
-### lib/github/handlers/handle-pr-review-event.ts
-
-```typescript
-import { GitHubWebhookContext } from '@/types/webhook'
-import { getCollection } from '@/lib/storage'
-import { updatePR } from '@/lib/services/prs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import type { PullRequest, ReviewStatus } from '@/types/pr'
-
-export async function handlePRReviewEvent(ctx: GitHubWebhookContext): Promise<void> {
-  const { action, rawPayload } = ctx
-  const pr = rawPayload.pull_request as any
-  const review = rawPayload.review as any
-  if (!pr || !review) return
-
-  const prNumber = pr.number
-  console.log(`[webhook/github] Handling pull_request_review.${action} for PR #${prNumber}`)
-
-  // Find local PR by number
-  const prs = getCollection('prs') as PullRequest[]
-  const localPR = prs.find((p) => p.number === prNumber)
-
-  if (!localPR) {
-    console.log(`[webhook/github] No local PR found for number ${prNumber}`)
-    return
-  }
-
-  switch (action) {
-    case 'submitted':
-      const reviewState = review.state.toLowerCase() // approved, changes_requested, commented
-      let reviewStatus: ReviewStatus = 'pending'
-      let eventType: 'github_pr_opened' | 'github_changes_requested' | 'github_review_requested' = 'github_review_requested'
-
-      if (reviewState === 'approved') {
-        reviewStatus = 'approved'
-      } else if (reviewState === 'changes_requested') {
-        reviewStatus = 'changes_requested'
-        eventType = 'github_changes_requested'
-      } else {
-        // Commented or other states we might not map directly to status but maybe event
-        console.log(`[webhook/github] Review state ${reviewState} for PR #${prNumber} logged but status unchanged.`)
-      }
-
-      if (reviewStatus !== 'pending') {
-        await updatePR(localPR.id, { reviewStatus })
-        
-        await createInboxEvent({
-          type: eventType as any,
-          title: `Review ${reviewState}: PR #${prNumber}`,
-          body: `Reviewer ${review.user.login} submitted review state "${reviewState}".`,
-          severity: reviewState === 'approved' ? 'success' : 'warning',
-          projectId: localPR.projectId,
-          actionUrl: review.html_url
-        })
-      }
-      break
-
-    case 'dismissed':
-      await updatePR(localPR.id, { reviewStatus: 'pending' })
-      break
-
-    default:
-      console.log(`[webhook/github] Review action ${action} not explicitly handled.`)
-  }
-}
-
-```
-
-### lib/github/handlers/handle-workflow-run-event.ts
-
-```typescript
-import { GitHubWebhookContext } from '@/types/webhook'
-import { getCollection } from '@/lib/storage'
-import { setAgentRunStatus } from '@/lib/services/agent-runs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import type { AgentRun } from '@/types/agent-run'
-
-export async function handleWorkflowRunEvent(ctx: GitHubWebhookContext): Promise<void> {
-  const { action, rawPayload } = ctx
-  const workflowRun = rawPayload.workflow_run as any
-  if (!workflowRun) return
-
-  const githubWorkflowRunId = workflowRun.id.toString()
-  console.log(`[webhook/github] Handling workflow_run.${action} for ID ${githubWorkflowRunId}`)
-
-  // Find the agent run by GitHub workflow run ID
-  const agentRuns = getCollection('agentRuns') as AgentRun[]
-  const agentRun = agentRuns.find((r) => r.githubWorkflowRunId === githubWorkflowRunId)
-
-  if (!agentRun) {
-    console.log(`[webhook/github] No local agent run found for workflow ID ${githubWorkflowRunId}`)
-    return
-  }
-
-  switch (action) {
-    case 'requested':
-    case 'in_progress':
-      setAgentRunStatus(agentRun.id, 'running')
-      break
-
-    case 'completed':
-      const conclusion = workflowRun.conclusion // success, failure, cancelled, etc.
-      const status = conclusion === 'success' ? 'succeeded' : 'failed'
-      
-      setAgentRunStatus(agentRun.id, status, {
-        summary: `GitHub workflow ${conclusion}: ${workflowRun.html_url}`,
-        error: conclusion === 'failure' ? 'Workflow run failed on GitHub.' : undefined
-      })
-
-      await createInboxEvent({
-        type: conclusion === 'success' ? 'github_workflow_succeeded' : 'github_workflow_failed',
-        title: `Workflow ${conclusion}`,
-        body: `Mira execution for project "${agentRun.projectId}" ${conclusion}.`,
-        severity: conclusion === 'success' ? 'success' : 'error',
-        projectId: agentRun.projectId,
-        actionUrl: workflowRun.html_url
-      })
-      break
-
-    default:
-      console.log(`[webhook/github] Workflow run action ${action} not specifically handled.`)
-  }
-}
-
-```
-
-### lib/github/handlers/index.ts
-
-```typescript
-import type { GitHubWebhookContext } from '@/types/webhook'
-import { handleIssueEvent } from './handle-issue-event'
-import { handlePREvent } from './handle-pr-event'
-import { handleWorkflowRunEvent } from './handle-workflow-run-event'
-import { handlePRReviewEvent } from './handle-pr-review-event'
-
-const handlers: Record<string, (ctx: GitHubWebhookContext) => Promise<void>> = {
-  issues: handleIssueEvent,
-  pull_request: handlePREvent,
-  workflow_run: handleWorkflowRunEvent,
-  pull_request_review: handlePRReviewEvent,
-}
-
-export async function routeGitHubEvent(ctx: GitHubWebhookContext): Promise<void> {
-  const handler = handlers[ctx.event]
-  if (handler) {
-    console.log(`[webhook/github] Handling ${ctx.event}.${ctx.action}`)
-    await handler(ctx)
-  } else {
-    console.log(`[webhook/github] Unhandled event: ${ctx.event}`)
-  }
-}
-
-```
-
-### lib/github/signature.ts
-
-```typescript
-import crypto from 'crypto'
-
-export function verifyGitHubSignature(
-  payload: string,
-  signature: string | null,
-  secret: string
-): boolean {
-  if (!signature) return false
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-}
-
-```
-
-### lib/guards.ts
-
-```typescript
-import type { Idea } from '@/types/idea'
-import type { Project } from '@/types/project'
-
-export function isIdea(value: unknown): value is Idea {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'id' in value &&
-    'title' in value &&
-    'status' in value
-  )
-}
-
-export function isProject(value: unknown): value is Project {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'id' in value &&
-    'state' in value &&
-    'health' in value
-  )
-}
-
-```
-
-### lib/routes.ts
-
-```typescript
-export const ROUTES = {
-  home: '/',
-  send: '/send',
-  drill: '/drill',
-  drillSuccess: '/drill/success',
-  drillEnd: '/drill/end',
-  arena: '/arena',
-  arenaProject: (id: string) => `/arena/${id}`,
-  icebox: '/icebox',
-  shipped: '/shipped',
-  killed: '/killed',
-  review: (prId: string) => `/review/${prId}`,
-  inbox: '/inbox',
-  devGptSend: '/dev/gpt-send',
-  // GitHub pages + API routes
-  githubPlayground: '/dev/github-playground',
-  githubTestConnection: '/api/github/test-connection',
-  githubCreateIssue: '/api/github/create-issue',
-  githubDispatchWorkflow: '/api/github/dispatch-workflow',
-  githubCreatePR: '/api/github/create-pr',
-  githubSyncPR: '/api/github/sync-pr',
-  githubMergePR: '/api/github/merge-pr',
-  githubTriggerAgent: '/api/github/trigger-agent',
-} as const
-
-```
-
-### lib/seed-data.ts
-
-```typescript
-import type { StudioStore } from './storage'
-
-export function getSeedData(): StudioStore {
-  return {
-    ideas: [
-      {
-        id: 'idea-001',
-        title: 'AI-powered code review assistant',
-        rawPrompt: 'What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?',
-        gptSummary: 'A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.',
-        vibe: 'productivity',
-        audience: 'engineering teams',
-        intent: 'Reduce code review bottlenecks and maintain code quality at scale.',
-        createdAt: '2026-03-22T00:13:00.000Z',
-        status: 'captured',
-      },
-      {
-        id: 'idea-002',
-        title: 'Team onboarding checklist builder',
-        rawPrompt: 'Build something to help companies create interactive onboarding flows for new hires',
-        gptSummary: 'A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.',
-        vibe: 'operations',
-        audience: 'HR teams and new employees',
-        intent: 'Cut onboarding time and reduce "what do I do next" anxiety.',
-        createdAt: '2026-03-20T00:43:00.000Z',
-        status: 'icebox',
-      },
-    ],
-    drillSessions: [
-      {
-        id: 'drill-001',
-        ideaId: 'idea-001',
-        intent: 'Reduce code review bottlenecks and maintain code quality at scale.',
-        successMetric: 'PR review time drops by 40% in first month',
-        scope: 'medium',
-        executionPath: 'assisted',
-        urgencyDecision: 'now',
-        finalDisposition: 'arena',
-        completedAt: '2026-03-22T00:23:00.000Z',
-      },
-    ],
-    projects: [
-      {
-        id: 'proj-001',
-        ideaId: 'idea-003',
-        name: 'Mira Studio v1',
-        summary: 'The Vercel-hosted studio UI for managing ideas from capture to execution.',
-        state: 'arena',
-        health: 'green',
-        currentPhase: 'Core UI',
-        nextAction: 'Review open PRs',
-        activePreviewUrl: 'https://preview.vercel.app/mira-studio',
-        createdAt: '2026-03-19T00:43:00.000Z',
-        updatedAt: '2026-03-21T22:43:00.000Z',
-      },
-      {
-        id: 'proj-002',
-        ideaId: 'idea-004',
-        name: 'Custom GPT Intake Layer',
-        summary: 'The ChatGPT custom action that sends structured idea payloads to Mira.',
-        state: 'arena',
-        health: 'yellow',
-        currentPhase: 'Integration',
-        nextAction: 'Fix webhook auth',
-        createdAt: '2026-03-15T00:43:00.000Z',
-        updatedAt: '2026-03-21T00:43:00.000Z',
-      },
-      {
-        id: 'proj-003',
-        ideaId: 'idea-005',
-        name: 'Analytics Dashboard',
-        summary: 'Shipped product metrics for internal tracking.',
-        state: 'shipped',
-        health: 'green',
-        currentPhase: 'Shipped',
-        nextAction: '',
-        activePreviewUrl: 'https://analytics.example.com',
-        createdAt: '2026-02-20T00:43:00.000Z',
-        updatedAt: '2026-03-17T00:43:00.000Z',
-        shippedAt: '2026-03-17T00:43:00.000Z',
-      },
-      {
-        id: 'proj-004',
-        ideaId: 'idea-006',
-        name: 'Mobile App v2',
-        summary: 'Complete rebuild of mobile experience.',
-        state: 'killed',
-        health: 'red',
-        currentPhase: 'Killed',
-        nextAction: '',
-        createdAt: '2026-02-05T00:43:00.000Z',
-        updatedAt: '2026-03-12T00:43:00.000Z',
-        killedAt: '2026-03-12T00:43:00.000Z',
-        killedReason: 'Scope too large for current team. Web-first is the right call.',
-      },
-    ],
-    tasks: [
-      {
-        id: 'task-001',
-        projectId: 'proj-001',
-        title: 'Implement drill tunnel flow',
-        status: 'in_progress',
-        priority: 'high',
-        createdAt: '2026-03-21T00:43:00.000Z',
-      },
-      {
-        id: 'task-002',
-        projectId: 'proj-001',
-        title: 'Build arena project card',
-        status: 'done',
-        priority: 'high',
-        linkedPrId: 'pr-001',
-        createdAt: '2026-03-20T12:43:00.000Z',
-      },
-      {
-        id: 'task-003',
-        projectId: 'proj-001',
-        title: 'Wire API routes to mock data',
-        status: 'pending',
-        priority: 'medium',
-        createdAt: '2026-03-21T12:43:00.000Z',
-      },
-      {
-        id: 'task-004',
-        projectId: 'proj-002',
-        title: 'Fix webhook signature validation',
-        status: 'blocked',
-        priority: 'high',
-        createdAt: '2026-03-21T18:43:00.000Z',
-      },
-    ],
-    prs: [
-      {
-        id: 'pr-001',
-        projectId: 'proj-001',
-        title: 'feat: arena project cards',
-        branch: 'feat/arena-cards',
-        status: 'merged',
-        previewUrl: 'https://preview.vercel.app/arena-cards',
-        buildState: 'success',
-        mergeable: true,
-        number: 12,
-        author: 'builder',
-        createdAt: '2026-03-21T00:43:00.000Z',
-      },
-      {
-        id: 'pr-002',
-        projectId: 'proj-001',
-        title: 'feat: drill tunnel components',
-        branch: 'feat/drill-tunnel',
-        status: 'open',
-        previewUrl: 'https://preview.vercel.app/drill-tunnel',
-        buildState: 'running',
-        mergeable: true,
-        number: 14,
-        author: 'builder',
-        createdAt: '2026-03-21T22:43:00.000Z',
-      },
-    ],
-    inbox: [
-      {
-        id: 'evt-001',
-        type: 'idea_captured',
-        title: 'New idea arrived',
-        body: 'AI-powered code review assistant — ready for drill.',
-        timestamp: '2026-03-22T00:13:00.000Z',
-        severity: 'info',
-        actionUrl: '/send',
-        read: false,
-      },
-      {
-        id: 'evt-002',
-        projectId: 'proj-001',
-        type: 'pr_opened',
-        title: 'PR opened: feat/drill-tunnel',
-        body: 'A new pull request is ready for review.',
-        timestamp: '2026-03-21T22:43:00.000Z',
-        severity: 'info',
-        actionUrl: '/review/pr-002',
-        read: false,
-      },
-      {
-        id: 'evt-003',
-        projectId: 'proj-002',
-        type: 'build_failed',
-        title: 'Build failed: Custom GPT Intake',
-        body: 'Webhook auth integration is failing. Action needed.',
-        timestamp: '2026-03-21T00:43:00.000Z',
-        severity: 'error',
-        actionUrl: '/arena/proj-002',
-        read: false,
-      },
-    ],
-    // Sprint 2: new collections (start empty)
-    agentRuns: [],
-    externalRefs: [],
-  }
-}
-
-```
-
-### lib/services/agent-runs-service.ts
-
-```typescript
-/**
- * lib/services/agent-runs-service.ts
- * CRUD service for AgentRun entities — tracks GitHub workflow / Copilot runs.
- * All reads/writes go through lib/storage.ts (SOP-6).
- */
-
-import type { AgentRun, AgentRunKind, AgentRunStatus } from '@/types/agent-run'
-import type { ExecutionMode } from '@/lib/constants'
-import { getCollection, saveCollection } from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-
-type CreateAgentRunInput = {
-  projectId: string
-  taskId?: string
-  kind: AgentRunKind
-  executionMode: ExecutionMode
-  triggeredBy: string
-  githubWorkflowRunId?: string
-  githubIssueNumber?: number
-}
-
-/** Create and persist a new AgentRun. Returns the created record. */
-export function createAgentRun(data: CreateAgentRunInput): AgentRun {
-  const runs = getCollection('agentRuns')
-  const run: AgentRun = {
-    id: `run-${generateId()}`,
-    status: 'queued',
-    startedAt: new Date().toISOString(),
-    ...data,
-  }
-  runs.push(run)
-  saveCollection('agentRuns', runs)
-  return run
-}
-
-/** Retrieve a single AgentRun by its ID. Returns undefined if not found. */
-export function getAgentRun(id: string): AgentRun | undefined {
-  const runs = getCollection('agentRuns')
-  return runs.find((r) => r.id === id)
-}
-
-/** All AgentRuns for a given project, sorted by startedAt descending. */
-export function getAgentRunsForProject(projectId: string): AgentRun[] {
-  const runs = getCollection('agentRuns')
-  return runs
-    .filter((r) => r.projectId === projectId)
-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
-}
-
-/** Partial-update an AgentRun by ID. Merges supplied fields into the record. */
-export function updateAgentRun(
-  id: string,
-  updates: Partial<Omit<AgentRun, 'id' | 'projectId'>>
-): AgentRun | undefined {
-  const runs = getCollection('agentRuns')
-  const idx = runs.findIndex((r) => r.id === id)
-  if (idx === -1) return undefined
-  runs[idx] = { ...runs[idx], ...updates }
-  saveCollection('agentRuns', runs)
-  return runs[idx]
-}
-
-/** Convenience: the most recently started run for a project. */
-export function getLatestRunForProject(projectId: string): AgentRun | undefined {
-  return getAgentRunsForProject(projectId)[0]
-}
-
-/** Update just the status field (and optionally finishedAt) atomically. */
-export function setAgentRunStatus(
-  id: string,
-  status: AgentRunStatus,
-  opts?: { summary?: string; error?: string }
-): AgentRun | undefined {
-  const finishedAt =
-    status === 'succeeded' || status === 'failed'
-      ? new Date().toISOString()
-      : undefined
-  return updateAgentRun(id, { status, finishedAt, ...opts })
-}
-
-```
-
-### lib/services/drill-service.ts
-
-```typescript
-import type { DrillSession } from '@/types/drill'
-import { getCollection, saveCollection } from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-
-export function getDrillSessionByIdeaId(ideaId: string): DrillSession | undefined {
-  const sessions = getCollection('drillSessions')
-  return sessions.find((s) => s.ideaId === ideaId)
-}
-
-export function saveDrillSession(data: Omit<DrillSession, 'id'>): DrillSession {
-  const sessions = getCollection('drillSessions')
-  const session: DrillSession = {
-    ...data,
-    id: `drill-${generateId()}`,
-    completedAt: data.completedAt ?? new Date().toISOString(),
-  }
-  sessions.push(session)
-  saveCollection('drillSessions', sessions)
-  return session
-}
-
-```
-
-### lib/services/external-refs-service.ts
-
-```typescript
-/**
- * lib/services/external-refs-service.ts
- * Bidirectional mapping between local Mira entities and external provider records
- * (GitHub issues/PRs, Vercel deployments, etc.).
- *
- * Primary use-case: GitHub webhook event arrives with a PR number → look up
- * which local project it belongs to.
- *
- * All reads/writes go through lib/storage.ts (SOP-6).
- */
-
-import type { ExternalRef, ExternalProvider } from '@/types/external-ref'
-import { getCollection, saveCollection } from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-
-type CreateExternalRefInput = Omit<ExternalRef, 'id' | 'createdAt'>
-
-/** Create and persist a new ExternalRef. Returns the created record. */
-export function createExternalRef(data: CreateExternalRefInput): ExternalRef {
-  const refs = getCollection('externalRefs')
-  const ref: ExternalRef = {
-    id: `ref-${generateId()}`,
-    createdAt: new Date().toISOString(),
-    ...data,
-  }
-  refs.push(ref)
-  saveCollection('externalRefs', refs)
-  return ref
-}
-
-/** All ExternalRefs for a specific local entity (e.g. all refs for project "proj-001"). */
-export function getExternalRefsForEntity(
-  entityType: ExternalRef['entityType'],
-  entityId: string
-): ExternalRef[] {
-  const refs = getCollection('externalRefs')
-  return refs.filter((r) => r.entityType === entityType && r.entityId === entityId)
-}
-
-/**
- * Reverse lookup — given a provider + external ID (e.g. GitHub issue number "42"),
- * find the matching local entity reference.
- *
- * @param provider  'github' | 'vercel' | 'supabase'
- * @param externalId  The external system's identifier string (can be a number stringified)
- */
-export function findByExternalId(
-  provider: ExternalProvider,
-  externalId: string
-): ExternalRef | undefined {
-  const refs = getCollection('externalRefs')
-  return refs.find((r) => r.provider === provider && r.externalId === externalId)
-}
-
-/**
- * Reverse lookup by external number (e.g. GitHub PR number as a JS number).
- * Convenience wrapper around findByExternalId.
- */
-export function findByExternalNumber(
-  provider: ExternalProvider,
-  entityType: ExternalRef['entityType'],
-  externalNumber: number
-): ExternalRef | undefined {
-  const refs = getCollection('externalRefs')
-  return refs.find(
-    (r) =>
-      r.provider === provider &&
-      r.entityType === entityType &&
-      r.externalNumber === externalNumber
-  )
-}
-
-/** Delete an ExternalRef by its local ID. No-op if not found. */
-export function deleteExternalRef(id: string): void {
-  const refs = getCollection('externalRefs')
-  const filtered = refs.filter((r) => r.id !== id)
-  saveCollection('externalRefs', filtered)
-}
-
-```
-
-### lib/services/github-factory-service.ts
-
-```typescript
-/**
- * lib/services/github-factory-service.ts
- *
- * Orchestration layer for GitHub write operations.
- * Routes call THIS service — never the adapter directly (SOP-8).
- *
- * Each method:
- *   1. Loads local data
- *   2. Validates / finds GitHub linkage
- *   3. Calls the GitHub adapter
- *   4. Updates local records (project, PR, externalRefs)
- *   5. Creates inbox events
- *
- * If GitHub is not configured (no token), every method throws with a
- * clear message so routes can return a 503 without crashing.
- */
-
-import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
-import { getGitHubClient } from '@/lib/github/client'
-import { getProjectById } from '@/lib/services/projects-service'
-import { createPR, getPRsForProject, updatePR } from '@/lib/services/prs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import { readStore, writeStore } from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-import type { PullRequest } from '@/types/pr'
-import type { ExternalRef } from '@/types/external-ref'
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function requireGitHub(): void {
-  if (!isGitHubConfigured()) {
-    throw new Error(
-      '[github-factory] GitHub is not configured. ' +
-        'Add GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, and GITHUB_WEBHOOK_SECRET to .env.local.'
-    )
-  }
-}
-
-/** Persist an ExternalRef record.
- * TODO(Lane 1): replace with external-refs-service once that module ships. */
-function saveExternalRef(ref: Omit<ExternalRef, 'id' | 'createdAt'>): void {
-  const store = readStore()
-  const refs: ExternalRef[] = (store as unknown as Record<string, unknown>).externalRefs as ExternalRef[] ?? []
-  const record: ExternalRef = {
-    ...ref,
-    id: `xref-${generateId()}`,
-    createdAt: new Date().toISOString(),
-  }
-  refs.push(record)
-  ;(store as unknown as Record<string, unknown>).externalRefs = refs
-  writeStore(store)
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a GitHub issue from a local project.
- * Updates the project with the issue number + URL.
- */
-export async function createIssueFromProject(
-  projectId: string,
-  options?: { assignAgent?: boolean }
-): Promise<{ issueNumber: number; issueUrl: string }> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-
-  const config = getGitHubConfig()
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  const body =
-    `> Created by Mira Studio\n\n` +
-    `**Summary:** ${project.summary}\n\n` +
-    `**Next action:** ${project.nextAction}`
-
-  const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
-
-  // Atomic handoff: assign copilot-swe-agent at creation time (not after)
-  // so the coding agent picks up the issue immediately.
-  const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
-
-  const { data: issue } = await octokit.issues.create({
-    owner,
-    repo,
-    title: project.name,
-    body,
-    labels,
-    assignees,
-  })
-
-  // Update project with GitHub issue linkage
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      githubIssueNumber: issue.number,
-      githubIssueUrl: issue.html_url,
-      githubOwner: owner,
-      githubRepo: repo,
-      lastSyncedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
-
-  // Track external ref
-  saveExternalRef({
-    entityType: 'project',
-    entityId: projectId,
-    provider: 'github',
-    externalId: String(issue.number),
-    externalNumber: issue.number,
-    url: issue.html_url,
-  })
-
-  await createInboxEvent({
-    type: 'task_created',
-    title: `GitHub issue created: #${issue.number}`,
-    body: `Issue "${project.name}" created at ${issue.html_url}`,
-    severity: 'info',
-    projectId,
-    actionUrl: issue.html_url,
-  })
-
-  return { issueNumber: issue.number, issueUrl: issue.html_url }
-}
-
-/**
- * Assign Copilot coding agent to the GitHub issue linked to a project.
- * Requires the project to already have a githubIssueNumber.
- */
-export async function assignCopilotToProject(projectId: string): Promise<void> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-  if (!project.githubIssueNumber) {
-    throw new Error(
-      `Project ${projectId} has no linked GitHub issue. Run createIssueFromProject first.`
-    )
-  }
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  // Assign the "copilot" user (GitHub Copilot Workspace agent login)
-  await octokit.issues.addAssignees({
-    owner,
-    repo,
-    issue_number: project.githubIssueNumber,
-    assignees: ['copilot'],
-  })
-
-  // Update project to record assignment timestamp
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      copilotAssignedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
-
-  await createInboxEvent({
-    type: 'task_created',
-    title: `Copilot assigned to issue #${project.githubIssueNumber}`,
-    body: `GitHub Copilot has been assigned to work on "${project.name}".`,
-    severity: 'info',
-    projectId,
-  })
-}
-
-/**
- * Dispatch a prototype GitHub Actions workflow for a project.
- */
-export async function dispatchPrototypeWorkflow(
-  projectId: string,
-  inputs?: Record<string, string>
-): Promise<void> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-
-  const config = getGitHubConfig()
-  const workflowId = config.workflowPrototype
-  if (!workflowId) {
-    throw new Error(
-      'GITHUB_WORKFLOW_PROTOTYPE is not set. Add the workflow filename to .env.local.'

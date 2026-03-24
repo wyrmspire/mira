@@ -1,186 +1,1499 @@
-# Git Diff Report
-
-**Generated**: Mon, Mar 23, 2026  7:31:51 PM
-
-**Local Branch**: main
-
-**Comparing Against**: origin/main
-
----
-
-## Uncommitted Changes (working directory)
-
-### Modified/Staged Files
-
-```
- M .env.example
- M board.md
- M gitrdiff.md
- M lib/constants.ts
- M lib/guards.ts
- M lib/routes.ts
- M lib/state-machine.ts
- M lib/storage.ts
- M lib/studio-copy.ts
- M package-lock.json
- M package.json
- M wiring.md
-?? app/api/experiences/
-?? app/api/gpt/
-?? app/api/interactions/
-?? app/api/synthesis/
-?? app/workspace/
-?? components/experience/
-?? lib/experience/
-?? lib/hooks/
-?? lib/services/experience-service.ts
-?? lib/services/interaction-service.ts
-?? lib/services/synthesis-service.ts
-?? lib/storage-adapter.ts
-?? lib/supabase/
-?? types/experience.ts
-?? types/interaction.ts
-?? types/synthesis.ts
-```
-
-### Uncommitted Diff
-
-```diff
-diff --git a/.env.example b/.env.example
-index c300857..a378aab 100644
---- a/.env.example
-+++ b/.env.example
-@@ -49,3 +49,17 @@ PREVIEW_BASE_URL=
- FEATURE_KILL_FLOW_ENABLED=true
- FEATURE_INBOX_ENABLED=true
- 
-+# ─── Supabase (Sprint 3: Runtime Foundation) ─────────────────────────────────
-+# Canonical runtime store for experiences, interactions, and results.
-+# App falls back to JSON file persistence (.local-data/studio.json) if missing.
-+
-+# The URL of your Supabase project (e.g. "https://xxxxxxxx.supabase.co")
-+NEXT_PUBLIC_SUPABASE_URL=
-+
-+# The anon/public key for your Supabase project (used in browser)
-+NEXT_PUBLIC_SUPABASE_ANON_KEY=
-+
-+# The service role key for your Supabase project (used on server, bypasses RLS)
-+# DO NOT include this in your browser-side client.
-+SUPABASE_SERVICE_ROLE_KEY=
-+
-diff --git a/board.md b/board.md
-index 9d8532e..17a15d5 100644
---- a/board.md
-+++ b/board.md
-@@ -47,11 +47,19 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
- 
- | Lane | Focus | Status |
- |------|-------|--------|
--| 🔴 Lane 1 | Supabase + Storage Adapter | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
--| 🟢 Lane 2 | Core Types + State Machine | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
--| 🔵 Lane 3 | Experience Services + API | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ |
--| 🟡 Lane 4 | Minimal Workspace Renderer | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
--| 🟣 Lane 5 | Interaction Capture | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ |
-+| 🔴 Lane 1 | Supabase + Storage Adapter | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-+- **Done**: Installed Supabase, created clients, wrote 3 migrations, implemented storage adapter with JSON fallback, and added experience constants.
-+| 🟢 Lane 2 | Core Types + State Machine | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ |
-+- **Done**: Created types/experience.ts with ExperienceClass, ExperienceStatus, InstanceType, Resolution, ReentryContract, and Instance types.
-+- **Done**: Created types/interaction.ts with InteractionEventType, InteractionEvent, and Artifact types.
-+- **Done**: Created types/synthesis.ts with SynthesisSnapshot, ProfileFacet, FacetType, FrictionLevel, and GPTStatePacket types.
-+- **Done**: Added ExperienceTransition types and EXPERIENCE_TRANSITIONS state machine to lib/state-machine.ts, along with transition helpers.
-+- **Done**: Added experience type guards and strict resolution validation to lib/guards.ts.
-+| 🔵 Lane 3 | Experience Services + API | ✅ W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 |
-+- **Done**: Full experience/interaction/synthesis logic and API surface implemented, with routes and copy updated.
-+| 🟡 Lane 4 | Minimal Workspace Renderer | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ |
-+| 🟣 Lane 5 | Interaction Capture | W1 ✅ W2 ✅ W3 ✅ W4 ✅ |
-+- **Done**: Implemented `useInteractionCapture` hook with time-on-step tracking and created `CAPTURE_CONTRACT.md`. All items complete.
- | 🏁 Lane 6 | Integration + Proof | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
- 
- ---
-@@ -274,7 +282,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
-   - `getRenderer(stepType: string)` — returns component or fallback
-   - `FallbackStep` — simple "Unsupported step type: {type}" component
- - Import types from `types/experience.ts`
--- Done when: registry compiles and exports `StepRenderer` type
-+- **Done**: Created the renderer registry with support for extensible step renderers and a fallback for unknown types.
- 
- **W2 — QuestionnaireStep renderer**
- - Create `components/experience/steps/QuestionnaireStep.tsx`:
-@@ -282,7 +290,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
-   - Renders each question as a form field
-   - On submit: calls `onComplete({ answers: Record<string, string> })`
-   - Basic Tailwind styling (dark theme compatible), no design obsession
--- Done when: component renders a multi-question form and calls onComplete with answers
-+- **Done**: Implemented a multi-questionnaire renderer supporting text, multi-choice, and scale input types.
- 
- **W3 — LessonStep renderer**
- - Create `components/experience/steps/LessonStep.tsx`:
-@@ -290,7 +298,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
-   - Renders sections as scrollable content
-   - Checkpoints require user to click "Got it" before proceeding
-   - On complete: calls `onComplete()`
--- Done when: component renders structured text content with checkpoint gates
-+- **Done**: Built a lesson renderer with structured sections and checkpoint gates for progression.
- 
- **W4 — ExperienceRenderer orchestrator**
- - Create `components/experience/ExperienceRenderer.tsx`:
-@@ -304,7 +312,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
-     - `light` — no header/progress, just the step content
-     - `medium` — progress bar + step title
-     - `heavy` — full header with goal, progress bar, step title, description
--- Done when: orchestrator renders steps in sequence, resolution controls chrome level
-+- **Done**: Orchestrated the step flow and implemented resolution-aware UI chrome (light/medium/heavy).
- 
- **W5 — Workspace page**
- - Create `app/workspace/[instanceId]/page.tsx`:
-@@ -316,7 +324,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
-   - `'use client'` component
-   - Receives instance + steps as props
-   - Renders `ExperienceRenderer`
--- Done when: navigating to `/workspace/{id}` renders the experience from DB data
-+- **Done**: Established the workspace route surface, connecting backend data to the renderer engine via Page/Client components.
- 
- ---
- 
-@@ -439,11 +447,11 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
- 
- | Lane | TSC | Build | Notes |
- |------|-----|-------|-------|
--| Lane 1 | ⬜ | ⬜ | |
-+| Lane 1 | ✅ | ⬜ | All W1-W7 items pass TSC. |
- | Lane 2 | ⬜ | ⬜ | |
--| Lane 3 | ⬜ | ⬜ | |
--| Lane 4 | ⬜ | ⬜ | |
--| Lane 5 | ⬜ | ⬜ | |
-+| Lane 3 | ✅ | ⬜ | |
-+| Lane 4 | ✅ | ⬜ | |
-+| Lane 5 | ✅ | ⬜ | |
- | Lane 6 | ⬜ | ⬜ | |
- 
- ---
-diff --git a/gitrdiff.md b/gitrdiff.md
-index 2212782..589734e 100644
---- a/gitrdiff.md
-+++ b/gitrdiff.md
-@@ -1,6 +1,6 @@
- # Git Diff Report
- 
+-      path: {
+-        question: 'How does this get built?',
+-        hint: 'Solo, assisted, or fully delegated?',
+-      },
+-      priority: {
+-        question: 'Does this belong now?',
+-        hint: 'What would you not do if you commit to this?',
+-      },
+-      decision: {
+-        question: "What's the call?",
+-        hint: 'Commit, hold, or remove. Every idea gets a clear decision.',
+-      },
+-    },
+-    cta: {
+-      next: 'Next →',
+-      back: '← Back',
+-      commit: 'Start building',
+-      icebox: 'Put on hold',
+-      kill: 'Remove this idea',
+-    },
+-  },
+-  arena: {
+-    heading: 'In Progress',
+-    empty: 'No active projects. Define an idea to get started.',
+-    limitReached: "You're at capacity. Ship or remove something first.",
+-    limitBanner: 'Active limit: {count}/{max}',
+-  },
+-  icebox: {
+-    heading: 'On Hold',
+-    subheading: 'Ideas and projects on pause',
+-    empty: 'Nothing on hold right now.',
+-    staleWarning: 'This idea has been here for {days} days. Time to decide.',
+-  },
+-  shipped: {
+-    heading: 'Shipped',
+-    empty: 'Nothing shipped yet.',
+-  },
+-  killed: {
+-    heading: 'Removed',
+-    empty: 'Nothing removed yet.',
+-    resurrection: 'Restore',
+-  },
+-  inbox: {
+-    heading: 'Inbox',
+-    empty: 'No new events.',
+-    filters: {
+-      all: 'All',
+-      unread: 'Unread',
+-      errors: 'Errors',
+-    },
+-    markRead: 'Mark as read',
+-  },
+-  common: {
+-    loading: 'Working...',
+-    error: 'Something went wrong.',
+-    confirm: 'Are you sure?',
+-    cancel: 'Cancel',
+-    save: 'Save',
+-  },
+-  github: {
+-    heading: 'GitHub Integration',
+-    connectionSuccess: 'Connected to GitHub',
+-    connectionFailed: 'Could not connect to GitHub',
+-    issueCreated: 'GitHub issue created',
+-    workflowDispatched: 'Build started',
+-    workflowFailed: 'Build failed',
+-    prOpened: 'Pull request opened',
+-    prMerged: 'Pull request merged',
+-    copilotAssigned: 'Copilot is working on this',
+-    syncFailed: 'GitHub sync failed',
+-    mergeBlocked: 'Cannot merge — checks did not pass',
+-    notLinked: 'Not linked to GitHub',
+-  },
+-}
+-
+-```
+-
+-### lib/utils.ts
+-
+-```typescript
+-export function cn(...inputs: (string | undefined | null | boolean)[]): string {
+-  return inputs
+-    .flat()
+-    .filter(Boolean)
+-    .join(' ')
+-    .replace(/\s+/g, ' ')
+-    .trim()
+-}
+-
+-export function generateId(): string {
+-  return Math.random().toString(36).slice(2, 11)
+-}
+-
+-```
+-
+-### lib/validators/drill-validator.ts
+-
+-```typescript
+-import type { DrillSession } from '@/types/drill'
+-
+-export function validateDrillPayload(data: unknown): { valid: boolean; errors?: string[] } {
+-  if (!data || typeof data !== 'object') {
+-    return { valid: false, errors: ['Invalid payload'] }
+-  }
+-  const d = data as Partial<DrillSession>
+-  const errors: string[] = []
+-
+-  if (!d.ideaId || typeof d.ideaId !== 'string') errors.push('ideaId is required and must be a string')
+-  if (!d.intent || typeof d.intent !== 'string') errors.push('intent is required and must be a string')
+-  if (!d.successMetric || typeof d.successMetric !== 'string') errors.push('successMetric is required and must be a string')
+-  
+-  const validScopes = ['small', 'medium', 'large']
+-  if (!d.scope || !validScopes.includes(d.scope)) errors.push('scope must be small, medium, or large')
+-
+-  const validPaths = ['solo', 'assisted', 'delegated']
+-  if (!d.executionPath || !validPaths.includes(d.executionPath)) errors.push('executionPath must be solo, assisted, or delegated')
+-
+-  const validUrgencies = ['now', 'later', 'never']
+-  if (!d.urgencyDecision || !validUrgencies.includes(d.urgencyDecision)) errors.push('urgencyDecision must be now, later, or never')
+-
+-  const validDispositions = ['arena', 'icebox', 'killed']
+-  if (!d.finalDisposition || !validDispositions.includes(d.finalDisposition)) errors.push('finalDisposition must be arena, icebox, or killed')
+-
+-  return {
+-    valid: errors.length === 0,
+-    errors: errors.length > 0 ? errors : undefined,
+-  }
+-}
+-
+-```
+-
+-### lib/validators/idea-validator.ts
+-
+-```typescript
+-import type { Idea } from '@/types/idea'
+-
+-export function validateIdeaPayload(data: unknown): { valid: boolean; error?: string } {
+-  if (!data || typeof data !== 'object') {
+-    return { valid: false, error: 'Invalid payload' }
+-  }
+-  const d = data as Partial<Idea>
+-  if (!d.title || typeof d.title !== 'string') {
+-    return { valid: false, error: 'Title is required' }
+-  }
+-  if (!d.rawPrompt || typeof d.rawPrompt !== 'string') {
+-    return { valid: false, error: 'Raw prompt is required' }
+-  }
+-  return { valid: true }
+-}
+-
+-```
+-
+-### lib/validators/project-validator.ts
+-
+-```typescript
+-import type { Project } from '@/types/project'
+-
+-export function validateProjectPayload(data: unknown): { valid: boolean; error?: string } {
+-  if (!data || typeof data !== 'object') {
+-    return { valid: false, error: 'Invalid payload' }
+-  }
+-  const d = data as Partial<Project>
+-  if (!d.name) return { valid: false, error: 'name is required' }
+-  if (!d.ideaId) return { valid: false, error: 'ideaId is required' }
+-  return { valid: true }
+-}
+-
+-```
+-
+-### lib/validators/webhook-validator.ts
+-
+-```typescript
+-import type { WebhookPayload } from '@/types/webhook'
+-
+-export function validateGitHubWebhookHeaders(headers: Headers): { valid: boolean; error?: string } {
+-  const event = headers.get('x-github-event')
+-  if (!event) return { valid: false, error: 'Missing x-github-event header' }
+-  
+-  // Signature is typically required in prod, but optional if SECRET not set in dev
+-  // We'll let the route handle the actual check vs secret
+-  return { valid: true }
+-}
+-
+-export function validateWebhookPayload(data: unknown): { valid: boolean; error?: string } {
+-
+-  if (!data || typeof data !== 'object') {
+-    return { valid: false, error: 'Invalid payload' }
+-  }
+-  const d = data as Partial<WebhookPayload>
+-  if (!d.source) return { valid: false, error: 'source is required' }
+-  if (!d.event) return { valid: false, error: 'event is required' }
+-  return { valid: true }
+-}
+-
+-```
+-
+-### lib/view-models/arena-view-model.ts
+-
+-```typescript
+-import type { Project } from '@/types/project'
+-import type { Task } from '@/types/task'
+-import type { PullRequest } from '@/types/pr'
+-
+-export interface ArenaViewModel {
+-  project: Project
+-  tasks: Task[]
+-  prs: PullRequest[]
+-  openPRCount: number
+-  blockedTaskCount: number
+-  donePct: number
+-}
+-
+-export function buildArenaViewModel(
+-  project: Project,
+-  tasks: Task[],
+-  prs: PullRequest[]
+-): ArenaViewModel {
+-  const done = tasks.filter((t) => t.status === 'done').length
+-  const blocked = tasks.filter((t) => t.status === 'blocked').length
+-  const donePct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
+-  const openPRs = prs.filter((pr) => pr.status === 'open').length
+-
+-  return {
+-    project,
+-    tasks,
+-    prs,
+-    openPRCount: openPRs,
+-    blockedTaskCount: blocked,
+-    donePct,
+-  }
+-}
+-
+-```
+-
+-### lib/view-models/icebox-view-model.ts
+-
+-```typescript
+-import type { Idea } from '@/types/idea'
+-import type { Project } from '@/types/project'
+-import { daysSince } from '@/lib/date'
+-import { STALE_ICEBOX_DAYS } from '@/lib/constants'
+-
+-export interface IceboxItem {
+-  type: 'idea' | 'project'
+-  id: string
+-  title: string
+-  summary: string
+-  daysInIcebox: number
+-  isStale: boolean
+-  createdAt: string
+-}
+-
+-export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): IceboxItem[] {
+-  const iceboxIdeas: IceboxItem[] = ideas
+-    .filter((i) => i.status === 'icebox')
+-    .map((i) => ({
+-      type: 'idea',
+-      id: i.id,
+-      title: i.title,
+-      summary: i.gptSummary,
+-      daysInIcebox: daysSince(i.createdAt),
+-      isStale: daysSince(i.createdAt) >= STALE_ICEBOX_DAYS,
+-      createdAt: i.createdAt,
+-    }))
+-
+-  const iceboxProjects: IceboxItem[] = projects
+-    .filter((p) => p.state === 'icebox')
+-    .map((p) => ({
+-      type: 'project',
+-      id: p.id,
+-      title: p.name,
+-      summary: p.summary,
+-      daysInIcebox: daysSince(p.updatedAt),
+-      isStale: daysSince(p.updatedAt) >= STALE_ICEBOX_DAYS,
+-      createdAt: p.updatedAt,
+-    }))
+-
+-  return [...iceboxIdeas, ...iceboxProjects].sort(
+-    (a, b) => b.daysInIcebox - a.daysInIcebox
+-  )
+-}
+-
+-```
+-
+-### lib/view-models/inbox-view-model.ts
+-
+-```typescript
+-import type { InboxEvent } from '@/types/inbox'
+-
+-export interface InboxViewModel {
+-  events: InboxEvent[]
+-  unreadCount: number
+-  errorCount: number
+-}
+-
+-export function buildInboxViewModel(events: InboxEvent[]): InboxViewModel {
+-  return {
+-    events,
+-    unreadCount: events.filter((e) => !e.read).length,
+-    errorCount: events.filter((e) => e.severity === 'error').length,
+-  }
+-}
+-
+-```
+-
+-### lib/view-models/review-view-model.ts
+-
+-```typescript
+-import type { PullRequest, ReviewStatus } from '@/types/pr'
+-import type { Project } from '@/types/project'
+-
+-export interface ReviewViewModel {
+-  pr: PullRequest
+-  project?: Project
+-  canMerge: boolean
+-  reviewState: ReviewStatus
+-}
+-
+-export function buildReviewViewModel(pr: PullRequest, project?: Project): ReviewViewModel {
+-  let reviewState: ReviewStatus = 'pending'
+-
+-  if (pr.status === 'merged') {
+-    reviewState = 'merged'
+-  } else if (pr.reviewStatus) {
+-    reviewState = pr.reviewStatus
+-  } else if (pr.requestedChanges) {
+-    reviewState = 'changes_requested'
+-  }
+-
+-  return {
+-    pr,
+-    project,
+-    canMerge: pr.status === 'open' && pr.buildState === 'success' && pr.mergeable,
+-    reviewState,
+-  }
+-}
+-
+-```
+-
+-### .github/copilot-instructions.md
+-
+-```markdown
+-# Copilot instructions for the Mira Studio repository.
+-# The coding agent reads this file for context when working on issues.
+-
+-## Project Overview
+-Mira Studio is a Next.js 14 (App Router) application for managing ideas
+-from capture through execution. TypeScript strict mode, Tailwind CSS.
+-
+-## Key Conventions
+-- All services read/write through `lib/storage.ts` to `.local-data/studio.json`
+-- Client components use `fetch()` to call API routes — never import services directly
+-- GitHub operations go through `lib/adapters/github-adapter.ts`
+-- UI copy comes from `lib/studio-copy.ts`
+-- Routes are centralized in `lib/routes.ts`
+-
+-## File Structure
+-- `app/` — Next.js pages and API routes
+-- `components/` — React components
+-- `lib/` — Services, adapters, utilities
+-- `types/` — TypeScript type definitions
+-
+-## Testing
+-- `npx tsc --noEmit` for type checking
+-- `npm run build` for production build verification
+-
+-```
+-
+-### .local-data/studio.json
+-
+-```json
+-{
+-  "agentRuns": [],
+-  "externalRefs": [
+-    {
+-      "entityType": "project",
+-      "entityId": "proj-001",
+-      "provider": "github",
+-      "externalId": "3",
+-      "externalNumber": 3,
+-      "url": "https://github.com/wyrmspire/mira/issues/3",
+-      "id": "xref-n3vtg1d7b",
+-      "createdAt": "2026-03-23T01:15:08.121Z"
+-    }
+-  ],
+-  "ideas": [
+-    {
+-      "id": "idea-001",
+-      "title": "AI-powered code review assistant",
+-      "rawPrompt": "What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?",
+-      "gptSummary": "A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.",
+-      "vibe": "productivity",
+-      "audience": "engineering teams",
+-      "intent": "Reduce code review bottlenecks and maintain code quality at scale.",
+-      "createdAt": "2026-03-22T00:13:00.000Z",
+-      "status": "captured"
+-    },
+-    {
+-      "id": "idea-002",
+-      "title": "Team onboarding checklist builder",
+-      "rawPrompt": "Build something to help companies create interactive onboarding flows for new hires",
+-      "gptSummary": "A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.",
+-      "vibe": "operations",
+-      "audience": "HR teams and new employees",
+-      "intent": "Cut onboarding time and reduce \"what do I do next\" anxiety.",
+-      "createdAt": "2026-03-20T00:43:00.000Z",
+-      "status": "icebox"
+-    },
+-    {
+-      "title": "Loop Test - Delete Me",
+-      "rawPrompt": "Testing the full idea capture to GitHub issue pipeline",
+-      "gptSummary": "A test idea to verify the webhook-to-issue wiring works end to end.",
+-      "vibe": "test",
+-      "audience": "developers",
+-      "intent": "verify pipeline",
+-      "id": "idea-xnueptneh",
+-      "createdAt": "2026-03-23T01:14:17.502Z",
+-      "status": "arena"
+-    }
+-  ],
+-  "drillSessions": [
+-    {
+-      "id": "drill-001",
+-      "ideaId": "idea-001",
+-      "intent": "Reduce code review bottlenecks and maintain code quality at scale.",
+-      "successMetric": "PR review time drops by 40% in first month",
+-      "scope": "medium",
+-      "executionPath": "assisted",
+-      "urgencyDecision": "now",
+-      "finalDisposition": "arena",
+-      "completedAt": "2026-03-22T00:23:00.000Z"
+-    }
+-  ],
+-  "projects": [
+-    {
+-      "id": "proj-001",
+-      "ideaId": "idea-003",
+-      "name": "Mira Studio v1",
+-      "summary": "The Vercel-hosted studio UI for managing ideas from capture to execution.",
+-      "state": "arena",
+-      "health": "green",
+-      "currentPhase": "Core UI",
+-      "nextAction": "Review open PRs",
+-      "activePreviewUrl": "https://preview.vercel.app/mira-studio",
+-      "createdAt": "2026-03-19T00:43:00.000Z",
+-      "updatedAt": "2026-03-23T01:15:08.109Z",
+-      "githubIssueNumber": 3,
+-      "githubIssueUrl": "https://github.com/wyrmspire/mira/issues/3",
+-      "githubOwner": "wyrmspire",
+-      "githubRepo": "mira",
+-      "lastSyncedAt": "2026-03-23T01:15:08.109Z"
+-    },
+-    {
+-      "id": "proj-002",
+-      "ideaId": "idea-004",
+-      "name": "Custom GPT Intake Layer",
+-      "summary": "The ChatGPT custom action that sends structured idea payloads to Mira.",
+-      "state": "arena",
+-      "health": "yellow",
+-      "currentPhase": "Integration",
+-      "nextAction": "Fix webhook auth",
+-      "createdAt": "2026-03-15T00:43:00.000Z",
+-      "updatedAt": "2026-03-21T00:43:00.000Z"
+-    },
+-    {
+-      "id": "proj-003",
+-      "ideaId": "idea-005",
+-      "name": "Analytics Dashboard",
+-      "summary": "Shipped product metrics for internal tracking.",
+-      "state": "shipped",
+-      "health": "green",
+-      "currentPhase": "Shipped",
+-      "nextAction": "",
+-      "activePreviewUrl": "https://analytics.example.com",
+-      "createdAt": "2026-02-20T00:43:00.000Z",
+-      "updatedAt": "2026-03-17T00:43:00.000Z",
+-      "shippedAt": "2026-03-17T00:43:00.000Z"
+-    },
+-    {
+-      "id": "proj-004",
+-      "ideaId": "idea-006",
+-      "name": "Mobile App v2",
+-      "summary": "Complete rebuild of mobile experience.",
+-      "state": "killed",
+-      "health": "red",
+-      "currentPhase": "Killed",
+-      "nextAction": "",
+-      "createdAt": "2026-02-05T00:43:00.000Z",
+-      "updatedAt": "2026-03-12T00:43:00.000Z",
+-      "killedAt": "2026-03-12T00:43:00.000Z",
+-      "killedReason": "Scope too large for current team. Web-first is the right call."
+-    }
+-  ],
+-  "tasks": [
+-    {
+-      "id": "task-001",
+-      "projectId": "proj-001",
+-      "title": "Implement drill tunnel flow",
+-      "status": "in_progress",
+-      "priority": "high",
+-      "createdAt": "2026-03-21T00:43:00.000Z"
+-    },
+-    {
+-      "id": "task-002",
+-      "projectId": "proj-001",
+-      "title": "Build arena project card",
+-      "status": "done",
+-      "priority": "high",
+-      "linkedPrId": "pr-001",
+-      "createdAt": "2026-03-20T12:43:00.000Z"
+-    },
+-    {
+-      "id": "task-003",
+-      "projectId": "proj-001",
+-      "title": "Wire API routes to mock data",
+-      "status": "pending",
+-      "priority": "medium",
+-      "createdAt": "2026-03-21T12:43:00.000Z"
+-    },
+-    {
+-      "id": "task-004",
+-      "projectId": "proj-002",
+-      "title": "Fix webhook signature validation",
+-      "status": "blocked",
+-      "priority": "high",
+-      "createdAt": "2026-03-21T18:43:00.000Z"
+-    }
+-  ],
+-  "prs": [
+-    {
+-      "id": "pr-001",
+-      "projectId": "proj-001",
+-      "title": "feat: arena project cards",
+-      "branch": "feat/arena-cards",
+-      "status": "merged",
+-      "previewUrl": "https://preview.vercel.app/arena-cards",
+-      "buildState": "success",
+-      "mergeable": true,
+-      "number": 12,
+-      "author": "builder",
+-      "createdAt": "2026-03-21T00:43:00.000Z"
+-    },
+-    {
+-      "id": "pr-002",
+-      "projectId": "proj-001",
+-      "title": "feat: drill tunnel components",
+-      "branch": "feat/drill-tunnel",
+-      "status": "open",
+-      "previewUrl": "https://preview.vercel.app/drill-tunnel",
+-      "buildState": "running",
+-      "mergeable": true,
+-      "number": 14,
+-      "author": "builder",
+-      "createdAt": "2026-03-21T22:43:00.000Z"
+-    }
+-  ],
+-  "inbox": [
+-    {
+-      "id": "evt-001",
+-      "type": "idea_captured",
+-      "title": "New idea arrived",
+-      "body": "AI-powered code review assistant — ready for drill.",
+-      "timestamp": "2026-03-22T00:13:00.000Z",
+-      "severity": "info",
+-      "actionUrl": "/send",
+-      "read": false
+-    },
+-    {
+-      "id": "evt-002",
+-      "projectId": "proj-001",
+-      "type": "pr_opened",
+-      "title": "PR opened: feat/drill-tunnel",
+-      "body": "A new pull request is ready for review.",
+-      "timestamp": "2026-03-21T22:43:00.000Z",
+-      "severity": "info",
+-      "actionUrl": "/review/pr-002",
+-      "read": false
+-    },
+-    {
+-      "id": "evt-003",
+-      "projectId": "proj-002",
+-      "type": "build_failed",
+-      "title": "Build failed: Custom GPT Intake",
+-      "body": "Webhook auth integration is failing. Action needed.",
+-      "timestamp": "2026-03-21T00:43:00.000Z",
+-      "severity": "error",
+-      "actionUrl": "/arena/proj-002",
+-      "read": false
+-    },
+-    {
+-      "type": "idea_captured",
+-      "title": "New idea arrived from GPT",
+-      "body": "\"Loop Test - Delete Me\" has been captured and is ready for definition.",
+-      "timestamp": "2026-03-23T01:14:17.504Z",
+-      "severity": "info",
+-      "read": false,
+-      "id": "evt-84w8kcd0x"
+-    },
+-    {
+-      "type": "project_promoted",
+-      "title": "Idea started: Loop Test - Delete Me",
+-      "body": "Idea is now in progress.",
+-      "timestamp": "2026-03-23T01:14:37.584Z",
+-      "severity": "success",
+-      "read": false,
+-      "id": "evt-75ze7ecv4"
+-    },
+-    {
+-      "type": "task_created",
+-      "title": "GitHub issue created: #3",
+-      "body": "Issue \"Mira Studio v1\" created at https://github.com/wyrmspire/mira/issues/3",
+-      "severity": "info",
+-      "projectId": "proj-001",
+-      "actionUrl": "https://github.com/wyrmspire/mira/issues/3",
+-      "id": "evt-djkcupctz",
+-      "timestamp": "2026-03-23T01:15:08.132Z",
+-      "read": false
+-    },
+-    {
+-      "type": "github_issue_created",
+-      "title": "GitHub Issue #3 opened",
+-      "body": "Issue \"Mira Studio v1\" was opened on GitHub.",
+-      "severity": "info",
+-      "projectId": "proj-001",
+-      "actionUrl": "/arena/proj-001",
+-      "id": "evt-u56tjienc",
+-      "timestamp": "2026-03-23T01:15:10.276Z",
+-      "read": false
+-    },
+-    {
+-      "type": "github_copilot_assigned",
+-      "title": "Developer assigned",
+-      "body": "Copilot was assigned to issue #3.",
+-      "severity": "info",
+-      "projectId": "proj-001",
+-      "id": "evt-vb3n2pvi2",
+-      "timestamp": "2026-03-23T01:24:01.489Z",
+-      "read": false
+-    },
+-    {
+-      "type": "github_copilot_assigned",
+-      "title": "Developer assigned",
+-      "body": "wyrmspire was assigned to issue #3.",
+-      "severity": "info",
+-      "projectId": "proj-001",
+-      "id": "evt-pwt2uq0dz",
+-      "timestamp": "2026-03-23T01:24:03.982Z",
+-      "read": false
+-    },
+-    {
+-      "type": "project_shipped",
+-      "title": "GitHub Issue #3 closed",
+-      "body": "The linked issue for \"Mira Studio v1\" was closed.",
+-      "severity": "success",
+-      "projectId": "proj-001",
+-      "id": "evt-ygxqz9ktn",
+-      "timestamp": "2026-03-23T01:46:53.183Z",
+-      "read": false
+-    }
+-  ]
+-}
+-```
+-
+-### agents.md
+-
+-```markdown
+-# Mira Studio — Agent Context
+-
+-> Standing context for any agent entering this repo. Not sprint-specific.
+-
+----
+-
+-## Product Summary
+-
+-Mira is a Vercel-hosted Studio UI for managing ideas from capture through execution. Ideas arrive from a custom GPT via webhook (or locally via a dev harness), then flow through a clarification tunnel (Drill), become projects, get reviewed via PR previews, and are ultimately shipped or archived.
+-
+-**Core user journey:** Capture → Clarify → Build → Review → Ship/Archive
+-
+-**Local development model:** The user is the local dev. They brainstorm ideas locally in the app and test the full flow. The API endpoints are the same contract that a custom GPT will hit in production. In local mode, ideas are entered via a `/dev/gpt-send` harness page. PRs and previews are simulated with local records.
+-
+----
+-
+-## Tech Stack
+-
+-| Layer | Tech |
+-|-------|------|
+-| Framework | Next.js 14.2 (App Router) |
+-| Language | TypeScript (strict) |
+-| Styling | Tailwind CSS 3.4, dark studio theme |
+-| Data | JSON file storage under `.local-data/` (survives server restarts) |
+-| State logic | `lib/state-machine.ts` — idea + project transition tables |
+-| Copy/Labels | `lib/studio-copy.ts` — centralized UI copy |
+-| Routing | `lib/routes.ts` — centralized route map |
+-
+----
+-
+-## Repo File Map
+-
+-```
+-app/
+-  page.tsx              ← Home / dashboard (attention cockpit)
+-  layout.tsx            ← Root layout (html, body, globals.css)
+-  globals.css           ← CSS custom props + tailwind directives
+-  send/page.tsx         ← Incoming ideas from GPT (shows all captured ideas)
+-  drill/page.tsx        ← 6-step idea clarification tunnel (client component)
+-  drill/success/        ← Post-drill success screen
+-  drill/end/            ← Post-drill kill screen
+-  arena/page.tsx        ← Active projects list
+-  arena/[projectId]/    ← Single project detail (3-pane)
+-  review/[prId]/page.tsx← PR review page (preview-first)
+-  inbox/page.tsx        ← Events feed (filterable, mark-read)
+-  icebox/page.tsx       ← Deferred ideas + projects
+-  shipped/page.tsx      ← Completed projects
+-  killed/page.tsx       ← Removed projects
+-  dev/
+-    gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
+-    github-playground/  ← Dev harness: test GitHub operations
+-  api/
+-    ideas/route.ts       ← GET/POST ideas
+-    ideas/materialize/   ← POST convert idea→project
+-    drill/route.ts       ← POST save drill session
+-    projects/route.ts    ← GET projects
+-    tasks/route.ts       ← GET tasks by project
+-    prs/route.ts         ← GET/PATCH PRs by project
+-    inbox/route.ts       ← GET/PATCH inbox events
+-    actions/
+-      promote-to-arena/  ← POST
+-      move-to-icebox/    ← POST
+-      mark-shipped/      ← POST
+-      kill-idea/         ← POST
+-      merge-pr/          ← POST
+-    github/              ← GitHub-specific API routes
+-      test-connection/   ← GET  validate token + repo access
+-      create-issue/      ← POST create GitHub issue from project
+-      create-pr/         ← POST create GitHub PR
+-      dispatch-workflow/ ← POST trigger GitHub Actions workflow
+-      sync-pr/           ← GET/POST sync PRs from GitHub
+-      merge-pr/          ← POST merge real GitHub PR
+-    webhook/
+-      gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
+-      github/route.ts    ← GitHub webhook receiver (real: signature-verified)
+-      vercel/route.ts    ← Vercel webhook receiver (stub)
+-
+-components/
+-  shell/                 ← AppShell, StudioSidebar, StudioHeader, MobileNav, CommandBar
+-  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, etc.
+-  send/                  ← CapturedIdeaCard, DefineInStudioHero, IdeaSummaryPanel
+-  drill/                 ← DrillLayout, DrillProgress, GiantChoiceButton, MaterializationSequence
+-  arena/                 ← ArenaProjectCard, ActiveLimitBanner, PreviewFrame, ProjectPanes, etc.
+-  review/                ← SplitReviewLayout, PRSummaryCard, DiffSummary, BuildStatusChip, FixRequestBox, PreviewToolbar
+-  inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
+-  icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
+-  archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
+-  dev/                   ← GPT send form, dev tools
+-
+-lib/
+-  config/
+-    github.ts            ← GitHub env config, validation, repo coordinates
+-  github/
+-    client.ts            ← Octokit wrapper, getGitHubClient()
+-    signature.ts         ← HMAC-SHA256 webhook signature verification
+-    handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
+-  storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
+-  seed-data.ts           ← Initial seed records (replaces mock-data.ts)
+-  state-machine.ts       ← Idea + project + PR transition rules
+-  studio-copy.ts         ← Central copy strings for all pages
+-  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, storage paths
+-  routes.ts              ← Centralized route paths
+-  guards.ts              ← Type guards
+-  utils.ts               ← generateId helper
+-  date.ts                ← Date formatting
+-  services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
+-                           agent-runs, external-refs, github-factory, github-sync services
+-  adapters/              ← github (real Octokit client), gpt, vercel, notifications
+-  formatters/            ← idea, project, pr, inbox formatters
+-  validators/            ← idea, project, drill, webhook validators
+-  view-models/           ← arena, icebox, inbox, review VMs
+-
+-types/
+-  idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
+-  agent-run.ts, external-ref.ts, github.ts
+-
+-content/                 ← Product copy markdown
+-docs/                    ← Architecture docs
+-
+-.local-data/             ← JSON file persistence (gitignored, auto-seeded)
+-lanes/                   ← Sprint lane files (sprint-specific)
+-wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
+-```
+-
+----
+-
+-## Commands
+-
+-```bash
+-npm install          # install dependencies
+-npm run dev          # start dev server (next dev)
+-npm run build        # production build (next build)
+-npm run lint         # eslint
+-npx tsc --noEmit     # type check
+-```
+-
+----
+-
+-## Common Pitfalls
+-
+-### Data persistence is JSON-file based
+-All services read/write through `lib/storage.ts` to `.local-data/studio.json`. Data survives server restarts. If the file doesn't exist, it auto-seeds from `lib/seed-data.ts`. **Do not** import mock arrays directly — always go through service functions.
+-
+-### Drill page is a client component
+-`app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
+-
+-### All data mutations must go through API routes
+-Client components call `/api/*` endpoints. Server components can import services directly. This ensures the same contract works for both the UI and the future custom GPT.
+-
+-### Review merge button must call the API
+-The "Merge PR" button in `review/[prId]/page.tsx` must POST to `/api/actions/merge-pr`. Never mutate state directly from the component.
+-
+-### GitHub adapter is a real Octokit client
+-`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter — never call Octokit directly from routes. The adapter reads credentials from `lib/config/github.ts` via `lib/github/client.ts`. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
+-
+-### GitHub webhook route verifies signatures
+-The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`. Events are dispatched to per-event handlers in `lib/github/handlers/`.
+-
+-### Vercel webhook is still a stub
+-Only the Vercel webhook handler remains a stub. GPT and GitHub webhooks are functional.
+-
+-### `studio-copy.ts` is the single source for UI labels
+-All user-facing text should come from this file. Some pages still hardcode strings — fix them when you see them.
+-
+-### Route naming vs. internal naming
+-Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should present these in friendlier terms: "In Progress" / "On Hold" / "Removed" / "Shipped".
+-
+----
+-
+-## SOPs
+-
+-### SOP-1: Always use `lib/routes.ts` for navigation
+-**Learned from**: Initial scaffolding
+-
+-- ❌ `href="/arena"` (hardcoded)
+-- ✅ `href={ROUTES.arena}` (centralized)
+-
+-### SOP-2: All UI copy goes through `lib/studio-copy.ts`
+-**Learned from**: Sprint 1 UX audit
+-
+-- ❌ `<h1>Trophy Room</h1>` (inline string)
+-- ✅ `<h1>{COPY.shipped.heading}</h1>` (centralized copy)
+-
+-### SOP-3: State transitions go through `lib/state-machine.ts`
+-**Learned from**: Initial architecture
+-
+-- ❌ Manually setting `idea.status = 'arena'` in a page
+-- ✅ Use `getNextIdeaState(idea.status, 'commit_to_arena')` to validate transition
+-
+-### SOP-4: Never push/pull from git
+-**Learned from**: Multi-agent coordination
+-
+-- ❌ `git push`, `git pull`, `git merge`
+-- ✅ Only modify files. Coordinator handles version control.
+-
+-### SOP-5: All data mutations go through API routes
+-**Learned from**: GPT contract compatibility
+-
+-- ❌ Calling `updateIdeaStatus()` directly from a client component
+-- ✅ `fetch('/api/actions/kill-idea', { method: 'POST', body: ... })`
+-- Why: The custom GPT will hit the same `/api/*` endpoints. The UI must exercise the same contract.
+-
+-### SOP-6: Use `lib/storage.ts` for all persistence
+-**Learned from**: In-memory data loss on server restart
+-
+-- ❌ `const ideas: Idea[] = [...MOCK_IDEAS]` (module-level array, lost on restart)
+-- ✅ `const ideas = storage.read('ideas')` (reads from `.local-data/studio.json`)
+-- Why: Local data must survive server restarts. JSON file storage is the local persistence layer.
+-
+-### SOP-7: GitHub operations go through the adapter, never raw Octokit
+-**Learned from**: Sprint 2 architecture
+-
+-- ❌ `const octokit = new Octokit(...)` in a route handler
+-- ✅ `import { createIssue } from '@/lib/adapters/github-adapter'`
+-- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes. Business logic stays untouched.
+-
+-### SOP-8: Don't call the adapter from routes — use services
+-**Learned from**: Sprint 2 architecture
+-
+-- ❌ `import { createIssue } from '@/lib/adapters/github-adapter'` in a route
+-- ✅ `import { createIssueFromProject } from '@/lib/services/github-factory-service'`
+-- Why: Services orchestrate: load local data → call adapter → update local records → create inbox events. Routes stay thin.
+-
+----
+-
+-## Lessons Learned (Changelog)
+-
+-- **2026-03-22**: Initial agents.md created during Sprint 1 boardinit.
+-- **2026-03-22**: Added SOP-5 (API-first mutations) and SOP-6 (JSON file storage).
+-- **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
+-
+-```
+-
+-### board.md
+-
+-```markdown
+-# Mira Studio — Sprint Board
+-
+-## Sprint History
+-
+-| Sprint | Focus | Tests | Status |
+-|--------|-------|-------|--------|
+-| Sprint 1 | Make It Real (Local-First) | TSC ✅ Build ✅ | ✅ Complete |
+-
+----
+-
+-## Sprint 2 — GitHub Factory (Token-First)
+-
+-> Replace stub seams with a real GitHub-backed execution loop. Prove the full irrigation path: **idea → project → GitHub issue → Copilot/workflow → PR appears → merge from app**. Use PAT now, design for GitHub App later. Supabase persistence deferred to Sprint 3.
+-
+-### Dependency Graph
+-
+-```
+-Lane 1 (Foundation):     [W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← TYPES + CONFIG
+-Lane 2 (GitHub Client):  [W1] → [W2] → [W3] → [W4] → [W5] → [W6]         ← ADAPTER
+-Lane 3 (Webhooks):       [W1] → [W2] → [W3] → [W4] → [W5] → [W6]         ← INGESTION
+-Lane 4 (Routes+Services):[W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← API LAYER
+-Lane 5 (Action Upgrades):[W1] → [W2] → [W3] → [W4] → [W5] → [W6] → [W7]  ← WIRING
+-                   ↓ all five complete ↓
+-Lane 6 (Integration):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← PROOF
+-```
+-
+-**Lanes 1–5 are fully parallel** — zero file conflicts between them.
+-**Lane 6 runs AFTER** Lanes 1–5 are merged. Lane 6 resolves cross-lane integration and proves the loop.
+-
+----
+-
+-### Sprint 2 Ownership Zones
+-
+-| Zone | Files | Lane |
+-|------|-------|------|
+-| Config + types + storage | `lib/config/github.ts` [NEW], `types/project.ts`, `types/pr.ts`, `types/task.ts`, `types/agent-run.ts` [NEW], `types/external-ref.ts` [NEW], `types/github.ts` [NEW], `lib/constants.ts`, `lib/storage.ts`, `lib/services/agent-runs-service.ts` [NEW], `lib/services/external-refs-service.ts` [NEW], `.env.example` | Lane 1 |
+-| GitHub Octokit client | `lib/adapters/github-adapter.ts` [REWRITE], `lib/github/client.ts` [NEW], `package.json` (octokit install only) | Lane 2 |
+-| Webhook pipeline | `app/api/webhook/github/route.ts` [REWRITE], `lib/github/handlers/*` [NEW], `lib/github/signature.ts` [NEW], `lib/validators/webhook-validator.ts`, `types/webhook.ts` | Lane 3 |
+-| GitHub API routes + services | `app/api/github/*` [NEW], `lib/services/github-factory-service.ts` [NEW], `lib/services/github-sync-service.ts` [NEW], `app/dev/github-playground/page.tsx` [NEW] | Lane 4 |
+-| Action upgrades + state machine + inbox | `app/api/actions/merge-pr/route.ts`, `app/api/actions/promote-to-arena/route.ts`, `app/api/actions/mark-shipped/route.ts`, `lib/state-machine.ts`, `types/inbox.ts`, `lib/services/inbox-service.ts`, `lib/studio-copy.ts`, `lib/routes.ts` | Lane 5 |
+-| Integration + proof | All files (read + targeted fixes) | Lane 6 |
+-
+----
+-
+-### Lane Status
+-
+-| Lane | Focus | File | Status |
+-|------|-------|------|--------|
+-| 🔴 Lane 1 | Foundation: Config, Types, Storage | `lanes/lane-1-foundation.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+-| 🟢 Lane 2 | GitHub Client Adapter | `lanes/lane-2-github-client.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+-| 🔵 Lane 3 | Webhook Pipeline | `lanes/lane-3-webhooks.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ |
+-| 🟡 Lane 4 | GitHub Routes + Factory Services | `lanes/lane-4-github-routes.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+-| 🟣 Lane 5 | Action Upgrades + State Machine | `lanes/lane-5-action-upgrades.md` | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+-| 🏁 Lane 6 | Integration + Proof of Loop | `lanes/lane-6-integration.md` | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
+-
+----
+-
+-## Pre-Flight Checklist
+-
+-- [ ] `npm install` succeeds
+-- [ ] `npx tsc --noEmit` passes
+-- [ ] `npm run build` passes
+-- [ ] Dev server starts (`npm run dev`)
+-- [ ] `wiring.md` env vars added by user
+-
+-## Handoff Protocol
+-
+-1. Mark W items ⬜→🟡→✅ as you go
+-2. Run `npx tsc --noEmit` before marking ✅ on your final W item
+-3. **DO NOT open the browser or perform visual checks** in Lanes 1–5. Lane 6 handles all visual QA.
+-4. Never touch files owned by other lanes (see Ownership Zones above)
+-5. Never push/pull from git
+-
+-## Test Summary
+-
+-| Lane | TSC | Build | Notes |
+-|------|-----|-------|-------|
+-| Lane 1 | ✅ | ⬜ | All 7 work items complete |
+-| Lane 2 | ✅ | ⬜ | 6 errors in other lanes' files; Lane 2 files clean |
+-| Lane 3 | ✅ | ⬜ | Webhook real ingestion; Lane 3 files clean (errors elsewhere). |
+-| Lane 4 | ✅ | ⬜ | |
+-| Lane 5 | ✅ | ⬜ | Only Lane 4 errors (github-sync-service.ts) remain; Lane 5 files clean |
+-| Lane 6 | ⬜ | ⬜ | |
+-
+-```
+-
+-### content/drill-principles.md
+-
+-```markdown
+-# Definition Flow
+-
+-The definition flow shapes clarity before commitment.
+-
+-## The 6 questions
+-
+-1. **Intent** — What is this really? Strip the excitement.
+-2. **Success metric** — How do you know it worked? One number.
+-3. **Scope** — Small, Medium, or Large. Be honest.
+-4. **Execution path** — Solo, Assisted, or Delegated.
+-5. **Priority** — Now, Later, or Never.
+-6. **Decision** — Start building, Put on hold, or Remove. No limbo.
+-
+-## Why this works
+-
+-Ideas feel bigger in your head than they are. The drill forces you to say the quiet part out loud.
+-
+-```
+-
+-### content/no-limbo.md
+-
+-```markdown
+-# Clear Decisions
+-
+-The central rule of Mira: **no limbo**.
+-
+-An idea is either:
+-- **In progress**
+-- **On hold**
+-- **Removed**
+-
+-There is no "maybe" shelf. The "On hold" list has a timer — after 14 days, stale items prompt a decision.
+-
+-```
+-
+-### content/onboarding.md
+-
+-```markdown
+-# Onboarding
+-
+-Welcome to Mira Studio.
+-
+-## How it works
+-
+-1. **Captured** — Ideas arrive from GPT or the dev harness.
+-2. **Defined** — You shape the idea by answering 6 focused questions.
+-3. **In Progress** — Active projects (max 3) live here.
+-4. **On Hold** — Projects on pause wait here.
+-5. **Archive** — Completed projects are Shipped; others are Removed.
+-
+-## The rule
+-
+-Every idea gets a clear decision. No limbo.
+-
+-```
+-
+-### content/tone-guide.md
+-
+-```markdown
+-# Tone Guide
+-
+-Mira speaks with precision. No fluff.
+-
+-## Principles
+-
+-- **Direct** — Say the thing. No softening.
+-- **Short** — One line where one line works.
+-- **Honest** — "This idea has been here for 14 days. Time to decide." Not "Hey, just checking in!"
+-- **No celebration** — "Committed." Not "Amazing! You're doing great!"
+-
+-## Examples
+-
+-Good: "Idea captured. Decide what to do next."
+-Bad: "Great news! Your idea has been saved to the system!"
+-
+-Good: "No active projects. Define an idea to get started."
+-Bad: "Looks like you don't have any projects yet. Why not create one?"
+-
+-```
+-
+-### docs/future-ideas.md
+-
+-```markdown
+-# Future Ideas
+-
+-## Auth layer
+-- Simple auth via NextAuth or a custom JWT approach
+-- Single-user initially (it's a personal studio)
+-
+-## Real GitHub integration
+-- Replace mock adapter with actual GitHub API calls
+-- Issue creation from tasks
+-- PR status via webhooks
+-
+-## Real Vercel integration
+-- Deployment status via Vercel API
+-- Preview URL auto-detection
+-
+-## Persistence
+-- Replace in-memory arrays with a real DB (Turso/PlanetScale/Postgres)
+-- Or use Vercel KV for simple key/value storage
+-
+-## AI features
+-- GPT summary of drill session
+-- Auto-task generation from project scope
+-- Intelligent staleness warnings
+-
+-```
+-
+-### docs/page-map.md
+-
+-```markdown
+-# Page Map
+-
+-| Route | Component | Description |
+-|-------|-----------|-------------|
+-| `/` | HomePage | Dashboard / redirect |
+-| `/send` | SendPage | Review captured idea |
+-| `/drill` | DrillPage | 6-step definition flow |
+-| `/drill/success` | DrillSuccessPage | Materialization sequence |
+-| `/drill/end` | DrillEndPage | Idea ended — preserves to Graveyard |
+-| `/arena` | ArenaPage | Active projects list |
+-| `/arena/[id]` | ArenaProjectPage | Three-pane project view |
+-| `/icebox` | IceboxPage | Deferred items |
+-| `/shipped` | ShippedPage | Trophy room |
+-| `/killed` | KilledPage | Graveyard |
+-| `/review/[id]` | ReviewPage | PR review |
+-| `/inbox` | InboxPage | Event feed |
+-
+-```
+-
+-### docs/product-overview.md
+-
+-```markdown
+-# Mira Studio — Product Overview
+-
+-Mira is a Vercel-hosted Studio UI for managing ideas from conception through execution.
+-
+-## The problem
+-
+-Ideas die in chat. They get lost, deprioritized, or never defined clearly enough to build.
+-
+-## The solution
+-
+-A five-zone system that forces every idea through a decision:
+-
+-1. **Send** — Ideas arrive from GPT via webhook.
+-2. **Drill** — 6 questions force clarity before commitment.
+-3. **Arena** — Active projects (max 3) with task and PR visibility.
+-4. **Icebox** — Deferred ideas with a staleness timer.
+-5. **Archive** — Trophy Room (shipped) and Graveyard (removed).
+-
+-## The rule
+-
+-No limbo. Every idea is in play, frozen, or gone.
+-
+-```
+-
+-### docs/state-model.md
+-
+-```markdown
+-# State Model
+-
+-## Idea states
+-
+-```
+-captured → drilling → arena
+-captured → icebox
+-captured → killed
+-drilling → icebox
+-drilling → killed
+-```
+-
+-## Project states
+-
+-```
+-arena → shipped
+-arena → killed
+-arena → icebox
+-icebox → arena
+-icebox → killed
+-```
+-
+-## The no-limbo rule
+-
+-Every idea or project must be in exactly one state. No ambiguity.
+-
+-```
+-
+-### docs/ui-principles.md
+-
+-```markdown
+-# UI Principles
+-
+-## Dark, dense, functional
+-
+-- Background: `#0a0a0f` (near black)
+-- Surface: `#12121a`
+-- Borders: `#1e1e2e`
+-- Text: `#e2e8f0`
+-- Muted: `#94a3b8`
+-- Accent: `#6366f1` (indigo)
+-
+-## No chrome
+-
+-Minimize decoration. Every element earns its place.
+-
+-## Keyboard first
+-
+-Cmd+K command bar. Enter to advance in drill. ESC to dismiss.
+-
+-## Mobile aware
+-
+-Sidebar on desktop, bottom nav on mobile.
+-
+-```
+-
+-### gitr.sh
+-
+-```bash
+-#!/usr/bin/env bash
+-
+-set -euo pipefail
+-
+-# Usage: ./gitr.sh "commit message here"
+-# Stages, commits, and pushes current branch.
+-# It will NOT auto-rebase on push failure.
+-
+-msg=${1:-"chore: update"}
+-
+-repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+-if [[ -z "${repo_root}" ]]; then
+-    echo "ERROR: Not a git repository."
+-    exit 1
+-fi
+-cd "${repo_root}"
+-
+-if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
+-    echo "ERROR: Rebase/merge in progress. Resolve it first."
+-    exit 1
+-fi
+-
+-branch=$(git rev-parse --abbrev-ref HEAD)
+-if [[ "${branch}" == "HEAD" ]]; then
+-    echo "ERROR: Detached HEAD. Checkout a branch first."
+-    exit 1
+-fi
+-
+-remote="origin"
+-
+-echo "Repo: ${repo_root}"
+-echo "Branch: ${branch}"
+-echo "Staging changes..."
+-
+-if ! git add -A; then
+-    echo "WARN: git add -A failed. Retrying with safer staging."
+-    git add -u
+-    while IFS= read -r path; do
+-        base=$(basename "$path")
+-        lower=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')
+-        case "$lower" in
+-            nul|con|prn|aux|com[1-9]|lpt[1-9])
+-                echo "Skipping reserved path on Windows: $path"
+-                continue
+-                ;;
+-        esac
+-        git add -- "$path" || echo "Skipping unstageable path: $path"
+-    done < <(git ls-files --others --exclude-standard)
+-fi
+-
+-if git diff --cached --quiet; then
+-    echo "No staged changes to commit."
+-else
+-    echo "Committing: ${msg}"
+-    git commit -m "${msg}"
+-fi
+-
+-if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+-    echo "Pushing to ${remote}/${branch}..."
+-    if git push "${remote}" "${branch}"; then
+-        echo "Push succeeded."
+-        exit 0
+-    fi
+-else
+-    echo "Pushing and setting upstream ${remote}/${branch}..."
+-    if git push -u "${remote}" "${branch}"; then
+-        echo "Push succeeded."
+-        exit 0
+-    fi
+-fi
+-
+-echo "Push failed (likely non-fast-forward)."
+-echo "Run this manually:"
+-echo "  git fetch ${remote}"
+-echo "  git log --oneline --graph --decorate --max-count=20 --all"
+-echo "  git push"
+-exit 1
+-
+-```
+-
+-### gitrdif.sh
+-
+-```bash
+-#!/bin/bash
+-
+-# gitrdif.sh - Generate a diff between local and remote branch
+-# Output: gitrdiff.md in the project root
+-
+-# Get current branch name
+-BRANCH=$(git rev-parse --abbrev-ref HEAD)
+-
+-# Fetch latest from remote without merging
+-echo "Fetching latest from origin/$BRANCH..."
+-git fetch origin "$BRANCH" 2>/dev/null
+-
+-# Check if remote branch exists
+-if ! git rev-parse --verify "origin/$BRANCH" > /dev/null 2>&1; then
+-    echo "Remote branch origin/$BRANCH not found. Using origin/main..."
+-    REMOTE_BRANCH="origin/main"
+-else
+-    REMOTE_BRANCH="origin/$BRANCH"
+-fi
+-
+-# Output file
+-OUTPUT="gitrdiff.md"
+-
+-# Generate the diff
+-echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
+-
+-{
+-    echo "# Git Diff Report"
+-    echo ""
+-    echo "**Generated**: $(date)"
+-    echo ""
+-    echo "**Local Branch**: $BRANCH"
+-    echo ""
+-    echo "**Comparing Against**: $REMOTE_BRANCH"
+-    echo ""
+-    echo "---"
+-    echo ""
+-    
+-    # NEW: Show uncommitted changes first (working directory)
+-    echo "## Uncommitted Changes (working directory)"
+-    echo ""
+-    echo "### Modified/Staged Files"
+-    echo ""
+-    echo '```'
+-    git status --short 2>/dev/null || echo "(clean)"
+-    echo '```'
+-    echo ""
+-    
+-    # Check if there are any uncommitted changes
+-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+-        echo "### Uncommitted Diff"
+-        echo ""
+-        echo '```diff'
+-        git diff 2>/dev/null
+-        git diff --cached 2>/dev/null
+-        echo '```'
+-        echo ""
+-    fi
+-    
+-    # NEW: Show contents of untracked files (new files not yet staged)
+-    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
+-    if [ -n "$UNTRACKED" ]; then
+-        echo "### New Untracked Files"
+-        echo ""
+-        for file in $UNTRACKED; do
+-            # Skip binary files and very large files
+-            if [ -f "$file" ]; then
+-                # Checking if it's a text file
+-                if command -v file >/dev/null 2>&1; then
+-                    if ! file "$file" | grep -q text; then
+-                        continue
+-                    fi
+-                fi
+-                
+-                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
+-                if [ "$LINES" -lt 500 ]; then
+-                    echo "#### \`$file\`"
+-                    echo ""
+-                    echo '```'
+-                    cat "$file" 2>/dev/null
+-                    echo '```'
+-                    echo ""
+-                else
+-                    echo "#### \`$file\` ($LINES lines - truncated)"
+-                    echo ""
+-                    echo '```'
+-                    head -100 "$file" 2>/dev/null
+-                    echo "... ($LINES total lines)"
+-                    echo '```'
+-                    echo ""
+-                fi
+-            fi
+-        done
+-    fi
+-    
+-    echo "---"
+-    echo ""
+-    
+-    # NEW: Show changes from the last pull/merge if applicable
+-    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
+-        VAL_HEAD=$(git rev-parse HEAD)
+-        VAL_ORIG=$(git rev-parse ORIG_HEAD)
+-        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
+-            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
+-            echo ""
+-            echo "These are the changes that recently came into your branch."
+-            echo ""
+-            echo '```diff'
+-            git diff ORIG_HEAD HEAD --stat 2>/dev/null
+-            echo '```'
+-            echo ""
+-            echo '```diff'
+-            # Limit full diff to avoid massive files
+-            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
+-            echo "... (truncated to 1000 lines)"
+-            echo '```'
+-            echo ""
+-            echo "---"
+-            echo ""
+-        fi
+-    fi
+-
+-    # Show commits that are different
+-    echo "## Commits Ahead (local changes not on remote)"
+-    echo ""
+-    echo '```'
+-    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
+-    echo '```'
+-    echo ""
+-    
+-    echo "## Commits Behind (remote changes not pulled)"
+-    echo ""
+-    echo '```'
+-    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
+-    echo '```'
+-    echo ""
+-    
+-    echo "---"
+-    echo ""
+-    
+-    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
+-    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
+-    
+-    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
+-        echo "## Status: Up to Date"
+-        echo ""
+-        echo "Your local branch is even with **$REMOTE_BRANCH**."
+-        echo "No unpushed commits."
+-        echo ""
+-    fi
+-    echo "## File Changes (YOUR UNPUSHED CHANGES)"
+-    echo ""
+-    echo '```'
+-    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
+-    echo '```'
+-    echo ""
+-    
+-    echo "---"
+-    echo ""
+-    echo "## Full Diff of Your Unpushed Changes"
+-    echo ""
+-    echo "Green (+) = lines you ADDED locally"
+-    echo "Red (-) = lines you REMOVED locally"
+-    echo ""
+-    echo '```diff'
+-    git diff "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no diff)"
+-    echo '```'
+-    
+-} > "$OUTPUT"
+-
+-echo "Done! Created $OUTPUT"
+-echo ""
+-echo "Summary:"
+-echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
+-echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+-echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
+-
+-```
+-
+-### gitrdiff.md
+-
+-```markdown
+-# Git Diff Report
+-
 -**Generated**: Sun, Mar 22, 2026  8:54:52 PM
-+**Generated**: Mon, Mar 23, 2026  7:31:51 PM
- 
- **Local Branch**: main
- 
-@@ -13,4994 +13,36 @@
- ### Modified/Staged Files
- 
- ```
+-
+-**Local Branch**: main
+-
+-**Comparing Against**: origin/main
+-
+----
+-
+-## Uncommitted Changes (working directory)
+-
+-### Modified/Staged Files
+-
+-```
 - M .gitignore
 - M app/api/actions/mark-shipped/route.ts
 - M app/api/actions/merge-pr/route.ts
 - M app/api/github/create-issue/route.ts
-+ M .env.example
-+ M board.md
-  M gitrdiff.md
+- M gitrdiff.md
 - M lib/adapters/github-adapter.ts
 - M lib/formatters/inbox-formatters.ts
 - M lib/services/github-factory-service.ts
@@ -195,36 +1508,11 @@ index 2212782..589734e 100644
 -?? "c\357\200\272miratsc-errors.txt"
 -?? gpt-schema.md
 -?? roadmap.md
-+ M lib/constants.ts
-+ M lib/guards.ts
-+ M lib/routes.ts
-+ M lib/state-machine.ts
-+ M lib/storage.ts
-+ M lib/studio-copy.ts
-+ M package-lock.json
-+ M package.json
-+ M wiring.md
-+?? app/api/experiences/
-+?? app/api/gpt/
-+?? app/api/interactions/
-+?? app/api/synthesis/
-+?? app/workspace/
-+?? components/experience/
-+?? lib/experience/
-+?? lib/hooks/
-+?? lib/services/experience-service.ts
-+?? lib/services/interaction-service.ts
-+?? lib/services/synthesis-service.ts
-+?? lib/storage-adapter.ts
-+?? lib/supabase/
-+?? types/experience.ts
-+?? types/interaction.ts
-+?? types/synthesis.ts
- ```
- 
- ### Uncommitted Diff
- 
- ```diff
+-```
+-
+-### Uncommitted Diff
+-
+-```diff
 -diff --git a/.gitignore b/.gitignore
 -index e23afc9..94a3b85 100644
 ---- a/.gitignore
@@ -5192,2363 +6480,1521 @@ index 2212782..589734e 100644
 -
 -```diff
 -```
-diff --git a/lib/constants.ts b/lib/constants.ts
-index eac0bf5..fb3fb14 100644
---- a/lib/constants.ts
-+++ b/lib/constants.ts
-@@ -45,3 +45,43 @@ export const AGENT_RUN_STATUSES = [
-   'blocked',
- ] as const
- 
-+// --- Sprint 3: Experience Engine ---
-+
-+export const EXPERIENCE_CLASSES = [
-+  'questionnaire',
-+  'lesson',
-+  'challenge',
-+  'plan_builder',
-+  'reflection',
-+  'essay_tasks',
-+] as const
-+
-+export type ExperienceClass = (typeof EXPERIENCE_CLASSES)[number]
-+
-+export const EXPERIENCE_STATUSES = [
-+  'proposed',
-+  'drafted',
-+  'ready_for_review',
-+  'approved',
-+  'published',
-+  'active',
-+  'completed',
-+  'archived',
-+  'superseded',
-+  'injected',
-+] as const
-+
-+export type ExperienceStatus = (typeof EXPERIENCE_STATUSES)[number]
-+
-+export const EPHEMERAL_STATUSES = ['injected', 'active', 'completed', 'archived'] as const
-+
-+export const RESOLUTION_DEPTHS = ['light', 'medium', 'heavy'] as const
-+export const RESOLUTION_MODES = ['illuminate', 'practice', 'challenge', 'build', 'reflect'] as const
-+export const RESOLUTION_TIME_SCOPES = ['immediate', 'session', 'multi_day', 'ongoing'] as const
-+export const RESOLUTION_INTENSITIES = ['low', 'medium', 'high'] as const
-+
-+export type ResolutionDepth = (typeof RESOLUTION_DEPTHS)[number]
-+export type ResolutionMode = (typeof RESOLUTION_MODES)[number]
-+export type ResolutionTimeScope = (typeof RESOLUTION_TIME_SCOPES)[number]
-+export type ResolutionIntensity = (typeof RESOLUTION_INTENSITIES)[number]
-+
-diff --git a/lib/guards.ts b/lib/guards.ts
-index f209743..cda77f2 100644
---- a/lib/guards.ts
-+++ b/lib/guards.ts
-@@ -1,5 +1,12 @@
- import type { Idea } from '@/types/idea'
- import type { Project } from '@/types/project'
-+import type { ExperienceInstance, Resolution } from '@/types/experience'
-+import {
-+  RESOLUTION_DEPTHS,
-+  RESOLUTION_MODES,
-+  RESOLUTION_TIME_SCOPES,
-+  RESOLUTION_INTENSITIES,
-+} from '@/lib/constants'
- 
- export function isIdea(value: unknown): value is Idea {
-   return (
-@@ -20,3 +27,34 @@ export function isProject(value: unknown): value is Project {
-     'health' in value
-   )
- }
-+
-+export function isExperienceInstance(value: unknown): value is ExperienceInstance {
-+  return (
-+    typeof value === 'object' &&
-+    value !== null &&
-+    'id' in value &&
-+    'instance_type' in value &&
-+    'status' in value &&
-+    'resolution' in value
-+  )
-+}
-+
-+export function isEphemeralExperience(instance: ExperienceInstance): boolean {
-+  return instance.instance_type === 'ephemeral'
-+}
-+
-+export function isPersistentExperience(instance: ExperienceInstance): boolean {
-+  return instance.instance_type === 'persistent'
-+}
-+
-+export function isValidResolution(obj: unknown): obj is Resolution {
-+  if (typeof obj !== 'object' || obj === null) return false
-+
-+  const res = obj as Record<string, unknown>
-+  return (
-+    RESOLUTION_DEPTHS.includes(res.depth as any) &&
-+    RESOLUTION_MODES.includes(res.mode as any) &&
-+    RESOLUTION_TIME_SCOPES.includes(res.timeScope as any) &&
-+    RESOLUTION_INTENSITIES.includes(res.intensity as any)
-+  )
-+}
-diff --git a/lib/routes.ts b/lib/routes.ts
-index 4b23c52..133f814 100644
---- a/lib/routes.ts
-+++ b/lib/routes.ts
-@@ -21,4 +21,10 @@ export const ROUTES = {
-   githubSyncPR: '/api/github/sync-pr',
-   githubMergePR: '/api/github/merge-pr',
-   githubTriggerAgent: '/api/github/trigger-agent',
-+
-+  // --- Sprint 3: Experience Engine ---
-+  workspace: (id: string) => `/workspace/${id}`,
-+  library: '/library',
-+  timeline: '/timeline',
-+  profile: '/profile',
- } as const
-diff --git a/lib/state-machine.ts b/lib/state-machine.ts
-index 4f11f88..04c3dbc 100644
---- a/lib/state-machine.ts
-+++ b/lib/state-machine.ts
-@@ -1,6 +1,7 @@
- import type { IdeaStatus } from '@/types/idea'
- import type { ProjectState } from '@/types/project'
- import type { ReviewStatus } from '@/types/pr'
-+import type { ExperienceStatus } from '@/types/experience'
- 
- type IdeaTransition = {
-   from: IdeaStatus
-@@ -95,3 +96,67 @@ export function getNextPRState(from: ReviewStatus, action: PRTransitionAction):
-   )
-   return transition ? transition.to : null
- }
-+
-+// ---------------------------------------------------------------------------
-+// Experience State Machine
-+// ---------------------------------------------------------------------------
-+
-+export type ExperienceTransitionAction =
-+  | 'draft'
-+  | 'submit_for_review'
-+  | 'request_changes'
-+  | 'approve'
-+  | 'publish'
-+  | 'activate'
-+  | 'complete'
-+  | 'archive'
-+  | 'supersede'
-+  | 'start'
-+
-+type ExperienceTransition = {
-+  from: ExperienceStatus
-+  to: ExperienceStatus
-+  action: ExperienceTransitionAction
-+}
-+
-+export const EXPERIENCE_TRANSITIONS: ExperienceTransition[] = [
-+  // Persistent Flow
-+  { from: 'proposed', to: 'drafted', action: 'draft' },
-+  { from: 'drafted', to: 'ready_for_review', action: 'submit_for_review' },
-+  { from: 'ready_for_review', to: 'drafted', action: 'request_changes' },
-+  { from: 'ready_for_review', to: 'approved', action: 'approve' },
-+  { from: 'approved', to: 'published', action: 'publish' },
-+  { from: 'published', to: 'active', action: 'activate' },
-+  { from: 'active', to: 'completed', action: 'complete' },
-+  { from: 'completed', to: 'archived', action: 'archive' },
-+
-+  // Pre-completed supersede
-+  { from: 'proposed', to: 'superseded', action: 'supersede' },
-+  { from: 'drafted', to: 'superseded', action: 'supersede' },
-+  { from: 'ready_for_review', to: 'superseded', action: 'supersede' },
-+  { from: 'approved', to: 'superseded', action: 'supersede' },
-+  { from: 'published', to: 'superseded', action: 'supersede' },
-+  { from: 'active', to: 'superseded', action: 'supersede' },
-+
-+  // Ephemeral Flow
-+  { from: 'injected', to: 'active', action: 'start' },
-+  { from: 'active', to: 'completed', action: 'complete' },
-+  { from: 'completed', to: 'archived', action: 'archive' },
-+]
-+
-+export function canTransitionExperience(
-+  from: ExperienceStatus,
-+  action: ExperienceTransitionAction
-+): boolean {
-+  return EXPERIENCE_TRANSITIONS.some((t) => t.from === from && t.action === action)
-+}
-+
-+export function getNextExperienceState(
-+  from: ExperienceStatus,
-+  action: ExperienceTransitionAction
-+): ExperienceStatus | null {
-+  const transition = EXPERIENCE_TRANSITIONS.find(
-+    (t) => t.from === from && t.action === action
-+  )
-+  return transition ? transition.to : null
-+}
-diff --git a/lib/storage.ts b/lib/storage.ts
-index 3408f5e..75a11a7 100644
---- a/lib/storage.ts
-+++ b/lib/storage.ts
-@@ -19,8 +19,18 @@ export interface StudioStore {
-   tasks: Task[]
-   prs: PullRequest[]
-   inbox: InboxEvent[]
--  agentRuns: AgentRun[]       // Sprint 2: GitHub workflow / Copilot runs
--  externalRefs: ExternalRef[] // Sprint 2: GitHub ↔ local entity mapping
-+  agentRuns: AgentRun[]
-+  externalRefs: ExternalRef[]
-+  
-+  // Sprint 3: Experience Engine (JSON fallback collections)
-+  experience_templates?: any[]
-+  experience_instances?: any[]
-+  experience_steps?: any[]
-+  interaction_events?: any[]
-+  artifacts?: any[]
-+  synthesis_snapshots?: any[]
-+  profile_facets?: any[]
-+  conversations?: any[]
- }
- 
- // Full paths for fs operations
-@@ -33,10 +43,18 @@ function ensureDir(): void {
-   }
- }
- 
--/** Defaults for keys added in Sprint 2 — ensures old JSON files auto-migrate. */
--const STORE_DEFAULTS: Pick<StudioStore, 'agentRuns' | 'externalRefs'> = {
-+/** Defaults for keys added in Sprint 2 & 3 — ensures old JSON files auto-migrate. */
-+const STORE_DEFAULTS: Partial<StudioStore> = {
-   agentRuns: [],
-   externalRefs: [],
-+  experience_templates: [],
-+  experience_instances: [],
-+  experience_steps: [],
-+  interaction_events: [],
-+  artifacts: [],
-+  synthesis_snapshots: [],
-+  profile_facets: [],
-+  conversations: [],
- }
- 
- export function readStore(): StudioStore {
-diff --git a/lib/studio-copy.ts b/lib/studio-copy.ts
-index bb1f3b2..8a2e13b 100644
---- a/lib/studio-copy.ts
-+++ b/lib/studio-copy.ts
-@@ -110,4 +110,17 @@ export const COPY = {
-     mergeBlocked: 'Cannot merge — checks did not pass',
-     notLinked: 'Not linked to GitHub',
-   },
-+  experience: {
-+    heading: 'Experience',
-+    workspace: 'Workspace',
-+    library: 'Library',
-+    timeline: 'Timeline',
-+    profile: 'Profile',
-+    approve: 'Approve Experience',
-+    publish: 'Publish',
-+    preview: 'Preview Experience',
-+    requestChanges: 'Request Changes',
-+    ephemeral: 'Moment',
-+    persistent: 'Experience',
-+  },
- }
-diff --git a/package-lock.json b/package-lock.json
-index 8a62d94..5c4b567 100644
---- a/package-lock.json
-+++ b/package-lock.json
-@@ -9,6 +9,7 @@
-       "version": "0.1.0",
-       "dependencies": {
-         "@octokit/rest": "^22.0.1",
-+        "@supabase/supabase-js": "^2.100.0",
-         "next": "14.2.29",
-         "react": "^18",
-         "react-dom": "^18"
-@@ -661,6 +662,92 @@
-       "dev": true,
-       "license": "MIT"
-     },
-+    "node_modules/@supabase/auth-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/auth-js/-/auth-js-2.100.0.tgz",
-+      "integrity": "sha512-pdT3ye3UVRN1Cg0wom6BmyY+XTtp5DiJaYnPi6j8ht5i8Lq8kfqxJMJz9GI9YDKk3w1nhGOPnh6Qz5qpyYm+1w==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "tslib": "2.8.1"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-+    "node_modules/@supabase/functions-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/functions-js/-/functions-js-2.100.0.tgz",
-+      "integrity": "sha512-keLg79RPwP+uiwHuxFPTFgDRxPV46LM4j/swjyR2GKJgWniTVSsgiBHfbIBDcrQwehLepy09b/9QSHUywtKRWQ==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "tslib": "2.8.1"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-+    "node_modules/@supabase/phoenix": {
-+      "version": "0.4.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/phoenix/-/phoenix-0.4.0.tgz",
-+      "integrity": "sha512-RHSx8bHS02xwfHdAbX5Lpbo6PXbgyf7lTaXTlwtFDPwOIw64NnVRwFAXGojHhjtVYI+PEPNSWwkL90f4agN3bw==",
-+      "license": "MIT"
-+    },
-+    "node_modules/@supabase/postgrest-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/postgrest-js/-/postgrest-js-2.100.0.tgz",
-+      "integrity": "sha512-xYNvNbBJaXOGcrZ44wxwp5830uo1okMHGS8h8dm3u4f0xcZ39yzbryUsubTJW41MG2gbL/6U57cA4Pi6YMZ9pA==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "tslib": "2.8.1"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-+    "node_modules/@supabase/realtime-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/realtime-js/-/realtime-js-2.100.0.tgz",
-+      "integrity": "sha512-2AZs00zzEF0HuCKY8grz5eCYlwEfVi5HONLZFoNR6aDfxQivl8zdQYNjyFoqN2MZiVhQHD7u6XV/xHwM8mCEHw==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "@supabase/phoenix": "^0.4.0",
-+        "@types/ws": "^8.18.1",
-+        "tslib": "2.8.1",
-+        "ws": "^8.18.2"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-+    "node_modules/@supabase/storage-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/storage-js/-/storage-js-2.100.0.tgz",
-+      "integrity": "sha512-d4EeuK6RNIgYNA2MU9kj8lQrLm5AzZ+WwpWjGkii6SADQNIGTC/uiaTRu02XJ5AmFALQfo8fLl9xuCkO6Xw+iQ==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "iceberg-js": "^0.8.1",
-+        "tslib": "2.8.1"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-+    "node_modules/@supabase/supabase-js": {
-+      "version": "2.100.0",
-+      "resolved": "https://registry.npmjs.org/@supabase/supabase-js/-/supabase-js-2.100.0.tgz",
-+      "integrity": "sha512-r0tlcukejJXJ1m/2eG/Ya5eYs4W8AC7oZfShpG3+SIo/eIU9uIt76ZeYI1SoUwUmcmzlAbgch+HDZDR/toVQPQ==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "@supabase/auth-js": "2.100.0",
-+        "@supabase/functions-js": "2.100.0",
-+        "@supabase/postgrest-js": "2.100.0",
-+        "@supabase/realtime-js": "2.100.0",
-+        "@supabase/storage-js": "2.100.0"
-+      },
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-     "node_modules/@swc/counter": {
-       "version": "0.1.3",
-       "resolved": "https://registry.npmjs.org/@swc/counter/-/counter-0.1.3.tgz",
-@@ -699,7 +786,6 @@
-       "version": "20.19.37",
-       "resolved": "https://registry.npmjs.org/@types/node/-/node-20.19.37.tgz",
-       "integrity": "sha512-8kzdPJ3FsNsVIurqBs7oodNnCEVbni9yUEkaHbgptDACOPW04jimGagZ51E6+lXUwJjgnBw+hyko/lkFWCldqw==",
--      "dev": true,
-       "license": "MIT",
-       "dependencies": {
-         "undici-types": "~6.21.0"
-@@ -734,6 +820,15 @@
-         "@types/react": "^18.0.0"
-       }
-     },
-+    "node_modules/@types/ws": {
-+      "version": "8.18.1",
-+      "resolved": "https://registry.npmjs.org/@types/ws/-/ws-8.18.1.tgz",
-+      "integrity": "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==",
-+      "license": "MIT",
-+      "dependencies": {
-+        "@types/node": "*"
-+      }
-+    },
-     "node_modules/@typescript-eslint/eslint-plugin": {
-       "version": "8.57.1",
-       "resolved": "https://registry.npmjs.org/@typescript-eslint/eslint-plugin/-/eslint-plugin-8.57.1.tgz",
-@@ -3377,6 +3472,15 @@
-         "node": ">= 0.4"
-       }
-     },
-+    "node_modules/iceberg-js": {
-+      "version": "0.8.1",
-+      "resolved": "https://registry.npmjs.org/iceberg-js/-/iceberg-js-0.8.1.tgz",
-+      "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA==",
-+      "license": "MIT",
-+      "engines": {
-+        "node": ">=20.0.0"
-+      }
-+    },
-     "node_modules/ignore": {
-       "version": "5.3.2",
-       "resolved": "https://registry.npmjs.org/ignore/-/ignore-5.3.2.tgz",
-@@ -6030,7 +6134,6 @@
-       "version": "6.21.0",
-       "resolved": "https://registry.npmjs.org/undici-types/-/undici-types-6.21.0.tgz",
-       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==",
--      "dev": true,
-       "license": "MIT"
-     },
-     "node_modules/universal-user-agent": {
-@@ -6345,6 +6448,27 @@
-       "dev": true,
-       "license": "ISC"
-     },
-+    "node_modules/ws": {
-+      "version": "8.20.0",
-+      "resolved": "https://registry.npmjs.org/ws/-/ws-8.20.0.tgz",
-+      "integrity": "sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==",
-+      "license": "MIT",
-+      "engines": {
-+        "node": ">=10.0.0"
-+      },
-+      "peerDependencies": {
-+        "bufferutil": "^4.0.1",
-+        "utf-8-validate": ">=5.0.2"
-+      },
-+      "peerDependenciesMeta": {
-+        "bufferutil": {
-+          "optional": true
-+        },
-+        "utf-8-validate": {
-+          "optional": true
-+        }
-+      }
-+    },
-     "node_modules/yocto-queue": {
-       "version": "0.1.0",
-       "resolved": "https://registry.npmjs.org/yocto-queue/-/yocto-queue-0.1.0.tgz",
-diff --git a/package.json b/package.json
-index 99ff425..b5a9072 100644
---- a/package.json
-+++ b/package.json
-@@ -11,6 +11,7 @@
-   },
-   "dependencies": {
-     "@octokit/rest": "^22.0.1",
-+    "@supabase/supabase-js": "^2.100.0",
-     "next": "14.2.29",
-     "react": "^18",
-     "react-dom": "^18"
-diff --git a/wiring.md b/wiring.md
-index bd45625..1de91cc 100644
---- a/wiring.md
-+++ b/wiring.md
-@@ -82,18 +82,42 @@ When ready to move beyond PAT:
- 
- ---
- 
--## Future: Supabase Persistence (Post Sprint 2)
-+## Phase C: Supabase Setup (Sprint 3)
- 
--Supabase credentials are already in `.env.local`. When ready:
-+Canonical runtime storage for experiences, interactions, and user synthesis.
- 
--1. Create tables matching the `StudioStore` schema
--2. Migrate `lib/storage.ts` from JSON file to Supabase client calls
--3. Enable Row Level Security
--4. Use Supabase Realtime for live inbox updates
-+### 1. Create a Supabase project
- 
--This is a separate sprint. The JSON file store is sufficient for the GitHub factory experiment.
-+1. Go to [https://supabase.com/dashboard/](https://supabase.com/dashboard/)
-+2. Create a new project in your organization.
-+3. Choose a region close to your Vercel deployment if applicable.
- 
+-
+-```
+-
+-### gpt-schema.md
+-
+-```markdown
+-# Mira Studio — Custom GPT Configuration
+-
+-> Paste the **OpenAPI schema** into your Custom GPT's **Actions** tab.
+-> Paste the **System Instructions** into the **Instructions** field.
+-
 ----
-+### 2. Add required env vars to `.env.local`
-+
-+From your project settings (Settings → API), add these to `.env.local`:
-+
-+```env
-+# ─── Supabase ───
-+# The URL of your Supabase project (from Project Settings → API)
-+NEXT_PUBLIC_SUPABASE_URL=
-+
-+# The anon/public key for your Supabase project (used in browser)
-+NEXT_PUBLIC_SUPABASE_ANON_KEY=
-+
-+# The service role key (used for administrative tasks/services, bypasses RLS)
-+# From Settings → API → service_role (keep this secret!)
-+SUPABASE_SERVICE_ROLE_KEY=
-+```
-+
-+### 3. Run database migrations
-+
-+Lane 1 provides SQL migration files in `lib/supabase/migrations/`. 
-+
-+1. Go to your Supabase project's **SQL Editor**.
-+2. Run the contents of each file in order:
-+    - `001_preserved_entities.sql`
-+    - `002_evolved_entities.sql`
-+    - `003_experience_tables.sql`
- 
- ## Copilot Coding Agent (SWE) — Verify Access
- 
-```
-
-### New Untracked Files
-
-#### `app/api/experiences/inject/route.ts`
-
-```
-import { NextResponse } from 'next/server'
-import { createExperienceInstance, createExperienceStep, ExperienceInstance } from '@/lib/services/experience-service'
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { templateId, userId, title, goal, resolution, steps } = body
-
-    if (!templateId || !userId || !resolution || !Array.isArray(steps)) {
-      return NextResponse.json({ 
-        error: 'Missing required fields: templateId, userId, resolution, steps[]' 
-      }, { status: 400 })
-    }
-
-    // Ephemeral skips the realization pipeline and goes straight to injected
-    const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
-      user_id: userId,
-      template_id: templateId,
-      idea_id: null,
-      title: title || 'Ephemeral Experience',
-      goal: goal || '',
-      instance_type: 'ephemeral',
-      status: 'injected',
-      resolution,
-      reentry: null,
-      previous_experience_id: null,
-      next_suggested_ids: [],
-      friction_level: null,
-      source_conversation_id: null,
-      generated_by: null,
-      realization_id: null,
-      published_at: null
-    }
-
-    const instance = await createExperienceInstance(instanceData)
-
-    // Create steps in sequence
-    for (let i = 0; i < steps.length; i++) {
-      const stepData = steps[i]
-      await createExperienceStep({
-        instance_id: instance.id,
-        step_order: i,
-        step_type: stepData.type || stepData.step_type,
-        title: stepData.title || '',
-        payload: stepData.payload || {},
-        completion_rule: stepData.completion_rule
-      })
-    }
-
-    return NextResponse.json(instance, { status: 201 })
-  } catch (error: any) {
-    console.error('Failed to inject experience:', error)
-    return NextResponse.json({ error: error.message || 'Failed to inject experience' }, { status: 500 })
-  }
-}
-```
-
-#### `app/api/experiences/route.ts`
-
-```
-import { NextResponse } from 'next/server'
-import { getExperienceInstances, createExperienceInstance, ExperienceStatus, InstanceType, ExperienceInstance } from '@/lib/services/experience-service'
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const status = searchParams.get('status') as ExperienceStatus | null
-  const type = searchParams.get('type') as InstanceType | null
-  const userId = searchParams.get('userId') || 'default-user'
-
-  try {
-    const filters: any = { userId }
-    if (status) filters.status = status
-    if (type) filters.instanceType = type
-
-    const instances = await getExperienceInstances(filters)
-    return NextResponse.json(instances)
-  } catch (error) {
-    console.error('Failed to fetch experiences:', error)
-    return NextResponse.json({ error: 'Failed to fetch experiences' }, { status: 500 })
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { templateId, userId, title, goal, resolution, reentry, previousExperienceId } = body
-
-    if (!templateId || !userId || !resolution) {
-      return NextResponse.json({ error: 'Missing required fields: templateId, userId, resolution' }, { status: 400 })
-    }
-
-    const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
-      user_id: userId,
-      template_id: templateId,
-      idea_id: null,
-      title: title || 'Untitled Experience',
-      goal: goal || '',
-      instance_type: 'persistent',
-      status: 'proposed',
-      resolution,
-      reentry: reentry || null,
-      previous_experience_id: previousExperienceId || null,
-      next_suggested_ids: [],
-      friction_level: null,
-      source_conversation_id: null,
-      generated_by: null,
-      realization_id: null,
-      published_at: null
-    }
-
-    const instance = await createExperienceInstance(instanceData)
-    return NextResponse.json(instance, { status: 201 })
-  } catch (error: any) {
-    console.error('Failed to create experience:', error)
-    return NextResponse.json({ error: error.message || 'Failed to create experience' }, { status: 500 })
-  }
-}
-```
-
-#### `app/api/gpt/state/route.ts`
-
-```
-import { NextResponse } from 'next/server'
-import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const userId = searchParams.get('userId') || 'default-user'
-
-  try {
-    const packet = await buildGPTStatePacket(userId)
-    return NextResponse.json(packet)
-  } catch (error) {
-    console.error('Failed to build GPT state packet:', error)
-    return NextResponse.json({ error: 'Failed to build GPT state packet' }, { status: 500 })
-  }
-}
-```
-
-#### `app/api/interactions/route.ts`
-
-```
-import { NextResponse } from 'next/server'
-import { recordInteraction } from '@/lib/services/interaction-service'
-
-export async function POST(request: Request) {
-  try {
-    const body = await request.json()
-    const { instanceId, stepId, eventType, eventPayload } = body
-
-    if (!instanceId || !eventType) {
-      return NextResponse.json({ error: 'Missing required fields: instanceId, eventType' }, { status: 400 })
-    }
-
-    const event = await recordInteraction({
-      instanceId,
-      stepId,
-      eventType,
-      eventPayload: eventPayload || {}
-    })
-
-    return NextResponse.json(event, { status: 201 })
-  } catch (error: any) {
-    console.error('Failed to record interaction:', error)
-    return NextResponse.json({ error: error.message || 'Failed to record interaction' }, { status: 500 })
-  }
-}
-```
-
-#### `app/api/synthesis/route.ts`
-
-```
-import { NextResponse } from 'next/server'
-import { getLatestSnapshot } from '@/lib/services/synthesis-service'
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const userId = searchParams.get('userId') || 'default-user'
-
-  try {
-    const snapshot = await getLatestSnapshot(userId)
-    if (!snapshot) {
-      return NextResponse.json({ message: 'No synthesis snapshot found' }, { status: 404 })
-    }
-    return NextResponse.json(snapshot)
-  } catch (error) {
-    console.error('Failed to fetch synthesis snapshot:', error)
-    return NextResponse.json({ error: 'Failed to fetch synthesis snapshot' }, { status: 500 })
-  }
-}
-```
-
-#### `app/workspace/[instanceId]/WorkspaceClient.tsx`
-
-```
-'use client';
-
-import React from 'react';
-import ExperienceRenderer from '@/components/experience/ExperienceRenderer';
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface Resolution {
-  depth: 'light' | 'medium' | 'heavy';
-  mode: string;
-  timeScope: string;
-  intensity: string;
-}
-
-interface ExperienceInstance {
-  id: string;
-  title: string;
-  goal: string;
-  status: string;
-  resolution: Resolution;
-}
-
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: any;
-  completion_rule?: string;
-}
-
-interface WorkspaceClientProps {
-  instance: any; // Using any for now then casting to local types to avoid Lane 2 mismatch
-  steps: any[];
-}
-
-export default function WorkspaceClient({ instance, steps }: WorkspaceClientProps) {
-  return (
-    <div className="flex flex-col min-h-screen">
-      <ExperienceRenderer 
-        instance={instance as ExperienceInstance} 
-        steps={steps as ExperienceStep[]} 
-      />
-    </div>
-  );
-}
-```
-
-#### `app/workspace/[instanceId]/page.tsx`
-
-```
-import { notFound } from 'next/navigation';
-import { getExperienceInstanceById } from '@/lib/services/experience-service';
-import WorkspaceClient from './WorkspaceClient';
-
-export const dynamic = 'force-dynamic';
-
-interface WorkspacePageProps {
-  params: {
-    instanceId: string;
-  };
-}
-
-export default async function WorkspacePage({ params }: WorkspacePageProps) {
-  const { instanceId } = params;
-
-  // Fetch instance + steps from the service
-  const data = await getExperienceInstanceById(instanceId);
-
-  if (!data) {
-    notFound();
-  }
-
-  const { steps, ...instance } = data;
-
-  return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#e2e8f0]">
-      <WorkspaceClient instance={instance} steps={steps} />
-    </div>
-  );
-}
-```
-
-#### `components/experience/ExperienceRenderer.tsx`
-
-```
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
-import QuestionnaireStep from './steps/QuestionnaireStep';
-import LessonStep from './steps/LessonStep';
-
-// Register built-in renderers
-registerRenderer('questionnaire', QuestionnaireStep as any);
-registerRenderer('lesson', LessonStep as any);
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface Resolution {
-  depth: 'light' | 'medium' | 'heavy';
-  mode: string;
-  timeScope: string;
-  intensity: string;
-}
-
-interface ExperienceInstance {
-  id: string;
-  title: string;
-  goal: string;
-  status: string;
-  resolution: Resolution;
-}
-
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: any;
-  completion_rule?: string;
-}
-
-interface ExperienceRendererProps {
-  instance: ExperienceInstance;
-  steps: ExperienceStep[];
-}
-
-export default function ExperienceRenderer({ instance, steps }: ExperienceRendererProps) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isCompleted, setIsCompleted] = useState(false);
-
-  const currentStep = steps[currentStepIndex];
-  const totalSteps = steps.length;
-  const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
-
-  const handleCompleteStep = (payload?: unknown) => {
-    // TODO: Track interaction event (Lane 5)
-    console.log('Step complete:', currentStep.id, payload);
-
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    } else {
-      setIsCompleted(true);
-    }
-  };
-
-  const handleSkipStep = () => {
-    // TODO: Track interaction event (Lane 5)
-    console.log('Step skipped:', currentStep.id);
-    
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    }
-  };
-
-  const StepComponent = getRenderer(currentStep?.step_type);
-
-  if (isCompleted) {
-    return (
-      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">Experience Complete</h2>
-          <p className="text-[#94a3b8] text-lg">You've reached the end of this journey. Your progress and artifacts have been saved.</p>
-        </div>
-        <button 
-          onClick={() => window.location.href = '/'}
-          className="px-8 py-3 bg-indigo-500/20 text-indigo-300 rounded-xl font-bold hover:bg-indigo-500/30 transition-all border border-indigo-500/30"
-        >
-          Return to Dashboard
-        </button>
-      </div>
-    );
-  }
-
-  const { depth } = instance.resolution;
-
-  return (
-    <div className="w-full h-full flex flex-col items-center">
-      {/* Full Header (Heavy Depth) */}
-      {depth === 'heavy' && (
-        <div className="w-full bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-[#1e1e2e] sticky top-0 z-10 px-6 py-8">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-sm font-bold uppercase tracking-widest text-indigo-400 mb-1">Active Experience</h1>
-                <h2 className="text-3xl font-bold text-white tracking-tight">{instance.title}</h2>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-mono text-[#475569] block mb-1">PROGRESS</span>
-                <span className="text-xl font-mono text-indigo-400">{currentStepIndex + 1} / {totalSteps}</span>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-[#475569]">
-                <span>Goal: {instance.goal}</span>
-                <span>{progressPercent}% Complete</span>
-              </div>
-              <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden border border-[#33334d]">
-                <div 
-                  className="h-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)] transition-all duration-700 ease-out" 
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Progress Bar + Title (Medium Depth) */}
-      {depth === 'medium' && (
-        <div className="w-full max-w-3xl px-6 py-6 border-b border-[#1e293b]/50">
-          <div className="space-y-4">
-            <div className="flex justify-between items-end border-b border-indigo-500/20 pb-2">
-              <h1 className="text-lg font-bold text-indigo-100">{instance.title}</h1>
-              <span className="text-[10px] font-mono text-[#64748b]">STEP {currentStepIndex + 1} OF {totalSteps}</span>
-            </div>
-            <div className="h-1 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-500" 
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* No Header (Light Depth) */}
-      {/* Handled by rendering nothing here */}
-
-      {/* Main Experience Surface */}
-      <main className={`w-full max-w-2xl px-6 py-12 flex-grow ${depth === 'light' ? 'flex items-center justify-center min-h-[60vh]' : ''}`}>
-        {currentStep ? (
-          <StepComponent 
-            step={currentStep} 
-            onComplete={handleCompleteStep} 
-            onSkip={handleSkipStep} 
-          />
-        ) : (
-          <div className="text-[#94a3b8] italic">Initializing experience steps…</div>
-        )}
-      </main>
-    </div>
-  );
-}
-```
-
-#### `components/experience/steps/LessonStep.tsx`
-
-```
-'use client';
-
-import React, { useState } from 'react';
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: {
-    sections: Array<{
-      heading: string;
-      body: string;
-      type?: 'text' | 'callout' | 'checkpoint';
-    }>;
-  };
-}
-
-interface LessonStepProps {
-  step: ExperienceStep;
-  onComplete: () => void;
-  onSkip: () => void;
-}
-
-export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps) {
-  const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
-
-  const handleCheckpoint = (index: number) => {
-    setCheckpoints((prev) => ({ ...prev, [index]: true }));
-  };
-
-  const isComplete = step.payload.sections.every(
-    (s, i) => s.type !== 'checkpoint' || checkpoints[i]
-  );
-
-  return (
-    <div className="space-y-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
-      <div className="mb-8">
-        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{step.title}</h2>
-      </div>
-
-      <div className="space-y-10">
-        {step.payload.sections.map((section, idx) => (
-          <div key={idx} className={`relative ${section.type === 'callout' ? 'p-6 bg-indigo-500/5 border-l-2 border-indigo-500 rounded-r-xl' : ''}`}>
-            {section.heading && (
-              <h3 className="text-xl font-semibold text-[#e2e8f0] mb-3">{section.heading}</h3>
-            )}
-            
-            <p className="text-lg leading-relaxed text-[#94a3b8] whitespace-pre-wrap">
-              {section.body}
-            </p>
-
-            {section.type === 'checkpoint' && (
-              <div className="mt-6 flex items-center justify-center border border-dashed border-[#33334d] p-6 rounded-xl">
-                {checkpoints[idx] ? (
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                    <span className="w-6 h-6 rounded-full bg-emerald-400/20 flex items-center justify-center">✓</span>
-                    Understood
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleCheckpoint(idx)}
-                    className="px-6 py-2 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30 hover:bg-indigo-500/30 transition-all font-medium"
-                  >
-                    Got it
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
-          <button
-            onClick={onSkip}
-            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
-          >
-            Skip for now
-          </button>
-          
-          <button
-            onClick={onComplete}
-            disabled={!isComplete}
-            className="px-10 py-3 bg-indigo-600/20 text-indigo-100 rounded-xl text-sm font-bold hover:bg-indigo-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-600/30 shadow-lg shadow-indigo-900/10"
-          >
-            Continue →
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-```
-
-#### `components/experience/steps/QuestionnaireStep.tsx`
-
-```
-'use client';
-
-import React, { useState } from 'react';
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: {
-    questions: Array<{
-      id: string;
-      label: string;
-      type: 'text' | 'choice' | 'scale';
-      options?: string[];
-    }>;
-  };
-}
-
-interface QuestionnaireStepProps {
-  step: ExperienceStep;
-  onComplete: (payload: { answers: Record<string, string> }) => void;
-  onSkip: () => void;
-}
-
-export default function QuestionnaireStep({ step, onComplete, onSkip }: QuestionnaireStepProps) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-
-  const handleInputChange = (questionId: string, value: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onComplete({ answers });
-  };
-
-  const isComplete = step.payload.questions.every((q) => !!answers[q.id]);
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="mb-6">
-        <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{step.title}</h2>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {step.payload.questions.map((q) => (
-          <div key={q.id} className="space-y-3">
-            <label className="block text-lg font-medium text-[#94a3b8]">{q.label}</label>
-            
-            {q.type === 'text' && (
-              <textarea
-                value={answers[q.id] || ''}
-                onChange={(e) => handleInputChange(q.id, e.target.value)}
-                placeholder="Type your answer…"
-                rows={3}
-                className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-xl px-4 py-3 text-[#e2e8f0] placeholder-[#94a3b8]/50 focus:outline-none focus:border-indigo-500/40 transition-colors resize-none"
-              />
-            )}
-
-            {q.type === 'choice' && (
-              <div className="grid grid-cols-1 gap-2">
-                {q.options?.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => handleInputChange(q.id, option)}
-                    className={`px-4 py-3 rounded-xl border text-left transition-all ${
-                      answers[q.id] === option
-                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300'
-                        : 'bg-[#12121a] border-[#1e1e2e] text-[#94a3b8] hover:border-[#33334d]'
-                    }`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {q.type === 'scale' && (
-              <div className="flex justify-between items-center bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
-                {[1, 2, 3, 4, 5].map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => handleInputChange(q.id, val.toString())}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center border transition-all ${
-                      answers[q.id] === val.toString()
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300'
-                        : 'bg-[#1a1a2e] border-[#33334d] text-[#64748b] hover:border-indigo-500/30'
-                    }`}
-                  >
-                    {val}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-
-        <div className="flex items-center justify-between pt-4">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
-          >
-            Skip for now
-          </button>
-          
-          <button
-            type="submit"
-            disabled={!isComplete}
-            className="px-8 py-3 bg-indigo-500/20 text-indigo-300 rounded-xl text-sm font-bold hover:bg-indigo-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-500/20"
-          >
-            Next Step →
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-```
-
-#### `lib/experience/CAPTURE_CONTRACT.md`
-
-```
-# Mira Interaction Capture — Contract
-
-> Documentation for the telemetry layer of the Mira Experience Engine.
-
-This document defines the interface and behaviors for tracking user interactions within an Experience. It is used by the `useInteractionCapture` hook and implemented by the `/api/interactions` endpoint.
-
----
-
-## API Endpoint
-
-**`POST /api/interactions`**
-
-### Request Body Schema
-```json
-{
-  "instanceId": "string (UUID)",
-  "stepId": "string (UUID) | optional",
-  "eventType": "InteractionEventType",
-  "eventPayload": "object (JSONB) | optional"
-}
-```
-
----
-
-## Event Types & Payloads
-
-### 1. `step_viewed`
-- **Trigger**: Fired when a user enters/views a specific step in an experience.
-- **`stepId`**: Required.
-- **Payload**: None required.
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "stepId": "step_1",
-    "eventType": "step_viewed"
-  }
-  ```
-
-### 2. `answer_submitted`
-- **Trigger**: Fired when a user submits data for a specific step (e.g., questionnaire responses).
-- **`stepId`**: Required.
-- **Payload**: `{ answers: Record<string, any> }`
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "stepId": "step_1",
-    "eventType": "answer_submitted",
-    "eventPayload": {
-      "answers": { "q1": "val1", "q2": "val2" }
-    }
-  }
-  ```
-
-### 3. `task_completed`
-- **Trigger**: Fired when a specific task or objective within a step is marked as complete.
-- **`stepId`**: Required.
-- **Payload**: Optional metadata about completion.
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "stepId": "step_2",
-    "eventType": "task_completed"
-  }
-  ```
-
-### 4. `step_skipped`
-- **Trigger**: Fired when a user chooses to skip an optional step.
-- **`stepId`**: Required.
-- **Payload**: None required.
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "stepId": "step_3",
-    "eventType": "step_skipped"
-  }
-  ```
-
-### 5. `time_on_step`
-- **Trigger**: Fired when a user leaves a step (navigates away or finishes). Measures active dwell time.
-- **`stepId`**: Required.
-- **Payload**: `{ durationMs: number }`
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "stepId": "step_1",
-    "eventType": "time_on_step",
-    "eventPayload": { "durationMs": 45000 }
-  }
-  ```
-
-### 6. `experience_started`
-- **Trigger**: Fired once when the experience is first loaded in the workspace.
-- **`stepId`**: Optional (usually null).
-- **Payload**: None required.
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "eventType": "experience_started"
-  }
-  ```
-
-### 7. `experience_completed`
-- **Trigger**: Fired when the user reaches the final "complete" state of the entire experience.
-- **`stepId`**: Optional (usually null).
-- **Payload**: None required.
-- **Example**:
-  ```json
-  {
-    "instanceId": "...",
-    "eventType": "experience_completed"
-  }
-  ```
-
----
-
-## Usage in Renderers (Lane 6 Integration)
-
-Renderers should use the `useInteractionCapture` hook:
-
-1.  **Initialize**: `const telemetry = useInteractionCapture(instanceId)`
-2.  **Mount**: `useEffect(() => telemetry.trackExperienceStart(), [])`
-3.  **Step Entry**: `useEffect(() => { telemetry.trackStepView(currentStepId); telemetry.startStepTimer(currentStepId); return () => telemetry.endStepTimer(currentStepId); }, [currentStepId])`
-4.  **Submission**: Pass `telemetry.trackAnswer`, `telemetry.trackComplete`, and `telemetry.trackSkip` down to individual step components.
-5.  **Finalize**: Call `telemetry.trackExperienceComplete()` when the experience orchestrator reaches the end state.
-```
-
-#### `lib/experience/interaction-events.ts`
-
-```
-/**
- * Interaction Event Types for the Mira Experience Engine.
- * These are the canonical event names used for telemetry.
- */
-export const INTERACTION_EVENTS = {
-  STEP_VIEWED: 'step_viewed',
-  ANSWER_SUBMITTED: 'answer_submitted',
-  TASK_COMPLETED: 'task_completed',
-  STEP_SKIPPED: 'step_skipped',
-  TIME_ON_STEP: 'time_on_step',
-  EXPERIENCE_STARTED: 'experience_started',
-  EXPERIENCE_COMPLETED: 'experience_completed',
-} as const;
-
-export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];
-
-/**
- * Utility to build a typed interaction payload.
- * This ensures consistency across different capture points.
- */
-export function buildInteractionPayload(
-  eventType: InteractionEventType,
-  instanceId: string,
-  stepId?: string,
-  extra: Record<string, any> = {}
-) {
-  return {
-    instanceId,
-    stepId,
-    eventType,
-    eventPayload: extra,
-  };
-}
-```
-
-#### `lib/experience/renderer-registry.tsx`
-
-```
-import React from 'react';
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-export interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: any;
-  completion_rule?: string;
-}
-
-export type StepRenderer = React.ComponentType<{
-  step: ExperienceStep;
-  onComplete: (payload?: unknown) => void;
-  onSkip: () => void;
-}>;
-
-const registry: Record<string, StepRenderer> = {};
-
-export function registerRenderer(stepType: string, component: StepRenderer) {
-  registry[stepType] = component;
-}
-
-export function getRenderer(stepType: string): StepRenderer {
-  return registry[stepType] || FallbackStep;
-}
-
-function FallbackStep({ step }: { step: ExperienceStep }) {
-  return (
-    <div className="p-6 border border-[#1e1e2e] rounded-xl bg-[#12121a]">
-      <h3 className="text-xl font-bold text-red-400 mb-2">Unsupported Step Type</h3>
-      <p className="text-[#94a3b8]">The step type <code className="text-indigo-300">"{step.step_type}"</code> is not registered in the system.</p>
-    </div>
-  );
-}
-```
-
-#### `lib/hooks/useInteractionCapture.ts`
-
-```
-'use client';
-
-import { useRef } from 'react';
-import { INTERACTION_EVENTS, buildInteractionPayload, type InteractionEventType } from '@/lib/experience/interaction-events';
-
-/**
- * useInteractionCapture - A pure client-side hook for experience telemetry.
- * All methods are fire-and-forget, non-blocking, and do not track state.
- */
-export function useInteractionCapture(instanceId: string) {
-  const stepTimers = useRef<Record<string, number>>({});
-  
-  const postEvent = (eventType: InteractionEventType, stepId?: string, payload: Record<string, any> = {}) => {
-    // Fire and forget
-    const data = buildInteractionPayload(eventType, instanceId, stepId, payload);
-    
-    fetch('/api/interactions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data),
-    }).catch((err) => {
-      // Quietly log errors to console without interrupting the UI
-      console.warn(`[InteractionCapture] Failed to record ${eventType}:`, err);
-    });
-  };
-
-  const trackStepView = (stepId: string) => {
-    postEvent(INTERACTION_EVENTS.STEP_VIEWED, stepId);
-  };
-
-  const trackAnswer = (stepId: string, answers: Record<string, any>) => {
-    postEvent(INTERACTION_EVENTS.ANSWER_SUBMITTED, stepId, answers);
-  };
-
-  const trackSkip = (stepId: string) => {
-    postEvent(INTERACTION_EVENTS.STEP_SKIPPED, stepId);
-  };
-
-  const trackComplete = (stepId: string, payload?: Record<string, any>) => {
-    postEvent(INTERACTION_EVENTS.TASK_COMPLETED, stepId, payload);
-  };
-
-  const trackExperienceStart = () => {
-    postEvent(INTERACTION_EVENTS.EXPERIENCE_STARTED);
-  };
-
-  const trackExperienceComplete = () => {
-    postEvent(INTERACTION_EVENTS.EXPERIENCE_COMPLETED);
-  };
-
-  const startStepTimer = (stepId: string) => {
-    stepTimers.current[stepId] = Date.now();
-  };
-
-  const endStepTimer = (stepId: string) => {
-    const startTime = stepTimers.current[stepId];
-    if (startTime) {
-      const durationMs = Date.now() - startTime;
-      postEvent(INTERACTION_EVENTS.TIME_ON_STEP, stepId, { durationMs });
-      // Reset after capture
-      delete stepTimers.current[stepId];
-    }
-  };
-
-  return {
-    trackStepView,
-    trackAnswer,
-    trackSkip,
-    trackComplete,
-    trackExperienceStart,
-    trackExperienceComplete,
-    startStepTimer,
-    endStepTimer,
-  };
-}
-```
-
-#### `lib/services/experience-service.ts`
-
-```
-import { ExperienceInstance, ExperienceStatus, InstanceType, ExperienceTemplate, ExperienceStep, ReentryContract } from '@/types/experience'
-export type { ExperienceInstance, ExperienceStatus, InstanceType, ExperienceTemplate, ExperienceStep, ReentryContract } from '@/types/experience'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-export async function getExperienceTemplates(): Promise<ExperienceTemplate[]> {
-  const adapter = getStorageAdapter()
-  return adapter.getCollection<ExperienceTemplate>('experience_templates')
-}
-
-export async function getExperienceInstances(filters?: { status?: ExperienceStatus; instanceType?: InstanceType; userId?: string }): Promise<ExperienceInstance[]> {
-  const adapter = getStorageAdapter()
-  if (filters) {
-    const queryFilters: Record<string, any> = {}
-    if (filters.status) queryFilters.status = filters.status
-    if (filters.instanceType) queryFilters.instance_type = filters.instanceType
-    if (filters.userId) queryFilters.user_id = filters.userId
-    return adapter.query<ExperienceInstance>('experience_instances', queryFilters)
-  }
-  return adapter.getCollection<ExperienceInstance>('experience_instances')
-}
-
-export async function getExperienceInstanceById(id: string): Promise<(ExperienceInstance & { steps: ExperienceStep[] }) | null> {
-  const adapter = getStorageAdapter()
-  const instances = await adapter.query<ExperienceInstance>('experience_instances', { id })
-  const instance = instances[0]
-  if (!instance) return null
-
-  const steps = await getExperienceSteps(id)
-  return { ...instance, steps }
-}
-
-export async function createExperienceInstance(data: Omit<ExperienceInstance, 'id' | 'created_at'>): Promise<ExperienceInstance> {
-  if (!data.resolution) {
-    throw new Error('Resolution is required for creating an experience instance')
-  }
-  const adapter = getStorageAdapter()
-  const instance: ExperienceInstance = {
-    ...data,
-    id: `exp-${generateId()}`,
-    created_at: new Date().toISOString()
-  } as ExperienceInstance
-
-  return adapter.saveItem<ExperienceInstance>('experience_instances', instance)
-}
-
-export async function updateExperienceInstance(id: string, updates: Partial<ExperienceInstance>): Promise<ExperienceInstance | null> {
-  const adapter = getStorageAdapter()
-  return adapter.updateItem<ExperienceInstance>('experience_instances', id, updates)
-}
-
-export async function getExperienceSteps(instanceId: string): Promise<ExperienceStep[]> {
-  const adapter = getStorageAdapter()
-  const steps = await adapter.query<ExperienceStep>('experience_steps', { instance_id: instanceId })
-  return (steps as ExperienceStep[]).sort((a, b) => a.step_order - b.step_order)
-}
-
-export async function createExperienceStep(data: Omit<ExperienceStep, 'id'>): Promise<ExperienceStep> {
-  const adapter = getStorageAdapter()
-  const step: ExperienceStep = {
-    ...data,
-    id: `step-${generateId()}`
-  } as ExperienceStep
-  return adapter.saveItem<ExperienceStep>('experience_steps', step)
-}
-```
-
-#### `lib/services/interaction-service.ts`
-
-```
-import { InteractionEvent, InteractionEventType, Artifact } from '@/types/interaction'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
-  const adapter = getStorageAdapter()
-  const event: InteractionEvent = {
-    id: `evnt-${generateId()}`,
-    instance_id: data.instanceId,
-    step_id: data.stepId || null,
-    event_type: data.eventType,
-    event_payload: data.eventPayload,
-    created_at: new Date().toISOString()
-  }
-  return adapter.saveItem<InteractionEvent>('interaction_events', event)
-}
-
-export async function getInteractionsByInstance(instanceId: string): Promise<InteractionEvent[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
-}
-
-export async function createArtifact(data: { instanceId: string; artifactType: string; title: string; content: string; metadata: any }): Promise<Artifact> {
-  const adapter = getStorageAdapter()
-  const artifact: Artifact = {
-    id: `art-${generateId()}`,
-    instance_id: data.instanceId,
-    artifact_type: data.artifactType,
-    title: data.title,
-    content: data.content,
-    metadata: data.metadata || {},
-    created_at: new Date().toISOString()
-  } as Artifact
-  return adapter.saveItem<Artifact>('artifacts', artifact)
-}
-
-export async function getArtifactsByInstance(instanceId: string): Promise<Artifact[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<Artifact>('artifacts', { instance_id: instanceId })
-}
-```
-
-#### `lib/services/synthesis-service.ts`
-
-```
-import { SynthesisSnapshot, ProfileFacet, GPTStatePacket, FrictionLevel } from '@/types/synthesis'
-import { ExperienceInstance, ReentryContract } from '@/types/experience'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-import { getExperienceInstances } from './experience-service'
-import { getInteractionsByInstance } from './interaction-service'
-
-export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
-  const adapter = getStorageAdapter()
-  
-  // Basic summary computation for foundation pivot
-  const interactions = await getInteractionsByInstance(sourceId)
-  const summary = `Synthesized context from ${interactions.length} interactions in ${sourceType} ${sourceId}.`
-  
-  const snapshot: SynthesisSnapshot = {
-    id: `snap-${generateId()}`,
-    user_id: userId,
-    source_type: sourceType,
-    source_id: sourceId,
-    summary,
-    key_signals: { interactionCount: interactions.length },
-    next_candidates: [],
-    created_at: new Date().toISOString()
-  }
-  
-  return adapter.saveItem<SynthesisSnapshot>('synthesis_snapshots', snapshot)
-}
-
-export async function getLatestSnapshot(userId: string): Promise<SynthesisSnapshot | null> {
-  const adapter = getStorageAdapter()
-  const snapshots = await adapter.query<SynthesisSnapshot>('synthesis_snapshots', { user_id: userId })
-  if (snapshots.length === 0) return null
-  return snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-}
-
-export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacket> {
-  const experiences = await getExperienceInstances({ userId })
-  
-  // Collect active reentry prompts
-  const activeReentryPrompts: ReentryContract[] = []
-  experiences.forEach(exp => {
-    if (exp.reentry && (exp.status === 'active' || exp.status === 'completed')) {
-      activeReentryPrompts.push(exp.reentry)
-    }
-  })
-
-  // Compute friction signals from experience status/metadata
-  const frictionSignals = experiences
-    .filter(exp => exp.friction_level)
-    .map(exp => ({
-      instanceId: exp.id,
-      level: exp.friction_level as FrictionLevel
-    }))
-
-  const snapshot = await getLatestSnapshot(userId)
-
-  return {
-    latestExperiences: experiences.slice(0, 5),
-    activeReentryPrompts,
-    frictionSignals,
-    suggestedNext: experiences[0]?.next_suggested_ids || [],
-    synthesisSnapshot: snapshot
-  }
-}
-```
-
-#### `lib/storage-adapter.ts`
-
-```
-import { getSupabaseClient } from '@/lib/supabase/client'
-import * as jsonStorage from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-
-export interface StorageAdapter {
-  getCollection<T>(name: string): Promise<T[]>
-  saveItem<T>(collection: string, item: T): Promise<T>
-  updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T>
-  deleteItem(collection: string, id: string): Promise<void>
-  query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]>
-}
-
-/**
- * Maps local collection names to Supabase table names.
- * Standardizes pluralization and naming differences.
- */
-const TABLE_MAP: Record<string, string> = {
-  ideas: 'ideas',
-  drillSessions: 'drill_sessions',
-  projects: 'realizations',
-  tasks: 'experience_steps',
-  prs: 'realization_reviews',
-  inbox: 'timeline_events',
-  agentRuns: 'agent_runs',
-  externalRefs: 'external_refs',
-  experience_templates: 'experience_templates',
-  experience_instances: 'experience_instances',
-  interaction_events: 'interaction_events',
-  artifacts: 'artifacts',
-  synthesis_snapshots: 'synthesis_snapshots',
-  profile_facets: 'profile_facets',
-}
-
-export class SupabaseStorageAdapter implements StorageAdapter {
-  private client = getSupabaseClient()
-
-  private getTableName(collection: string): string {
-    return TABLE_MAP[collection] || collection
-  }
-
-  async getCollection<T>(name: string): Promise<T[]> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client.from(this.getTableName(name)).select('*')
-    if (error) throw error
-    return data as T[]
-  }
-
-  async saveItem<T>(collection: string, item: T): Promise<T> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client
-      .from(this.getTableName(collection))
-      .insert(item as any)
-      .select()
-      .single()
-    if (error) throw error
-    return data as T
-  }
-
-  async updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client
-      .from(this.getTableName(collection))
-      .update(updates as any)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-    return data as T
-  }
-
-  async deleteItem(collection: string, id: string): Promise<void> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { error } = await this.client.from(this.getTableName(collection)).delete().eq('id', id)
-    if (error) throw error
-  }
-
-  async query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    let query = this.client.from(this.getTableName(collection)).select('*')
-    
-    for (const [key, value] of Object.entries(filters)) {
-      query = query.eq(key, value as string | number | boolean)
-    }
-    
-    const { data, error } = await query
-    if (error) throw error
-    return data as T[]
-  }
-}
-
-/**
- * Adapter for existing JSON file storage.
- * Note: existing storage.ts methods are synchronous, we wrap them in Promises.
- */
-export class JsonFileStorageAdapter implements StorageAdapter {
-  async getCollection<T>(name: string): Promise<T[]> {
-    return jsonStorage.getCollection(name as any) as unknown as T[]
-  }
-
-  async saveItem<T>(collection: string, item: any): Promise<T> {
-    const list = jsonStorage.getCollection(collection as any)
-    const newItem = { ...item, id: item.id || generateId() }
-    list.push(newItem)
-    jsonStorage.saveCollection(collection as any, list)
-    return newItem as T
-  }
-
-  async updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T> {
-    const list = jsonStorage.getCollection(collection as any)
-    const index = list.findIndex((item: any) => item.id === id)
-    if (index === -1) throw new Error(`Item with id ${id} not found in ${collection}`)
-    
-    list[index] = { ...list[index], ...updates }
-    jsonStorage.saveCollection(collection as any, list)
-    return list[index] as any as T
-  }
-
-  async deleteItem(collection: string, id: string): Promise<void> {
-    const list = jsonStorage.getCollection(collection as any)
-    const newList = list.filter((item: any) => item.id !== id)
-    jsonStorage.saveCollection(collection as any, newList)
-  }
-
-  async query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]> {
-    const list = jsonStorage.getCollection(collection as any) as unknown as any[]
-    return list.filter((item) => {
-      return Object.entries(filters).every(([key, value]) => item[key] === value)
-    }) as T[]
-  }
-}
-
-let activeAdapter: StorageAdapter | null = null
-
-export function getStorageAdapter(): StorageAdapter {
-  if (activeAdapter) return activeAdapter
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (supabaseUrl && supabaseKey) {
-    activeAdapter = new SupabaseStorageAdapter()
-  } else {
-    activeAdapter = new JsonFileStorageAdapter()
-  }
-
-  return activeAdapter
-}
-```
-
-#### `lib/supabase/browser.ts`
-
-```
-import { createClient } from '@supabase/supabase-js'
-
-let browserClient: ReturnType<typeof createClient> | null = null
-
-export function getSupabaseBrowserClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Supabase: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY missing. Falling back to null.')
-    }
-    return null
-  }
-
-  if (!browserClient) {
-    browserClient = createClient(supabaseUrl, supabaseKey)
-  }
-
-  return browserClient
-}
-```
-
-#### `lib/supabase/client.ts`
-
-```
-import { createClient } from '@supabase/supabase-js'
-
-export function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Supabase: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Falling back to null.')
-    }
-    return null
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  })
-}
-```
-
-#### `lib/supabase/migrations/001_preserved_entities.sql`
-
-```
--- 001_preserved_entities.sql
--- Migrates existing JSON file entities to Supabase tables.
-
--- Users table (single-user seed for Mira)
-CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
-    display_name TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Ideas table (matches types/idea.ts)
-CREATE TYPE idea_status AS ENUM ('captured', 'drilling', 'arena', 'icebox', 'shipped', 'killed');
-
-CREATE TABLE IF NOT EXISTS ideas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title TEXT NOT NULL,
-    raw_prompt TEXT NOT NULL,
-    gpt_summary TEXT,
-    vibe TEXT,
-    audience TEXT,
-    intent TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    status idea_status DEFAULT 'captured'
-);
-
--- Drill Sessions table (matches types/drill.ts)
-CREATE TYPE drill_disposition AS ENUM ('arena', 'icebox', 'killed');
-CREATE TYPE drill_scope AS ENUM ('small', 'medium', 'large');
-CREATE TYPE drill_execution_path AS ENUM ('solo', 'assisted', 'delegated');
-CREATE TYPE drill_urgency_decision AS ENUM ('now', 'later', 'never');
-
-CREATE TABLE IF NOT EXISTS drill_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    idea_id UUID REFERENCES ideas(id) ON DELETE CASCADE,
-    intent TEXT,
-    success_metric TEXT,
-    scope drill_scope,
-    execution_path drill_execution_path,
-    urgency_decision drill_urgency_decision,
-    final_disposition drill_disposition,
-    completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Agent Runs table (matches types/agent-run.ts)
-CREATE TYPE agent_run_kind AS ENUM ('prototype', 'fix_request', 'spec', 'research_summary', 'copilot_issue_assignment');
-CREATE TYPE agent_run_status AS ENUM ('queued', 'running', 'succeeded', 'failed', 'blocked');
-
-CREATE TABLE IF NOT EXISTS agent_runs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID NOT NULL, -- UUID for now, though project might still be local string in transition
-    task_id TEXT, -- Might be string id from JSON
-    kind agent_run_kind NOT NULL,
-    status agent_run_status NOT NULL,
-    execution_mode TEXT NOT NULL,
-    triggered_by TEXT NOT NULL,
-    github_workflow_run_id TEXT,
-    github_issue_number INT,
-    started_at TIMESTAMPTZ DEFAULT NOW(),
-    finished_at TIMESTAMPTZ,
-    summary TEXT,
-    error TEXT
-);
-
--- External Refs table (matches types/external-ref.ts)
-CREATE TYPE external_provider AS ENUM ('github', 'vercel', 'supabase');
-CREATE TYPE entity_type AS ENUM ('project', 'pr', 'task', 'agent_run');
-
-CREATE TABLE IF NOT EXISTS external_refs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_type entity_type NOT NULL,
-    entity_id TEXT NOT NULL, -- Polymorphic reference, keeping as TEXT
-    provider external_provider NOT NULL,
-    external_id TEXT NOT NULL,
-    external_number INT,
-    url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### `lib/supabase/migrations/002_evolved_entities.sql`
-
-```
--- 002_evolved_entities.sql
--- Evolved versions of existing entities (projects -> realizations, etc).
-
--- Realizations (formerly projects)
-CREATE TYPE project_state AS ENUM ('arena', 'icebox', 'shipped', 'killed');
-CREATE TYPE project_health AS ENUM ('green', 'yellow', 'red');
-
-CREATE TABLE IF NOT EXISTS realizations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    idea_id UUID REFERENCES ideas(id) ON DELETE SET NULL,
-    name TEXT NOT NULL,
-    summary TEXT,
-    state project_state DEFAULT 'arena',
-    health project_health DEFAULT 'green',
-    current_phase TEXT,
-    next_action TEXT,
-    active_preview_url TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    shipped_at TIMESTAMPTZ,
-    killed_at TIMESTAMPTZ,
-    killed_reason TEXT,
-    
-    -- GitHub integration
-    github_owner TEXT,
-    github_repo TEXT,
-    github_issue_number INT,
-    github_issue_url TEXT,
-    execution_mode TEXT,
-    github_workflow_status TEXT,
-    copilot_assigned_at TIMESTAMPTZ,
-    copilot_pr_number INT,
-    copilot_pr_url TEXT,
-    last_synced_at TIMESTAMPTZ,
-    github_installation_id TEXT,
-    github_repo_full_name TEXT,
-    
-    -- Link to experience (FK added in 003)
-    experience_instance_id UUID
-);
-
--- Realization Reviews (formerly PRs)
-CREATE TYPE pr_status AS ENUM ('open', 'merged', 'closed');
-CREATE TYPE build_state AS ENUM ('pending', 'running', 'success', 'failed');
-CREATE TYPE review_status AS ENUM ('pending', 'approved', 'changes_requested', 'merged');
-
-CREATE TABLE IF NOT EXISTS realization_reviews (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID REFERENCES realizations(id) ON DELETE CASCADE,
-    title TEXT NOT NULL,
-    branch TEXT NOT NULL,
-    status pr_status DEFAULT 'open',
-    preview_url TEXT,
-    build_state build_state DEFAULT 'pending',
-    mergeable BOOLEAN DEFAULT FALSE,
-    requested_changes TEXT,
-    review_status review_status DEFAULT 'pending',
-    local_number INT NOT NULL, -- Distinct from github_pr_number
-    author TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    
-    -- GitHub integration
-    github_pr_number INT,
-    github_pr_url TEXT,
-    github_branch_ref TEXT,
-    head_sha TEXT,
-    base_branch TEXT,
-    checks_url TEXT,
-    last_github_sync_at TIMESTAMPTZ,
-    workflow_run_id TEXT,
-    source TEXT -- 'local' | 'github'
-);
-
--- Timeline Events (formerly inbox)
-CREATE TABLE IF NOT EXISTS timeline_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID REFERENCES realizations(id) ON DELETE SET NULL,
-    type TEXT NOT NULL, -- types/inbox.ts: InboxEventType
-    title TEXT NOT NULL,
-    body TEXT,
-    timestamp TIMESTAMPTZ DEFAULT NOW(),
-    severity TEXT, -- 'info' | 'warning' | 'error' | 'success'
-    action_url TEXT,
-    github_url TEXT,
-    read BOOLEAN DEFAULT FALSE
-);
-```
-
-#### `lib/supabase/migrations/003_experience_tables.sql`
-
-```
--- 003_experience_tables.sql
--- New entities for the experience engine.
-
--- Experience Template status
-CREATE TYPE experience_template_status AS ENUM ('draft', 'active', 'archived');
-
-CREATE TABLE IF NOT EXISTS experience_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    slug TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    class TEXT NOT NULL, -- questionnaire, lesson, etc
-    renderer_type TEXT NOT NULL,
-    schema_version INT DEFAULT 1,
-    config_schema JSONB,
-    status experience_template_status DEFAULT 'active',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Experience Status
-CREATE TYPE experience_instance_status AS ENUM ('proposed', 'drafted', 'ready_for_review', 'approved', 'published', 'active', 'completed', 'archived', 'superseded', 'injected');
-
-CREATE TABLE IF NOT EXISTS experience_instances (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    idea_id UUID REFERENCES ideas(id) ON DELETE SET NULL,
-    template_id UUID REFERENCES experience_templates(id) ON DELETE RESTRICT,
-    title TEXT NOT NULL,
-    goal TEXT,
-    instance_type TEXT CHECK (instance_type IN ('persistent', 'ephemeral')),
-    status experience_instance_status DEFAULT 'proposed',
-    resolution JSONB NOT NULL,
-    reentry JSONB,
-    previous_experience_id UUID REFERENCES experience_instances(id) ON DELETE SET NULL,
-    next_suggested_ids JSONB DEFAULT '[]',
-    friction_level TEXT CHECK (friction_level IN ('low', 'medium', 'high')),
-    source_conversation_id TEXT,
-    generated_by TEXT,
-    realization_id UUID REFERENCES realizations(id) ON DELETE SET NULL, -- FK to realization
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    published_at TIMESTAMPTZ
-);
-
--- Add missing FK to realizations (circular reference pattern)
-ALTER TABLE realizations ADD CONSTRAINT fk_experience_instance FOREIGN KEY (experience_instance_id) REFERENCES experience_instances(id) ON DELETE SET NULL;
-
--- Experience Steps
-CREATE TABLE IF NOT EXISTS experience_steps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    instance_id UUID REFERENCES experience_instances(id) ON DELETE CASCADE,
-    step_order INT NOT NULL,
-    step_type TEXT NOT NULL,
-    title TEXT,
-    payload JSONB,
-    completion_rule TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Interaction Events
-CREATE TABLE IF NOT EXISTS interaction_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    instance_id UUID REFERENCES experience_instances(id) ON DELETE CASCADE,
-    step_id UUID REFERENCES experience_steps(id) ON DELETE SET NULL,
-    event_type TEXT NOT NULL, -- step_viewed, answer_submitted, etc
-    event_payload JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Artifacts
-CREATE TABLE IF NOT EXISTS artifacts (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    instance_id UUID REFERENCES experience_instances(id) ON DELETE CASCADE,
-    artifact_type TEXT NOT NULL,
-    title TEXT,
-    content TEXT,
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Synthesis Snapshots
-CREATE TABLE IF NOT EXISTS synthesis_snapshots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    source_type TEXT NOT NULL, -- 'interaction_event', 'artifact', 'experience_instance'
-    source_id UUID,
-    summary TEXT,
-    key_signals JSONB DEFAULT '[]',
-    next_candidates JSONB DEFAULT '[]',
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Profile Facets
-CREATE TABLE IF NOT EXISTS profile_facets (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    facet_type TEXT NOT NULL, -- interest, skill, goal, etc
-    value TEXT NOT NULL,
-    confidence FLOAT DEFAULT 1.0,
-    source_snapshot_id UUID REFERENCES synthesis_snapshots(id) ON DELETE SET NULL,
-    updated_at TIMESTAMPTZ DEFAULT NOW() 
-);
-
--- Conversations
-CREATE TABLE IF NOT EXISTS conversations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    source TEXT NOT NULL, -- e.g. 'custom_gpt'
-    metadata JSONB,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### `types/experience.ts`
-
-```
-// types/experience.ts
-import {
-  ExperienceClass,
-  ExperienceStatus,
-  ResolutionDepth,
-  ResolutionMode,
-  ResolutionTimeScope,
-  ResolutionIntensity,
-} from '@/lib/constants';
-
-export type {
-  ExperienceClass,
-  ExperienceStatus,
-  ResolutionDepth,
-  ResolutionMode,
-  ResolutionTimeScope,
-  ResolutionIntensity,
-};
-
-export type InstanceType = 'persistent' | 'ephemeral';
-
-export interface Resolution {
-  depth: ResolutionDepth;
-  mode: ResolutionMode;
-  timeScope: ResolutionTimeScope;
-  intensity: ResolutionIntensity;
-}
-
-export interface ReentryContract {
-  trigger: 'time' | 'completion' | 'inactivity' | 'manual';
-  prompt: string;
-  contextScope: 'minimal' | 'full' | 'focused';
-}
-
-export interface ExperienceTemplate {
-  id: string;
-  slug: string;
-  name: string;
-  class: ExperienceClass;
-  renderer_type: string;
-  schema_version: number;
-  config_schema: any; // JSONB
-  status: 'active' | 'deprecated';
-  created_at: string;
-}
-
-export interface ExperienceInstance {
-  id: string;
-  user_id: string;
-  idea_id?: string | null;
-  template_id: string;
-  title: string;
-  goal: string;
-  instance_type: InstanceType;
-  status: ExperienceStatus;
-  resolution: Resolution;
-  reentry?: ReentryContract | null;
-  previous_experience_id?: string | null;
-  next_suggested_ids?: string[];
-  friction_level?: 'low' | 'medium' | 'high' | null;
-  source_conversation_id?: string | null;
-  generated_by?: string | null;
-  realization_id?: string | null;
-  created_at: string;
-  published_at?: string | null;
-}
-
-export interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: any; // JSONB
-  completion_rule?: string | null;
-}
-```
-
-#### `types/interaction.ts`
-
-```
-// types/interaction.ts
-
-export type InteractionEventType =
-  | 'step_viewed'
-  | 'answer_submitted'
-  | 'task_completed'
-  | 'step_skipped'
-  | 'time_on_step'
-  | 'experience_started'
-  | 'experience_completed';
-
-export interface InteractionEvent {
-  id: string;
-  instance_id: string;
-  step_id: string | null;
-  event_type: InteractionEventType;
-  event_payload: any; // JSONB
-  created_at: string;
-}
-
-export interface Artifact {
-  id: string;
-  instance_id: string;
-  artifact_type: string;
-  title: string;
-  content: string;
-  metadata: any; // JSONB
-}
-```
-
-#### `types/synthesis.ts`
-
-```
-// types/synthesis.ts
-import { ExperienceInstance, ReentryContract } from './experience';
-
-export type FacetType =
-  | 'interest'
-  | 'skill'
-  | 'goal'
-  | 'effort_area'
-  | 'preference'
-  | 'social_direction';
-
-export type FrictionLevel = 'low' | 'medium' | 'high';
-
-export interface SynthesisSnapshot {
-  id: string;
-  user_id: string;
-  source_type: string;
-  source_id: string; // UUID
-  summary: string;
-  key_signals: any; // JSONB
-  next_candidates: string[]; // JSONB
-  created_at: string;
-}
-
-export interface ProfileFacet {
-  id: string;
-  user_id: string;
-  facet_type: FacetType;
-  value: string;
-  confidence: number;
-  source_snapshot_id: string | null;
-  updated_at: string;
-}
-
-export interface GPTStatePacket {
-  latestExperiences: ExperienceInstance[];
-  activeReentryPrompts: ReentryContract[];
-  frictionSignals: { instanceId: string; level: FrictionLevel }[];
-  suggestedNext: string[];
-  synthesisSnapshot: SynthesisSnapshot | null;
-}
-```
-
----
-
-## Commits Ahead (local changes not on remote)
-
-```
-```
-
-## Commits Behind (remote changes not pulled)
-
-```
-```
-
----
-
-## Status: Up to Date
-
-Your local branch is even with **origin/main**.
-No unpushed commits.
-
-## File Changes (YOUR UNPUSHED CHANGES)
-
-```
-```
-
----
-
-## Full Diff of Your Unpushed Changes
-
-Green (+) = lines you ADDED locally
-Red (-) = lines you REMOVED locally
-
-```diff
-```
+-
+-## 1. OpenAPI Schema (Actions)
+-
+-Paste this into **Actions → Import from Schema**:
+-
+-```yaml
+-openapi: 3.1.0
+-info:
+-  title: Mira Studio API
+-  description: Send brainstormed ideas to Mira Studio for capture, clarification, and execution.
+-  version: 1.0.0
+-servers:
+-  - url: https://mira.mytsapi.us
+-    description: Mira Studio (tunneled to local dev)
+-paths:
+-  /api/webhook/gpt:
+-    post:
+-      operationId: sendIdea
+-      summary: Send a brainstormed idea to Mira Studio
+-      description: >
+-        Captures a new idea from the GPT conversation. The idea will appear
+-        in Mira Studio's Send page, ready for the user to drill (clarify)
+-        and promote to a project.
+-      requestBody:
+-        required: true
+-        content:
+-          application/json:
+-            schema:
+-              type: object
+-              required:
+-                - source
+-                - event
+-                - data
+-              properties:
+-                source:
+-                  type: string
+-                  enum: [gpt]
+-                  description: Always "gpt" for Custom GPT webhook calls.
+-                event:
+-                  type: string
+-                  enum: [idea_captured]
+-                  description: Always "idea_captured" when sending a new idea.
+-                data:
+-                  type: object
+-                  required:
+-                    - title
+-                    - rawPrompt
+-                    - gptSummary
+-                  properties:
+-                    title:
+-                      type: string
+-                      description: >
+-                        A short, punchy title for the idea (3-8 words).
+-                        Example: "AI-Powered Recipe Scaler"
+-                    rawPrompt:
+-                      type: string
+-                      description: >
+-                        The raw user input that sparked the idea. Copy the
+-                        user's words as faithfully as possible.
+-                    gptSummary:
+-                      type: string
+-                      description: >
+-                        Your structured summary of the idea. Include what
+-                        it does, who it's for, and why it matters. 2-4
+-                        sentences.
+-                    vibe:
+-                      type: string
+-                      description: >
+-                        The energy/aesthetic of the idea. Examples:
+-                        "playful", "enterprise", "minimal", "bold",
+-                        "cozy", "cyberpunk". Pick the one that fits best.
+-                    audience:
+-                      type: string
+-                      description: >
+-                        Who this is for. Examples: "indie devs",
+-                        "busy parents", "small business owners",
+-                        "content creators". Be specific.
+-                    intent:
+-                      type: string
+-                      description: >
+-                        What the user wants to achieve. Examples:
+-                        "ship a side project", "automate a workflow",
+-                        "learn something new", "solve a pain point".
+-                timestamp:
+-                  type: string
+-                  format: date-time
+-                  description: ISO 8601 timestamp of when the idea was captured.
+-      responses:
+-        "201":
+-          description: Idea captured successfully
+-          content:
+-            application/json:
+-              schema:
+-                type: object
+-                properties:
+-                  data:
+-                    type: object
+-                    description: The created idea object
+-                  message:
+-                    type: string
+-                    example: Idea captured
+-        "400":
+-          description: Invalid payload
+-          content:
+-            application/json:
+-              schema:
+-                type: object
+-                properties:
+-                  error:
+-                    type: string
+-```
+-
+----
+-
+-## 2. System Instructions
+-
+-Paste this into the Custom GPT's **Instructions** field:
+-
+-```
+-You are Mira — a creative brainstorming partner who helps capture and shape ideas.
+-
+-YOUR ROLE:
+-- Have a natural conversation with the user about their ideas
+-- Ask clarifying questions to understand what they're building and why
+-- When an idea feels solid enough, package it up and send it to Mira Studio
+-
+-HOW A SESSION WORKS:
+-1. The user describes an idea, problem, or thing they want to build
+-2. You ask 2-3 follow-up questions (what does it do? who's it for? what's the vibe?)
+-3. Once you have enough context, use the sendIdea action to capture it
+-4. Confirm to the user that the idea was sent to Mira Studio
+-
+-WHEN YOU CALL sendIdea:
+-- title: Make it punchy and memorable (3-8 words)
+-- rawPrompt: Copy the user's original words faithfully
+-- gptSummary: Write a clear 2-4 sentence summary of what, who, and why
+-- vibe: Pick a single word that captures the aesthetic energy
+-- audience: Be specific about who this serves
+-- intent: What does the user want to achieve?
+-- timestamp: Use the current ISO 8601 time
+-
+-IMPORTANT RULES:
+-- Do NOT send the idea until you've asked at least one follow-up question
+-- Do NOT make up details the user didn't mention — ask instead
+-- Do NOT send duplicate ideas — if the user refines, send the refined version
+-- When the idea is captured, tell the user: "Sent to Mira Studio! Open the app to start drilling."
+-- Keep the conversation warm, direct, and free of jargon
+-- You can capture multiple ideas in one session
+-
+-TONE:
+-- Friendly and energetic, like a smart friend who gets excited about ideas
+-- Direct — don't pad with filler
+-- Match the user's energy level
+-```
+-
+----
+-
+-## 3. GPT Settings
+-
+-| Setting | Value |
+-|---------|-------|
+-| **Name** | Mira |
+-| **Description** | Brainstorm ideas and send them to Mira Studio for execution. |
+-| **Conversation starters** | "I have an idea for an app", "Help me brainstorm something", "I want to build..." |
+-| **Authentication** | None (webhook is unauthenticated — fine for dev tunnel) |
+-| **Privacy Policy** | Not needed for personal use |
+-
+----
+-
+-## 4. Testing
+-
+-After setting up the GPT:
+-
+-1. Open ChatGPT and start a conversation with your Mira GPT
+-2. Describe an idea
+-3. The GPT will ask follow-up questions, then call `sendIdea`
+-4. Open `https://mira.mytsapi.us` — the idea should appear in the Send page
+-5. Drill it, promote it to a project, and the GitHub factory takes over
+-
+----
+-
+-## 5. Payload Example
+-
+-Here's what the GPT sends when it captures an idea:
+-
+-```json
+-{
+-  "source": "gpt",
+-  "event": "idea_captured",
+-  "data": {
+-    "title": "AI-Powered Recipe Scaler",
+-    "rawPrompt": "I want an app that takes a recipe and scales it for any number of servings, accounting for cooking time changes",
+-    "gptSummary": "A web app that intelligently scales recipes beyond simple multiplication. It adjusts cooking times, pan sizes, and ingredient ratios that don't scale linearly (like spices and leavening agents). Built for home cooks who want to batch-cook or reduce recipes.",
+-    "vibe": "cozy",
+-    "audience": "home cooks who meal prep",
+-    "intent": "ship a useful side project"
+-  },
+-  "timestamp": "2026-03-22T20:00:00Z"
+-}
+-```
+-
+-```
+-
+-### lanes/lane-1-foundation.md
+-
+-```markdown
+-# 🔴 Lane 1 — Foundation: Config, Types, Storage
+-
+-> Build the typed foundation every other lane imports from. GitHub config, expanded domain types, new entity types, and storage extensions.
+-
+----
+-
+-## Files Owned
+-
+-| File | Action |
+-|------|--------|
+-| `lib/config/github.ts` | NEW |
+-| `types/project.ts` | MODIFY |
+-| `types/pr.ts` | MODIFY |
+-| `types/task.ts` | MODIFY |
+-| `types/agent-run.ts` | NEW |
+-| `types/external-ref.ts` | NEW |
+-| `types/github.ts` | NEW |
+-| `lib/constants.ts` | MODIFY |
+-| `lib/storage.ts` | MODIFY |
+-| `lib/services/agent-runs-service.ts` | NEW |
+-| `lib/services/external-refs-service.ts` | NEW |
+-| `.env.example` | MODIFY |
+-
+----
+-
+-## W1 ✅ — GitHub config module
+-- **Done**: Created `lib/config/github.ts` exporting `getGitHubConfig()`, `isGitHubConfigured()`, `getRepoFullName()`, and `getRepoCoordinates()` with required-var validation that throws with a clear message in dev.
+-
+-Create `lib/config/github.ts`:
+-
+-- Read env vars: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_DEFAULT_BRANCH`, `GITHUB_WEBHOOK_SECRET`
+-- Optional env vars: `GITHUB_WORKFLOW_PROTOTYPE`, `GITHUB_WORKFLOW_FIX_REQUEST`, `GITHUB_LABEL_PREFIX`, `APP_BASE_URL`
+-- Export typed config object with validation
+-- Fail loudly in dev if required vars are missing (throw with clear message)
+-- Centralize repo coordinates: `getRepoFullName()`, `getRepoCoordinates()`
+-- Add `isGitHubConfigured(): boolean` helper for graceful degradation
+-
+-**Done when**: `lib/config/github.ts` exports validated typed config, importable from any lane.
+-
+----
+-
+-## W2 ✅ — Expand Project type with GitHub fields
+-- **Done**: Added 11 optional GitHub fields to `Project` (`githubIssueNumber`, `executionMode`, `copilotPrNumber`, etc.) — all optional so existing local-only projects remain valid.
+-
+-Modify `types/project.ts`:
+-
+-Add optional fields:
+-```ts
+-githubOwner?: string
+-githubRepo?: string
+-githubIssueNumber?: number
+-githubIssueUrl?: string
+-executionMode?: ExecutionMode  // import from constants
+-githubWorkflowStatus?: string
+-copilotAssignedAt?: string
+-copilotPrNumber?: number
+-copilotPrUrl?: string
+-lastSyncedAt?: string
+-githubInstallationId?: string   // placeholder for GitHub App
+-githubRepoFullName?: string     // placeholder for GitHub App
+-```
+-
+-All new fields are optional — existing local-only projects remain valid.
+-
+-**Done when**: `types/project.ts` compiles with new optional fields, no existing code breaks.
+-
+----
+-
+-## W3 ✅ — Expand PullRequest type with GitHub metadata
+-- **Done**: Added 9 optional GitHub fields to `PullRequest` (`githubPrNumber`, `headSha`, `source`, etc.) preserving the existing local `number` field.
+-
+-Modify `types/pr.ts`:
+-
+-Add optional fields:
+-```ts
+-githubPrNumber?: number
+-githubPrUrl?: string
+-githubBranchRef?: string
+-headSha?: string
+-baseBranch?: string
+-checksUrl?: string
+-lastGithubSyncAt?: string
+-workflowRunId?: string
+-source?: 'local' | 'github'
+-```
+-
+-Keep existing `number` field (local PR number). `githubPrNumber` is the real GitHub PR number.
+-
+-**Done when**: `types/pr.ts` compiles with new optional fields.
+-
+----
+-
+-## W4 ✅ — Expand Task type + create GitHub event types
+-- **Done**: Added 4 optional GitHub fields to `Task`; created `types/github.ts` with `GitHubEventType`, `GitHubIssuePayload`, `GitHubPRPayload`, and `GitHubWorkflowRunPayload`.
+-
+-Modify `types/task.ts`:
+-
+-Add optional fields:
+-```ts
+-githubIssueNumber?: number
+-githubIssueUrl?: string
+-source?: 'local' | 'github'
+-parentTaskId?: string
+-```
+-
+-Create `types/github.ts` — shared GitHub-specific types:
+-```ts
+-export type GitHubEventType = 'issues' | 'issue_comment' | 'pull_request' | 'pull_request_review' | 'workflow_run' | 'push'
+-
+-export interface GitHubIssuePayload {
+-  action: string
+-  issue: { number: number; title: string; html_url: string; state: string; assignee?: { login: string } }
+-  repository: { full_name: string; owner: { login: string }; name: string }
+-}
+-
+-export interface GitHubPRPayload {
+-  action: string
+-  pull_request: { number: number; title: string; html_url: string; state: string; head: { sha: string; ref: string }; base: { ref: string }; draft: boolean; mergeable?: boolean }
+-  repository: { full_name: string; owner: { login: string }; name: string }
+-}
+-
+-export interface GitHubWorkflowRunPayload {
+-  action: string
+-  workflow_run: { id: number; name: string; status: string; conclusion: string | null; html_url: string; head_sha: string }
+-  repository: { full_name: string; owner: { login: string }; name: string }
+-}
+-```
+-
+-**Done when**: Both type files compile cleanly.
+-
+----
+-
+-## W5 ✅ — Create AgentRun and ExternalRef types
+-- **Done**: Created `types/agent-run.ts` with `AgentRun` interface (referencing `ExecutionMode` from constants) and `types/external-ref.ts` with `ExternalRef` interface for bidirectional provider mapping.
+-
+-Create `types/agent-run.ts`:
+-```ts
+-export type AgentRunKind = 'prototype' | 'fix_request' | 'spec' | 'research_summary' | 'copilot_issue_assignment'
+-export type AgentRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'blocked'
+-
+-export interface AgentRun {
+-  id: string
+-  projectId: string
+-  taskId?: string
+-  kind: AgentRunKind
+-  status: AgentRunStatus
+-  executionMode: ExecutionMode  // from constants
+-  triggeredBy: string
+-  githubWorkflowRunId?: string
+-  githubIssueNumber?: number
+-  startedAt: string
+-  finishedAt?: string
+-  summary?: string
+-  error?: string
+-}
+-```
+-
+-Create `types/external-ref.ts`:
+-```ts
+-export type ExternalProvider = 'github' | 'vercel' | 'supabase'
+-
+-export interface ExternalRef {
+-  id: string
+-  entityType: 'project' | 'pr' | 'task' | 'agent_run'
+-  entityId: string
+-  provider: ExternalProvider
+-  externalId: string
+-  externalNumber?: number
+-  url?: string
+-  createdAt: string
+-}
+-```
+-
+-**Done when**: Both new type files export their interfaces cleanly with `import type` working.
+-
+----
+-
+-## W6 ✅ — Extend storage and constants
+-- **Done**: Added `EXECUTION_MODES`, `ExecutionMode`, `AGENT_RUN_KINDS`, `AGENT_RUN_STATUSES` to `constants.ts`; extended `StudioStore` with `agentRuns`/`externalRefs`; upgraded `writeStore()` to atomic temp-file+rename; added auto-migration defaults in `readStore()`; updated `seed-data.ts` with empty arrays.
+-
+-Modify `lib/constants.ts`:
+-
+-Add:
+-```ts
+-export const EXECUTION_MODES = ['copilot_issue_assignment', 'custom_workflow_dispatch', 'local_agent'] as const
+-export type ExecutionMode = (typeof EXECUTION_MODES)[number]
+-
+-export const AGENT_RUN_KINDS = ['prototype', 'fix_request', 'spec', 'research_summary', 'copilot_issue_assignment'] as const
+-export const AGENT_RUN_STATUSES = ['queued', 'running', 'succeeded', 'failed', 'blocked'] as const
+-```
+-
+-Modify `lib/storage.ts`:
+-
+-Import `AgentRun` and `ExternalRef` types. Extend `StudioStore`:
+-```ts
+-export interface StudioStore {
+-  ideas: Idea[]
+-  drillSessions: DrillSession[]
+-  projects: Project[]
+-  tasks: Task[]
+-  prs: PullRequest[]
+-  inbox: InboxEvent[]
+-  agentRuns: AgentRun[]        // NEW
+-  externalRefs: ExternalRef[]  // NEW
+-}
+-```
+-
+-Update `getSeedData()` in `lib/seed-data.ts` to include empty arrays for `agentRuns` and `externalRefs` as defaults. Wait — `lib/seed-data.ts` is not in our ownership zone explicitly, but storage.ts creates the seed. Adjust: update the fallback in `readStore()` to merge missing keys with defaults so existing `.local-data/studio.json` files auto-migrate.
+-
+-**Also**: Use temp-file + rename pattern for atomic writes in `writeStore()`:
+-```ts
+-import os from 'os'
+-// write to temp, then rename
+-const tmpPath = FULL_STORAGE_PATH + '.tmp'
+-fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+-fs.renameSync(tmpPath, FULL_STORAGE_PATH)
+-```
+-
+-**Done when**: `StudioStore` has `agentRuns` and `externalRefs`, writes are atomic, old JSON files auto-migrate.
+-
+----
+-
+-## W7 ✅ — Create agent-runs and external-refs services + update .env.example
+-- **Done**: Created `lib/services/agent-runs-service.ts` (createAgentRun, getAgentRun, getAgentRunsForProject, updateAgentRun, getLatestRunForProject, setAgentRunStatus) and `lib/services/external-refs-service.ts` (createExternalRef, getExternalRefsForEntity, findByExternalId, findByExternalNumber, deleteExternalRef); updated `.env.example` with all Sprint 2 GitHub env vars and comments.
+-
+-Create `lib/services/agent-runs-service.ts`:
+-- `createAgentRun(data)` — generates ID, sets startedAt, persists
+-- `getAgentRun(id)` — by ID
+-- `getAgentRunsForProject(projectId)` — filter by project
+-- `updateAgentRun(id, updates)` — partial update
+-- `getLatestRunForProject(projectId)` — most recent run
+-
+-Create `lib/services/external-refs-service.ts`:
+-- `createExternalRef(data)` — persists
+-- `getExternalRefsForEntity(entityType, entityId)` — lookup
+-- `findByExternalId(provider, externalId)` — reverse lookup (GitHub ID → local entity)
+-- `deleteExternalRef(id)`
+-
+-Modify `.env.example` — add all new GitHub env vars with placeholder values and comments.
+-
+-**Done when**: Both services r/w through storage, `.env.example` documents all env vars.
+-
+-```
+-
+-### lanes/lane-1-persistence.md
+-
+-```markdown
+diff --git a/dump02.md b/dump02.md
+deleted file mode 100644
+index 4013221..0000000
+--- a/dump02.md
++++ /dev/null
+@@ -1,3472 +0,0 @@
+-# 🔴 Lane 1 — Local Persistence Engine
+-
+-> **Goal:** Replace all in-memory mock arrays with JSON file storage so data survives server restarts. Every service reads/writes through a single `lib/storage.ts` module to `.local-data/studio.json`.
+-
+----
+-
+-## W1 ✅ — Create `lib/storage.ts` JSON file storage module
+-- **Done**: Created a storage module with read/write/collection helpers and auto-seeding.
+-
+-Create a new file `lib/storage.ts` that provides a simple read/write API for a single JSON file at `.local-data/studio.json`.
+-
+-**What to build:**
+-- A `readStore()` function that reads and parses `.local-data/studio.json`. If the file doesn't exist, it should auto-seed by calling `getSeedData()` from `lib/seed-data.ts` (we'll create that in W2), write it to disk, and return it.
+-- A `writeStore(data)` function that writes the full store object to `.local-data/studio.json` with `JSON.stringify(data, null, 2)`.
+-- A `getCollection(name)` helper that reads the store and returns a specific collection (e.g., `getCollection('ideas')` returns the ideas array).
+-- A `saveCollection(name, data)` helper that reads the store, replaces the named collection, and writes back.
+-- Use `fs.readFileSync` / `fs.writeFileSync` from Node.js `fs` module (synchronous is fine for local dev).
+-- Auto-create the `.local-data/` directory if it doesn't exist (use `fs.mkdirSync` with `{ recursive: true }`).
+-
+-**The store shape** should be:
+-```typescript
+-interface StudioStore {
+-  ideas: Idea[]
+-  drillSessions: DrillSession[]
+-  projects: Project[]
+-  tasks: Task[]
+-  prs: PullRequest[]
+-  inbox: InboxEvent[]
+-}
+-```
+-
+-**Done when:** `lib/storage.ts` exports `readStore`, `writeStore`, `getCollection`, `saveCollection` and handles auto-creation + auto-seeding.
+-
+----
+-
+-## W2 ✅ — Create `lib/seed-data.ts` from `mock-data.ts`
+-- **Done**: Created seed-data with fixed ISO dates and deleted mock-data.ts.
+-
+-Rename/replace `lib/mock-data.ts` with `lib/seed-data.ts`.
+-
+-**What to do:**
+-- Copy the existing mock data arrays from `mock-data.ts` into a new file `lib/seed-data.ts`.
+-- Export a single function `getSeedData(): StudioStore` that returns the full store object with all six collections.
+-- Keep the same mock records (ideas, projects, tasks, PRs, inbox events, drill sessions) — just restructure them into the `StudioStore` shape.
+-- Delete `lib/mock-data.ts` after creating `seed-data.ts`.
+-- **Important:** Use fixed ISO date strings instead of `new Date(Date.now() - ...)` so the seed data is deterministic and doesn't change on every restart.
+-
+-**Done when:** `lib/seed-data.ts` exists, exports `getSeedData()`, `mock-data.ts` is deleted, and no other file imports from `mock-data.ts` anymore.
+-
+----
+-
+-## W3 ✅ — Rewrite `ideas-service.ts` and `projects-service.ts` to use storage
+-- **Done**: Updated both services to read/write from storage, maintaining existing signatures.
+-
+-**`lib/services/ideas-service.ts` changes:**
+-- Remove the `import { MOCK_IDEAS }` line and the module-level `const ideas = [...MOCK_IDEAS]` array.
+-- Rewrite every function to read from / write to storage via `getCollection('ideas')` and `saveCollection('ideas', ...)`.
+-- `getIdeas()` → `return getCollection('ideas')`
+-- `getIdeaById(id)` → read collection, find by id
+-- `getIdeasByStatus(status)` → read collection, filter by status
+-- `createIdea(data)` → read collection, push new idea, save collection, return idea
+-- `updateIdeaStatus(id, status)` → read collection, find + update, save collection
+-
+-**`lib/services/projects-service.ts` changes:**
+-- Same pattern: remove mock import, use `getCollection('projects')` / `saveCollection('projects', ...)`.
+-- Rewrite `getProjects()`, `getProjectById()`, `getArenaProjects()`, `getProjectsByState()`, `createProject()`, and any update functions.
+-
+-**Done when:** Both services read/write through `lib/storage.ts`. Zero imports from `mock-data.ts`. Data persists across server restarts.
+-
+----
+-
+-## W4 ✅ — Rewrite `tasks-service.ts` and `prs-service.ts` to use storage
+-- **Done**: Services now use getCollection/saveCollection, and updatePR() added for Lane 4 use.
+-
+-**`lib/services/tasks-service.ts` changes:**
+-- Same pattern as W3. Use `getCollection('tasks')` / `saveCollection('tasks', ...)`.
+-- Rewrite all existing functions (getTasksByProject, etc.).
+-
+-**`lib/services/prs-service.ts` changes:**
+-- Same pattern. Use `getCollection('prs')` / `saveCollection('prs', ...)`.
+-- Rewrite existing functions.
+-- **Add a new function** `updatePR(id, updates)` that merges partial updates into an existing PR record. This will be needed by Lane 4 (Review) for merge and fix-request actions.
+-
+-**Done when:** Both services read/write through `lib/storage.ts`. `updatePR()` exists and works.
+-
+----
+-
+-## W5 ✅ — Rewrite `inbox-service.ts` to use storage + add create/filter/mark-read
+-- **Done**: Inbox service now uses storage and provides full create/filter/unread-count functionality.
+-
+-**`lib/services/inbox-service.ts` changes:**
+-- Same storage pattern: use `getCollection('inbox')` / `saveCollection('inbox', ...)`.
+-- Rewrite `getInboxEvents()` to read from storage.
+-- **Add `createInboxEvent(data)`** — takes partial event data (type, title, body, severity, optional projectId, optional actionUrl), auto-generates `id`, `timestamp`, sets `read: false`, saves to storage. This is the central function other lanes call when they need to record an event.
+-- **Add `markEventRead(id)`** — finds event by id, sets `read: true`, saves.
+-- **Add `getUnreadCount()`** — returns count of events where `read === false`.
+-- **Add `getEventsByFilter(filter)`** — accepts `'all' | 'unread' | 'errors'` and returns filtered events.
+-
+-**Done when:** `inbox-service.ts` uses storage, exports `createInboxEvent`, `markEventRead`, `getUnreadCount`, `getEventsByFilter`.
+-
+----
+-
+-## W6 ✅ — Update `.gitignore` and `lib/constants.ts` + verify all imports compile
+-- **Done**: Added `.local-data/` to gitignore, centralized storage constants, and verified build with `tsc` and `npm run build`.
+-
+-**`.gitignore` changes:**
+-- Add `.local-data/` to gitignore (so the local JSON file is never committed).
+-
+-**`lib/constants.ts` changes:**
+-- Add `STORAGE_PATH = '.local-data/studio.json'` constant.
+-- Add `STORAGE_DIR = '.local-data'` constant.
+-- Update `lib/storage.ts` to import these constants instead of hardcoding the path.
+-
+-**Verification:**
+-- Run `npx tsc --noEmit` — should pass with zero errors.
+-- Run `npm run build` — should pass.
+-- If any file still imports from `mock-data.ts`, fix the import to use the new service functions or `seed-data.ts`.
+-- Update test summary row for Lane 1 in `board.md`.
+-
+-**Done when:** `.gitignore` updated, constants centralized, `npx tsc --noEmit` passes, `npm run build` passes. No file imports `mock-data.ts`.
+-
+-```
+-
+-### lanes/lane-2-drill.md
+-
+-```markdown
+-# 🟢 Lane 2 — Drill & Materialization Flow
+-
+-> **Goal:** Make the core promise real. Drill answers must save to the API before navigation. Materialization must create a real (persisted) project. Kill/defer must write state. The user should see what GPT sent and what they are now deciding.
+-
+-**Important context:** The drill page (`app/drill/page.tsx`) is a `'use client'` component. It cannot import server-side services directly. All data persistence must happen through `fetch()` calls to `/api/*` routes. This is by design — the same API routes will be called by the future custom GPT.
+-
+----
+-
+-## W1 ✅ — Add `intent` field to `DrillSession` type and update validator
+-- **Done**: Added `intent` to `DrillSession` interface and implemented full field validation in `drill-validator.ts`.
+-
+-**`types/drill.ts` changes:**
+-- Add `intent: string` to the `DrillSession` interface. This captures what the user typed in the first drill step ("What is this really?").
+-
+-**`lib/validators/drill-validator.ts` changes:**
+-- Update the validation logic to require that `intent` is a non-empty string.
+-- Validate that `ideaId` is a non-empty string.
+-- Validate that `scope` is one of `'small' | 'medium' | 'large'`.
+-- Validate that `executionPath` is one of `'solo' | 'assisted' | 'delegated'`.
+-- Validate that `urgencyDecision` is one of `'now' | 'later' | 'never'`.
+-- Validate that `finalDisposition` is one of `'arena' | 'icebox' | 'killed'`.
+-- Export a function like `validateDrillPayload(body: unknown): { valid: boolean; errors?: string[] }`.
+-
+-**Done when:** `DrillSession` type has `intent` field, validator checks all fields, exports a clean validation function.
+-
+----
+-
+-## W2 ✅ — Update `/api/drill/route.ts` to accept POST and persist drill session
+-- **Done**: Rewrote `drill-service.ts` to use `lib/storage.ts` and updated the API route to handle POST requests with validation.
+-
+-**`app/api/drill/route.ts` changes:**
+-- Add (or update) a `POST` handler.
+-- Parse the request body as JSON.
+-- Call `validateDrillPayload(body)` — return 400 with errors if invalid.
+-- Call `saveDrillSession(validatedData)` from `lib/services/drill-service.ts`.
+-- Return the saved session as JSON with status 201.
+-
+-**`lib/services/drill-service.ts` changes:**
+-- This file currently uses `[...MOCK_DRILL_SESSIONS]` in-memory. Lane 1 is NOT rewriting this file (it's in Lane 2's ownership). So YOU need to rewrite it to use `getCollection('drillSessions')` and `saveCollection('drillSessions', ...)` from `lib/storage.ts`.
+-- Rewrite `getDrillSessionByIdeaId(ideaId)` to read from storage.
+-- Rewrite `saveDrillSession(data)` to read collection, push new session, save collection.
+-
+-**Done when:** POST `/api/drill` validates, persists to JSON storage, and returns the saved session.
+-
+----
+-
+-## W3 ✅ — Wire drill page to POST answers before navigating
+-- **Done**: Implemented `saveDrillAndNavigate` in `app/drill/page.tsx` to persist answers via `/api/drill` before navigation. Fixed the Enter key useEffect bug.
+-
+-**`app/drill/page.tsx` changes:**
+-
+-Currently, the `handleDecision()` function immediately calls `router.push()` without saving anything. Fix this:
+-
+-1. Create an async `saveDrillAndNavigate(decision)` function that:
+-   - Sets a `saving` state to `true` (shows a saving indicator to the user)
+-   - Builds the POST body: `{ ideaId, intent: state.intent, successMetric: state.successMetric, scope: state.scope, executionPath: state.executionPath, urgencyDecision: state.urgency, finalDisposition: decision }`
+-   - POSTs to `/api/drill` with `fetch('/api/drill', { method: 'POST', body: JSON.stringify(payload) })`
+-   - Waits for the response. If response is OK, THEN navigates. If response fails, shows an error message.
+-   - For `decision === 'arena'`: navigate to `/drill/success?ideaId=${ideaId}`
+-   - For `decision === 'killed'`: navigate to `/drill/end?ideaId=${ideaId}`
+-   - For `decision === 'icebox'`: navigate to `/icebox`
+-   - Sets `saving` back to `false` on error.
+-
+-2. Replace the current `handleDecision()` function with a call to `saveDrillAndNavigate()`.
+-
+-3. Add a `saving` boolean state. While `saving` is true, show a brief overlay or disable the choice buttons and show "Saving…" text.
+-
+-4. **Fix the Enter key bug:** The current `useEffect` for keyboard events does not have a dependency array, so it re-registers on every render. Add `[currentStep, state]` as dependencies. Also make sure Enter doesn't fire during the decision step (which should only use button clicks, not Enter).
+-
+-**Done when:** Drill page POSTs to `/api/drill` before any navigation. Enter key bug is fixed. Saving indicator shows during POST.
+-
+----
+-
+-## W4 ✅ — Wire materialization: drill success → real project creation
+-- **Done**: Rewrote `materialization-service.ts` to create projects and inbox events. Updated `/api/ideas/materialize` and the drill success page to handle real project creation and confirmation.
+-
+-**`app/drill/success/` page changes:**
+-
+-Look at the current success page (read it first). It likely shows an animation and redirects. Change it to:
+-
+-1. On mount, it should POST to `/api/ideas/materialize` with `{ ideaId }` (from the `?ideaId=` search param).
+-2. Wait for the response. The response should include the created project (`{ project: { id, name, ... } }`).
+-3. Show a confirmation screen: "Project created: {project.name}" with a link to `/arena/{project.id}`.
+-4. Do NOT auto-redirect — let the user click through to see their new project.
+-
+-**`app/api/ideas/materialize/route.ts` changes:**
+-- Parse `ideaId` from the request body.
+-- Call `getIdeaById(ideaId)` — return 404 if not found.
+-- Call `getDrillSessionByIdeaId(ideaId)` — return 400 if no drill session (idea hasn't been drilled yet).
+-- Call `materializeIdea(idea, drillSession)` from `lib/services/materialization-service.ts`.
+-- Return the created project as JSON with status 201.
+-
+-**`lib/services/materialization-service.ts` changes:**
+-- Rewrite to use storage (same pattern as Lane 1: import `getCollection`/`saveCollection`).
+-- The `materializeIdea()` function should:
+-  1. Call `createProject(...)` from projects-service (which Lane 1 is rewriting to use storage — that's fine, just import and call it).
+-  2. Call `updateIdeaStatus(idea.id, 'arena')` from ideas-service.
+-  3. Call `createInboxEvent(...)` from inbox-service to create a "project_promoted" event.
+-  4. Return the created project.
+-
+-**Done when:** Completing drill with "Commit" creates a real persisted project. Success page shows confirmation with a link. No auto-redirect.
+-
+----
+-
+-## W5 ✅ — Wire kill/defer actions from drill + update `drill/end` page
+-- **Done**: Added API calls to `kill-idea` and `move-to-icebox` in the drill page before navigation. Updated the drill end page with a clean "Idea Removed" confirmation and improved links.
+-
+-**Kill path from drill:**
+-- In `app/drill/page.tsx`, the `saveDrillAndNavigate('killed')` path from W3 already saves the drill session. But it also needs to update the idea's status to `'killed'`.
+-- After the drill POST succeeds, also POST to `/api/actions/kill-idea` with `{ ideaId }` before navigating to `/drill/end`.
+-
+-**Defer path from drill:**
+-- Similarly, for `saveDrillAndNavigate('icebox')`, after the drill POST succeeds, also POST to `/api/actions/move-to-icebox` with `{ ideaId }` before navigating to `/icebox`.
+-
+-**`app/drill/end/` page changes:**
+-- Read the current end page. It likely shows a "killed" confirmation.
+-- Update it to show: "Idea removed" with a brief summary and a link back to `/send` ("See other ideas") or `/` ("Go home").
+-- The end page does NOT need to call any API — the kill already happened before navigation.
+-
+-**Done when:** Kill and defer from drill persist state via API before navigating. End page shows clean confirmation.
+-
+----
+-
+-## W6 ✅ — Show GPT context in drill + improve continuity
+-- **Done**: Created `IdeaContextCard` and integrated it into the drill page. The page now fetches and displays the original GPT brainstorm, summary, and metadata to provide continuity during the drill.
+-
+-**`app/drill/page.tsx` changes:**
+-
+-1. When the page loads with `?ideaId=X`, fetch the idea from `/api/ideas?id=X` (or add a GET endpoint that returns a single idea).
+-   - If `/api/ideas/route.ts` doesn't support `?id=X`, that's Lane 3's file. Instead, create a small client-side fetch: `fetch('/api/ideas').then(res => res.json()).then(ideas => ideas.find(i => i.id === ideaId))`.
+-   - Or add a separate fetch to the existing GET endpoint with a query parameter — but only if you can do this without modifying files owned by Lane 3. If not, use the workaround above.
+-
+-2. Store the fetched idea in component state.
+-
+-3. Render a **context card** at the top of the drill layout, above the steps. This card should show:
+-   - **"From GPT"** header
+-   - Idea title (bold)
+-   - `rawPrompt` (the original brainstorm)
+-   - `gptSummary` (GPT's cleaned-up version)
+-   - `vibe` and `audience` as small chips/tags
+-   - A subtle visual separator between the GPT context and the drill questions below
+-
+-4. This makes it clear to the user: "Here's what GPT captured. Now you're defining it further."
+-
+-**Done when:** Drill page shows the GPT-originated idea context above the drill steps. User can see what came from GPT vs what they're deciding now.
+-
+-```
+-
+-### lanes/lane-2-github-client.md
+-
+-```markdown
+-# 🟢 Lane 2 — GitHub Client Adapter
+-
+-> Replace the stub adapter with a real Octokit-based GitHub client. Build the complete provider boundary that all other lanes call into.
+-
+----
+-
+-## Files Owned
+-
+-| File | Action |
+-|------|--------|
+-| `lib/github/client.ts` | NEW |
+-| `lib/adapters/github-adapter.ts` | REWRITE |
+-| `package.json` | MODIFY (octokit install only) |
+-
+----
+-
+-## W1 ✅ — Install Octokit + create client module
+-
+-Run `npm install @octokit/rest` to add the GitHub API library.
+-
+-Create `lib/github/client.ts`:
+-
+-```ts
+-import { Octokit } from '@octokit/rest'
+-
+-let _client: Octokit | null = null
+-
+-export function getGitHubClient(): Octokit {
+-  if (!_client) {
+-    const token = process.env.GITHUB_TOKEN
+-    if (!token) throw new Error('GITHUB_TOKEN is not set')
+-    _client = new Octokit({ auth: token })
+-  }
+-  return _client
+-}
+-
+-// Future: this becomes the boundary for GitHub App auth
+-// export function getGitHubClientForInstallation(installationId): Octokit { ... }
+-```
+-
+-**Done when**: `lib/github/client.ts` exports `getGitHubClient()`, `@octokit/rest` is in `package.json` dependencies.
+-- **Done**: Created `lib/github/client.ts` with singleton `getGitHubClient()` factory; `@octokit/rest` added to `package.json`.
+-
+----
+-
+-## W2 ✅ — Rewrite adapter: repo + connectivity methods
+-
+-Rewrite `lib/adapters/github-adapter.ts` from scratch. Remove old stub code entirely.
+-
+-The adapter should import `getGitHubClient()` and use `lib/config/github.ts` for repo coordinates (import the types; if config module isn't merged yet, read env directly with a TODO comment).
+-
+-Add methods:
+-
+-```ts
+-export async function validateToken(): Promise<{ valid: boolean; login: string; scopes: string[] }>
+-export async function getRepo(): Promise<{ name: string; full_name: string; default_branch: string; private: boolean }>
+-export async function getDefaultBranch(): Promise<string>
+-```
+-
+-Each method should:
+-- Get the Octokit client
+-- Call the appropriate REST endpoint
+-- Return simplified domain-friendly results (not raw Octokit response objects)
+-- Handle errors with clear messages
+-
+-**Done when**: The three methods work against a real GitHub repo. Old stub code is gone.
+-- **Done**: Adapter rewritten from scratch; `validateToken`, `getRepoInfo`, `getDefaultBranchName` added; old stubs removed.
+-
+----
+-
+-## W3 ✅ — Issue methods
+-
+-Add to `lib/adapters/github-adapter.ts`:
+-
+-```ts
+-export async function createIssue(params: {
+-  title: string
+-  body: string
+-  labels?: string[]
+-  assignees?: string[]
+-}): Promise<{ number: number; url: string }>
+-
+-export async function updateIssue(issueNumber: number, params: {
+-  title?: string
+-  body?: string
+-  state?: 'open' | 'closed'
+-}): Promise<void>
+-
+-export async function addIssueComment(issueNumber: number, body: string): Promise<{ id: number }>
+-
+-export async function addIssueLabels(issueNumber: number, labels: string[]): Promise<void>
+-
+-export async function closeIssue(issueNumber: number): Promise<void>
+-```
+-
+-Use `GITHUB_OWNER` and `GITHUB_REPO` from env for all calls. Each method calls `getGitHubClient()` internally.
+-
+-**Done when**: All five issue methods compile and follow the async adapter pattern.
+-- **Done**: All five issue methods (`createIssue`, `updateIssue`, `addIssueComment`, `addIssueLabels`, `closeIssue`) implemented.
+-
+----
+-
+-## W4 ✅ — Pull request methods
+-
+-Add to `lib/adapters/github-adapter.ts`:
+-
+-```ts
+-export async function createBranch(branchName: string, fromSha?: string): Promise<{ ref: string }>
+-
+-export async function createPullRequest(params: {
+-  title: string
+-  body: string
+-  head: string
+-  base?: string      // defaults to GITHUB_DEFAULT_BRANCH
+-  draft?: boolean
+-}): Promise<{ number: number; url: string }>
+-
+-export async function getPullRequest(prNumber: number): Promise<{
+-  number: number
+-  title: string
+-  url: string
+-  state: string
+-  head: { sha: string; ref: string }
+-  base: { ref: string }
+-  draft: boolean
+-  mergeable: boolean | null
+-  merged: boolean
+-}>
+-
+-export async function listPullRequestsForRepo(params?: {
+-  state?: 'open' | 'closed' | 'all'
+-}): Promise<Array<{ number: number; title: string; url: string; state: string }>>
+-
+-export async function addPullRequestComment(prNumber: number, body: string): Promise<{ id: number }>
+-
+-export async function mergePullRequest(prNumber: number, params?: {
+-  merge_method?: 'merge' | 'squash' | 'rebase'
+-  commit_title?: string
+-}): Promise<{ sha: string; merged: boolean }>
+-```
+-
+-For `createBranch`: use Octokit's `git.createRef()` endpoint. Get the SHA from the default branch head if `fromSha` is not provided.
+-
+-**Done when**: All PR methods compile and use real Octokit REST calls.
+-- **Done**: All six PR/branch methods (`createBranch`, `createPullRequest`, `getPullRequest`, `listPullRequestsForRepo`, `addPullRequestComment`, `mergePullRequest`) implemented.
+-
+----
+-
+-## W5 ✅ — Workflow / Actions methods
+-
+-Add to `lib/adapters/github-adapter.ts`:
+-
+-```ts
+-export async function dispatchWorkflow(params: {
+-  workflowId: string   // filename or ID
+-  ref?: string          // branch, defaults to GITHUB_DEFAULT_BRANCH
+-  inputs?: Record<string, string>
+-}): Promise<void>
+-
+-export async function getWorkflowRun(runId: number): Promise<{
+-  id: number
+-  name: string
+-  status: string
+-  conclusion: string | null
+-  url: string
+-  headSha: string
+-}>
+-
+-export async function listWorkflowRuns(params?: {
+-  workflowId?: string
+-  status?: string
+-  perPage?: number
+-}): Promise<Array<{
+-  id: number
+-  name: string
+-  status: string
+-  conclusion: string | null
+-  url: string
+-}>>
+-```
+-
+-**Done when**: Workflow methods compile. `dispatchWorkflow` uses Octokit's `actions.createWorkflowDispatch`.
+-- **Done**: `dispatchWorkflow`, `getWorkflowRun`, and `listWorkflowRuns` implemented using real Octokit Actions API.
+-
+----
+-
+-## W6 ✅ — Copilot handoff + auth boundary prep
+-
+-Add to `lib/adapters/github-adapter.ts`:
+-
+-```ts
+-// Assign Copilot coding agent to an issue
+-// This triggers Copilot to start working on the issue
+-export async function assignCopilotToIssue(issueNumber: number): Promise<void> {
+-  // Uses Octokit's issues.addAssignees with 'copilot-swe-agent' login
+-  // Wraps in try/catch — if Copilot is not available, log warning and return
+-}
+-```
+-
+-Also add a comment block at the top of the adapter documenting the auth boundary:
+-
+-```ts
+-/**
+- * GitHub Adapter — Provider Boundary
+- *
+- * Auth strategy:
+- * - Phase A (current): Personal Access Token via GITHUB_TOKEN env var
+- * - Phase B (future): GitHub App installation token via getGitHubClientForInstallation()
+- *
+- * All methods in this file use getGitHubClient() which currently resolves from PAT.
+- * When migrating to GitHub App, only client.ts needs to change.
+- */
+-```
+-
+-**Done when**: Copilot assignment method compiles. Auth boundary is documented. All adapter methods compile cleanly with `npx tsc --noEmit`.
+-- **Done**: `assignCopilotToIssue` implemented with graceful try/catch fallback; auth boundary JSDoc block added at file top.
+-
+-```
+-
+-### lanes/lane-3-send-home.md
+-
+-```markdown
+-# 🔵 Lane 3 — Send & Home Cockpit
+-
+-> **Goal:** Make each screen answer one obvious question. Send = "Here's what arrived — what do you want to do with it?" Home = "What needs your attention right now?" Every item should have a clear next action.
+-
+-**Important context:** The action API routes (`/api/actions/*`) that this lane owns currently exist as files but may be minimally implemented. You need to make them functional — they should read/write through the service functions from `lib/services/*` (which Lane 1 is rewriting to use storage). Import service functions and call them; do NOT modify the service files themselves (those are Lane 1's).
+-
+----
+-
+-## W1 ✅ — Expand Send page to show ALL captured ideas
+-
+-**`app/send/page.tsx` changes:**
+-
+-Currently this page shows only `ideas[0]` (the first captured idea). Change it to show ALL captured ideas:
+-
+-1. Keep the `getIdeasByStatus('captured')` call but render ALL results, not just `ideas[0]`.
+-2. Add a count header at the top: `{ideas.length} idea{s} waiting` (or use copy from `studio-copy.ts` if available).
+-3. Render each idea as a `CapturedIdeaCard` inside a `space-y-4` list.
+-4. Keep the empty state for when `ideas.length === 0` (already exists).
+-5. Remove the single-idea variable: `const idea = ideas[0]`.
+-
+-**Done when:** Send page shows a full scrollable list of all captured ideas, not just the first one.
+-
+-- **Done**: Send page now awaits `getIdeasByStatus('captured')` and renders all captured ideas via `SendPageClient`, with a count header and empty state.
+-
+----
+-
+-## W2 ✅ — Enrich `CapturedIdeaCard` with GPT context and triage buttons
+-
+-**`components/send/captured-idea-card.tsx` changes:**
+-
+-Currently this card likely shows minimal info about an idea. Expand it:
+-
+-1. Show these fields from the Idea object:
+-   - `title` — bold, largest text
+-   - `gptSummary` — the GPT-cleaned version of the idea
+-   - `rawPrompt` — the original brainstorm text, shown as a quote or lighter text
+-   - `vibe` and `audience` — shown as small colored chips/tags
+-   - `createdAt` — relative time ("30 minutes ago") using `lib/date.ts`
+-
+-2. Add three action buttons at the bottom of each card:
+-   - **"Define this →"** — links to `/drill?ideaId={idea.id}` (use `ROUTES.drill + '?ideaId=' + idea.id`)
+-   - **"Put on hold"** — calls a handler that will be wired in W6
+-   - **"Remove"** — calls a handler that will be wired in W6
+-   - For now, make the buttons render but pass `onHold` and `onRemove` as props (optional callbacks). They'll be wired in W6.
+-
+-3. Use the dark studio theme colors from `globals.css`: `bg-[#12121a]`, `border-[#1e1e2e]`, etc.
+-
+-**Done when:** Each captured idea card shows full GPT context plus three action buttons (define, hold, remove).
+-
+-- **Done**: CapturedIdeaCard now shows gptSummary, rawPrompt as blockquote, vibe/audience chips, nextAction label, and accepts onHold/onRemove callback props.
+-
+----
+-
+-## W3 ✅ — Build `IdeaSummaryPanel` component
+-
+-**Create/update `components/send/idea-summary-panel.tsx`:**
+-
+-This is a collapsible panel that shows what GPT sent vs what still needs user input. It can be used on the Send page inline within each card, or as a standalone component.
+-
+-1. Accept an `Idea` as a prop.
+-2. Render two sections:
+-   - **"From GPT"** section: shows `gptSummary`, `vibe`, `audience`, `rawPrompt` — these are the fields GPT filled in.
+-   - **"Needs your input"** section: shows what the drill will ask — intent, scope, execution path, priority. Display these as empty placeholder items with a "→ Start defining" link to `/drill?ideaId={idea.id}`.
+-3. Make the panel collapsible: starts expanded, can toggle with a chevron button.
+-4. Use subtle visual distinction (e.g., left border color) between the two sections.
+-
+-**Done when:** `IdeaSummaryPanel` renders correctly, is importable, and shows GPT vs user data clearly.
+-
+-- **Done**: IdeaSummaryPanel is fully collapsible with two visually-distinct sections (indigo border for GPT data, amber border for needs-input) and a drill link.
+-
+----
+-
+-## W4 ✅ — Rebuild Home page as an attention cockpit
+-
+-**`app/page.tsx` changes:**
+-
+-Replace the current simple router/summary with three clear sections:
+-
+-1. **"Needs attention"** (top section):
+-   - Show captured ideas (ideas with status `'captured'`) — each as a compact card with "Define →" link to Send page
+-   - Show arena projects with health `'red'` or `'yellow'` — each with their `nextAction` highlighted
+-   - If nothing needs attention, show a subtle "You're all caught up" message
+-
+-2. **"In progress"** (middle section):
+-   - Show all arena projects (from `getArenaProjects()`)
+-   - Each project shows: name, current phase, next action, and health indicator (green/yellow/red dot)
+-   - Each project links to `/arena/{project.id}`
+-
+-3. **"Recent activity"** (bottom section):
+-   - Show the 3 most recent inbox events (from `getInboxEvents()`, take first 3)
+-   - Each event shows: title, relative timestamp, severity icon
+-   - "See all →" link to `/inbox`
+-
+-**Imports you'll need:** `getIdeasByStatus`, `getArenaProjects`, `getInboxEvents` from their respective services. These are server-side imports (this is a server component page).
+-
+-**Done when:** Home page has three distinct sections answering "what needs attention?", "what's active?", and "what happened recently?".
+-
+-- **Done**: Home rebuilt as async server component with three labeled sections, health dots on projects, severity icons on events, and "You're all caught up" message when nothing needs attention.
+-
+----
+-
+-## W5 ✅ — Add clear "next action" cues to cards on Home and Send
+-
+-**Add a `nextAction` label to every item card across Home and Send pages:**
+-
+-1. **Captured ideas** (on home + send): Show "Define this →" as the next action
+-2. **Arena projects with open PRs**: Show "Review PR →" as next action (you'll need to check if a project has open PRs — import `getPRsByProject` if available, or just use `project.nextAction` field)
+-3. **Arena projects with failed builds**: Show "Fix build" in red/warning color
+-4. **Arena projects (healthy)**: Show `project.currentPhase` + `project.nextAction` from the data
+-5. **Inbox events**: Show event title as a clickable link to `event.actionUrl`
+-
+-**Implementation approach:**
+-- Create a small helper function or component `NextActionBadge` in `components/common/` that takes a label and optional href and renders a small pill/link.
+-- Or just add the labels inline in the existing card components.
+-
+-**Done when:** Every surface item on Home and Send pages tells the user exactly what to do next.
+-
+-- **Done**: Created `NextActionBadge` in `components/common/`; Home and Send both show clear next-action labels inline on every item card.
+-
+----
+-
+-## W6 ✅ — Wire triage actions on Send page (hold, remove, refresh)
+-
+-**`app/send/page.tsx` changes:**
+-
+-The Send page needs to become interactive. Currently it's a server component. You have two options:
+-- **Option A (recommended):** Keep Send as a server component but create a small client component wrapper (`components/send/send-page-client.tsx`) that handles the button actions via `fetch()` + `router.refresh()`.
+-- **Option B:** Convert Send page to `'use client'` and fetch ideas via API call on mount.
+-
+-Either way, wire these actions:
+-
+-1. **"Put on hold" button** on each `CapturedIdeaCard`:
+-   - POST to `/api/actions/move-to-icebox` with `{ ideaId: idea.id }` in the body
+-   - On success, refresh the page data (call `router.refresh()` or re-fetch)
+-
+-2. **"Remove" button** on each `CapturedIdeaCard`:
+-   - Show a `ConfirmDialog` first ("Remove this idea? This can't be undone.")
+-   - If confirmed, POST to `/api/actions/kill-idea` with `{ ideaId: idea.id }`
+-   - On success, refresh the page data
+-
+-3. **Wire the action routes** (these files exist but may be minimal):
+-   - `app/api/actions/move-to-icebox/route.ts`: Parse `ideaId` from body, call `updateIdeaStatus(ideaId, 'icebox')` from ideas-service, return 200. Also call `createInboxEvent()` from inbox-service to log the event.
+-   - `app/api/actions/kill-idea/route.ts`: Same pattern — update status to `'killed'`, create inbox event, return 200.
+-   - `app/api/actions/promote-to-arena/route.ts`: Update idea status to `'arena'`, create inbox event.
+-   - `app/api/actions/mark-shipped/route.ts`: Update project state to `'shipped'`, create inbox event.
+-
+-**Done when:** Hold and Remove buttons work end-to-end on Send page. All four action routes are functional and create inbox events. Page refreshes after each action.
+-
+-- **Done**: Created `SendPageClient` (Option A) with fetch()+router.refresh(); all four action routes now call async updateIdeaStatus/updateProjectState and createInboxEvent correctly.
+-
+-```
+-
+-### lanes/lane-3-webhooks.md
+-
+-```markdown
+-# 🔵 Lane 3 — Webhook Pipeline
+-
+-> Build real GitHub webhook ingestion: signature verification, event dispatch, and per-event handlers that sync GitHub state into the local store.
+-
+----
+-
+-## Files Owned
+-
+-| File | Action |
+-|------|--------|
+-| `lib/github/signature.ts` | NEW |
+-| `types/webhook.ts` | MODIFY |
+-| `app/api/webhook/github/route.ts` | REWRITE |
+-| `lib/github/handlers/index.ts` | NEW |
+-| `lib/github/handlers/handle-issue-event.ts` | NEW |
+-| `lib/github/handlers/handle-pr-event.ts` | NEW |
+-| `lib/github/handlers/handle-workflow-run-event.ts` | NEW |
+-| `lib/github/handlers/handle-pr-review-event.ts` | NEW |
+-| `lib/validators/webhook-validator.ts` | MODIFY |
+-
+----
+-
+-## W1 ✅ — Signature verification utility
+-- **Done**: Implemented `verifyGitHubSignature` with timing-safe comparison.
+-
+-Create `lib/github/signature.ts`:
+-
+-```ts
+-import crypto from 'crypto'
+-
+-export function verifyGitHubSignature(
+-  payload: string,
+-  signature: string | null,
+-  secret: string
+-): boolean {
+-  if (!signature) return false
+-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex')
+-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+-}
+-```
+-
+-Notes:
+-- GitHub sends signature in `x-hub-signature-256` header
+-- Use `timingSafeEqual` to prevent timing attacks
+-- Read `GITHUB_WEBHOOK_SECRET` from env (or via config module if available)
+-
+-**Done when**: `verifyGitHubSignature()` compiles and handles edge cases (null signature returns false).
+-
+----
+-
+-## W2 ✅ — Expand webhook types
+-- **Done**: Added `GitHubWebhookContext` and `GitHubWebhookHandler` types.
+-
+-Modify `types/webhook.ts`:
+-
+-Keep existing `WebhookPayload` but add GitHub-specific types:
+-
+-```ts
+-export interface WebhookPayload {
+-  source: 'gpt' | 'github' | 'vercel'
+-  event: string
+-  data: Record<string, unknown>
+-  signature?: string
+-  timestamp: string
+-}
+-
+-// GitHub-specific webhook context parsed from headers + body
+-export interface GitHubWebhookContext {
+-  event: string                    // x-github-event header
+-  action: string                   // body.action
+-  delivery: string                 // x-github-delivery header
+-  repositoryFullName: string       // body.repository.full_name
+-  sender: string                   // body.sender.login
+-  rawPayload: Record<string, unknown>
+-}
+-
+-export type GitHubWebhookHandler = (ctx: GitHubWebhookContext) => Promise<void>
+-```
+-
+-**Done when**: Types compile, `GitHubWebhookContext` captures all fields needed by handlers.
+-
+----
+-
+-## W3 ✅ — Rewrite GitHub webhook route
+-- **Done**: Implemented `route.ts` with signature verification and dispatch to `routeGitHubEvent`.
+-
+-Rewrite `app/api/webhook/github/route.ts`:
+-
+-1. Read raw body as text (for signature verification)
+-2. Verify signature using `verifyGitHubSignature()` — return 401 if invalid
+-3. Parse event type from `x-github-event` header
+-4. Parse action from body
+-5. Build `GitHubWebhookContext`
+-6. Dispatch to the event router from `lib/github/handlers/index.ts`
+-7. Return 200 with acknowledgment
+-
+-Error handling:
+-- Missing event header → 400
+-- Invalid signature → 401
+-- Unknown event type → 200 (log + acknowledge, don't fail)
+-- Handler error → 500 with logged error
+-
+-```ts
+-export async function POST(request: NextRequest) {
+-  const rawBody = await request.text()
+-  const event = request.headers.get('x-github-event')
+-  const signature = request.headers.get('x-hub-signature-256')
+-  const delivery = request.headers.get('x-github-delivery')
+-
+-  if (!event) return NextResponse.json({ error: 'Missing event header' }, { status: 400 })
+-
+-  const secret = process.env.GITHUB_WEBHOOK_SECRET
+-  if (secret && !verifyGitHubSignature(rawBody, signature, secret)) {
+-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+-  }
+-
+-  const body = JSON.parse(rawBody)
+-  const ctx: GitHubWebhookContext = {
+-    event,
+-    action: body.action ?? '',
+-    delivery: delivery ?? '',
+-    repositoryFullName: body.repository?.full_name ?? '',
+-    sender: body.sender?.login ?? '',
+-    rawPayload: body,
+-  }
+-
+-  await routeGitHubEvent(ctx)
+-  return NextResponse.json({ message: `Event '${event}' processed` })
+-}
+-```
+-
+-**Done when**: Route verifies signatures, parses headers, dispatches to router, returns proper status codes.
+-
+----
+-
+-## W4 ✅ — Issue and PR event handlers
+-- **Done**: Implemented `handle-issue-event.ts` and `handle-pr-event.ts` with local store sync.
+-
+-Create `lib/github/handlers/handle-issue-event.ts`:
+-
+-Handle `issues` event with actions: `opened`, `closed`, `reopened`, `assigned`, `unassigned`, `labeled`.
+-
+-For each relevant action:
+-- Look up local project/task by GitHub issue number (via external-refs if available, or by scanning projects)
+-- Update local state (project status, task status)
+-- Log the event
+-
+-Keep handlers thin — they read the context, look up local records, and update them. If the local record doesn't exist, log and skip (don't crash).
+-
+-Create `lib/github/handlers/handle-pr-event.ts`:
+-
+-Handle `pull_request` event with actions: `opened`, `closed`, `reopened`, `synchronize`, `ready_for_review`, `converted_to_draft`.
+-
+-For `opened`:
+-- Check if any local project links to this repo/issue
+-- Create or update local PR record with GitHub metadata
+-- Create inbox event
+-
+-For `closed` with `merged=true`:
+-- Update local PR status to 'merged'
+-- Create inbox event
+-
+-**Done when**: Both handler files export async functions, handle relevant actions, and compile cleanly.
+-
+----
+-
+-## W5 ✅ — Workflow run and PR review handlers
+-- **Done**: Implemented `handle-workflow-run-event.ts` and `handle-pr-review-event.ts`.
+-
+-Create `lib/github/handlers/handle-workflow-run-event.ts`:
+-
+-Handle `workflow_run` event with actions: `requested`, `in_progress`, `completed`.
+-
+-For `completed`:
+-- Find agent run by `githubWorkflowRunId`
+-- Update status based on `conclusion` (success → succeeded, failure → failed)
+-- Create inbox event
+-
+-Create `lib/github/handlers/handle-pr-review-event.ts`:
+-
+-Handle `pull_request_review` event with actions: `submitted`, `dismissed`.
+-
+-For `submitted`:
+-- Find local PR by GitHub PR number
+-- Update `reviewStatus` based on review state (`approved`, `changes_requested`)
+-- Create inbox event
+-
+-**Done when**: Both handlers compile and follow the same pattern as W4.
+-
+----
+-
+-## W6 ✅ — Event router + validator upgrades
+-- **Done**: Completed `lib/github/handlers/index.ts` and added `validateGitHubWebhookHeaders` to the validator. All systems wired for real GitHub ingestion.
+-
+-Create `lib/github/handlers/index.ts`:
+-
+-```ts
+-import type { GitHubWebhookContext } from '@/types/webhook'
+-import { handleIssueEvent } from './handle-issue-event'
+-import { handlePREvent } from './handle-pr-event'
+-import { handleWorkflowRunEvent } from './handle-workflow-run-event'
+-import { handlePRReviewEvent } from './handle-pr-review-event'
+-
+-const handlers: Record<string, (ctx: GitHubWebhookContext) => Promise<void>> = {
+-  issues: handleIssueEvent,
+-  pull_request: handlePREvent,
+-  workflow_run: handleWorkflowRunEvent,
+-  pull_request_review: handlePRReviewEvent,
+-}
+-
+-export async function routeGitHubEvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const handler = handlers[ctx.event]
+-  if (handler) {
+-    console.log(`[webhook/github] Handling ${ctx.event}.${ctx.action}`)
+-    await handler(ctx)
+-  } else {
+-    console.log(`[webhook/github] Unhandled event: ${ctx.event}`)
+-  }
+-}
+-```
+-
+-Modify `lib/validators/webhook-validator.ts`:
+-- Add `validateGitHubWebhookHeaders(headers)` — checks for `x-github-event`, optionally `x-hub-signature-256`
+-- Keep existing generic `validateWebhookPayload()` for the GPT webhook
+-
+-Run `npx tsc --noEmit` to verify all webhook pipeline files compile.
+-
+-**Done when**: Router dispatches to correct handlers. Validator has GitHub-specific helpers. TSC passes for all Lane 3 files.
+-
+-```
+-
+-### lanes/lane-4-github-routes.md
+-
+-```markdown
+-# 🟡 Lane 4 — GitHub API Routes + Factory/Sync Services
+-
+-> Build the GitHub-specific API routes and the service layer that orchestrates GitHub operations. Add a dev playground for manual testing.
+-
+----
+-
+-## Files Owned
+-
+-| File | Action |
+-|------|--------|
+-| `lib/services/github-factory-service.ts` | NEW |
+-| `lib/services/github-sync-service.ts` | NEW |
+-| `app/api/github/test-connection/route.ts` | NEW |
+-| `app/api/github/create-issue/route.ts` | NEW |
+-| `app/api/github/dispatch-workflow/route.ts` | NEW |
+-| `app/api/github/create-pr/route.ts` | NEW |
+-| `app/api/github/sync-pr/route.ts` | NEW |
+-| `app/api/github/merge-pr/route.ts` | NEW |
+-| `app/dev/github-playground/page.tsx` | NEW |
+-
+----
+-
+-## W1 ✅ — GitHub factory service
+-
+-- **Done**: Created `lib/services/github-factory-service.ts` with six orchestration methods (createIssueFromProject, assignCopilotToProject, dispatchPrototypeWorkflow, createPRFromProject, requestRevision, mergeProjectPR) that load local data, call Octokit, update records, and emit inbox events.
+-
+----
+-
+-## W2 ✅ — GitHub sync service
+-
+-- **Done**: Created `lib/services/github-sync-service.ts` with four methods (syncPullRequest, syncWorkflowRun, syncIssue, syncAllOpenPRs) that pull live GitHub state into local records via Octokit.
+-
+----
+-
+-## W3 ✅ — Test connection route
+-
+-- **Done**: Created `app/api/github/test-connection/route.ts` — GET route that validates the PAT, fetches user login and repo details, and returns `{ connected, login, repo, defaultBranch, scopes }` or `{ connected: false, error }`.
+-
+----
+-
+-## W4 ✅ — Create issue + dispatch workflow routes
+-
+-- **Done**: Created `app/api/github/create-issue/route.ts` (POST, supports projectId or standalone title/body) and `app/api/github/dispatch-workflow/route.ts` (POST, uses factory service for default workflow or accepts custom workflowId).
+-
+----
+-
+-## W5 ✅ — Create PR + sync PR routes
+-
+-- **Done**: Created `app/api/github/create-pr/route.ts` (POST, requires projectId+title+head) and `app/api/github/sync-pr/route.ts` (GET for batch sync, POST for single PR sync by number).
+-
+----
+-
+-## W6 ✅ — GitHub merge route
+-
+-- **Done**: Created `app/api/github/merge-pr/route.ts` with live policy enforcement (checks PR is open and not conflicted via `pulls.get` before delegating to factory service's `mergeProjectPR`).
+-
+----
+-
+-## W7 ✅ — Dev GitHub playground page
+-
+-- **Done**: Created `app/dev/github-playground/page.tsx` — a `'use client'` page with five collapsible sections (connection test, create issue, sync PRs, dispatch workflow, merge PR) styled to match the gpt-send dev harness.
+-
+-```
+-
+-### lanes/lane-4-review.md
+-
+-```markdown
+-# ✅ Lane 4 — Review & Merge Experience
+-
+-> **Goal:** Make review preview-first and merge real. Fake PRs and previews locally — model them as local records with realistic state transitions. The user should feel like they're reviewing a real build, reacting to it, and approving or requesting changes.
+-
+-**Important context:** PRs and previews are simulated locally. There is no real GitHub or Vercel. PR records live in JSON storage (created by Lane 1). Preview URLs can point to local routes or show a placeholder frame. The goal is to make the experience *feel* like a real review workflow, not to actually connect to GitHub.
+-
+----
+-
+-## W1 ✅ — Restructure review page to make preview the hero
+-
+-**`app/review/[prId]/page.tsx` changes:**
+-
+-Currently the review page uses a `SplitReviewLayout` with PR metadata on the left and build/merge controls on the right. The preview is just a toolbar link. Restructure:
+-
+-1. Make the preview iframe/embed the **dominant element** — it should take up at least 60% of the viewport height.
+-2. Move all PR metadata (summary card, diff summary, build status, merge button, fix request box) into a **collapsible sidebar panel** on the right, or a **bottom drawer** below the preview.
+-3. Layout order should be:
+-   - Top: breadcrumb (← Project Name / Review PR #N)
+-   - Center (large): Preview frame
+-   - Right sidebar or bottom panel: PR metadata + actions
+-
+-4. Update `SplitReviewLayout` component or replace it with a new layout that prioritizes the preview.
+-
+-**`components/review/split-review-layout.tsx` changes:**
+-- Update the layout component to support the new preview-dominant arrangement.
+-- Accept a `preview` slot/prop in addition to `left` and `right`.
+-
+-**Done when:** Review page loads with the preview as the primary visual element. Metadata is accessible but secondary.
+-- **Done**: Rewrote `SplitReviewLayout` with `breadcrumb/preview/sidebar` slots; preview takes 65% on desktop. Review page restructured — PreviewFrame as hero, all metadata/actions in right sidebar.
+-
+----
+-
+-## W2 ✅ — Upgrade `PreviewFrame` to render a real iframe
+-
+-**`components/arena/preview-frame.tsx` changes:**
+-
+-Currently this component shows a placeholder box with a URL. Replace it with a real iframe:
+-
+-1. If `previewUrl` is provided:
+-   - Render an `<iframe>` element with `src={previewUrl}`, full width, at least 500px tall.
+-   - Add a loading skeleton that shows while the iframe loads (use `iframe.onLoad` event to hide it).
+-   - Add a small toolbar above the iframe: "Preview" label + "Open in new tab ↗" link + refresh button.
+-   - Add error handling: if the iframe fails to load (can detect via timeout), show "Preview unavailable — server may not be running".
+-
+-2. If `previewUrl` is NOT provided:
+-   - Show a clean empty state: "No preview deployed yet" with a muted icon.
+-   - This should not crash or look broken.
+-
+-3. For local dev: preview URLs will be fake initially (like `https://preview.vercel.app/...`). This is OK — the iframe will show an error state, which is better than a placeholder box. Later, previews can point to real local routes.
+-
+-**Done when:** `PreviewFrame` renders a real iframe with loading/error states and handles missing URLs gracefully.
+-- **Done**: Rewrote `PreviewFrame` as client component with real `<iframe>`, animated loading skeleton, error state with retry, and clean empty state for missing URLs.
+-
+----
+-
+-## W3 ✅ — Wire the Merge button to call the API
+-
+-**`app/review/[prId]/page.tsx` changes:**
+-
+-The Merge button currently has `disabled` logic but NO `onClick` handler. Fix this:
+-
+-1. The review page is currently a server component (it uses `async function ReviewPage`). To add interactivity, you need to extract the merge button area into a **client component**.
+-   - Create `components/review/merge-actions.tsx` (client component with `'use client'`).
+-   - This component receives `prId`, `canMerge`, and `currentStatus` as props.
+-   - It handles the merge click, loading state, and success feedback.
+-
+-2. **Merge button onClick:**
+-   - Set a `merging` loading state to true.
+-   - POST to `/api/actions/merge-pr` with `{ prId }` in the body.
+-   - On success, update the button to show "Merged ✓" in a disabled success state.
+-   - On failure, show an error message.
+-
+-3. **Wire `/api/actions/merge-pr/route.ts`:**
+-   - Parse `prId` from request body.
+-   - Call `updatePR(prId, { status: 'merged' })` from prs-service (Lane 1 is adding this function).
+-   - Call `createInboxEvent(...)` from inbox-service with type `'merge_completed'`.
+-   - Return 200 with the updated PR.
+-
+-**Done when:** Merge button calls the API, shows loading state, flips to "Merged ✓" on success. API route persists the change.
+-- **Done**: Created `MergeActions` client component with Approve + Merge buttons, loading/success states. Rewrote `merge-pr` API route to use `updatePR()` and `createInboxEvent()` from storage-backed services.
+-
+----
+-
+-## W4 ✅ — Wire `FixRequestBox` to persist change requests
+-
+-**`components/review/fix-request-box.tsx` changes:**
+-
+-This component currently renders a text input area but doesn't submit anything. Make it functional:
+-
+-1. Make it a client component (`'use client'`).
+-2. Add a text input (or textarea) for the fix request description.
+-3. Add a "Request Changes" submit button.

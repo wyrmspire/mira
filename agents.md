@@ -57,7 +57,10 @@ app/
   icebox/page.tsx       ← Deferred ideas + projects
   shipped/page.tsx      ← Completed projects
   killed/page.tsx       ← Removed projects
-  workspace/            ← [NEW Sprint 3] Lived experience surface
+  workspace/            ← Lived experience surface
+    [instanceId]/
+      page.tsx          ← Server component: fetch instance + steps
+      WorkspaceClient.tsx ← Client component: renders ExperienceRenderer
   dev/
     gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
     github-playground/  ← Dev harness: test GitHub operations
@@ -69,10 +72,12 @@ app/
     tasks/route.ts       ← GET tasks by project
     prs/route.ts         ← GET/PATCH PRs by project
     inbox/route.ts       ← GET/PATCH inbox events
-    experiences/         ← [NEW Sprint 3] experience CRUD + inject
-    interactions/        ← [NEW Sprint 3] event telemetry
-    synthesis/           ← [NEW Sprint 3] compressed state for GPT
-    gpt/state/           ← [NEW Sprint 3] GPT re-entry endpoint
+    experiences/         ← Experience CRUD + inject
+      route.ts           ← GET (list) / POST (create persistent)
+      inject/route.ts    ← POST (create ephemeral — GPT direct-create)
+    interactions/        ← Event telemetry
+    synthesis/           ← Compressed state for GPT
+    gpt/state/           ← GPT re-entry endpoint
     actions/
       promote-to-arena/  ← POST
       move-to-icebox/    ← POST
@@ -86,6 +91,7 @@ app/
       dispatch-workflow/ ← POST trigger GitHub Actions workflow
       sync-pr/           ← GET/POST sync PRs from GitHub
       merge-pr/          ← POST merge real GitHub PR
+      trigger-agent/     ← POST trigger Copilot agent
     webhook/
       gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
       github/route.ts    ← GitHub webhook receiver (real: signature-verified)
@@ -101,7 +107,7 @@ components/
   inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
   icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
   archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
-  experience/            ← [NEW Sprint 3] ExperienceRenderer, step renderers
+  experience/            ← ExperienceRenderer, step renderers (Questionnaire, Lesson)
   dev/                   ← GPT send form, dev tools
 
 lib/
@@ -111,18 +117,25 @@ lib/
     client.ts            ← Octokit wrapper, getGitHubClient()
     signature.ts         ← HMAC-SHA256 webhook signature verification
     handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
-  supabase/              ← [NEW Sprint 3] Supabase client + adapter
+  supabase/
     client.ts            ← Server-side Supabase client
     browser.ts           ← Browser-side Supabase client
+    migrations/          ← SQL migration files (001, 002, 003)
+  experience/
+    renderer-registry.tsx← Step renderer registry (maps step_type → component)
+    interaction-events.ts← Event type constants + payload builder
+    CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
+  hooks/
+    useInteractionCapture.ts ← Fire-and-forget telemetry hook
   storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
-  storage-adapter.ts     ← [NEW Sprint 3] Adapter interface for storage backends
-  seed-data.ts           ← Initial seed records
+  storage-adapter.ts     ← Adapter interface: Supabase primary, JSON fallback
+  seed-data.ts           ← Initial seed records (legacy JSON)
   state-machine.ts       ← Idea + project + experience + PR transition rules
   studio-copy.ts         ← Central copy strings for all pages
-  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, experience classes
-  routes.ts              ← Centralized route paths
-  guards.ts              ← Type guards
-  utils.ts               ← generateId helper
+  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, experience classes, resolution constants, DEFAULT_USER_ID, DEFAULT_TEMPLATE_IDS
+  routes.ts              ← Centralized route paths (including workspace, library, timeline, profile)
+  guards.ts              ← Type guards (isExperienceInstance, isValidResolution, etc.)
+  utils.ts               ← generateId helper (UUID via crypto.randomUUID)
   date.ts                ← Date formatting
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
@@ -135,7 +148,7 @@ lib/
 types/
   idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
   agent-run.ts, external-ref.ts, github.ts,
-  experience.ts [NEW Sprint 3], interaction.ts [NEW Sprint 3], synthesis.ts [NEW Sprint 3]
+  experience.ts, interaction.ts, synthesis.ts
 
 content/                 ← Product copy markdown
 docs/                    ← Architecture docs
@@ -163,7 +176,7 @@ npx tsc --noEmit     # type check
 ## Common Pitfalls
 
 ### Data persistence has two backends
-`lib/storage.ts` is the legacy JSON file store. In Sprint 3+, Supabase becomes the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the JSON file fallback activates automatically. **Do not** call `fs` directly from services — always go through the adapter.
+`lib/storage.ts` is the legacy JSON file store. Supabase is the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the JSON file fallback activates automatically. **Do not** call `fs` directly from services — always go through the adapter.
 
 ### Drill page is a client component
 `app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
@@ -187,11 +200,32 @@ All user-facing text should come from this file. Some pages still hardcode strin
 Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should present these in friendlier terms: "In Progress" / "On Hold" / "Removed" / "Shipped".
 
 ### Experience has two instance types
-`persistent` = goes through proposal → realization → review → publish pipeline.
+`persistent` = goes through proposal → review → publish pipeline.
 `ephemeral` = GPT creates directly via `/api/experiences/inject`, renders instantly, skips review.
 
 ### Resolution object is mandatory on all experience instances
 Every experience carries a `resolution` JSONB field: `{ depth, mode, timeScope, intensity }`. This controls renderer chrome, coder spec shape, and GPT entry mode. Never create an experience instance without a resolution.
+
+### Persistent experiences use the same schema as ephemeral
+They share the same `experience_instances` table, same step structure, same renderer, same interaction model. The only differences are lifecycle (proposed → active) and visibility (shows in library, can be revisited). Do NOT create a second system for persistent experiences.
+
+### Review is an illusion layer in Sprint 4
+Approve/Publish are UI buttons that transition experience status. They do NOT wire to real GitHub PR logic. Do not deepen GitHub integration for experiences.
+
+### Resolution must visibly affect UX
+`light` → minimal chrome (no header, no progress bar, clean immersive step only).
+`medium` → progress bar + step title.
+`heavy` → full header with goal, progress, description.
+If resolution doesn't visibly change the UI → it's dead weight.
+
+### UUID-style IDs everywhere
+All IDs use `crypto.randomUUID()` via `lib/utils.ts`. No prefixed IDs (`exp-`, `step-`, etc.). This ensures clean DB alignment and easier joins.
+
+### DEFAULT_USER_ID for development
+Single-user dev mode uses `DEFAULT_USER_ID = 'a0000000-0000-0000-0000-000000000001'` from `lib/constants.ts`. No auth system exists yet — all API routes use this ID.
+
+### Supabase project is live
+Project ID: `bbdhhlungcjqzghwovsx`. 16 tables exist. Dev user and 6 templates are seeded.
 
 ---
 
@@ -263,6 +297,27 @@ Every experience carries a `resolution` JSONB field: `{ depth, mode, timeScope, 
 - ✅ Always include `resolution: { depth, mode, timeScope, intensity }` — even for ephemeral
 - Why: Resolution controls renderer chrome, coder spec shape, and GPT entry behavior. Without it, the system drifts.
 
+### SOP-11: Persistent is a boring clone of ephemeral — not a second system
+**Learned from**: Sprint 3 → Sprint 4 transition
+
+- ❌ Creating separate tables, renderers, or interaction models for persistent experiences
+- ✅ Same schema, same renderer, same interaction model. Only lifecycle (proposed → active) and library visibility differ.
+- Why: Two systems = drift. One schema rendered two ways = coherent system.
+
+### SOP-12: Do not deepen GitHub integration for experiences
+**Learned from**: Sprint 4 architecture decision
+
+- ❌ Wiring real GitHub PR merge logic into experience approval
+- ✅ Preview → Approve → Publish as status transitions in Supabase only
+- Why: Review is an illusion layer. GitHub mapping happens later if needed.
+
+### SOP-13: Do not over-abstract or generalize prematurely
+**Learned from**: Coordinator guidance
+
+- ❌ "Let's add abstraction here" / "Let's generalize this" / "Let's make a framework"
+- ✅ Concrete, obvious, slightly ugly but working
+- Why: Working code that ships beats elegant code that drifts.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -271,3 +326,4 @@ Every experience carries a `resolution` JSONB field: `{ depth, mode, timeScope, 
 - **2026-03-22**: Added SOP-5 (API-first mutations) and SOP-6 (JSON file storage).
 - **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
 - **2026-03-23**: Sprint 3 boardinit — Runtime Foundation. Added SOP-9 (Supabase through services), SOP-10 (resolution mandatory). Updated product summary to experience-engine model. Added Supabase to tech stack. Updated repo map with experience, interaction, synthesis files. Updated SOP-6 with adapter pattern.
+- **2026-03-23**: Sprint 4 boardinit — Experience Engine. Added SOP-11 (persistent = clone of ephemeral), SOP-12 (no GitHub for experience review), SOP-13 (no premature abstraction). Updated repo map with workspace page details, interaction events, renderer registry. Added pitfalls for resolution UX enforcement, UUID discipline, and DEFAULT_USER_ID.

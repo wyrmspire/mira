@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getExperienceInstances, createExperienceInstance, ExperienceStatus, InstanceType, ExperienceInstance } from '@/lib/services/experience-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status') as ExperienceStatus | null
   const type = searchParams.get('type') as InstanceType | null
-  const userId = searchParams.get('userId') || 'default-user'
+  const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
     const filters: any = { userId }
@@ -23,7 +24,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { templateId, userId, title, goal, resolution, reentry, previousExperienceId } = body
+    const { templateId, userId, title, goal, resolution, reentry, previousExperienceId, steps } = body
 
     if (!templateId || !userId || !resolution) {
       return NextResponse.json({ error: 'Missing required fields: templateId, userId, resolution' }, { status: 400 })
@@ -49,6 +50,23 @@ export async function POST(request: Request) {
     }
 
     const instance = await createExperienceInstance(instanceData)
+
+    // Create steps if provided
+    if (steps && Array.isArray(steps)) {
+      const { createExperienceStep } = await import('@/lib/services/experience-service')
+      for (let i = 0; i < steps.length; i++) {
+        const stepData = steps[i]
+        await createExperienceStep({
+          instance_id: instance.id,
+          step_order: i,
+          step_type: stepData.type,
+          title: stepData.title,
+          payload: stepData.payload,
+          completion_rule: stepData.completion_rule || null
+        })
+      }
+    }
+
     return NextResponse.json(instance, { status: 201 })
   } catch (error: any) {
     console.error('Failed to create experience:', error)

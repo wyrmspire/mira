@@ -45,6 +45,21 @@ export const AGENT_RUN_STATUSES = [
   'blocked',
 ] as const
 
+// --- Sprint 3: Dev Auto-Login ---
+// Hardcoded user for development — no auth required.
+// Matches the seed row in Supabase: users.id = 'a0000000-0000-0000-0000-000000000001'
+export const DEFAULT_USER_ID = 'a0000000-0000-0000-0000-000000000001'
+
+// Seeded template IDs
+export const DEFAULT_TEMPLATE_IDS = {
+  questionnaire: 'b0000000-0000-0000-0000-000000000001',
+  lesson: 'b0000000-0000-0000-0000-000000000002',
+  challenge: 'b0000000-0000-0000-0000-000000000003',
+  plan_builder: 'b0000000-0000-0000-0000-000000000004',
+  reflection: 'b0000000-0000-0000-0000-000000000005',
+  essay_tasks: 'b0000000-0000-0000-0000-000000000006',
+} as const
+
 // --- Sprint 3: Experience Engine ---
 
 export const EXPERIENCE_CLASSES = [

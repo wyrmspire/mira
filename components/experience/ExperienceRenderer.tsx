@@ -1,39 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
+import type { ExperienceInstance, ExperienceStep, Resolution } from '@/types/experience';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
+import { COPY } from '@/lib/studio-copy';
 import QuestionnaireStep from './steps/QuestionnaireStep';
 import LessonStep from './steps/LessonStep';
 
 // Register built-in renderers
 registerRenderer('questionnaire', QuestionnaireStep as any);
 registerRenderer('lesson', LessonStep as any);
-
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface Resolution {
-  depth: 'light' | 'medium' | 'heavy';
-  mode: string;
-  timeScope: string;
-  intensity: string;
-}
-
-interface ExperienceInstance {
-  id: string;
-  title: string;
-  goal: string;
-  status: string;
-  resolution: Resolution;
-}
-
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: any;
-  completion_rule?: string;
-}
 
 interface ExperienceRendererProps {
   instance: ExperienceInstance;
@@ -43,25 +22,68 @@ interface ExperienceRendererProps {
 export default function ExperienceRenderer({ instance, steps }: ExperienceRendererProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const prevStepRef = useRef<string | null>(null);
+
+  const capture = useInteractionCapture(instance.id);
 
   const currentStep = steps[currentStepIndex];
   const totalSteps = steps.length;
   const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
 
+  // Track experience start on mount
+  useEffect(() => {
+    capture.trackExperienceStart();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Track step view and time-on-step when step changes
+  useEffect(() => {
+    if (!currentStep) return;
+
+    // End timer for previous step
+    if (prevStepRef.current) {
+      capture.endStepTimer(prevStepRef.current);
+    }
+
+    // Start tracking new step
+    capture.trackStepView(currentStep.id);
+    capture.startStepTimer(currentStep.id);
+    prevStepRef.current = currentStep.id;
+
+    // Cleanup: end timer on unmount
+    return () => {
+      if (prevStepRef.current) {
+        capture.endStepTimer(prevStepRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStepIndex]);
+
   const handleCompleteStep = (payload?: unknown) => {
-    // TODO: Track interaction event (Lane 5)
-    console.log('Step complete:', currentStep.id, payload);
+    // Guard against non-serializable payloads (e.g., React SyntheticEvents leaked from onClick)
+    const safePayload = (payload && typeof payload === 'object' && !('nativeEvent' in (payload as any)))
+      ? payload as Record<string, any>
+      : undefined;
+
+    capture.trackComplete(currentStep.id, safePayload);
 
     if (currentStepIndex < totalSteps - 1) {
       setCurrentStepIndex((prev) => prev + 1);
     } else {
+      capture.endStepTimer(currentStep.id);
+      capture.trackExperienceComplete();
+      // Transition instance status to 'completed' in DB
+      fetch(`/api/experiences/${instance.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete' }),
+      }).catch((err) => console.warn('[ExperienceRenderer] Failed to mark completed:', err));
       setIsCompleted(true);
     }
   };
 
   const handleSkipStep = () => {
-    // TODO: Track interaction event (Lane 5)
-    console.log('Step skipped:', currentStep.id);
+    capture.trackSkip(currentStep.id);
     
     if (currentStepIndex < totalSteps - 1) {
       setCurrentStepIndex((prev) => prev + 1);
@@ -79,15 +101,18 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
           </svg>
         </div>
         <div>
-          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">Experience Complete</h2>
-          <p className="text-[#94a3b8] text-lg">You've reached the end of this journey. Your progress and artifacts have been saved.</p>
+          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
+          <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
         </div>
-        <button 
-          onClick={() => window.location.href = '/'}
-          className="px-8 py-3 bg-indigo-500/20 text-indigo-300 rounded-xl font-bold hover:bg-indigo-500/30 transition-all border border-indigo-500/30"
-        >
-          Return to Dashboard
-        </button>
+        <div className="flex flex-col items-center gap-6">
+          <Link 
+            href={ROUTES.library}
+            className="px-10 py-4 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/10"
+          >
+            {COPY.completion.returnToLibrary}
+          </Link>
+          <p className="text-[#4a4a6a] text-sm font-medium">{COPY.completion.returnToChat}</p>
+        </div>
       </div>
     );
   }
@@ -145,8 +170,7 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
         </div>
       )}
 
-      {/* No Header (Light Depth) */}
-      {/* Handled by rendering nothing here */}
+      {/* No Header (Light Depth) — renders nothing */}
 
       {/* Main Experience Surface */}
       <main className={`w-full max-w-2xl px-6 py-12 flex-grow ${depth === 'light' ? 'flex items-center justify-center min-h-[60vh]' : ''}`}>

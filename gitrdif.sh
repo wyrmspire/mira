@@ -51,8 +51,8 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
         echo "### Uncommitted Diff"
         echo ""
         echo '```diff'
-        git diff 2>/dev/null
-        git diff --cached 2>/dev/null
+        git diff -- ':!gitrdiff.md' 2>/dev/null
+        git diff --cached -- ':!gitrdiff.md' 2>/dev/null
         echo '```'
         echo ""
     fi
@@ -163,7 +163,7 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
     echo "Red (-) = lines you REMOVED locally"
     echo ""
     echo '```diff'
-    git diff "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no diff)"
+    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' 2>/dev/null || echo "(no diff)"
     echo '```'
     
 } > "$OUTPUT"

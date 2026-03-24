@@ -1,21 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
 
-// TODO: Reconciliation with Lane 2 (types/experience.ts)
-interface ExperienceStep {
-  id: string;
-  instance_id: string;
-  step_order: number;
-  step_type: string;
-  title: string;
-  payload: {
-    sections: Array<{
-      heading: string;
-      body: string;
-      type?: 'text' | 'callout' | 'checkpoint';
-    }>;
-  };
+interface LessonPayload {
+  sections: Array<{
+    heading: string;
+    body: string;
+    type?: 'text' | 'callout' | 'checkpoint';
+  }>;
 }
 
 interface LessonStepProps {
@@ -26,12 +19,13 @@ interface LessonStepProps {
 
 export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps) {
   const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
+  const payload = step.payload as LessonPayload;
 
   const handleCheckpoint = (index: number) => {
     setCheckpoints((prev) => ({ ...prev, [index]: true }));
   };
 
-  const isComplete = step.payload.sections.every(
+  const isComplete = payload.sections.every(
     (s, i) => s.type !== 'checkpoint' || checkpoints[i]
   );
 
@@ -42,7 +36,7 @@ export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps
       </div>
 
       <div className="space-y-10">
-        {step.payload.sections.map((section, idx) => (
+        {payload.sections.map((section, idx) => (
           <div key={idx} className={`relative ${section.type === 'callout' ? 'p-6 bg-indigo-500/5 border-l-2 border-indigo-500 rounded-r-xl' : ''}`}>
             {section.heading && (
               <h3 className="text-xl font-semibold text-[#e2e8f0] mb-3">{section.heading}</h3>
@@ -81,7 +75,7 @@ export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps
           </button>
           
           <button
-            onClick={onComplete}
+            onClick={() => onComplete()}
             disabled={!isComplete}
             className="px-10 py-3 bg-indigo-600/20 text-indigo-100 rounded-xl text-sm font-bold hover:bg-indigo-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-600/30 shadow-lg shadow-indigo-900/10"
           >

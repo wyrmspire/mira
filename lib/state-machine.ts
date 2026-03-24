@@ -130,6 +130,10 @@ export const EXPERIENCE_TRANSITIONS: ExperienceTransition[] = [
   { from: 'active', to: 'completed', action: 'complete' },
   { from: 'completed', to: 'archived', action: 'archive' },
 
+  // Shortcut transitions for "Accept & Start" one-click flow
+  // UI sends approve→publish→activate from proposed status
+  { from: 'proposed', to: 'approved', action: 'approve' },
+
   // Pre-completed supersede
   { from: 'proposed', to: 'superseded', action: 'supersede' },
   { from: 'drafted', to: 'superseded', action: 'supersede' },

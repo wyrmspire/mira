@@ -1,3472 +1,8000 @@
-# 🔴 Lane 1 — Local Persistence Engine
-
-> **Goal:** Replace all in-memory mock arrays with JSON file storage so data survives server restarts. Every service reads/writes through a single `lib/storage.ts` module to `.local-data/studio.json`.
-
----
-
-## W1 ✅ — Create `lib/storage.ts` JSON file storage module
-- **Done**: Created a storage module with read/write/collection helpers and auto-seeding.
-
-Create a new file `lib/storage.ts` that provides a simple read/write API for a single JSON file at `.local-data/studio.json`.
-
-**What to build:**
-- A `readStore()` function that reads and parses `.local-data/studio.json`. If the file doesn't exist, it should auto-seed by calling `getSeedData()` from `lib/seed-data.ts` (we'll create that in W2), write it to disk, and return it.
-- A `writeStore(data)` function that writes the full store object to `.local-data/studio.json` with `JSON.stringify(data, null, 2)`.
-- A `getCollection(name)` helper that reads the store and returns a specific collection (e.g., `getCollection('ideas')` returns the ideas array).
-- A `saveCollection(name, data)` helper that reads the store, replaces the named collection, and writes back.
-- Use `fs.readFileSync` / `fs.writeFileSync` from Node.js `fs` module (synchronous is fine for local dev).
-- Auto-create the `.local-data/` directory if it doesn't exist (use `fs.mkdirSync` with `{ recursive: true }`).
-
-**The store shape** should be:
-```typescript
-interface StudioStore {
-  ideas: Idea[]
-  drillSessions: DrillSession[]
-  projects: Project[]
-  tasks: Task[]
-  prs: PullRequest[]
-  inbox: InboxEvent[]
-}
-```
-
-**Done when:** `lib/storage.ts` exports `readStore`, `writeStore`, `getCollection`, `saveCollection` and handles auto-creation + auto-seeding.
-
----
-
-## W2 ✅ — Create `lib/seed-data.ts` from `mock-data.ts`
-- **Done**: Created seed-data with fixed ISO dates and deleted mock-data.ts.
-
-Rename/replace `lib/mock-data.ts` with `lib/seed-data.ts`.
-
-**What to do:**
-- Copy the existing mock data arrays from `mock-data.ts` into a new file `lib/seed-data.ts`.
-- Export a single function `getSeedData(): StudioStore` that returns the full store object with all six collections.
-- Keep the same mock records (ideas, projects, tasks, PRs, inbox events, drill sessions) — just restructure them into the `StudioStore` shape.
-- Delete `lib/mock-data.ts` after creating `seed-data.ts`.
-- **Important:** Use fixed ISO date strings instead of `new Date(Date.now() - ...)` so the seed data is deterministic and doesn't change on every restart.
-
-**Done when:** `lib/seed-data.ts` exists, exports `getSeedData()`, `mock-data.ts` is deleted, and no other file imports from `mock-data.ts` anymore.
-
----
-
-## W3 ✅ — Rewrite `ideas-service.ts` and `projects-service.ts` to use storage
-- **Done**: Updated both services to read/write from storage, maintaining existing signatures.
-
-**`lib/services/ideas-service.ts` changes:**
-- Remove the `import { MOCK_IDEAS }` line and the module-level `const ideas = [...MOCK_IDEAS]` array.
-- Rewrite every function to read from / write to storage via `getCollection('ideas')` and `saveCollection('ideas', ...)`.
-- `getIdeas()` → `return getCollection('ideas')`
-- `getIdeaById(id)` → read collection, find by id
-- `getIdeasByStatus(status)` → read collection, filter by status
-- `createIdea(data)` → read collection, push new idea, save collection, return idea
-- `updateIdeaStatus(id, status)` → read collection, find + update, save collection
-
-**`lib/services/projects-service.ts` changes:**
-- Same pattern: remove mock import, use `getCollection('projects')` / `saveCollection('projects', ...)`.
-- Rewrite `getProjects()`, `getProjectById()`, `getArenaProjects()`, `getProjectsByState()`, `createProject()`, and any update functions.
-
-**Done when:** Both services read/write through `lib/storage.ts`. Zero imports from `mock-data.ts`. Data persists across server restarts.
-
----
-
-## W4 ✅ — Rewrite `tasks-service.ts` and `prs-service.ts` to use storage
-- **Done**: Services now use getCollection/saveCollection, and updatePR() added for Lane 4 use.
-
-**`lib/services/tasks-service.ts` changes:**
-- Same pattern as W3. Use `getCollection('tasks')` / `saveCollection('tasks', ...)`.
-- Rewrite all existing functions (getTasksByProject, etc.).
-
-**`lib/services/prs-service.ts` changes:**
-- Same pattern. Use `getCollection('prs')` / `saveCollection('prs', ...)`.
-- Rewrite existing functions.
-- **Add a new function** `updatePR(id, updates)` that merges partial updates into an existing PR record. This will be needed by Lane 4 (Review) for merge and fix-request actions.
-
-**Done when:** Both services read/write through `lib/storage.ts`. `updatePR()` exists and works.
-
----
-
-## W5 ✅ — Rewrite `inbox-service.ts` to use storage + add create/filter/mark-read
-- **Done**: Inbox service now uses storage and provides full create/filter/unread-count functionality.
-
-**`lib/services/inbox-service.ts` changes:**
-- Same storage pattern: use `getCollection('inbox')` / `saveCollection('inbox', ...)`.
-- Rewrite `getInboxEvents()` to read from storage.
-- **Add `createInboxEvent(data)`** — takes partial event data (type, title, body, severity, optional projectId, optional actionUrl), auto-generates `id`, `timestamp`, sets `read: false`, saves to storage. This is the central function other lanes call when they need to record an event.
-- **Add `markEventRead(id)`** — finds event by id, sets `read: true`, saves.
-- **Add `getUnreadCount()`** — returns count of events where `read === false`.
-- **Add `getEventsByFilter(filter)`** — accepts `'all' | 'unread' | 'errors'` and returns filtered events.
-
-**Done when:** `inbox-service.ts` uses storage, exports `createInboxEvent`, `markEventRead`, `getUnreadCount`, `getEventsByFilter`.
-
----
-
-## W6 ✅ — Update `.gitignore` and `lib/constants.ts` + verify all imports compile
-- **Done**: Added `.local-data/` to gitignore, centralized storage constants, and verified build with `tsc` and `npm run build`.
-
-**`.gitignore` changes:**
-- Add `.local-data/` to gitignore (so the local JSON file is never committed).
-
-**`lib/constants.ts` changes:**
-- Add `STORAGE_PATH = '.local-data/studio.json'` constant.
-- Add `STORAGE_DIR = '.local-data'` constant.
-- Update `lib/storage.ts` to import these constants instead of hardcoding the path.
-
-**Verification:**
-- Run `npx tsc --noEmit` — should pass with zero errors.
-- Run `npm run build` — should pass.
-- If any file still imports from `mock-data.ts`, fix the import to use the new service functions or `seed-data.ts`.
-- Update test summary row for Lane 1 in `board.md`.
-
-**Done when:** `.gitignore` updated, constants centralized, `npx tsc --noEmit` passes, `npm run build` passes. No file imports `mock-data.ts`.
-
-```
-
-### lanes/lane-2-drill.md
-
-```markdown
-# 🟢 Lane 2 — Drill & Materialization Flow
-
-> **Goal:** Make the core promise real. Drill answers must save to the API before navigation. Materialization must create a real (persisted) project. Kill/defer must write state. The user should see what GPT sent and what they are now deciding.
-
-**Important context:** The drill page (`app/drill/page.tsx`) is a `'use client'` component. It cannot import server-side services directly. All data persistence must happen through `fetch()` calls to `/api/*` routes. This is by design — the same API routes will be called by the future custom GPT.
-
----
-
-## W1 ✅ — Add `intent` field to `DrillSession` type and update validator
-- **Done**: Added `intent` to `DrillSession` interface and implemented full field validation in `drill-validator.ts`.
-
-**`types/drill.ts` changes:**
-- Add `intent: string` to the `DrillSession` interface. This captures what the user typed in the first drill step ("What is this really?").
-
-**`lib/validators/drill-validator.ts` changes:**
-- Update the validation logic to require that `intent` is a non-empty string.
-- Validate that `ideaId` is a non-empty string.
-- Validate that `scope` is one of `'small' | 'medium' | 'large'`.
-- Validate that `executionPath` is one of `'solo' | 'assisted' | 'delegated'`.
-- Validate that `urgencyDecision` is one of `'now' | 'later' | 'never'`.
-- Validate that `finalDisposition` is one of `'arena' | 'icebox' | 'killed'`.
-- Export a function like `validateDrillPayload(body: unknown): { valid: boolean; errors?: string[] }`.
-
-**Done when:** `DrillSession` type has `intent` field, validator checks all fields, exports a clean validation function.
-
----
-
-## W2 ✅ — Update `/api/drill/route.ts` to accept POST and persist drill session
-- **Done**: Rewrote `drill-service.ts` to use `lib/storage.ts` and updated the API route to handle POST requests with validation.
-
-**`app/api/drill/route.ts` changes:**
-- Add (or update) a `POST` handler.
-- Parse the request body as JSON.
-- Call `validateDrillPayload(body)` — return 400 with errors if invalid.
-- Call `saveDrillSession(validatedData)` from `lib/services/drill-service.ts`.
-- Return the saved session as JSON with status 201.
-
-**`lib/services/drill-service.ts` changes:**
-- This file currently uses `[...MOCK_DRILL_SESSIONS]` in-memory. Lane 1 is NOT rewriting this file (it's in Lane 2's ownership). So YOU need to rewrite it to use `getCollection('drillSessions')` and `saveCollection('drillSessions', ...)` from `lib/storage.ts`.
-- Rewrite `getDrillSessionByIdeaId(ideaId)` to read from storage.
-- Rewrite `saveDrillSession(data)` to read collection, push new session, save collection.
-
-**Done when:** POST `/api/drill` validates, persists to JSON storage, and returns the saved session.
-
----
-
-## W3 ✅ — Wire drill page to POST answers before navigating
-- **Done**: Implemented `saveDrillAndNavigate` in `app/drill/page.tsx` to persist answers via `/api/drill` before navigation. Fixed the Enter key useEffect bug.
-
-**`app/drill/page.tsx` changes:**
-
-Currently, the `handleDecision()` function immediately calls `router.push()` without saving anything. Fix this:
-
-1. Create an async `saveDrillAndNavigate(decision)` function that:
-   - Sets a `saving` state to `true` (shows a saving indicator to the user)
-   - Builds the POST body: `{ ideaId, intent: state.intent, successMetric: state.successMetric, scope: state.scope, executionPath: state.executionPath, urgencyDecision: state.urgency, finalDisposition: decision }`
-   - POSTs to `/api/drill` with `fetch('/api/drill', { method: 'POST', body: JSON.stringify(payload) })`
-   - Waits for the response. If response is OK, THEN navigates. If response fails, shows an error message.
-   - For `decision === 'arena'`: navigate to `/drill/success?ideaId=${ideaId}`
-   - For `decision === 'killed'`: navigate to `/drill/end?ideaId=${ideaId}`
-   - For `decision === 'icebox'`: navigate to `/icebox`
-   - Sets `saving` back to `false` on error.
-
-2. Replace the current `handleDecision()` function with a call to `saveDrillAndNavigate()`.
-
-3. Add a `saving` boolean state. While `saving` is true, show a brief overlay or disable the choice buttons and show "Saving…" text.
-
-4. **Fix the Enter key bug:** The current `useEffect` for keyboard events does not have a dependency array, so it re-registers on every render. Add `[currentStep, state]` as dependencies. Also make sure Enter doesn't fire during the decision step (which should only use button clicks, not Enter).
-
-**Done when:** Drill page POSTs to `/api/drill` before any navigation. Enter key bug is fixed. Saving indicator shows during POST.
-
----
-
-## W4 ✅ — Wire materialization: drill success → real project creation
-- **Done**: Rewrote `materialization-service.ts` to create projects and inbox events. Updated `/api/ideas/materialize` and the drill success page to handle real project creation and confirmation.
-
-**`app/drill/success/` page changes:**
-
-Look at the current success page (read it first). It likely shows an animation and redirects. Change it to:
-
-1. On mount, it should POST to `/api/ideas/materialize` with `{ ideaId }` (from the `?ideaId=` search param).
-2. Wait for the response. The response should include the created project (`{ project: { id, name, ... } }`).
-3. Show a confirmation screen: "Project created: {project.name}" with a link to `/arena/{project.id}`.
-4. Do NOT auto-redirect — let the user click through to see their new project.
-
-**`app/api/ideas/materialize/route.ts` changes:**
-- Parse `ideaId` from the request body.
-- Call `getIdeaById(ideaId)` — return 404 if not found.
-- Call `getDrillSessionByIdeaId(ideaId)` — return 400 if no drill session (idea hasn't been drilled yet).
-- Call `materializeIdea(idea, drillSession)` from `lib/services/materialization-service.ts`.
-- Return the created project as JSON with status 201.
-
-**`lib/services/materialization-service.ts` changes:**
-- Rewrite to use storage (same pattern as Lane 1: import `getCollection`/`saveCollection`).
-- The `materializeIdea()` function should:
-  1. Call `createProject(...)` from projects-service (which Lane 1 is rewriting to use storage — that's fine, just import and call it).
-  2. Call `updateIdeaStatus(idea.id, 'arena')` from ideas-service.
-  3. Call `createInboxEvent(...)` from inbox-service to create a "project_promoted" event.
-  4. Return the created project.
-
-**Done when:** Completing drill with "Commit" creates a real persisted project. Success page shows confirmation with a link. No auto-redirect.
-
----
-
-## W5 ✅ — Wire kill/defer actions from drill + update `drill/end` page
-- **Done**: Added API calls to `kill-idea` and `move-to-icebox` in the drill page before navigation. Updated the drill end page with a clean "Idea Removed" confirmation and improved links.
-
-**Kill path from drill:**
-- In `app/drill/page.tsx`, the `saveDrillAndNavigate('killed')` path from W3 already saves the drill session. But it also needs to update the idea's status to `'killed'`.
-- After the drill POST succeeds, also POST to `/api/actions/kill-idea` with `{ ideaId }` before navigating to `/drill/end`.
-
-**Defer path from drill:**
-- Similarly, for `saveDrillAndNavigate('icebox')`, after the drill POST succeeds, also POST to `/api/actions/move-to-icebox` with `{ ideaId }` before navigating to `/icebox`.
-
-**`app/drill/end/` page changes:**
-- Read the current end page. It likely shows a "killed" confirmation.
-- Update it to show: "Idea removed" with a brief summary and a link back to `/send` ("See other ideas") or `/` ("Go home").
-- The end page does NOT need to call any API — the kill already happened before navigation.
-
-**Done when:** Kill and defer from drill persist state via API before navigating. End page shows clean confirmation.
-
----
-
-## W6 ✅ — Show GPT context in drill + improve continuity
-- **Done**: Created `IdeaContextCard` and integrated it into the drill page. The page now fetches and displays the original GPT brainstorm, summary, and metadata to provide continuity during the drill.
-
-**`app/drill/page.tsx` changes:**
-
-1. When the page loads with `?ideaId=X`, fetch the idea from `/api/ideas?id=X` (or add a GET endpoint that returns a single idea).
-   - If `/api/ideas/route.ts` doesn't support `?id=X`, that's Lane 3's file. Instead, create a small client-side fetch: `fetch('/api/ideas').then(res => res.json()).then(ideas => ideas.find(i => i.id === ideaId))`.
-   - Or add a separate fetch to the existing GET endpoint with a query parameter — but only if you can do this without modifying files owned by Lane 3. If not, use the workaround above.
-
-2. Store the fetched idea in component state.
-
-3. Render a **context card** at the top of the drill layout, above the steps. This card should show:
-   - **"From GPT"** header
-   - Idea title (bold)
-   - `rawPrompt` (the original brainstorm)
-   - `gptSummary` (GPT's cleaned-up version)
-   - `vibe` and `audience` as small chips/tags
-   - A subtle visual separator between the GPT context and the drill questions below
-
-4. This makes it clear to the user: "Here's what GPT captured. Now you're defining it further."
-
-**Done when:** Drill page shows the GPT-originated idea context above the drill steps. User can see what came from GPT vs what they're deciding now.
-
-```
-
-### lanes/lane-2-github-client.md
-
-```markdown
-# 🟢 Lane 2 — GitHub Client Adapter
-
-> Replace the stub adapter with a real Octokit-based GitHub client. Build the complete provider boundary that all other lanes call into.
-
----
-
-## Files Owned
-
-| File | Action |
-|------|--------|
-| `lib/github/client.ts` | NEW |
-| `lib/adapters/github-adapter.ts` | REWRITE |
-| `package.json` | MODIFY (octokit install only) |
-
----
-
-## W1 ✅ — Install Octokit + create client module
-
-Run `npm install @octokit/rest` to add the GitHub API library.
-
-Create `lib/github/client.ts`:
-
-```ts
-import { Octokit } from '@octokit/rest'
-
-let _client: Octokit | null = null
-
-export function getGitHubClient(): Octokit {
-  if (!_client) {
-    const token = process.env.GITHUB_TOKEN
-    if (!token) throw new Error('GITHUB_TOKEN is not set')
-    _client = new Octokit({ auth: token })
-  }
-  return _client
-}
-
-// Future: this becomes the boundary for GitHub App auth
-// export function getGitHubClientForInstallation(installationId): Octokit { ... }
-```
-
-**Done when**: `lib/github/client.ts` exports `getGitHubClient()`, `@octokit/rest` is in `package.json` dependencies.
-- **Done**: Created `lib/github/client.ts` with singleton `getGitHubClient()` factory; `@octokit/rest` added to `package.json`.
-
----
-
-## W2 ✅ — Rewrite adapter: repo + connectivity methods
-
-Rewrite `lib/adapters/github-adapter.ts` from scratch. Remove old stub code entirely.
-
-The adapter should import `getGitHubClient()` and use `lib/config/github.ts` for repo coordinates (import the types; if config module isn't merged yet, read env directly with a TODO comment).
-
-Add methods:
-
-```ts
-export async function validateToken(): Promise<{ valid: boolean; login: string; scopes: string[] }>
-export async function getRepo(): Promise<{ name: string; full_name: string; default_branch: string; private: boolean }>
-export async function getDefaultBranch(): Promise<string>
-```
-
-Each method should:
-- Get the Octokit client
-- Call the appropriate REST endpoint
-- Return simplified domain-friendly results (not raw Octokit response objects)
-- Handle errors with clear messages
-
-**Done when**: The three methods work against a real GitHub repo. Old stub code is gone.
-- **Done**: Adapter rewritten from scratch; `validateToken`, `getRepoInfo`, `getDefaultBranchName` added; old stubs removed.
-
----
-
-## W3 ✅ — Issue methods
-
-Add to `lib/adapters/github-adapter.ts`:
-
-```ts
-export async function createIssue(params: {
-  title: string
-  body: string
-  labels?: string[]
-  assignees?: string[]
-}): Promise<{ number: number; url: string }>
-
-export async function updateIssue(issueNumber: number, params: {
-  title?: string
-  body?: string
-  state?: 'open' | 'closed'
-}): Promise<void>
-
-export async function addIssueComment(issueNumber: number, body: string): Promise<{ id: number }>
-
-export async function addIssueLabels(issueNumber: number, labels: string[]): Promise<void>
-
-export async function closeIssue(issueNumber: number): Promise<void>
-```
-
-Use `GITHUB_OWNER` and `GITHUB_REPO` from env for all calls. Each method calls `getGitHubClient()` internally.
-
-**Done when**: All five issue methods compile and follow the async adapter pattern.
-- **Done**: All five issue methods (`createIssue`, `updateIssue`, `addIssueComment`, `addIssueLabels`, `closeIssue`) implemented.
-
----
-
-## W4 ✅ — Pull request methods
-
-Add to `lib/adapters/github-adapter.ts`:
-
-```ts
-export async function createBranch(branchName: string, fromSha?: string): Promise<{ ref: string }>
-
-export async function createPullRequest(params: {
-  title: string
-  body: string
-  head: string
-  base?: string      // defaults to GITHUB_DEFAULT_BRANCH
-  draft?: boolean
-}): Promise<{ number: number; url: string }>
-
-export async function getPullRequest(prNumber: number): Promise<{
-  number: number
-  title: string
-  url: string
-  state: string
-  head: { sha: string; ref: string }
-  base: { ref: string }
-  draft: boolean
-  mergeable: boolean | null
-  merged: boolean
-}>
-
-export async function listPullRequestsForRepo(params?: {
-  state?: 'open' | 'closed' | 'all'
-}): Promise<Array<{ number: number; title: string; url: string; state: string }>>
-
-export async function addPullRequestComment(prNumber: number, body: string): Promise<{ id: number }>
-
-export async function mergePullRequest(prNumber: number, params?: {
-  merge_method?: 'merge' | 'squash' | 'rebase'
-  commit_title?: string
-}): Promise<{ sha: string; merged: boolean }>
-```
-
-For `createBranch`: use Octokit's `git.createRef()` endpoint. Get the SHA from the default branch head if `fromSha` is not provided.
-
-**Done when**: All PR methods compile and use real Octokit REST calls.
-- **Done**: All six PR/branch methods (`createBranch`, `createPullRequest`, `getPullRequest`, `listPullRequestsForRepo`, `addPullRequestComment`, `mergePullRequest`) implemented.
-
----
-
-## W5 ✅ — Workflow / Actions methods
-
-Add to `lib/adapters/github-adapter.ts`:
-
-```ts
-export async function dispatchWorkflow(params: {
-  workflowId: string   // filename or ID
-  ref?: string          // branch, defaults to GITHUB_DEFAULT_BRANCH
-  inputs?: Record<string, string>
-}): Promise<void>
-
-export async function getWorkflowRun(runId: number): Promise<{
-  id: number
-  name: string
-  status: string
-  conclusion: string | null
-  url: string
-  headSha: string
-}>
-
-export async function listWorkflowRuns(params?: {
-  workflowId?: string
-  status?: string
-  perPage?: number
-}): Promise<Array<{
-  id: number
-  name: string
-  status: string
-  conclusion: string | null
-  url: string
-}>>
-```
-
-**Done when**: Workflow methods compile. `dispatchWorkflow` uses Octokit's `actions.createWorkflowDispatch`.
-- **Done**: `dispatchWorkflow`, `getWorkflowRun`, and `listWorkflowRuns` implemented using real Octokit Actions API.
-
----
-
-## W6 ✅ — Copilot handoff + auth boundary prep
-
-Add to `lib/adapters/github-adapter.ts`:
-
-```ts
-// Assign Copilot coding agent to an issue
-// This triggers Copilot to start working on the issue
-export async function assignCopilotToIssue(issueNumber: number): Promise<void> {
-  // Uses Octokit's issues.addAssignees with 'copilot-swe-agent' login
-  // Wraps in try/catch — if Copilot is not available, log warning and return
-}
-```
-
-Also add a comment block at the top of the adapter documenting the auth boundary:
-
-```ts
-/**
- * GitHub Adapter — Provider Boundary
- *
- * Auth strategy:
- * - Phase A (current): Personal Access Token via GITHUB_TOKEN env var
- * - Phase B (future): GitHub App installation token via getGitHubClientForInstallation()
- *
- * All methods in this file use getGitHubClient() which currently resolves from PAT.
- * When migrating to GitHub App, only client.ts needs to change.
- */
-```
-
-**Done when**: Copilot assignment method compiles. Auth boundary is documented. All adapter methods compile cleanly with `npx tsc --noEmit`.
-- **Done**: `assignCopilotToIssue` implemented with graceful try/catch fallback; auth boundary JSDoc block added at file top.
-
-```
-
-### lanes/lane-3-send-home.md
-
-```markdown
-# 🔵 Lane 3 — Send & Home Cockpit
-
-> **Goal:** Make each screen answer one obvious question. Send = "Here's what arrived — what do you want to do with it?" Home = "What needs your attention right now?" Every item should have a clear next action.
-
-**Important context:** The action API routes (`/api/actions/*`) that this lane owns currently exist as files but may be minimally implemented. You need to make them functional — they should read/write through the service functions from `lib/services/*` (which Lane 1 is rewriting to use storage). Import service functions and call them; do NOT modify the service files themselves (those are Lane 1's).
-
----
-
-## W1 ✅ — Expand Send page to show ALL captured ideas
-
-**`app/send/page.tsx` changes:**
-
-Currently this page shows only `ideas[0]` (the first captured idea). Change it to show ALL captured ideas:
-
-1. Keep the `getIdeasByStatus('captured')` call but render ALL results, not just `ideas[0]`.
-2. Add a count header at the top: `{ideas.length} idea{s} waiting` (or use copy from `studio-copy.ts` if available).
-3. Render each idea as a `CapturedIdeaCard` inside a `space-y-4` list.
-4. Keep the empty state for when `ideas.length === 0` (already exists).
-5. Remove the single-idea variable: `const idea = ideas[0]`.
-
-**Done when:** Send page shows a full scrollable list of all captured ideas, not just the first one.
-
-- **Done**: Send page now awaits `getIdeasByStatus('captured')` and renders all captured ideas via `SendPageClient`, with a count header and empty state.
-
----
-
-## W2 ✅ — Enrich `CapturedIdeaCard` with GPT context and triage buttons
-
-**`components/send/captured-idea-card.tsx` changes:**
-
-Currently this card likely shows minimal info about an idea. Expand it:
-
-1. Show these fields from the Idea object:
-   - `title` — bold, largest text
-   - `gptSummary` — the GPT-cleaned version of the idea
-   - `rawPrompt` — the original brainstorm text, shown as a quote or lighter text
-   - `vibe` and `audience` — shown as small colored chips/tags
-   - `createdAt` — relative time ("30 minutes ago") using `lib/date.ts`
-
-2. Add three action buttons at the bottom of each card:
-   - **"Define this →"** — links to `/drill?ideaId={idea.id}` (use `ROUTES.drill + '?ideaId=' + idea.id`)
-   - **"Put on hold"** — calls a handler that will be wired in W6
-   - **"Remove"** — calls a handler that will be wired in W6
-   - For now, make the buttons render but pass `onHold` and `onRemove` as props (optional callbacks). They'll be wired in W6.
-
-3. Use the dark studio theme colors from `globals.css`: `bg-[#12121a]`, `border-[#1e1e2e]`, etc.
-
-**Done when:** Each captured idea card shows full GPT context plus three action buttons (define, hold, remove).
-
-- **Done**: CapturedIdeaCard now shows gptSummary, rawPrompt as blockquote, vibe/audience chips, nextAction label, and accepts onHold/onRemove callback props.
-
----
-
-## W3 ✅ — Build `IdeaSummaryPanel` component
-
-**Create/update `components/send/idea-summary-panel.tsx`:**
-
-This is a collapsible panel that shows what GPT sent vs what still needs user input. It can be used on the Send page inline within each card, or as a standalone component.
-
-1. Accept an `Idea` as a prop.
-2. Render two sections:
-   - **"From GPT"** section: shows `gptSummary`, `vibe`, `audience`, `rawPrompt` — these are the fields GPT filled in.
-   - **"Needs your input"** section: shows what the drill will ask — intent, scope, execution path, priority. Display these as empty placeholder items with a "→ Start defining" link to `/drill?ideaId={idea.id}`.
-3. Make the panel collapsible: starts expanded, can toggle with a chevron button.
-4. Use subtle visual distinction (e.g., left border color) between the two sections.
-
-**Done when:** `IdeaSummaryPanel` renders correctly, is importable, and shows GPT vs user data clearly.
-
-- **Done**: IdeaSummaryPanel is fully collapsible with two visually-distinct sections (indigo border for GPT data, amber border for needs-input) and a drill link.
-
----
-
-## W4 ✅ — Rebuild Home page as an attention cockpit
-
-**`app/page.tsx` changes:**
-
-Replace the current simple router/summary with three clear sections:
-
-1. **"Needs attention"** (top section):
-   - Show captured ideas (ideas with status `'captured'`) — each as a compact card with "Define →" link to Send page
-   - Show arena projects with health `'red'` or `'yellow'` — each with their `nextAction` highlighted
-   - If nothing needs attention, show a subtle "You're all caught up" message
-
-2. **"In progress"** (middle section):
-   - Show all arena projects (from `getArenaProjects()`)
-   - Each project shows: name, current phase, next action, and health indicator (green/yellow/red dot)
-   - Each project links to `/arena/{project.id}`
-
-3. **"Recent activity"** (bottom section):
-   - Show the 3 most recent inbox events (from `getInboxEvents()`, take first 3)
-   - Each event shows: title, relative timestamp, severity icon
-   - "See all →" link to `/inbox`
-
-**Imports you'll need:** `getIdeasByStatus`, `getArenaProjects`, `getInboxEvents` from their respective services. These are server-side imports (this is a server component page).
-
-**Done when:** Home page has three distinct sections answering "what needs attention?", "what's active?", and "what happened recently?".
-
-- **Done**: Home rebuilt as async server component with three labeled sections, health dots on projects, severity icons on events, and "You're all caught up" message when nothing needs attention.
-
----
-
-## W5 ✅ — Add clear "next action" cues to cards on Home and Send
-
-**Add a `nextAction` label to every item card across Home and Send pages:**
-
-1. **Captured ideas** (on home + send): Show "Define this →" as the next action
-2. **Arena projects with open PRs**: Show "Review PR →" as next action (you'll need to check if a project has open PRs — import `getPRsByProject` if available, or just use `project.nextAction` field)
-3. **Arena projects with failed builds**: Show "Fix build" in red/warning color
-4. **Arena projects (healthy)**: Show `project.currentPhase` + `project.nextAction` from the data
-5. **Inbox events**: Show event title as a clickable link to `event.actionUrl`
-
-**Implementation approach:**
-- Create a small helper function or component `NextActionBadge` in `components/common/` that takes a label and optional href and renders a small pill/link.
-- Or just add the labels inline in the existing card components.
-
-**Done when:** Every surface item on Home and Send pages tells the user exactly what to do next.
-
-- **Done**: Created `NextActionBadge` in `components/common/`; Home and Send both show clear next-action labels inline on every item card.
-
----
-
-## W6 ✅ — Wire triage actions on Send page (hold, remove, refresh)
-
-**`app/send/page.tsx` changes:**
-
-The Send page needs to become interactive. Currently it's a server component. You have two options:
-- **Option A (recommended):** Keep Send as a server component but create a small client component wrapper (`components/send/send-page-client.tsx`) that handles the button actions via `fetch()` + `router.refresh()`.
-- **Option B:** Convert Send page to `'use client'` and fetch ideas via API call on mount.
-
-Either way, wire these actions:
-
-1. **"Put on hold" button** on each `CapturedIdeaCard`:
-   - POST to `/api/actions/move-to-icebox` with `{ ideaId: idea.id }` in the body
-   - On success, refresh the page data (call `router.refresh()` or re-fetch)
-
-2. **"Remove" button** on each `CapturedIdeaCard`:
-   - Show a `ConfirmDialog` first ("Remove this idea? This can't be undone.")
-   - If confirmed, POST to `/api/actions/kill-idea` with `{ ideaId: idea.id }`
-   - On success, refresh the page data
-
-3. **Wire the action routes** (these files exist but may be minimal):
-   - `app/api/actions/move-to-icebox/route.ts`: Parse `ideaId` from body, call `updateIdeaStatus(ideaId, 'icebox')` from ideas-service, return 200. Also call `createInboxEvent()` from inbox-service to log the event.
-   - `app/api/actions/kill-idea/route.ts`: Same pattern — update status to `'killed'`, create inbox event, return 200.
-   - `app/api/actions/promote-to-arena/route.ts`: Update idea status to `'arena'`, create inbox event.
-   - `app/api/actions/mark-shipped/route.ts`: Update project state to `'shipped'`, create inbox event.
-
-**Done when:** Hold and Remove buttons work end-to-end on Send page. All four action routes are functional and create inbox events. Page refreshes after each action.
-
-- **Done**: Created `SendPageClient` (Option A) with fetch()+router.refresh(); all four action routes now call async updateIdeaStatus/updateProjectState and createInboxEvent correctly.
-
-```
-
-### lanes/lane-3-webhooks.md
-
-```markdown
-# 🔵 Lane 3 — Webhook Pipeline
-
-> Build real GitHub webhook ingestion: signature verification, event dispatch, and per-event handlers that sync GitHub state into the local store.
-
----
-
-## Files Owned
-
-| File | Action |
-|------|--------|
-| `lib/github/signature.ts` | NEW |
-| `types/webhook.ts` | MODIFY |
-| `app/api/webhook/github/route.ts` | REWRITE |
-| `lib/github/handlers/index.ts` | NEW |
-| `lib/github/handlers/handle-issue-event.ts` | NEW |
-| `lib/github/handlers/handle-pr-event.ts` | NEW |
-| `lib/github/handlers/handle-workflow-run-event.ts` | NEW |
-| `lib/github/handlers/handle-pr-review-event.ts` | NEW |
-| `lib/validators/webhook-validator.ts` | MODIFY |
-
----
-
-## W1 ✅ — Signature verification utility
-- **Done**: Implemented `verifyGitHubSignature` with timing-safe comparison.
-
-Create `lib/github/signature.ts`:
-
-```ts
-import crypto from 'crypto'
-
-export function verifyGitHubSignature(
-  payload: string,
-  signature: string | null,
-  secret: string
-): boolean {
-  if (!signature) return false
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
-}
-```
-
-Notes:
-- GitHub sends signature in `x-hub-signature-256` header
-- Use `timingSafeEqual` to prevent timing attacks
-- Read `GITHUB_WEBHOOK_SECRET` from env (or via config module if available)
-
-**Done when**: `verifyGitHubSignature()` compiles and handles edge cases (null signature returns false).
-
----
-
-## W2 ✅ — Expand webhook types
-- **Done**: Added `GitHubWebhookContext` and `GitHubWebhookHandler` types.
-
-Modify `types/webhook.ts`:
-
-Keep existing `WebhookPayload` but add GitHub-specific types:
-
-```ts
-export interface WebhookPayload {
-  source: 'gpt' | 'github' | 'vercel'
-  event: string
-  data: Record<string, unknown>
-  signature?: string
-  timestamp: string
-}
-
-// GitHub-specific webhook context parsed from headers + body
-export interface GitHubWebhookContext {
-  event: string                    // x-github-event header
-  action: string                   // body.action
-  delivery: string                 // x-github-delivery header
-  repositoryFullName: string       // body.repository.full_name
-  sender: string                   // body.sender.login
-  rawPayload: Record<string, unknown>
-}
-
-export type GitHubWebhookHandler = (ctx: GitHubWebhookContext) => Promise<void>
-```
-
-**Done when**: Types compile, `GitHubWebhookContext` captures all fields needed by handlers.
-
----
-
-## W3 ✅ — Rewrite GitHub webhook route
-- **Done**: Implemented `route.ts` with signature verification and dispatch to `routeGitHubEvent`.
-
-Rewrite `app/api/webhook/github/route.ts`:
-
-1. Read raw body as text (for signature verification)
-2. Verify signature using `verifyGitHubSignature()` — return 401 if invalid
-3. Parse event type from `x-github-event` header
-4. Parse action from body
-5. Build `GitHubWebhookContext`
-6. Dispatch to the event router from `lib/github/handlers/index.ts`
-7. Return 200 with acknowledgment
-
-Error handling:
-- Missing event header → 400
-- Invalid signature → 401
-- Unknown event type → 200 (log + acknowledge, don't fail)
-- Handler error → 500 with logged error
-
-```ts
-export async function POST(request: NextRequest) {
-  const rawBody = await request.text()
-  const event = request.headers.get('x-github-event')
-  const signature = request.headers.get('x-hub-signature-256')
-  const delivery = request.headers.get('x-github-delivery')
-
-  if (!event) return NextResponse.json({ error: 'Missing event header' }, { status: 400 })
-
-  const secret = process.env.GITHUB_WEBHOOK_SECRET
-  if (secret && !verifyGitHubSignature(rawBody, signature, secret)) {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-  }
-
-  const body = JSON.parse(rawBody)
-  const ctx: GitHubWebhookContext = {
-    event,
-    action: body.action ?? '',
-    delivery: delivery ?? '',
-    repositoryFullName: body.repository?.full_name ?? '',
-    sender: body.sender?.login ?? '',
-    rawPayload: body,
-  }
-
-  await routeGitHubEvent(ctx)
-  return NextResponse.json({ message: `Event '${event}' processed` })
-}
-```
-
-**Done when**: Route verifies signatures, parses headers, dispatches to router, returns proper status codes.
-
----
-
-## W4 ✅ — Issue and PR event handlers
-- **Done**: Implemented `handle-issue-event.ts` and `handle-pr-event.ts` with local store sync.
-
-Create `lib/github/handlers/handle-issue-event.ts`:
-
-Handle `issues` event with actions: `opened`, `closed`, `reopened`, `assigned`, `unassigned`, `labeled`.
-
-For each relevant action:
-- Look up local project/task by GitHub issue number (via external-refs if available, or by scanning projects)
-- Update local state (project status, task status)
-- Log the event
-
-Keep handlers thin — they read the context, look up local records, and update them. If the local record doesn't exist, log and skip (don't crash).
-
-Create `lib/github/handlers/handle-pr-event.ts`:
-
-Handle `pull_request` event with actions: `opened`, `closed`, `reopened`, `synchronize`, `ready_for_review`, `converted_to_draft`.
-
-For `opened`:
-- Check if any local project links to this repo/issue
-- Create or update local PR record with GitHub metadata
-- Create inbox event
-
-For `closed` with `merged=true`:
-- Update local PR status to 'merged'
-- Create inbox event
-
-**Done when**: Both handler files export async functions, handle relevant actions, and compile cleanly.
-
----
-
-## W5 ✅ — Workflow run and PR review handlers
-- **Done**: Implemented `handle-workflow-run-event.ts` and `handle-pr-review-event.ts`.
-
-Create `lib/github/handlers/handle-workflow-run-event.ts`:
-
-Handle `workflow_run` event with actions: `requested`, `in_progress`, `completed`.
-
-For `completed`:
-- Find agent run by `githubWorkflowRunId`
-- Update status based on `conclusion` (success → succeeded, failure → failed)
-- Create inbox event
-
-Create `lib/github/handlers/handle-pr-review-event.ts`:
-
-Handle `pull_request_review` event with actions: `submitted`, `dismissed`.
-
-For `submitted`:
-- Find local PR by GitHub PR number
-- Update `reviewStatus` based on review state (`approved`, `changes_requested`)
-- Create inbox event
-
-**Done when**: Both handlers compile and follow the same pattern as W4.
-
----
-
-## W6 ✅ — Event router + validator upgrades
-- **Done**: Completed `lib/github/handlers/index.ts` and added `validateGitHubWebhookHeaders` to the validator. All systems wired for real GitHub ingestion.
-
-Create `lib/github/handlers/index.ts`:
-
-```ts
-import type { GitHubWebhookContext } from '@/types/webhook'
-import { handleIssueEvent } from './handle-issue-event'
-import { handlePREvent } from './handle-pr-event'
-import { handleWorkflowRunEvent } from './handle-workflow-run-event'
-import { handlePRReviewEvent } from './handle-pr-review-event'
-
-const handlers: Record<string, (ctx: GitHubWebhookContext) => Promise<void>> = {
-  issues: handleIssueEvent,
-  pull_request: handlePREvent,
-  workflow_run: handleWorkflowRunEvent,
-  pull_request_review: handlePRReviewEvent,
-}
-
-export async function routeGitHubEvent(ctx: GitHubWebhookContext): Promise<void> {
-  const handler = handlers[ctx.event]
-  if (handler) {
-    console.log(`[webhook/github] Handling ${ctx.event}.${ctx.action}`)
-    await handler(ctx)
-  } else {
-    console.log(`[webhook/github] Unhandled event: ${ctx.event}`)
-  }
-}
-```
-
-Modify `lib/validators/webhook-validator.ts`:
-- Add `validateGitHubWebhookHeaders(headers)` — checks for `x-github-event`, optionally `x-hub-signature-256`
-- Keep existing generic `validateWebhookPayload()` for the GPT webhook
-
-Run `npx tsc --noEmit` to verify all webhook pipeline files compile.
-
-**Done when**: Router dispatches to correct handlers. Validator has GitHub-specific helpers. TSC passes for all Lane 3 files.
-
-```
-
-### lanes/lane-4-github-routes.md
-
-```markdown
-# 🟡 Lane 4 — GitHub API Routes + Factory/Sync Services
-
-> Build the GitHub-specific API routes and the service layer that orchestrates GitHub operations. Add a dev playground for manual testing.
-
----
-
-## Files Owned
-
-| File | Action |
-|------|--------|
-| `lib/services/github-factory-service.ts` | NEW |
-| `lib/services/github-sync-service.ts` | NEW |
-| `app/api/github/test-connection/route.ts` | NEW |
-| `app/api/github/create-issue/route.ts` | NEW |
-| `app/api/github/dispatch-workflow/route.ts` | NEW |
-| `app/api/github/create-pr/route.ts` | NEW |
-| `app/api/github/sync-pr/route.ts` | NEW |
-| `app/api/github/merge-pr/route.ts` | NEW |
-| `app/dev/github-playground/page.tsx` | NEW |
-
----
-
-## W1 ✅ — GitHub factory service
-
-- **Done**: Created `lib/services/github-factory-service.ts` with six orchestration methods (createIssueFromProject, assignCopilotToProject, dispatchPrototypeWorkflow, createPRFromProject, requestRevision, mergeProjectPR) that load local data, call Octokit, update records, and emit inbox events.
-
----
-
-## W2 ✅ — GitHub sync service
-
-- **Done**: Created `lib/services/github-sync-service.ts` with four methods (syncPullRequest, syncWorkflowRun, syncIssue, syncAllOpenPRs) that pull live GitHub state into local records via Octokit.
-
----
-
-## W3 ✅ — Test connection route
-
-- **Done**: Created `app/api/github/test-connection/route.ts` — GET route that validates the PAT, fetches user login and repo details, and returns `{ connected, login, repo, defaultBranch, scopes }` or `{ connected: false, error }`.
-
----
-
-## W4 ✅ — Create issue + dispatch workflow routes
-
-- **Done**: Created `app/api/github/create-issue/route.ts` (POST, supports projectId or standalone title/body) and `app/api/github/dispatch-workflow/route.ts` (POST, uses factory service for default workflow or accepts custom workflowId).
-
----
-
-## W5 ✅ — Create PR + sync PR routes
-
-- **Done**: Created `app/api/github/create-pr/route.ts` (POST, requires projectId+title+head) and `app/api/github/sync-pr/route.ts` (GET for batch sync, POST for single PR sync by number).
-
----
-
-## W6 ✅ — GitHub merge route
-
-- **Done**: Created `app/api/github/merge-pr/route.ts` with live policy enforcement (checks PR is open and not conflicted via `pulls.get` before delegating to factory service's `mergeProjectPR`).
-
----
-
-## W7 ✅ — Dev GitHub playground page
-
-- **Done**: Created `app/dev/github-playground/page.tsx` — a `'use client'` page with five collapsible sections (connection test, create issue, sync PRs, dispatch workflow, merge PR) styled to match the gpt-send dev harness.
-
-```
-
-### lanes/lane-4-review.md
-
-```markdown
-# ✅ Lane 4 — Review & Merge Experience
-
-> **Goal:** Make review preview-first and merge real. Fake PRs and previews locally — model them as local records with realistic state transitions. The user should feel like they're reviewing a real build, reacting to it, and approving or requesting changes.
-
-**Important context:** PRs and previews are simulated locally. There is no real GitHub or Vercel. PR records live in JSON storage (created by Lane 1). Preview URLs can point to local routes or show a placeholder frame. The goal is to make the experience *feel* like a real review workflow, not to actually connect to GitHub.
-
----
-
-## W1 ✅ — Restructure review page to make preview the hero
-
-**`app/review/[prId]/page.tsx` changes:**
-
-Currently the review page uses a `SplitReviewLayout` with PR metadata on the left and build/merge controls on the right. The preview is just a toolbar link. Restructure:
-
-1. Make the preview iframe/embed the **dominant element** — it should take up at least 60% of the viewport height.
-2. Move all PR metadata (summary card, diff summary, build status, merge button, fix request box) into a **collapsible sidebar panel** on the right, or a **bottom drawer** below the preview.
-3. Layout order should be:
-   - Top: breadcrumb (← Project Name / Review PR #N)
-   - Center (large): Preview frame
-   - Right sidebar or bottom panel: PR metadata + actions
-
-4. Update `SplitReviewLayout` component or replace it with a new layout that prioritizes the preview.
-
-**`components/review/split-review-layout.tsx` changes:**
-- Update the layout component to support the new preview-dominant arrangement.
-- Accept a `preview` slot/prop in addition to `left` and `right`.
-
-**Done when:** Review page loads with the preview as the primary visual element. Metadata is accessible but secondary.
-- **Done**: Rewrote `SplitReviewLayout` with `breadcrumb/preview/sidebar` slots; preview takes 65% on desktop. Review page restructured — PreviewFrame as hero, all metadata/actions in right sidebar.
-
----
-
-## W2 ✅ — Upgrade `PreviewFrame` to render a real iframe
-
-**`components/arena/preview-frame.tsx` changes:**
-
-Currently this component shows a placeholder box with a URL. Replace it with a real iframe:
-
-1. If `previewUrl` is provided:
-   - Render an `<iframe>` element with `src={previewUrl}`, full width, at least 500px tall.
-   - Add a loading skeleton that shows while the iframe loads (use `iframe.onLoad` event to hide it).
-   - Add a small toolbar above the iframe: "Preview" label + "Open in new tab ↗" link + refresh button.
-   - Add error handling: if the iframe fails to load (can detect via timeout), show "Preview unavailable — server may not be running".
-
-2. If `previewUrl` is NOT provided:
-   - Show a clean empty state: "No preview deployed yet" with a muted icon.
-   - This should not crash or look broken.
-
-3. For local dev: preview URLs will be fake initially (like `https://preview.vercel.app/...`). This is OK — the iframe will show an error state, which is better than a placeholder box. Later, previews can point to real local routes.
-
-**Done when:** `PreviewFrame` renders a real iframe with loading/error states and handles missing URLs gracefully.
-- **Done**: Rewrote `PreviewFrame` as client component with real `<iframe>`, animated loading skeleton, error state with retry, and clean empty state for missing URLs.
-
----
-
-## W3 ✅ — Wire the Merge button to call the API
-
-**`app/review/[prId]/page.tsx` changes:**
-
-The Merge button currently has `disabled` logic but NO `onClick` handler. Fix this:
-
-1. The review page is currently a server component (it uses `async function ReviewPage`). To add interactivity, you need to extract the merge button area into a **client component**.
-   - Create `components/review/merge-actions.tsx` (client component with `'use client'`).
-   - This component receives `prId`, `canMerge`, and `currentStatus` as props.
-   - It handles the merge click, loading state, and success feedback.
-
-2. **Merge button onClick:**
-   - Set a `merging` loading state to true.
-   - POST to `/api/actions/merge-pr` with `{ prId }` in the body.
-   - On success, update the button to show "Merged ✓" in a disabled success state.
-   - On failure, show an error message.
-
-3. **Wire `/api/actions/merge-pr/route.ts`:**
-   - Parse `prId` from request body.
-   - Call `updatePR(prId, { status: 'merged' })` from prs-service (Lane 1 is adding this function).
-   - Call `createInboxEvent(...)` from inbox-service with type `'merge_completed'`.
-   - Return 200 with the updated PR.
-
-**Done when:** Merge button calls the API, shows loading state, flips to "Merged ✓" on success. API route persists the change.
-- **Done**: Created `MergeActions` client component with Approve + Merge buttons, loading/success states. Rewrote `merge-pr` API route to use `updatePR()` and `createInboxEvent()` from storage-backed services.
-
----
-
-## W4 ✅ — Wire `FixRequestBox` to persist change requests
-
-**`components/review/fix-request-box.tsx` changes:**
-
-This component currently renders a text input area but doesn't submit anything. Make it functional:
-
-1. Make it a client component (`'use client'`).
-2. Add a text input (or textarea) for the fix request description.
-3. Add a "Request Changes" submit button.
-4. On submit:
-   - POST to `/api/prs` with `{ prId, requestedChanges: textValue }` (you'll need to add PATCH support to the prs route).
-   - Or create a simpler approach: POST to a new sub-route, or use the existing prs route with a method indicator in the body.
-5. After submission, show the request inline ("Changes requested: {text}") and disable the form.
-
-**`app/api/prs/route.ts` changes:**
-- Add a `PATCH` handler that accepts `{ prId, requestedChanges }`.
-- Call `updatePR(prId, { requestedChanges, status: 'open' })` from prs-service.
-- Call `createInboxEvent(...)` with type `'build_failed'` or a new type like `'changes_requested'`.
-- Return the updated PR.
-
-**Done when:** User can type a fix request, submit it, and see it persisted. PR record updates.
-- **Done**: `FixRequestBox` posts to PATCH `/api/prs`, shows persisted request inline after submit. Added `changes_requested` InboxEventType and PATCH handler to prs route.
-
----
-
-## W5 ✅ — Polish project detail 3-pane labels + wire project page
-
-**`app/arena/[projectId]/page.tsx` changes:**
-- Read this file first to understand the current 3-pane layout.
-- The panes are currently named things like "Anchor", "Engine", "Reality" (abstract internal names). Rename the visible section headers:
-  - "Anchor" pane → **"What This Is"** (shows project name, summary, origin idea)
-  - "Engine" pane → **"What's Being Done"** (shows tasks, current phase, assignees)
-  - "Reality" pane → **"Check It"** (shows preview, latest PR, build status)
-
-**Component changes:**
-- `components/arena/project-anchor-pane.tsx`: Update the section heading to "What This Is"
-- `components/arena/project-engine-pane.tsx`: Update to "What's Being Done"
-- `components/arena/project-reality-pane.tsx`: Update to "Check It"
-- Make sure these components actually render useful data from the project/tasks/PRs. If they're currently just placeholders, fill them in with real data from the service functions.
-
-**`app/arena/page.tsx` changes (the list page):**
-- Verify it works with the storage-backed services (Lane 1 handles the service rewrite, but verify the page still renders).
-
-**Done when:** Project detail page has plain-language pane labels. Panes show real data.
-- **Done**: Updated all three pane components with plain-language headers: "What This Is", "What's Being Done", "Check It". Arena list page verified with storage-backed services.
-
----
-
-## W6 ✅ — Add approve/reject flow + PR state simulation
-
-**Add a review state to the PR model and review page:**
-
-1. **Review status concept:** Add a visual indicator on the review page showing one of:
-   - "Pending Review" (default for open PRs)
-   - "Changes Requested" (when fix request has been submitted via W4)
-   - "Approved" (when user clicks Approve)
-   - "Merged" (when merge is complete)
-
-2. **Add an "Approve" button** next to the Merge button in `components/review/merge-actions.tsx`:
-   - On click, POST to `/api/prs` PATCH with `{ prId, reviewStatus: 'approved' }`.
-   - Show "Approved ✓" state.
-   - Approval doesn't auto-merge — user must still click Merge separately.
-
-3. **Update `lib/view-models/review-view-model.ts`:**
-   - Compute the review state from PR data: check `requestedChanges`, `status`, and a new `reviewStatus` field.
-   - Export a `reviewState` property: `'pending' | 'changes_requested' | 'approved' | 'merged'`.
-
-4. **Local PR simulation note:** For local dev, PRs are just records in storage. The state transitions (`open → changes_requested → approved → merged`) are all driven by user actions through the UI. No real CI/CD needed.
-
-**Done when:** Review page has Approve + Merge buttons with distinct states. PR review workflow has visible status progression.
-- **Done**: Added `ReviewStatus` type to PR model, `reviewStatus` field to seed data, `reviewState` computation to view model. `MergeActions` has both Approve (sets reviewed) and Merge buttons with distinct visual states.
-
-```
-
-### lanes/lane-5-action-upgrades.md
-
-```markdown
-# 🟣 Lane 5 — Action Upgrades + State Machine + Inbox
-
-> Wire existing product actions to check for GitHub linkage, add new state transitions, expand inbox event types, and update routes/copy.
-
----
-
-## Files Owned
-
-| File | Action |
-|------|--------|
-| `app/api/actions/merge-pr/route.ts` | MODIFY |
-| `app/api/actions/promote-to-arena/route.ts` | MODIFY |
-| `app/api/actions/mark-shipped/route.ts` | MODIFY |
-| `lib/state-machine.ts` | MODIFY |
-| `types/inbox.ts` | MODIFY |
-| `lib/services/inbox-service.ts` | MODIFY |
-| `lib/studio-copy.ts` | MODIFY |
-| `lib/routes.ts` | MODIFY |
-
----
-
-## W1 ✅ — Expand inbox event types
-- **Done**: Added 10 GitHub lifecycle event types to `InboxEventType` and `githubUrl?: string` to `InboxEvent` interface.
-
-Modify `types/inbox.ts`:
-
-Add new event types for GitHub lifecycle events:
-
-```ts
-export type InboxEventType =
-  | 'idea_captured'
-  | 'idea_deferred'
-  | 'drill_completed'
-  | 'project_promoted'
-  | 'task_created'
-  | 'pr_opened'
-  | 'preview_ready'
-  | 'build_failed'
-  | 'merge_completed'
-  | 'project_shipped'
-  | 'project_killed'
-  | 'changes_requested'
-  // NEW — GitHub lifecycle events
-  | 'github_issue_created'
-  | 'github_workflow_dispatched'
-  | 'github_workflow_failed'
-  | 'github_workflow_succeeded'
-  | 'github_pr_opened'
-  | 'github_pr_merged'
-  | 'github_review_requested'
-  | 'github_changes_requested'
-  | 'github_copilot_assigned'
-  | 'github_sync_failed'
-  | 'github_connection_error'
-```
-
-Add optional `githubUrl` field to `InboxEvent`:
-```ts
-export interface InboxEvent {
-  // ... existing fields
-  githubUrl?: string  // link to GitHub issue/PR/action
-}
-```
-
-**Done when**: New event types compile. Existing inbox code unaffected (additive change).
-
----
-
-## W2 ✅ — Add GitHub routes + copy
-- **Done**: Added 7 GitHub API/page routes to `lib/routes.ts` and a `github` copy section to `lib/studio-copy.ts`.
-
-Modify `lib/routes.ts`:
-
-Add routes for new GitHub pages/endpoints:
-```ts
-export const ROUTES = {
-  // ... existing routes
-  githubPlayground: '/dev/github-playground',
-  githubTestConnection: '/api/github/test-connection',
-  githubCreateIssue: '/api/github/create-issue',
-  githubDispatchWorkflow: '/api/github/dispatch-workflow',
-  githubCreatePR: '/api/github/create-pr',
-  githubSyncPR: '/api/github/sync-pr',
-  githubMergePR: '/api/github/merge-pr',
-}
-```
-
-Modify `lib/studio-copy.ts`:
-
-Add GitHub-related copy:
-```ts
-github: {
-  heading: 'GitHub Integration',
-  connectionSuccess: 'Connected to GitHub',
-  connectionFailed: 'Could not connect to GitHub',
-  issueCreated: 'GitHub issue created',
-  workflowDispatched: 'Build started',
-  workflowFailed: 'Build failed',
-  prOpened: 'Pull request opened',
-  prMerged: 'Pull request merged',
-  copilotAssigned: 'Copilot is working on this',
-  syncFailed: 'GitHub sync failed',
-  mergeBlocked: 'Cannot merge — checks did not pass',
-  notLinked: 'Not linked to GitHub',
-}
-```
-
-**Done when**: Routes and copy compile. No existing code breaks.
-
----
-
-## W3 ✅ — Expand state machine for GitHub-backed transitions
-- **Done**: Added 4 GitHub-backed project transitions and a full PR state machine (`PR_TRANSITIONS`, `canTransitionPR`, `getNextPRState`) to `lib/state-machine.ts`.
-
-Modify `lib/state-machine.ts`:
-
-Add new project transitions:
-```ts
-// GitHub-backed transitions
-{ from: 'arena', to: 'arena', action: 'github_issue_created' },   // stays arena, but now linked
-{ from: 'arena', to: 'arena', action: 'workflow_dispatched' },     // execution started
-{ from: 'arena', to: 'arena', action: 'pr_received' },             // PR came in from GitHub
-{ from: 'arena', to: 'shipped', action: 'github_pr_merged' },      // merge = ship (optional auto-ship)
-```
-
-Add a new PR state machine:
-```ts
-export type PRTransitionAction = 
-  | 'open' | 'request_changes' | 'approve' | 'merge' | 'close' | 'reopen'
-
-export const PR_TRANSITIONS: Array<{
-  from: ReviewStatus
-  to: ReviewStatus
-  action: PRTransitionAction
-}> = [
-  { from: 'pending', to: 'changes_requested', action: 'request_changes' },
-  { from: 'pending', to: 'approved', action: 'approve' },
-  { from: 'pending', to: 'merged', action: 'merge' },
-  { from: 'changes_requested', to: 'approved', action: 'approve' },
-  { from: 'changes_requested', to: 'merged', action: 'merge' },
-  { from: 'approved', to: 'merged', action: 'merge' },
-  { from: 'approved', to: 'changes_requested', action: 'request_changes' },
-]
-
-export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction): boolean { ... }
-export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null { ... }
-```
-
-Import `ReviewStatus` from `types/pr.ts`.
-
-**Done when**: New transitions compile. Existing transition functions still work. PR state machine added.
-
----
-
-## W4 ✅ — Upgrade merge-pr action to check GitHub
-- **Done**: Merge route now checks `githubPrNumber`, validates mergeability via adapter (dynamic import for graceful degradation), and falls back to local-only merge if adapter unavailable.
-
-Modify `app/api/actions/merge-pr/route.ts`:
-
-The product-level merge action should now:
-
-1. Load local PR record
-2. **Check if PR has GitHub linkage** (`githubPrNumber` exists)
-3. If GitHub-linked:
-   a. Call adapter to check PR is open + mergeable
-   b. Call adapter to merge the real GitHub PR
-   c. If merge fails, return error with reason
-   d. Update local PR from actual result
-4. If local-only: proceed with existing local-only merge (keep backward compat)
-5. Create inbox event
-6. Return result
-
-```ts
-// Pseudocode for the GitHub-aware path:
-if (pr.githubPrNumber) {
-  const ghPr = await getPullRequest(pr.githubPrNumber)
-  if (!ghPr.mergeable) return error('PR is not mergeable')
-  if (ghPr.merged) return error('PR is already merged')
-  const result = await mergePullRequest(pr.githubPrNumber)
-  // update local from result
-}
-```
-
-Import adapter methods. If adapter isn't available yet (other lane), add TODO with clear interface expectation.
-
-**Done when**: Merge route handles both local-only and GitHub-linked PRs. Clear error messages.
-
----
-
-## W5 ✅ — Upgrade promote-to-arena to optionally create GitHub issue
-- **Done**: Route now accepts `createGithubIssue` flag; dynamically imports factory service and fires `github_connection_error` inbox event on failure — promotion never blocks.
-
-Modify `app/api/actions/promote-to-arena/route.ts`:
-
-After successfully promoting an idea to arena:
-
-1. Check if GitHub is configured (`isGitHubConfigured()` from config module, or env check)
-2. If configured and request body includes `createGithubIssue: true`:
-   a. Call factory service (or adapter directly) to create issue
-   b. Update the project with GitHub linkage fields
-   c. Create `github_issue_created` inbox event
-3. If not configured: proceed as before (local-only promotion)
-
-The `createGithubIssue` flag is optional — default false. This keeps the existing flow unbroken.
-
-**Done when**: Promote route has optional GitHub issue creation. Existing flow unchanged when flag is omitted.
-
----
-
-## W6 ✅ — Upgrade mark-shipped to optionally close GitHub issue
-- **Done**: mark-shipped now comments + closes linked GitHub issue via adapter (dynamic import, best-effort); local ship always succeeds.
-
-Modify `app/api/actions/mark-shipped/route.ts`:
-
-Read the file first, then add:
-
-After marking a project shipped:
-
-1. Check if project has `githubIssueNumber`
-2. If yes: call `closeIssue(project.githubIssueNumber)` via adapter
-3. Add comment on the issue: "Shipped via Mira Studio"
-4. Create inbox event noting the GitHub issue was closed
-5. If adapter call fails: log warning but don't block the ship action
-
-**Done when**: Ship action closes linked GitHub issues. Non-linked projects ship as before.
-
----
-
-## W7 ✅ — Inbox service enhancements + TSC
-- **Done**: Added `createGitHubInboxEvent` helper to `inbox-service.ts`; expanded `createInboxEvent` params to accept `githubUrl`; all Lane 5 files pass `npx tsc --noEmit` (only pre-existing Lane 4 errors remain).
-
-Modify `lib/services/inbox-service.ts`:
-
-Add helper functions for common GitHub inbox events:
-
-```ts
-export async function createGitHubInboxEvent(params: {
-  type: InboxEventType
-  projectId: string
-  title: string
-  body: string
-  githubUrl?: string
-  severity?: 'info' | 'warning' | 'error' | 'success'
-}): Promise<InboxEvent>
-```
-
-This is a convenience wrapper around `createInboxEvent` that sets defaults for GitHub events.
-
-Run `npx tsc --noEmit` to verify all Lane 5 files compile.
-
-**Done when**: Helper compiles. All Lane 5 files pass type check. No regressions in existing inbox behavior.
-
-```
-
-### lanes/lane-5-copy-inbox-harness.md
-
-```markdown
-# 🟣 Lane 5 — Copy, Inbox & Dev Harness
-
-> **Goal:** Three things: (1) Replace all founder-lore UI labels with plain human language. (2) Make the inbox functional with filters and mark-read. (3) Build the dev harness page so the user can simulate "GPT sends an idea" and test the full flow locally.
-
-**Important context for copy changes:** Internal code names (arena, icebox, killed, shipped) stay in code (types, variables, route paths). Only user-visible labels in the UI change. All label changes go through `lib/studio-copy.ts` first, then pages/components reference the copy constants.
-
----
-
-## W1 ✅ — Rewrite `studio-copy.ts` for plain, self-explanatory language
-- **Done**: All founder-lore and dramatic language in `studio-copy.ts` has been replaced with clear, direct labels like "On Hold", "Removed", and "Start building".
-
-**`lib/studio-copy.ts` changes:**
-
-Replace all founder-lore and dramatic language with clear, direct labels:
-
-```
-app.tagline: "Chat is where ideas are born. Studio is where ideas are forced into truth."
-→ "Your ideas, shaped and shipped."
-
-send.heading: "Idea captured."
-→ "Ideas from GPT"
-send.subheading: "Define it or let it go."
-→ "Review what arrived and decide what to do next."
-send.ctaIcebox: "Send to Icebox"
-→ "Put on hold"
-send.ctaKill: "Kill it now"
-→ "Remove"
-
-drill.steps.decision.hint: "Arena, Icebox, or Kill. No limbo."
-→ "Commit, hold, or remove. Every idea gets a clear decision."
-drill.cta.commit: "Commit to Arena"
-→ "Start building"
-drill.cta.icebox: "Send to Icebox"
-→ "Put on hold"
-drill.cta.kill: "Kill this idea"
-→ "Remove this idea"
-
-arena.heading: "In Progress" (already OK)
-arena.limitReached: "You're at capacity. Ship or kill something first."
-→ "You're at capacity. Ship or remove something first."
-
-icebox.heading: "Icebox"
-→ "On Hold"
-icebox.empty: "Nothing deferred. Ideas are either in play or gone."
-→ "Nothing on hold right now."
-
-shipped.heading: "Trophy Room"
-→ "Shipped"
-shipped.empty: "Nothing shipped yet. Get one idea to the finish line."
-→ "Nothing shipped yet."
-
-killed.heading: "Graveyard"
-→ "Removed"
-killed.empty: "Nothing killed. Good ideas die too — that's how focus works."
-→ "Nothing removed yet."
-killed.resurrection: "Resurrect"
-→ "Restore"
-```
-
-Keep the sharpness in drill questions ("Strip the excitement. What is the actual thing?") — those are good UX, not lore.
-
-**Done when:** All copy in `studio-copy.ts` uses plain, self-explanatory language. No "Trophy Room", "Graveyard", "Icebox", "Kill", "No limbo", or "forced into truth" in user-facing strings.
-
----
-
-## W2 ✅ — Update sidebar, mobile nav, and shell labels
-- **Done**: Sidebar and mobile nav now use plain labels sourced from `studio-copy.ts`. Meta description in `layout.tsx` updated to the new tagline.
-
-**`components/shell/studio-sidebar.tsx` changes:**
-- The `NAV_ITEMS` array currently has labels: `'Inbox'`, `'In Progress'`, `'Icebox'`, `'Shipped'`, `'Killed'`.
-- Change: `'Icebox'` → `'On Hold'`, `'Killed'` → `'Removed'`.
-- `'Inbox'`, `'In Progress'`, and `'Shipped'` are already fine.
-
-**`components/shell/mobile-nav.tsx` changes:**
-- Apply the same label changes as the sidebar.
-
-**`app/layout.tsx` changes:**
-- Update the `<meta>` description from "forced into truth" to the new tagline from W1.
-- Title can stay "Mira Studio" — that's fine.
-
-**Done when:** Sidebar and mobile nav show updated plain labels. Meta description is updated.
-
----
-
-## W3 ✅ — Update archive + on-hold pages to use copy constants
-- **Done**: Shipped, Removed, and On Hold pages (and their cards) now pull headings and labels from `studio-copy.ts`. added `subheading` to `icebox` copy.
-
-**`app/shipped/page.tsx` changes:**
-- Replace hardcoded `"Trophy Room"` heading with `COPY.shipped.heading` (which is now "Shipped" from W1).
-- Import `{ COPY }` from `'@/lib/studio-copy'`.
-
-**`app/killed/page.tsx` changes:**
-- Replace hardcoded `"Graveyard"` heading with `COPY.killed.heading` (now "Removed").
-
-**`app/icebox/page.tsx` changes:**
-- Replace hardcoded `"Icebox"` heading with `COPY.icebox.heading` (now "On Hold").
-- Replace `"Deferred ideas and projects"` with updated subheading from copy.
-
-**Check archive components too:**
-- `components/archive/trophy-card.tsx`: if it has any hardcoded "Trophy" or "Shipped" labels, update to use copy or plain language.
-- `components/archive/graveyard-card.tsx`: same — replace any "Graveyard" / "Killed" labels.
-- `components/icebox/icebox-card.tsx`: replace any "Icebox" labels.
-
-**Done when:** All archive and on-hold pages pull labels from `studio-copy.ts`. Zero hardcoded "Trophy Room", "Graveyard", or "Icebox" in user-visible text.
-
----
-
-## W4 ✅ — Make inbox page functional with filters and mark-read
-- **Done**: Inbox now has filter tabs (All/Unread/Errors), a mark-read API endpoint, and interactive cards with unread indicators. home page labels also updated.
-
-**`app/inbox/page.tsx` changes:**
-
-Currently the inbox page shows events from `getInboxEvents()` with no interactivity. Add:
-
-1. **Filter tabs** using the `InboxFilterTabs` component (already exists at `components/inbox/inbox-filter-tabs.tsx`):
-   - Three tabs: "All", "Unread", "Errors"
-   - To make this interactive, you need a client component wrapper.
-   - Create a wrapper component or convert the page to client-side fetching.
-
-2. **Mark-as-read per event:**
-   - Add a "Mark read" button (or click-to-read) on each `InboxEventCard`.
-   - On click: PATCH `/api/inbox` with `{ eventId, read: true }`.
-   - Refresh the list after marking.
-
-**`app/api/inbox/route.ts` changes:**
-- Keep the existing GET handler.
-- Add a `PATCH` handler: parse `{ eventId, read }` from body, call `markEventRead(eventId)` from inbox-service (Lane 1 adds this function), return 200.
-- Optionally support `?filter=unread` or `?filter=errors` query params on GET by calling `getEventsByFilter()` from inbox-service.
-
-**`components/inbox/inbox-filter-tabs.tsx` changes:**
-- Wire the tabs to actually filter. Accept `activeFilter` and `onFilterChange` props.
-
-**`components/inbox/inbox-event-card.tsx` changes:**
-- Add a "Mark read" button or visual indicator for read/unread state.
-- Unread events should have a visual indicator (e.g., blue dot, bold title, or subtle background).
-
-**`lib/view-models/inbox-view-model.ts` changes:**
-- Update to compute filter counts: total, unread, errors.
-- Export these counts so the page can display them on the filter tabs.
-
-**Done when:** Inbox has working filter tabs, mark-as-read per event, and visual unread indicators.
-
----
-
-## W5 ✅ — Build the dev harness page for simulating GPT sends
-- **Done**: Created `/dev/gpt-send` with a functional form that POSTs to `/api/webhook/gpt`. Updated the webhook to create inbox events.
-
-**Create `app/dev/gpt-send/page.tsx`:**
-
-This is the local dev harness that lets the user (who is the local developer) simulate "an idea arrives from GPT." It should be a `'use client'` component with a form.
-
-1. **Form fields** (matching the GPT webhook payload shape):
-   - `title` (text input, required) — "What's the idea?"
-   - `rawPrompt` (textarea, required) — "Original brainstorm"
-   - `gptSummary` (textarea, required) — "GPT's cleaned-up summary"
-   - `vibe` (text input, optional) — e.g., "productivity", "creative", "ops"
-   - `audience` (text input, optional) — e.g., "engineering teams"
-   - `intent` (text input, optional) — "What is this for?"
-
-2. **Submit action:**
-   - POST to `/api/webhook/gpt` with the form data as JSON.
-   - This is intentionally hitting the webhook route (not `/api/ideas` directly) because the real custom GPT will hit this same endpoint in production.
-
-3. **Wire `/api/webhook/gpt/route.ts`:**
-   - Parse the incoming JSON body.
-   - Validate it has at least `title`, `rawPrompt`, and `gptSummary`.
-   - Call `createIdea({ title, rawPrompt, gptSummary, vibe, audience, intent })` from ideas-service (imported server-side — this is an API route, not a client component).
-   - Call `createInboxEvent({ type: 'idea_captured', title: 'New idea arrived', body: title, severity: 'info', actionUrl: '/send' })` from inbox-service.
-   - Return the created idea as JSON with status 201.
-
-4. **After successful submit:**
-   - Show a success message: "Idea sent! Go to /send to see it."
-   - Include a link to `/send`.
-   - Optionally pre-fill the form with sample data for quick testing.
-
-5. **Add a "Quick fill" button** that populates the form with sample data for fast testing.
-
-**Also create `components/dev/gpt-send-form.tsx`:**
-- Extract the form component so it's reusable.
-- Style it with the dark studio theme.
-
-**Done when:** User can go to `/dev/gpt-send`, fill in an idea, submit it, and then see it appear on `/send`. The webhook endpoint creates a real persisted idea and inbox event.
-
----
-
-## W6 ⬜ — Update content files, README, globals.css + final verification
-
-**`content/` file updates:**
-- `content/tone-guide.md`: soften language for user-facing contexts (remove "forced into truth" energy, keep direct/sharp tone)
-- `content/no-limbo.md`: rephrase as "Every idea gets a clear decision" — same principle, less mythology
-- `content/drill-principles.md`: review and soften if needed
-- `content/onboarding.md`: review and update to match new labels
-
-**`README.md` changes:**
-- Update description to match the new tagline
-- Fix tech stack description to match actual `package.json` (Next.js 14.2, React 18, Tailwind CSS 3.4)
-- Remove any references to Next 15, React 19, Tailwind 4, or AI integrations that don't exist yet
-- Add a section about the dev harness: "Go to `/dev/gpt-send` to simulate ideas arriving from GPT"
-- Add a section about local data: "Data persists in `.local-data/studio.json` and survives restarts"
-
-**`app/globals.css` changes:**
-- Add CSS custom properties for semantic colors used across components:
-  ```css
-  --studio-success: #10b981;
-  --studio-warning: #f59e0b;
-  --studio-danger: #ef4444;
-  --studio-ice: #38bdf8;
-  ```
-- These can be used by components instead of hardcoding hex values.
-
-**`lib/routes.ts` changes:**
-- Add `devGptSend: '/dev/gpt-send'` to the routes object.
-
-**`package.json` changes:**
-- Update `description` field if it has one, to match the new tagline.
-
-**Verification:**
-- Run `npx tsc --noEmit` — must pass.
-- Run `npm run build` — must pass.
-- Update test summary row for Lane 5 in `board.md`.
-
-**Done when:** All content files and README reflect accurate, plain language. Globals has semantic color tokens. Routes include dev harness. Build passes.
-
-```
-
-### lanes/lane-6-integration.md
-
-```markdown
-# 🏁 Lane 6 — Integration + Proof of Loop
-
-> Resolve cross-lane type errors, ensure build passes, and prove the first complete GitHub-backed irrigation loop end-to-end.
-
-**This lane runs AFTER Lanes 1–5 are merged.**
-
----
-
-## Files Owned
-
-All files (read + targeted fixes for cross-lane integration).
-
----
-
-## W1 ⬜ — TSC clean
-
-Run `npx tsc --noEmit` and fix all cross-lane type errors.
-
-Common expected issues:
-- Import paths between lanes (handler files importing types from Lane 1, services from Lane 4)
-- Missing re-exports
-- Type mismatches between adapter return types and service expectations
-- `StudioStore` shape changes needing seed data updates
-
-Fix each error. Do not change the design — only fix imports, type assertions, and minor plumbing.
-
-**Done when**: `npx tsc --noEmit` exits clean (exit 0).
-
----
-
-## W2 ⬜ — Build clean
-
-Run `npm run build` and fix any build-time errors.
-
-Common expected issues:
-- Server/client boundary violations (dev playground is `'use client'`)
-- Dynamic route segments
-- Missing `force-dynamic` on new API routes if needed
-
-**Done when**: `npm run build` exits clean (exit 0).
-
----
-
-## W3 ⬜ — E2E connection test
-
-With the dev server running (`npm run dev`):
-
-1. Verify `wiring.md` env vars are set
-2. Hit `GET /api/github/test-connection` and confirm it returns repo info
-3. Hit the dev playground page and test the connection button
-4. Create a test issue via the playground
-5. Verify the issue appears on GitHub
-6. Verify a local inbox event was created
-
-**Done when**: Connection test returns valid data. Test issue appears on GitHub. Inbox shows the event.
-
----
-
-## W4 ⬜ — E2E factory loop test
-
-Test the first complete irrigation path:
-
-1. Create an idea via the dev GPT harness (`/dev/gpt-send`)
-2. Run through drill → materialize → project in arena
-3. From the arena, use the playground or API to create a GitHub issue for the project
-4. Assign Copilot (if available) or dispatch a workflow
-5. Verify webhook events (use ngrok or similar) sync PR into local store
-6. Merge the PR from the app
-7. Verify local state reflects the merge
-
-If webhooks aren't testable yet (user hasn't set up forwarding), document what works and what needs `wiring.md` steps.
-
-**Done when**: As much of the loop as possible is proven working. Gaps documented in `wiring.md`.
-
----
-
-## W5 ⬜ — Final polish + documentation
-
-1. Update `agents.md` with:
-   - New files added to repo map
-   - New SOPs learned from this sprint
-   - Updated pitfalls section for GitHub integration
-   - Lessons learned changelog entry
-
-2. Update `wiring.md` with any additional manual steps discovered during integration
-
-3. Verify all lane files have ✅ markers
-
-4. Run final `npx tsc --noEmit` + `npm run build`
-
-**Done when**: agents.md updated. wiring.md complete. Board shows all green. Build passes.
-
-```
-
-### lanes/lane-6-visual-qa.md
-
-```markdown
-# 🏁 Lane 6 — Visual QA & Final Polish
-
-> **Goal:** Run the app in the browser, test every page and flow end-to-end, fix any issues from Lanes 1–5, and ensure the app feels like a real product. This is the ONLY lane that uses the browser.
-
-**Important context:** This lane runs AFTER Lanes 1–5 are all merged. You have full ownership of ALL files — no restrictions. Your job is to fix whatever is broken and make everything consistent.
-
----
-
-## W1 ✅ — Build verification + install
-
-Completed. TSC and build both pass clean. Dev server starts without error.
-
-**Pre-Lane-6 hardening fixes applied:**
-- Materialization idempotency guard (returns existing project if idea already materialized)
-- Fixed missing `source` field in dev harness webhook payload
-- Fixed wrong event type in move-to-icebox route (`idea_captured` → `idea_deferred`)
-- Added missing `await` on `createInboxEvent` in kill-idea and mark-shipped routes
-- Added `force-dynamic` to all 9 mutable server pages to prevent stale data
-- Replaced `require('./seed-data')` hack with proper ES import in storage.ts
-- Added `idea_deferred` to InboxEventType union and formatter Record
-
----
-
-## W2 ✅ — Visual QA: Dev Harness + Send page
-
-Verified in browser:
-- Dev harness form now has correct fields: Title, GPT Summary, Raw Prompt, Vibe, Audience
-- Form correctly sends `source: 'gpt'` in the webhook payload
-- Ideas appear on /send page with correct metadata (vibe/audience tags now show real values, not "unknown")
-- "Define this →", "Put on hold", "Remove" labels all correct
-- Home page attention cockpit shows captured ideas and in-progress projects
-
----
-
-## W3 ✅ — Visual QA: Full drill flow + materialization
-
-Verified in browser:
-- GPT context card appears at top of drill with ORIGINAL BRAINSTORM and GPT SUMMARY
-- All 6 steps work: text input → text input → choice (auto-advance) → choice → choice → decision
-- Decision step now shows: "Start building", "Put on hold", "Remove this idea" (was "Commit to Arena", "Send to Icebox")
-- Subtitle reads: "Commit, hold, or remove. Every idea gets a clear decision." (was "Arena, Icebox, or Remove. No limbo.")
-- Materialization creates project and navigates to success page
-- Success page button says "View project →" (was "Go to Arena →")
-- Idempotency guard prevents duplicate projects on double-fire
-
----
-
-## W4 ✅ — Visual QA: Review + Project Detail
-
-Verified:
-- Project detail breadcrumbs show "← In Progress" (correct)
-- 3-pane layout renders with project data
-- Review page merge button works via API
-- PR status persists after merge
-
----
-
-## W5 ✅ — Visual QA: Inbox + Archive + On Hold pages
-
-Verified:
-- Inbox shows events with correct language ("Project created", "New idea arrived from GPT")
-- No more "promoted to the Arena" text in inbox events
-- Mobile header titles: "On Hold", "Shipped", "Removed" (was "Icebox", "Trophy Room", "Graveyard")
-- Command bar (Ctrl+K): "Go to On Hold", "Go to Shipped" (was "Go to Icebox", "Go to Trophy Room")
-- Archive filter bar: "Shipped", "Removed" (was "Trophy Room", "Graveyard")
-- Stale idea modal: "Start building", "Remove this idea", "Keep on hold" (was "Promote to Arena", "Remove from Icebox", "Keep frozen")
-
----
-
-## W6 ✅ — Cross-page consistency + final build + update board
-
-**Lore sweep results — all replaced:**
-| Old Label | New Label | Status |
-|-----------|-----------|--------|
-| Arena | In Progress | ✅ Replaced in all UI |
-| Icebox | On Hold | ✅ Replaced in all UI |
-| Trophy Room | Shipped | ✅ Replaced in all UI |
-| Graveyard | Removed | ✅ Replaced in all UI |
-| Commit to Arena | Start building | ✅ |
-| Send to Icebox | Put on hold | ✅ |
-| Kill/Remove this idea | Remove this idea | ✅ |
-| Go to Arena | View project | ✅ |
-| promoted to Arena | is now in progress | ✅ |
-| frozen | on hold | ✅ |
-| No limbo | Every idea gets a clear decision | ✅ |
-
-**Note:** Internal code identifiers (`arena`, `icebox`, `killed`) remain unchanged — this is by design per SOP. Only user-facing labels were updated.
-
-**Final build:**
-- `npx tsc --noEmit` — ✅ clean
-- `npm run build` — ✅ clean
-
-```
-
-### next-env.d.ts
-
-```typescript
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
-
-// NOTE: This file should not be edited
-// see https://nextjs.org/docs/app/building-your-application/configuring/typescript for more information.
-
-```
-
-### printcode.sh
-
-```bash
-#!/bin/bash
-# =============================================================================
-# printcode.sh — Smart project dump for AI chat contexts
-# =============================================================================
-#
-# Outputs project structure and source code to numbered markdown dump files
-# (dump00.md … dump09.md). Running with NO arguments dumps the whole repo
-# exactly as before. With CLI flags you can target specific areas, filter by
-# extension, slice line ranges, or just list files.
-#
-# Upload this script to a chat session so the agent can tell you which
-# arguments to run to get exactly the context it needs.
-#
-# Usage: ./printcode.sh [OPTIONS]
-# Run ./printcode.sh --help for full details and examples.
-# =============================================================================
-
-set -e
-
-# ---------------------------------------------------------------------------
-# Defaults
-# ---------------------------------------------------------------------------
-OUTPUT_PREFIX="dump"
-LINES_PER_FILE=""          # empty = auto-calculate to fit MAX_DUMP_FILES
-MAX_DUMP_FILES=10
-MAX_FILES=""               # empty = unlimited
-MAX_BYTES=""               # empty = unlimited
-SHOW_STRUCTURE=true
-LIST_ONLY=false
-SLICE_MODE=""              # head | tail | range
-SLICE_N=""
-SLICE_A=""
-SLICE_B=""
-
-declare -a AREAS=()
-declare -a INCLUDE_PATHS=()
-declare -a USER_EXCLUDES=()
-declare -a EXT_FILTER=()
-
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# ---------------------------------------------------------------------------
-# Area → glob mappings
-# ---------------------------------------------------------------------------
-# Returns a newline-separated list of globs for a given area name.
-globs_for_area() {
-    case "$1" in
-        backend)   echo "backend/**" ;;
-        frontend)
-            if [[ -d "$PROJECT_ROOT/frontend" ]]; then
-                echo "frontend/**"
-            elif [[ -d "$PROJECT_ROOT/web" ]]; then
-                echo "web/**"
-            else
-                echo "frontend/**"
-            fi
-            ;;
-        docs)      printf '%s\n' "docs/**" "*.md" ;;
-        scripts)   echo "scripts/**" ;;
-        plugins)   echo "plugins/**" ;;
-        tests)     echo "tests/**" ;;
-        config)    printf '%s\n' "*.toml" "*.yaml" "*.yml" "*.json" "*.ini" ".env*" ;;
-        *)
-            echo "Error: unknown area '$1'" >&2
-            echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
-            exit 1
-            ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Help
-# ---------------------------------------------------------------------------
-show_help() {
-cat <<'EOF'
-printcode.sh — Smart project dump for AI chat contexts
-
-USAGE
-  ./printcode.sh [OPTIONS]
-
-With no arguments the entire repo is dumped into dump00.md … dump09.md
-(same as original behavior). Options let you target specific areas,
-filter by extension, slice line ranges, or list files without code.
-
-AREA PRESETS (--area, repeatable)
-  backend   backend/**
-  frontend  frontend/** (or web/**)
-  docs      docs/** *.md
-  scripts   scripts/**
-  plugins   plugins/**
-  tests     tests/**
-  config    *.toml *.yaml *.yml *.json *.ini .env*
-
-OPTIONS
-  --area <name>          Include only files matching the named area (repeatable).
-  --path <glob>          Include only files matching this glob (repeatable).
-  --exclude <glob>       Add extra exclude glob on top of defaults (repeatable).
-  --ext <ext[,ext,…]>   Include only files with these extensions (comma-sep).
-
-  --head <N>             Keep only the first N lines of each file.
-  --tail <N>             Keep only the last N lines of each file.
-  --range <A:B>          Keep only lines A through B of each file.
-                         (Only one of head/tail/range may be used at a time.)
-
-  --list                 Print only the file list / project structure (no code).
-  --no-structure         Skip the project-structure tree section.
-  --lines-per-file <N>  Override auto-calculated lines-per-dump-file split.
-  --max-files <N>        Stop after selecting N files (safety guard).
-  --max-bytes <N>        Stop once cumulative selected size exceeds N bytes.
-  --output-prefix <pfx>  Change dump file prefix (default: "dump").
-
-  --help                 Show this help and exit.
-
-EXAMPLES
-  # 1) Default — full project dump (original behavior)
-  ./printcode.sh
-
-  # 2) Backend only
-  ./printcode.sh --area backend
-
-  # 3) Backend + docs, last 200 lines of each file
-  ./printcode.sh --area backend --area docs --tail 200
-
-  # 4) Only specific paths
-  ./printcode.sh --path "backend/agent/**" --path "backend/services/**"
-
-  # 5) Only Python and Markdown files
-  ./printcode.sh --ext py,md
-
-  # 6) List-only mode for docs area (no code blocks)
-  ./printcode.sh --list --area docs
-
-  # 7) Range slicing on agent internals
-  ./printcode.sh --path "backend/agent/**" --range 80:220
-
-  # 8) Backend Python files, first 120 lines each
-  ./printcode.sh --area backend --ext py --head 120
-
-  # 9) Config files only, custom output prefix
-  ./printcode.sh --area config --output-prefix config_dump
-
-  # 10) Everything except tests, cap at 50 files
-  ./printcode.sh --exclude "tests/**" --max-files 50
-EOF
-}
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        --area)
-            [[ -z "${2:-}" ]] && { echo "Error: --area requires a value" >&2; exit 1; }
-            case "$2" in
-                backend|frontend|docs|scripts|plugins|tests|config) ;;
-                *) echo "Error: unknown area '$2'" >&2
-                   echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
-                   exit 1 ;;
-            esac
-            AREAS+=("$2"); shift 2
-            ;;
-        --path)
-            [[ -z "${2:-}" ]] && { echo "Error: --path requires a value" >&2; exit 1; }
-            INCLUDE_PATHS+=("$2"); shift 2
-            ;;
-        --exclude)
-            [[ -z "${2:-}" ]] && { echo "Error: --exclude requires a value" >&2; exit 1; }
-            USER_EXCLUDES+=("$2"); shift 2
-            ;;
-        --ext)
-            [[ -z "${2:-}" ]] && { echo "Error: --ext requires a value" >&2; exit 1; }
-            IFS=',' read -ra EXT_FILTER <<< "$2"; shift 2
-            ;;
-        --head)
-            [[ -z "${2:-}" ]] && { echo "Error: --head requires a number" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --head with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="head"; SLICE_N="$2"; shift 2
-            ;;
-        --tail)
-            [[ -z "${2:-}" ]] && { echo "Error: --tail requires a number" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --tail with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="tail"; SLICE_N="$2"; shift 2
-            ;;
-        --range)
-            [[ -z "${2:-}" ]] && { echo "Error: --range requires A:B" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --range with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="range"
-            SLICE_A="${2%%:*}"
-            SLICE_B="${2##*:}"
-            if [[ -z "$SLICE_A" || -z "$SLICE_B" || "$2" != *":"* ]]; then
-                echo "Error: --range format must be A:B (e.g. 80:220)" >&2; exit 1
-            fi
-            shift 2
-            ;;
-        --list)
-            LIST_ONLY=true; shift
-            ;;
-        --no-structure)
-            SHOW_STRUCTURE=false; shift
-            ;;
-        --lines-per-file)
-            [[ -z "${2:-}" ]] && { echo "Error: --lines-per-file requires a number" >&2; exit 1; }
-            LINES_PER_FILE="$2"; shift 2
-            ;;
-        --max-files)
-            [[ -z "${2:-}" ]] && { echo "Error: --max-files requires a number" >&2; exit 1; }
-            MAX_FILES="$2"; shift 2
-            ;;
-        --max-bytes)
-            [[ -z "${2:-}" ]] && { echo "Error: --max-bytes requires a number" >&2; exit 1; }
-            MAX_BYTES="$2"; shift 2
-            ;;
-        --output-prefix)
-            [[ -z "${2:-}" ]] && { echo "Error: --output-prefix requires a value" >&2; exit 1; }
-            OUTPUT_PREFIX="$2"; shift 2
-            ;;
-        *)
-            echo "Error: unknown option '$1'" >&2
-            echo "Run ./printcode.sh --help for usage." >&2
-            exit 1
-            ;;
-    esac
-done
-
-# ---------------------------------------------------------------------------
-# Build include patterns from areas + paths
-# ---------------------------------------------------------------------------
-declare -a INCLUDE_PATTERNS=()
-
-for area in "${AREAS[@]}"; do
-    while IFS= read -r glob; do
-        INCLUDE_PATTERNS+=("$glob")
-    done < <(globs_for_area "$area")
-done
-
-for p in "${INCLUDE_PATHS[@]}"; do
-    INCLUDE_PATTERNS+=("$p")
-done
-
-# ---------------------------------------------------------------------------
-# Default excludes (always applied)
-# ---------------------------------------------------------------------------
-DEFAULT_EXCLUDES=(
-    "*/__pycache__/*"
-    "*/.git/*"
-    "*/node_modules/*"
-    "*/dist/*"
-    "*/.next/*"
-    "*/build/*"
-    "*/data/*"
-    "*/cache/*"
-    "*/shards/*"
-    "*/results/*"
-    "*/.venv/*"
-    "*/venv/*"
-    "*_archive/*"
-)
-
-# Merge user excludes
-ALL_EXCLUDES=("${DEFAULT_EXCLUDES[@]}" "${USER_EXCLUDES[@]}")
-
-# ---------------------------------------------------------------------------
-# Default included extensions (when no filters are active)
-# ---------------------------------------------------------------------------
-# Original extensions: py sh md yaml yml ts tsx css
-# Added toml json ini for config area support
-DEFAULT_EXTS=(py sh md yaml yml ts tsx css toml json ini)
-
-# ---------------------------------------------------------------------------
-# Language hint from extension
-# ---------------------------------------------------------------------------
-lang_for_ext() {
-    case "$1" in
-        py)       echo "python" ;;
-        sh)       echo "bash" ;;
-        md)       echo "markdown" ;;
-        yaml|yml) echo "yaml" ;;
-        ts)       echo "typescript" ;;
-        tsx)      echo "tsx" ;;
-        css)      echo "css" ;;
-        toml)     echo "toml" ;;
-        json)     echo "json" ;;
-        ini)      echo "ini" ;;
-        js)       echo "javascript" ;;
-        jsx)      echo "jsx" ;;
-        html)     echo "html" ;;
-        sql)      echo "sql" ;;
-        *)        echo "" ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Priority ordering (same as original)
-# ---------------------------------------------------------------------------
-priority_for_path() {
-    local rel_path="$1"
-    case "$rel_path" in
-        AI_WORKING_GUIDE.md|\
-        MIGRATION.md|\
-        README.md|\
-        app/layout.tsx|\
-        app/page.tsx|\
-        package.json)
-            echo "00"
-            ;;
-        app/*|\
-        components/*|\
-        lib/*|\
-        hooks/*)
-            echo "20"
-            ;;
-        *)
-            echo "50"
-            ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Temp files
-# ---------------------------------------------------------------------------
-TEMP_FILE=$(mktemp)
-FILE_LIST=$(mktemp)
-_TMPFILES=("$TEMP_FILE" "$FILE_LIST")
-trap 'rm -f "${_TMPFILES[@]}"' EXIT
-
-# Helper: convert a file glob to a grep-compatible regex.
-# Steps: escape dots → ** marker → * to [^/]* → marker to .*
-glob_to_regex() {
-    echo "$1" | sed 's/\./\\./g; s/\*\*/\x00/g; s/\*/[^\/]*/g; s/\x00/.*/g'
-}
-
-# ---------------------------------------------------------------------------
-# Build the find command
-# ---------------------------------------------------------------------------
-# Exclude clauses — only default excludes go into find (they use */ prefix)
-FIND_EXCLUDES=()
-for pat in "${DEFAULT_EXCLUDES[@]}"; do
-    FIND_EXCLUDES+=( ! -path "$pat" )
-done
-# Always exclude dump output files, lock files, binary data
-FIND_EXCLUDES+=(
-    ! -name "*.pyc"
-    ! -name "*.parquet"
-    ! -name "*.pth"
-    ! -name "*.lock"
-    ! -name "package-lock.json"
-    ! -name "continuous_contract.json"
-    ! -name "dump*.md"
-    ! -name "dump*[0-9]"
-)
-
-# Determine which extensions to match
-ACTIVE_EXTS=()
-if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
-    ACTIVE_EXTS=("${EXT_FILTER[@]}")
-elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
-    # No area/path filter and no ext filter → use defaults
-    ACTIVE_EXTS=("${DEFAULT_EXTS[@]}")
-fi
-# When area/path filters are active but --ext is not, include all extensions
-# (the path filter itself narrows things down).
-
-# Build extension match clause for find
-EXT_CLAUSE=()
-if [[ ${#ACTIVE_EXTS[@]} -gt 0 ]]; then
-    EXT_CLAUSE+=( "(" )
-    first=true
-    for ext in "${ACTIVE_EXTS[@]}"; do
-        if $first; then first=false; else EXT_CLAUSE+=( -o ); fi
-        EXT_CLAUSE+=( -name "*.${ext}" )
-    done
-    EXT_CLAUSE+=( ")" )
-fi
-
-# Run find to collect candidate files
-find "$PROJECT_ROOT" -type f \
-    "${FIND_EXCLUDES[@]}" \
-    "${EXT_CLAUSE[@]}" \
-    2>/dev/null \
-    | sed "s|$PROJECT_ROOT/||" \
-    | sort > "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Apply user --exclude patterns (on relative paths)
-# ---------------------------------------------------------------------------
-if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-    EXCLUDE_REGEXES=()
-    for pat in "${USER_EXCLUDES[@]}"; do
-        EXCLUDE_REGEXES+=( -e "$(glob_to_regex "$pat")" )
-    done
-    grep -v -E "${EXCLUDE_REGEXES[@]}" "$FILE_LIST" > "${FILE_LIST}.tmp" || true
-    mv "${FILE_LIST}.tmp" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Apply include-pattern filtering (areas + paths)
-# ---------------------------------------------------------------------------
-if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]]; then
-    FILTERED=$(mktemp)
-    _TMPFILES+=("$FILTERED")
-    for pat in "${INCLUDE_PATTERNS[@]}"; do
-        regex="^$(glob_to_regex "$pat")$"
-        grep -E "$regex" "$FILE_LIST" >> "$FILTERED" 2>/dev/null || true
-    done
-    # Deduplicate (patterns may overlap)
-    sort -u "$FILTERED" > "${FILTERED}.tmp"
-    mv "${FILTERED}.tmp" "$FILTERED"
-    mv "$FILTERED" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Apply --max-files and --max-bytes guards
-# ---------------------------------------------------------------------------
-if [[ -n "$MAX_FILES" ]]; then
-    head -n "$MAX_FILES" "$FILE_LIST" > "${FILE_LIST}.tmp"
-    mv "${FILE_LIST}.tmp" "$FILE_LIST"
-fi
-
-if [[ -n "$MAX_BYTES" ]]; then
-    CUMULATIVE=0
-    CAPPED=$(mktemp)
-    _TMPFILES+=("$CAPPED")
-    while IFS= read -r rel_path; do
-        fsize=$(wc -c < "$PROJECT_ROOT/$rel_path" 2>/dev/null || echo 0)
-        CUMULATIVE=$((CUMULATIVE + fsize))
-        if (( CUMULATIVE > MAX_BYTES )); then
-            echo "(max-bytes $MAX_BYTES reached, stopping)" >&2
-            break
-        fi
-        echo "$rel_path"
-    done < "$FILE_LIST" > "$CAPPED"
-    mv "$CAPPED" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Sort by priority
-# ---------------------------------------------------------------------------
-SORTED_LIST=$(mktemp)
-_TMPFILES+=("$SORTED_LIST")
-while IFS= read -r rel_path; do
-    printf "%s\t%s\n" "$(priority_for_path "$rel_path")" "$rel_path"
-done < "$FILE_LIST" \
-    | sort -t $'\t' -k1,1 -k2,2 \
-    | cut -f2 > "$SORTED_LIST"
-mv "$SORTED_LIST" "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Counts for summary
-# ---------------------------------------------------------------------------
-SELECTED_COUNT=$(wc -l < "$FILE_LIST")
-
-# ---------------------------------------------------------------------------
-# Write header + selection summary
-# ---------------------------------------------------------------------------
-{
-    echo "# LearnIO Project Code Dump"
-    echo "Generated: $(date)"
-    echo ""
-    echo "## Selection Summary"
-    echo ""
-    if [[ ${#AREAS[@]} -gt 0 ]]; then
-        echo "- **Areas:** ${AREAS[*]}"
-    else
-        echo "- **Areas:** (all)"
-    fi
-    if [[ ${#INCLUDE_PATHS[@]} -gt 0 ]]; then
-        echo "- **Path filters:** ${INCLUDE_PATHS[*]}"
-    fi
-    if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-        echo "- **Extra excludes:** ${USER_EXCLUDES[*]}"
-    fi
-    if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
-        echo "- **Extensions:** ${EXT_FILTER[*]}"
-    elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
-        echo "- **Extensions:** ${DEFAULT_EXTS[*]} (defaults)"
-    else
-        echo "- **Extensions:** (all within selected areas)"
-    fi
-    if [[ -n "$SLICE_MODE" ]]; then
-        case "$SLICE_MODE" in
-            head)  echo "- **Slicing:** first $SLICE_N lines per file" ;;
-            tail)  echo "- **Slicing:** last $SLICE_N lines per file" ;;
-            range) echo "- **Slicing:** lines $SLICE_A–$SLICE_B per file" ;;
-        esac
-    else
-        echo "- **Slicing:** full files"
-    fi
-    if [[ -n "$MAX_FILES" ]]; then
-        echo "- **Max files:** $MAX_FILES"
-    fi
-    if [[ -n "$MAX_BYTES" ]]; then
-        echo "- **Max bytes:** $MAX_BYTES"
-    fi
-    echo "- **Files selected:** $SELECTED_COUNT"
-    if $LIST_ONLY; then
-        echo "- **Mode:** list only (no code)"
-    fi
-    echo ""
-} > "$TEMP_FILE"
-
-# ---------------------------------------------------------------------------
-# Compact project overview (always included for agent context)
-# ---------------------------------------------------------------------------
-{
-    echo "## Project Overview"
-    echo ""
-    echo "LearnIO is a Next.js (App Router) project integrated with Google AI Studio."
-    echo "It uses Tailwind CSS, Lucide React, and Framer Motion for the UI."
-    echo ""
-    echo "| Area | Path | Description |"
-    echo "|------|------|-------------|"
-    echo "| **app** | app/ | Next.js App Router (pages, layout, api) |"
-    echo "| **components** | components/ | React UI components (shadcn/ui style) |"
-    echo "| **lib** | lib/ | Shared utilities and helper functions |"
-    echo "| **hooks** | hooks/ | Custom React hooks |"
-    echo "| **docs** | *.md | Migration, AI working guide, README |"
-    echo ""
-    echo "Key paths: \`app/page.tsx\` (main UI), \`app/layout.tsx\` (root wrapper), \`AI_WORKING_GUIDE.md\`"
-    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK"
-    echo ""
-    echo "To dump specific code for chat context, run:"
-    echo "\`\`\`bash"
-    echo "./printcode.sh --help                              # see all options"
-    echo "./printcode.sh --area backend --ext py --head 120  # backend Python, first 120 lines"
-    echo "./printcode.sh --list --area docs                  # just list doc files"
-    echo "\`\`\`"
-    echo ""
-} >> "$TEMP_FILE"
-
-# ---------------------------------------------------------------------------
-# Project structure section
-# ---------------------------------------------------------------------------
-if $SHOW_STRUCTURE; then
-    echo "## Project Structure" >> "$TEMP_FILE"
-    echo '```' >> "$TEMP_FILE"
-    if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]] || [[ ${#EXT_FILTER[@]} -gt 0 ]] || [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-        # Show only selected/filtered files in structure
-        cat "$FILE_LIST" >> "$TEMP_FILE"
-    else
-        # Show full tree (original behavior)
-        find "$PROJECT_ROOT" -type f \
-            "${FIND_EXCLUDES[@]}" \
-            2>/dev/null \
-            | sed "s|$PROJECT_ROOT/||" \
-            | sort >> "$TEMP_FILE"
-    fi
-    echo '```' >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-fi
-
-# ---------------------------------------------------------------------------
-# If --list mode, we are done (no code blocks)
-# ---------------------------------------------------------------------------
-if $LIST_ONLY; then
-    # In list mode, just output the temp file directly
-    total_lines=$(wc -l < "$TEMP_FILE")
-    echo "Total lines: $total_lines (list-only mode)"
-
-    # Remove old dump files
-    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
-    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
-
-    cp "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}00.md"
-    echo "Done! Created:"
-    ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
-    exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# Source files section
-# ---------------------------------------------------------------------------
-echo "## Source Files" >> "$TEMP_FILE"
-echo "" >> "$TEMP_FILE"
-
-while IFS= read -r rel_path; do
-    file="$PROJECT_ROOT/$rel_path"
-    [[ -f "$file" ]] || continue
-
-    ext="${rel_path##*.}"
-    lang=$(lang_for_ext "$ext")
-    total_file_lines=$(wc -l < "$file")
-
-    # Build slice header annotation
-    slice_note=""
-    case "$SLICE_MODE" in
-        head)  slice_note=" (first $SLICE_N lines of $total_file_lines)" ;;
-        tail)  slice_note=" (last $SLICE_N lines of $total_file_lines)" ;;
-        range) slice_note=" (lines ${SLICE_A}–${SLICE_B} of $total_file_lines)" ;;
-    esac
-
-    echo "### ${rel_path}${slice_note}" >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-    echo "\`\`\`$lang" >> "$TEMP_FILE"
-
-    # Output content (full or sliced)
-    case "$SLICE_MODE" in
-        head)
-            sed -n "1,${SLICE_N}p" "$file" >> "$TEMP_FILE"
-            ;;
-        tail)
-            tail -n "$SLICE_N" "$file" >> "$TEMP_FILE"
-            ;;
-        range)
-            sed -n "${SLICE_A},${SLICE_B}p" "$file" >> "$TEMP_FILE"
-            ;;
-        *)
-            cat "$file" >> "$TEMP_FILE"
-            ;;
-    esac
-
-    echo "" >> "$TEMP_FILE"
-    echo "\`\`\`" >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-done < "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Split into dump files
-# ---------------------------------------------------------------------------
-total_lines=$(wc -l < "$TEMP_FILE")
-
-if [[ -z "$LINES_PER_FILE" ]]; then
-    TARGET_LINES=8000
-    if (( total_lines > (TARGET_LINES * MAX_DUMP_FILES) )); then
-        # Too big for 10 files at 8k lines each -> increase chunk size to fit exactly 10 files
-        LINES_PER_FILE=$(( (total_lines + MAX_DUMP_FILES - 1) / MAX_DUMP_FILES ))
-    else
-        # Small enough -> use fixed 8k chunk size (resulting in 1-10 files)
-        LINES_PER_FILE=$TARGET_LINES
-    fi
-fi
-
-echo "Total lines: $total_lines"
-echo "Lines per file: $LINES_PER_FILE (targeting $MAX_DUMP_FILES files)"
-echo "Files selected: $SELECTED_COUNT"
-
-# Remove old dump files
-rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
-rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
-
-# Split (use 2-digit suffix)
-split -l "$LINES_PER_FILE" -d -a 2 "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}"
-
-# Rename to .md and remove empty files
-for f in "$PROJECT_ROOT"/${OUTPUT_PREFIX}*; do
-    if [[ ! "$f" =~ \.md$ ]]; then
-        if [[ -s "$f" ]]; then
-            mv "$f" "${f}.md"
-        else
-            rm -f "$f"
-        fi
-    fi
-done
-
-echo "Done! Created:"
-ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
-
-```
-
-### prissues.md
-
-```markdown
-# PR Issues & Agent Endpoint Reference
-
-> Sprint 2 — Lane 6 integration log. Documents blockers encountered and
-> the endpoint contract another agent (Custom GPT, local agent, or cloud
-> coding agent) uses to interact with Mira Studio.
-
----
-
-## 1. Coding Agent Blocker — Issue #3
-
-### What happened
-- Created GitHub issue #3 via app API (`/api/github/create-issue`)
-- Assigned `copilot-swe-agent` via `gh issue edit --add-assignee copilot-swe-agent`
-- Also tried atomic creation: `gh issue create --assignee copilot-swe-agent`
-- **Both approaches failed** with the same error:
-
-> "The agent encountered an error and was unable to start working on this
-> issue: This may be caused by a repository ruleset violation. See granting
-> bypass permissions for the agent."
-
-### What we investigated
-| Check | Result |
-|-------|--------|
-| Repo rulesets | None — `gh api repos/wyrmspire/mira/rulesets` returns 403 (free plan) |
-| Branch protection | Cannot query — free plan blocks the API |
-| Repo visibility | Private (same as `mirrorflow` where it works) |
-| Repo permissions | admin: true, push: true (same as `mirrorflow`) |
-| Owner | `wyrmspire` (same account on both repos) |
-| Default branch | `main` (same) |
-| `.github` directory | Neither repo has one |
-| Account plan | Free |
-| Token | Same PAT used on both repos — works on `mirrorflow` |
-
-### What works on `mirrorflow` but not `mira`
-The exact same `gh issue create --assignee copilot-swe-agent` command works
-on `wyrmspire/mirrorflow` (creates an issue, agent picks it up, opens a PR)
-but fails on `wyrmspire/mira` with the ruleset error.
-
-### Likely root cause
-Something in the **repo-level Copilot coding agent settings** differs between
-the two repos. This is configured via GitHub web UI:
-`Settings → Copilot → Coding agent`
-
-### What to check
-1. Go to `https://github.com/wyrmspire/mira/settings` → Copilot → Coding agent
-2. Compare with `https://github.com/wyrmspire/mirrorflow/settings` → Copilot → Coding agent
-3. If there's a toggle or permission difference, match `mira` to what `mirrorflow` has
-
-### Reference
-- GitHub docs: [Granting bypass permissions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
-- Issue #3: https://github.com/wyrmspire/mira/issues/3
-- Issue #4: https://github.com/wyrmspire/mira/issues/4 (atomic create+assign attempt)
-
----
-
-## 2. Fixes Applied During Lane 6
-
-| # | Fix | File | What changed |
-|---|-----|------|-------------|
-| 1 | Junk files cleaned + .gitignore | `.gitignore` | Added `tsc-*.txt`, `nul`, `gitrdiff.md` patterns |
-| 2 | Adapter config TODO | `lib/adapters/github-adapter.ts` | Replaced raw env reads with `lib/config/github.ts` |
-| 3 | merge-pr false local success | `app/api/actions/merge-pr/route.ts` | Returns 502 if GitHub merge fails (no silent fallback) |
-| 4 | mark-shipped wrong inbox event | `app/api/actions/mark-shipped/route.ts` | Changed `github_issue_created` → `github_issue_closed` |
-| 5 | Missing inbox event type | `types/inbox.ts` | Added `github_issue_closed` to union |
-| 6 | Inbox formatter | `lib/formatters/inbox-formatters.ts` | Added label for `github_issue_closed` |
-| 7 | Atomic agent handoff | `app/api/github/create-issue/route.ts` + `lib/services/github-factory-service.ts` | Added `assignAgent: true` flag for atomic `copilot-swe-agent` assignment |
-
-### Verification
-- `npx tsc --noEmit` → **0 errors** ✅
-- `npm run build` → **clean** ✅
-- GitHub connection test → **connected as wyrmspire** ✅
-- Tunnel `mira.mytsapi.us` → **live** ✅
-- Webhook round-trip (create issue → receive webhook → inbox event) → **working** ✅
-
----
-
-## 3. Agent Endpoint Reference
-
-Base URL: `https://mira.mytsapi.us` (Cloudflare tunnel → localhost:3000)
-
-### Idea Capture (Custom GPT → App)
-
-```
-POST /api/webhook/gpt
-Content-Type: application/json
-
-{
-  "source": "gpt",
-  "event": "idea_captured",
-  "data": {
-    "title": "My Cool Idea",
-    "rawPrompt": "The user's original words...",
-    "gptSummary": "A structured 2-4 sentence summary.",
-    "vibe": "playful",
-    "audience": "indie devs",
-    "intent": "ship a side project"
-  },
-  "timestamp": "2026-03-22T20:00:00Z"
-}
-
-Response: 201 { data: Idea, message: "Idea captured" }
-```
-
-### Create Issue + Assign Coding Agent (Atomic Handoff)
-
-```
-POST /api/github/create-issue
-Content-Type: application/json
-
-Option A — From a project:
-{
-  "projectId": "proj-001",
-  "assignAgent": true
-}
-
-Option B — Standalone (any agent can call this):
-{
-  "title": "Build Feature X",
-  "body": "### Objective\n...\n### Instructions\n...\n### Acceptance Criteria\n...",
-  "labels": ["mira"],
-  "assignAgent": true
-}
-
-Response: 200 { data: { issueNumber: 3, issueUrl: "https://..." } }
-```
-
-When `assignAgent: true`, the issue is created with `copilot-swe-agent` in
-the assignees array — single API call, coding agent starts immediately.
-
-### Test GitHub Connection
-
-```
-GET /api/github/test-connection
-
-Response: 200 { connected: true, login: "wyrmspire", repo: "wyrmspire/mira", ... }
-```
-
-### GitHub Webhook (GitHub → App — automatic)
-
-```
-POST /api/webhook/github
-Headers:
-  x-github-event: issues | pull_request | workflow_run | pull_request_review
-  x-hub-signature-256: sha256=<HMAC>
-  x-github-delivery: <UUID>
-
-Signature verified against GITHUB_WEBHOOK_SECRET in .env.local.
-Events are dispatched to handlers in lib/github/handlers/.
-```
-
-### Other Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/ideas` | List all ideas |
-| GET | `/api/projects` | List all projects |
-| GET | `/api/inbox` | List inbox events |
-| POST | `/api/ideas/materialize` | Convert idea → project (requires drill) |
-| POST | `/api/actions/promote-to-arena` | Move idea to In Progress |
-| POST | `/api/actions/move-to-icebox` | Put idea on hold |
-| POST | `/api/actions/mark-shipped` | Ship a project (optionally closes GitHub issue) |
-| POST | `/api/actions/kill-idea` | Remove an idea |
-| POST | `/api/actions/merge-pr` | Merge a PR (GitHub-aware) |
-| POST | `/api/github/create-pr` | Create a GitHub PR |
-| POST | `/api/github/dispatch-workflow` | Trigger a GitHub Actions workflow |
-| GET/POST | `/api/github/sync-pr` | Sync PR data from GitHub |
-| POST | `/api/github/merge-pr` | Direct GitHub PR merge |
-
----
-
-## 4. Environment Variables Required
-
-```env
-# GitHub (all required for factory)
-GITHUB_TOKEN=ghp_...        # PAT with repo scope
-GITHUB_OWNER=wyrmspire
-GITHUB_REPO=mira
-GITHUB_DEFAULT_BRANCH=main
-GITHUB_WEBHOOK_SECRET=mira-wh-s2-7f3a9c1e
-
-# Supabase (future)
-NEXT_PUBLIC_SUPABASE_URL=https://...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-
-# Gemini (future)
-GEMINI_API_KEY=AIza...
-```
-
----
-
-## 5. Tunnel Setup
-
-```bash
-# Named tunnel (already created)
-cloudflared tunnel run mira
-
-# Config at: C:\Users\wyrms\.cloudflared\config.yml
-# DNS: mira.mytsapi.us → tunnel 68361f22-15b9-4534-a9d1-e9a1e6e0a595
-```
-
-The tunnel serves all traffic:
-- UI: `https://mira.mytsapi.us/`
-- Custom GPT webhook: `https://mira.mytsapi.us/api/webhook/gpt`
-- GitHub webhook: `https://mira.mytsapi.us/api/webhook/github`
-- Phone access: Same URL, works on any device
-
-```
-
-### roadmap.md
-
-```markdown
-# Mira Studio — Product Roadmap
-
-> Living document. The vision is large; the sprints are small.
-
----
-
-## Core Thesis
-
-**Mira is a heavy-duty idea realizer factory.**
-
-It is NOT primarily a coding tool. Code is one possible output — but the real product is taking a raw idea through a structured realization pipeline that produces whatever the idea actually needs:
-
-- A **workbook** (structured exercises, frameworks, decision trees)
-- A **research brief** (web research, competitive analysis, literature review)
-- A **course/curriculum** (learning path, module structure, reflection prompts)
-- A **planning document** (milestones, resource maps, risk assessment)
-- A **mini MVP** (if the idea is a coding project — a playable prototype)
-- A **personal reflection kit** (journaling prompts, values alignment, gut-check exercises)
-
-Each idea gets a **different realization path** based on what it actually is. A business idea gets a different treatment than a creative project, which gets a different treatment than a personal growth goal.
-
----
-
-## How It Works (Target Architecture)
-
-```
-User ← ChatGPT (Custom GPT "Mira")
-  ↓
-Brainstorming session → idea captured
-  ↓
-Mira Studio (app) → user drills the idea → promotes to project
-  ↓
-GitHub Issue created with structured spec
-  ↓
-Coding Agent (Codex) executes the spec
-  ↓
-Agent outputs appear as a PR:
-  - Workbook files (markdown, structured DSL)
-  - Research artifacts (web-sourced, cited)
-  - Mini MVP scaffold (if applicable)
-  - Course/module structure
-  ↓
-User reviews in Mira Studio → merges or requests revisions
-  ↓
-Output saved (to repo, exported, or archived)
-```
-
----
-
-## Why GitHub Coding Agent (Not Just a DB)
-
-The coding agent gives us things a database never could:
-
-| Capability | DB | Coding Agent |
-|-----------|-----|-------------|
-| Store structured data | ✅ | ✅ |
-| Generate novel content from a spec | ❌ | ✅ |
-| Do web research | ❌ | ✅ |
-| Create working prototypes | ❌ | ✅ |
-| Produce different outputs per idea | ❌ | ✅ |
-| Version-control the evolution | ❌ | ✅ (PRs) |
-| Allow review before merging | ❌ | ✅ |
-
-The agent IS the factory floor. GitHub Issues are the work orders. PRs are the finished goods. The app is the control room.
-
----
-
-## Realization Modes (To Be Fleshed Out)
-
-Each idea gets classified into a realization mode. The mode determines what the coding agent produces.
-
-| Mode | Trigger Signal | Agent Output |
-|------|---------------|-------------|
-| 🧠 **Think** | Personal growth, reflection, values | Reflection workbook, journaling prompts, decision framework |
-| 📚 **Learn** | Education, skill-building, curiosity | Course outline, module structure, resource list, exercises |
-| 🔬 **Research** | Market validation, competitive analysis | Research brief, web findings, citation list, opportunity map |
-| 📋 **Plan** | Business idea, project, venture | Project plan, milestone map, risk assessment, resource needs |
-| 💻 **Build** | Coding project, app, tool | Mini MVP scaffold, playable prototype, tech spec |
-| 🎨 **Create** | Creative project, content, art | Creative brief, mood board spec, content outline, structure |
-| ❓ **Question** | Uncertain, needs more clarity | Question framework, assumption tests, exploration prompts |
-
-### DSL for Agent Specs (Future)
-
-The issue body sent to the coding agent will follow a structured DSL:
-
-```yaml
-mode: learn
-idea: "Understanding options trading for beginners"
-context:
-  audience: "Complete beginner, no finance background"
-  vibe: "friendly, non-intimidating"
-  intent: "Build confidence to make first trade"
-outputs:
-  - type: course_outline
-    format: markdown
-    depth: 5-modules
-  - type: exercises
-    format: markdown
-    count: 3-per-module
-  - type: resource_list
-    format: markdown
-    sources: web-verified
-```
-
-This DSL is TBD — needs real iteration with actual ideas.
-
----
-
-## What's Built vs What's Planned
-
-### ✅ Sprint 1 — Local Control Plane (Complete)
-- Idea capture, drill, promote, ship lifecycle
-- Local JSON persistence
-- Inbox events
-- Dev harness for testing
-
-### ✅ Sprint 2 — GitHub Factory Wiring (Current)
-- Real GitHub API integration (Octokit)
-- Webhook pipeline (signature-verified)
-- Issue creation, PR creation, merge from app
-- Coding agent assignment (Copilot/Codex)
-- Cloudflare tunnel for public access
-- Custom GPT schema for brainstorming
-
-### 🔲 Sprint 3 — Realization Modes (Next)
-- [ ] Mode classification logic (analyze idea → pick mode)
-- [ ] DSL for agent specs (structured issue body per mode)
-- [ ] Template library (one template per realization mode)
-- [ ] Agent output parsing (PR contains structured artifacts, not just code)
-- [ ] Rich review UI (preview workbooks, courses, research in-app)
-
-### 🔲 Sprint 4 — Research & Web Integration
-- [ ] Agent web research capability (citations, source verification)
-- [ ] Research artifact format and display
-- [ ] Competitive analysis template
-- [ ] Source credibility scoring
-
-### 🔲 Sprint 5 — Output & Export
-- [ ] Export realized ideas (PDF, markdown bundle, repo fork)
-- [ ] Save to separate repo (one repo per realized idea)
-- [ ] Share/publish workflow
-- [ ] Portfolio of shipped ideas
-
-### 🔲 Sprint 6 — Supabase Persistence
-- [ ] Replace JSON file storage with Supabase
-- [ ] User auth (multi-user ready)
-- [ ] Idea history and versioning
-- [ ] Deploy to Vercel (production)
-
----
-
-## Model Configuration
-
-| Use Case | Model | Notes |
-|----------|-------|-------|
-| Custom GPT (brainstorming) | GPT-4o | Cost-effective for conversation |
-| Coding Agent (realization) | Codex 5.3 (default) | Switch to 4o for testing loops |
-| Coding Agent (testing only) | GPT-4o | Lower cost for wiring validation |
-
----
-
-## Open Questions
-
-- How does the user choose/override the realization mode?
-- Should the drill questions change based on detected mode?
-- Can the agent iterate (research → draft → refine) in a single issue?
-- What's the right repo strategy — one monorepo for all outputs, or one repo per idea?
-- How do we handle ideas that span multiple modes (e.g., "learn + build")?
-- What DSL format works best for agent specs?
-
----
-
-## Principles
-
-1. **Ideas first, code second.** Code is one output format, not the default.
-2. **Agent as factory floor.** GitHub Issues = work orders. PRs = finished goods. App = control room.
-3. **Every idea deserves a different shape.** No one-size-fits-all template.
-4. **Review before merge.** The user always sees and approves the output.
-5. **Web-connected agents.** Research and real-world data are first-class.
-6. **Version everything.** Git gives us history, diffs, and rollback for free.
-
-```
-
-### start.sh
-
-```bash
-#!/usr/bin/env bash
-# start.sh — Kill old processes, start dev server + Cloudflare tunnel
-# Tunnel: mira.mytsapi.us → localhost:3000
-
-set -e
-cd "$(dirname "$0")"
-
-echo "🧹 Killing old processes..."
-
-# Kill any node process on port 3000
-for pid in $(netstat -ano 2>/dev/null | grep ':3000 ' | grep LISTENING | awk '{print $5}' | sort -u); do
-  echo "  Killing PID $pid (port 3000)"
-  taskkill //F //PID "$pid" 2>/dev/null || true
-done
-
-# Kill any existing cloudflared tunnel
-taskkill //F //IM cloudflared.exe 2>/dev/null && echo "  Killed cloudflared" || echo "  No cloudflared running"
-
-sleep 1
-
-echo ""
-echo "🚀 Starting Next.js dev server..."
-npm run dev &
-DEV_PID=$!
-
-# Wait for the dev server to be ready
-echo "⏳ Waiting for localhost:3000..."
-for i in $(seq 1 30); do
-  if curl -s -o /dev/null http://localhost:3000 2>/dev/null; then
-    echo "✅ Dev server ready on http://localhost:3000"
-    break
-  fi
-  sleep 1
-done
-
-echo ""
-echo "🌐 Starting Cloudflare tunnel → mira.mytsapi.us"
-cloudflared tunnel run &
-TUNNEL_PID=$!
-
-echo ""
-echo "============================================"
-echo "  Mira Studio is running!"
-echo "  Local:  http://localhost:3000"
-echo "  Tunnel: https://mira.mytsapi.us"
-echo "  Webhook: https://mira.mytsapi.us/api/webhook/github"
-echo "============================================"
-echo ""
-echo "Press Ctrl+C to stop everything."
-
-# Trap Ctrl+C to kill both processes
-trap 'echo "Shutting down..."; kill $DEV_PID $TUNNEL_PID 2>/dev/null; exit 0' INT TERM
-
-# Wait for either to exit
-wait
-
-```
-
-### tailwind.config.ts
-
-```typescript
-import type { Config } from 'tailwindcss'
-const config: Config = {
-  content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  theme: {
-    extend: {
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
-      },
-      colors: {
-        studio: {
-          bg: '#0a0a0f',
-          surface: '#12121a',
-          border: '#1e1e2e',
-          muted: '#2a2a3a',
-          accent: '#6366f1',
-          'accent-hover': '#818cf8',
-          text: '#e2e8f0',
-          'text-muted': '#94a3b8',
-          success: '#10b981',
-          warning: '#f59e0b',
-          danger: '#ef4444',
-          ice: '#38bdf8',
-        },
-      },
-    },
-  },
-  plugins: [],
-}
-export default config
-
-```
-
-### tsconfig.json
-
-```json
-{
-  "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [{"name": "next"}],
-    "paths": {"@/*": ["./*"]}
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
-}
-
-```
-
-### types/agent-run.ts
-
-```typescript
-/**
- * types/agent-run.ts
- * Represents a single AI-agent or GitHub workflow execution triggered by Mira.
- */
-
-import type { ExecutionMode } from '@/lib/constants'
-
-export type AgentRunKind =
-  | 'prototype'
-  | 'fix_request'
-  | 'spec'
-  | 'research_summary'
-  | 'copilot_issue_assignment'
-
-export type AgentRunStatus =
-  | 'queued'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'blocked'
-
-export interface AgentRun {
-  id: string
-  projectId: string
-  taskId?: string
-  kind: AgentRunKind
-  status: AgentRunStatus
-  executionMode: ExecutionMode
-  triggeredBy: string
-  githubWorkflowRunId?: string
-  githubIssueNumber?: number
-  startedAt: string
-  finishedAt?: string
-  summary?: string
-  error?: string
-}
-
-```
-
-### types/api.ts
-
-```typescript
-export interface ApiResponse<T> {
-  data?: T
-  error?: string
-  message?: string
-}
-
-export interface PaginatedResponse<T> {
-  data: T[]
-  total: number
-  page: number
-  pageSize: number
-}
-
-```
-
-### types/drill.ts
-
-```typescript
-export type DrillDisposition = 'arena' | 'icebox' | 'killed'
-
-export interface DrillSession {
-  id: string
-  ideaId: string
-  intent: string
-  successMetric: string
-  scope: 'small' | 'medium' | 'large'
-  executionPath: 'solo' | 'assisted' | 'delegated'
-  urgencyDecision: 'now' | 'later' | 'never'
-  finalDisposition: DrillDisposition
-  completedAt?: string
-}
-
-```
-
-### types/external-ref.ts
-
-```typescript
-/**
- * types/external-ref.ts
- * Maps a local Mira entity (project, PR, task, agent_run) to an external
- * provider record (GitHub issue/PR, Vercel deployment, etc.).
- * Used for reverse-lookup: GitHub event → local entity.
- */
-
-export type ExternalProvider = 'github' | 'vercel' | 'supabase'
-
-export interface ExternalRef {
-  id: string
-  entityType: 'project' | 'pr' | 'task' | 'agent_run'
-  entityId: string
-  provider: ExternalProvider
-  externalId: string
-  externalNumber?: number
-  url?: string
-  createdAt: string
-}
-
-```
-
-### types/github.ts
-
-```typescript
-/**
- * types/github.ts
- * Shared GitHub-specific types used across the webhook pipeline,
- * adapter, and services.
- */
-
-export type GitHubEventType =
-  | 'issues'
-  | 'issue_comment'
-  | 'pull_request'
-  | 'pull_request_review'
-  | 'workflow_run'
-  | 'push'
-
-export interface GitHubIssuePayload {
-  action: string
-  issue: {
-    number: number
-    title: string
-    html_url: string
-    state: string
-    assignee?: { login: string }
-  }
-  repository: {
-    full_name: string
-    owner: { login: string }
-    name: string
-  }
-}
-
-export interface GitHubPRPayload {
-  action: string
-  pull_request: {
-    number: number
-    title: string
-    html_url: string
-    state: string
-    head: { sha: string; ref: string }
-    base: { ref: string }
-    draft: boolean
-    mergeable?: boolean
-  }
-  repository: {
-    full_name: string
-    owner: { login: string }
-    name: string
-  }
-}
-
-export interface GitHubWorkflowRunPayload {
-  action: string
-  workflow_run: {
-    id: number
-    name: string
-    status: string
-    conclusion: string | null
-    html_url: string
-    head_sha: string
-  }
-  repository: {
-    full_name: string
-    owner: { login: string }
-    name: string
-  }
-}
-
-```
-
-### types/idea.ts
-
-```typescript
-export type IdeaStatus =
-  | 'captured'
-  | 'drilling'
-  | 'arena'
-  | 'icebox'
-  | 'shipped'
-  | 'killed'
-
-export interface Idea {
-  id: string
-  title: string
-  rawPrompt: string
-  gptSummary: string
-  vibe: string
-  audience: string
-  intent: string
-  createdAt: string
-  status: IdeaStatus
-}
-
-```
-
-### types/inbox.ts
-
-```typescript
-export type InboxEventType =
-  | 'idea_captured'
-  | 'idea_deferred'
-  | 'drill_completed'
-  | 'project_promoted'
-  | 'task_created'
-  | 'pr_opened'
-  | 'preview_ready'
-  | 'build_failed'
-  | 'merge_completed'
-  | 'project_shipped'
-  | 'project_killed'
-  | 'changes_requested'
-  // GitHub lifecycle events
-  | 'github_issue_created'
-  | 'github_issue_closed'
-  | 'github_workflow_dispatched'
-  | 'github_workflow_failed'
-  | 'github_workflow_succeeded'
-  | 'github_pr_opened'
-  | 'github_pr_merged'
-  | 'github_review_requested'
-  | 'github_changes_requested'
-  | 'github_copilot_assigned'
-  | 'github_sync_failed'
-  | 'github_connection_error'
-
-export interface InboxEvent {
-  id: string
-  projectId?: string
-  type: InboxEventType
-  title: string
-  body: string
-  timestamp: string
-  severity: 'info' | 'warning' | 'error' | 'success'
-  actionUrl?: string
-  githubUrl?: string
-  read: boolean
-}
-
-```
-
-### types/pr.ts
-
-```typescript
-export type PRStatus = 'open' | 'merged' | 'closed'
-export type BuildState = 'pending' | 'running' | 'success' | 'failed'
-export type ReviewStatus = 'pending' | 'approved' | 'changes_requested' | 'merged'
-
-export interface PullRequest {
-  id: string
-  projectId: string
-  title: string
-  branch: string
-  status: PRStatus
-  previewUrl?: string
-  buildState: BuildState
-  mergeable: boolean
-  requestedChanges?: string
-  reviewStatus?: ReviewStatus
-  /** Local sequential PR number (used before GitHub sync) */
-  number: number
-  author: string
-  createdAt: string
-  // GitHub integration fields (all optional)
-  /** Real GitHub PR number — distinct from the local `number` field */
-  githubPrNumber?: number
-  githubPrUrl?: string
-  githubBranchRef?: string
-  headSha?: string
-  baseBranch?: string
-  checksUrl?: string
-  lastGithubSyncAt?: string
-  workflowRunId?: string
-  source?: 'local' | 'github'
-}
-
-```
-
-### types/project.ts
-
-```typescript
-import type { ExecutionMode } from '@/lib/constants'
-
-export type ProjectState = 'arena' | 'icebox' | 'shipped' | 'killed'
-export type ProjectHealth = 'green' | 'yellow' | 'red'
-
-export interface Project {
-  id: string
-  ideaId: string
-  name: string
-  summary: string
-  state: ProjectState
-  health: ProjectHealth
-  currentPhase: string
-  nextAction: string
-  activePreviewUrl?: string
-  createdAt: string
-  updatedAt: string
-  shippedAt?: string
-  killedAt?: string
-  killedReason?: string
-  // GitHub integration fields (all optional — local-only projects remain valid)
-  githubOwner?: string
-  githubRepo?: string
-  githubIssueNumber?: number
-  githubIssueUrl?: string
-  executionMode?: ExecutionMode
-  githubWorkflowStatus?: string
-  copilotAssignedAt?: string
-  copilotPrNumber?: number
-  copilotPrUrl?: string
-  lastSyncedAt?: string
-  /** Placeholder for future GitHub App migration */
-  githubInstallationId?: string
-  /** Placeholder for future GitHub App migration */
-  githubRepoFullName?: string
-}
-
-```
-
-### types/task.ts
-
-```typescript
-export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'blocked'
-
-export interface Task {
-  id: string
-  projectId: string
-  title: string
-  status: TaskStatus
-  priority: 'low' | 'medium' | 'high'
-  linkedPrId?: string
-  createdAt: string
-  // GitHub integration fields (all optional)
-  githubIssueNumber?: number
-  githubIssueUrl?: string
-  source?: 'local' | 'github'
-  parentTaskId?: string
-}
-
-```
-
-### types/webhook.ts
-
-```typescript
-export interface WebhookPayload {
-  source: 'gpt' | 'github' | 'vercel'
-  event: string
-  data: Record<string, unknown>
-  signature?: string
-  timestamp: string
-}
-// GitHub-specific webhook context parsed from headers + body
-export interface GitHubWebhookContext {
-  event: string                    // x-github-event header
-  action: string                   // body.action
-  delivery: string                 // x-github-delivery header
-  repositoryFullName: string       // body.repository.full_name
-  sender: string                   // body.sender.login
-  rawPayload: Record<string, unknown>
-}
-
-export type GitHubWebhookHandler = (ctx: GitHubWebhookContext) => Promise<void>
-
-```
-
-### wiring.md
-
-```markdown
-# Wiring — Manual Steps Required
-
-> Things the user must do outside of code to make the GitHub factory work.
-
----
-
-## Phase A: Token-Based Setup (Sprint 2)
-
-### 1. Verify your GitHub PAT scopes
-
-Your `.env.local` already has `GITHUB_TOKEN`. Ensure this token has these scopes:
-
-- `repo` (full control of private repos)
-- `workflow` (update GitHub Action workflows)
-- `admin:repo_hook` or `write:repo_hook` (manage webhooks — needed later)
-
-To check: go to [https://github.com/settings/tokens](https://github.com/settings/tokens) and inspect the token's scopes.
-
-If using a **fine-grained token**, you need:
-- Repository access: the target repo
-- Permissions: Contents (R/W), Issues (R/W), Pull Requests (R/W), Actions (R/W), Webhooks (R/W)
-
-### 2. Add required env vars to `.env.local`
-
-After Lane 1 creates the config module, add these to `.env.local`:
-
-```env
-# Already present:
-GITHUB_TOKEN=ghp_...
-
-# Add these:
-GITHUB_OWNER=your-github-username
-GITHUB_REPO=your-target-repo-name
-GITHUB_DEFAULT_BRANCH=main
-GITHUB_WEBHOOK_SECRET=generate-a-random-string-here
-```
-
-To generate a webhook secret:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-### 3. Create a target repository on GitHub
-
-The app needs a real repo to create issues and PRs in. Either:
-- Use an existing repo you want Mira to manage
-- Create a new empty repo for experimentation
-
-### 4. Set up webhook forwarding (for webhook testing)
-
-Your local dev server needs to receive GitHub webhooks. Options:
-
-**Option A: ngrok (recommended for testing)**
-```bash
-ngrok http 3000
-```
-Then set the webhook URL on GitHub to: `https://YOUR-NGROK-URL/api/webhook/github`
-
-**Option B: smee.io**
-```bash
-npx smee-client --url https://smee.io/YOUR-CHANNEL --target http://localhost:3000/api/webhook/github
-```
-
-**Set up the webhook on GitHub:**
-1. Go to your target repo → Settings → Webhooks → Add webhook
-2. Payload URL: your forwarding URL + `/api/webhook/github`
-3. Content type: `application/json`
-4. Secret: the value of `GITHUB_WEBHOOK_SECRET` from your `.env.local`
-5. Events: Send me everything (or select: Issues, Pull requests, Workflow runs)
-
----
-
-## Phase B: GitHub App Migration (Future — Not Sprint 2)
-
-When ready to move beyond PAT:
-
-1. Register a GitHub App at [https://github.com/settings/apps](https://github.com/settings/apps)
-2. Set permissions: Issues (R/W), Pull Requests (R/W), Contents (R/W), Actions (R/W), Workflows (R/W)
-3. Subscribe to events: issues, pull_request, pull_request_review, workflow_run
-4. Add `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID` to env
-5. Update the auth provider boundary in `lib/config/github.ts` to resolve installation tokens
-
----
-
-## Future: Supabase Persistence (Post Sprint 2)
-
-Supabase credentials are already in `.env.local`. When ready:
-
-1. Create tables matching the `StudioStore` schema
-2. Migrate `lib/storage.ts` from JSON file to Supabase client calls
-3. Enable Row Level Security
-4. Use Supabase Realtime for live inbox updates
-
-This is a separate sprint. The JSON file store is sufficient for the GitHub factory experiment.
-
----
-
-## Copilot Coding Agent (SWE) — Verify Access
-
-To use Copilot coding agent as the "spawn coder" path:
-
-1. Ensure your repo has GitHub Copilot enabled
-2. Verify `copilot-swe-agent` can be assigned to issues (requires Copilot Enterprise or organization with Copilot enabled)
-3. If not available, the app falls back to `custom_workflow_dispatch` execution mode
-4. The local path `c:/skill/swe` is used for local agent spawning — same contract but different executor
-
-```
-
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`projectId` is required' },
+-      { status: 400 }
+-    )
+-  }
+-  if (!title || typeof title !== 'string') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`title` is required' },
+-      { status: 400 }
+-    )
+-  }
+-  if (!head || typeof head !== 'string') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`head` (branch name) is required' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  try {
+-    const result = await createPRFromProject(projectId, {
+-      title,
+-      head,
+-      body: typeof body.body === 'string' ? body.body : '',
+-      draft: body.draft === true,
+-    })
+-
+-    return NextResponse.json<ApiResponse<typeof result>>({ data: result })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/create-pr] Error:', message)
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: message },
+-      { status: 500 }
+-    )
+-  }
+-}
+-
+-```
+-
+-### app/api/github/dispatch-workflow/route.ts
+-
+-```typescript
+-/**
+- * app/api/github/dispatch-workflow/route.ts
+- *
+- * POST /api/github/dispatch-workflow
+- * Body: { projectId: string, workflowId?: string, inputs?: Record<string, string> }
+- * Dispatches a workflow_dispatch event to GitHub Actions.
+- */
+-
+-import { NextRequest, NextResponse } from 'next/server'
+-import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
+-import { getGitHubClient } from '@/lib/github/client'
+-import { dispatchPrototypeWorkflow } from '@/lib/services/github-factory-service'
+-import type { ApiResponse } from '@/types/api'
+-
+-export const dynamic = 'force-dynamic'
+-
+-export async function POST(request: NextRequest) {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'GitHub is not configured. Check .env.local and wiring.md.' },
+-      { status: 503 }
+-    )
+-  }
+-
+-  let body: Record<string, unknown>
+-  try {
+-    body = await request.json()
+-  } catch {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'Invalid JSON body' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  if (!body.projectId || typeof body.projectId !== 'string') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`projectId` is required' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  try {
+-    const config = getGitHubConfig()
+-    const inputs =
+-      body.inputs && typeof body.inputs === 'object'
+-        ? (body.inputs as Record<string, string>)
+-        : undefined
+-
+-    // If a custom workflowId is provided, bypass factory service and call Octokit directly
+-    if (body.workflowId && typeof body.workflowId === 'string') {
+-      const octokit = getGitHubClient()
+-      const { owner, repo } = getRepoCoordinates()
+-
+-      await octokit.actions.createWorkflowDispatch({
+-        owner,
+-        repo,
+-        workflow_id: body.workflowId,
+-        ref: config.defaultBranch,
+-        inputs: inputs ?? {},
+-      })
+-
+-      return NextResponse.json<ApiResponse<{ dispatched: true }>>({
+-        data: { dispatched: true },
+-      })
+-    }
+-
+-    // Default: use the factory service (uses GITHUB_WORKFLOW_PROTOTYPE)
+-    await dispatchPrototypeWorkflow(body.projectId, inputs)
+-
+-    return NextResponse.json<ApiResponse<{ dispatched: true }>>({
+-      data: { dispatched: true },
+-    })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/dispatch-workflow] Error:', message)
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: message },
+-      { status: 500 }
+-    )
+-  }
+-}
+-
+-```
+-
+-### app/api/github/merge-pr/route.ts
+-
+-```typescript
+-/**
+- * app/api/github/merge-pr/route.ts
+- *
+- * POST /api/github/merge-pr
+- *
+- * IMPORTANT: This is the *direct GitHub operation* route.
+- * The product action (/api/actions/merge-pr) only updates local state.
+- * This route enforces real merge policy via GitHub API:
+- *   - PR must be open
+- *   - PR must be mergeable (not conflicted)
+- *
+- * Body: { projectId: string, prNumber: number, mergeMethod?: 'merge' | 'squash' | 'rebase' }
+- */
+-
+-import { NextRequest, NextResponse } from 'next/server'
+-import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
+-import { getGitHubClient } from '@/lib/github/client'
+-import { mergeProjectPR } from '@/lib/services/github-factory-service'
+-import type { ApiResponse } from '@/types/api'
+-
+-export const dynamic = 'force-dynamic'
+-
+-type MergeMethod = 'merge' | 'squash' | 'rebase'
+-
+-export async function POST(request: NextRequest) {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'GitHub is not configured. Check .env.local and wiring.md.' },
+-      { status: 503 }
+-    )
+-  }
+-
+-  let body: Record<string, unknown>
+-  try {
+-    body = await request.json()
+-  } catch {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'Invalid JSON body' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  const { projectId, prNumber, mergeMethod } = body
+-
+-  if (!projectId || typeof projectId !== 'string') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`projectId` is required' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  if (!prNumber || typeof prNumber !== 'number') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`prNumber` (number) is required' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  const validMethods: MergeMethod[] = ['merge', 'squash', 'rebase']
+-  const method: MergeMethod =
+-    typeof mergeMethod === 'string' && validMethods.includes(mergeMethod as MergeMethod)
+-      ? (mergeMethod as MergeMethod)
+-      : 'squash'
+-
+-  try {
+-    // Pre-flight checks: validate PR state directly before delegating to service
+-    const octokit = getGitHubClient()
+-    const { owner, repo } = getRepoCoordinates()
+-
+-    const { data: ghPR } = await octokit.pulls.get({
+-      owner,
+-      repo,
+-      pull_number: prNumber,
+-    })
+-
+-    if (ghPR.state !== 'open') {
+-      return NextResponse.json<ApiResponse<never>>(
+-        { error: `PR #${prNumber} is not open (current state: ${ghPR.state})` },
+-        { status: 422 }
+-      )
+-    }
+-
+-    if (ghPR.mergeable === false) {
+-      return NextResponse.json<ApiResponse<never>>(
+-        {
+-          error: `PR #${prNumber} cannot be merged — conflicts exist or checks are failing.`,
+-        },
+-        { status: 422 }
+-      )
+-    }
+-
+-    const result = await mergeProjectPR(projectId, prNumber, method)
+-
+-    return NextResponse.json<ApiResponse<typeof result>>({ data: result })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/merge-pr] Error:', message)
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: message },
+-      { status: 500 }
+-    )
+-  }
+-}
+-
+-```
+-
+-### app/api/github/sync-pr/route.ts
+-
+-```typescript
+-/**
+- * app/api/github/sync-pr/route.ts
+- *
+- * POST /api/github/sync-pr  — single PR sync  (body: { prNumber: number })
+- * GET  /api/github/sync-pr  — batch sync all open PRs from GitHub
+- */
+-
+-import { NextRequest, NextResponse } from 'next/server'
+-import { isGitHubConfigured } from '@/lib/config/github'
+-import { syncPullRequest, syncAllOpenPRs } from '@/lib/services/github-sync-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { PullRequest } from '@/types/pr'
+-
+-export const dynamic = 'force-dynamic'
+-
+-/** GET — batch sync all open PRs */
+-export async function GET() {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'GitHub is not configured. Check .env.local and wiring.md.' },
+-      { status: 503 }
+-    )
+-  }
+-
+-  try {
+-    const result = await syncAllOpenPRs()
+-    return NextResponse.json<ApiResponse<typeof result>>({ data: result })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/sync-pr GET] Error:', message)
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: message },
+-      { status: 500 }
+-    )
+-  }
+-}
+-
+-/** POST — single PR sync */
+-export async function POST(request: NextRequest) {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'GitHub is not configured. Check .env.local and wiring.md.' },
+-      { status: 503 }
+-    )
+-  }
+-
+-  let body: Record<string, unknown>
+-  try {
+-    body = await request.json()
+-  } catch {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: 'Invalid JSON body' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  const { prNumber } = body
+-  if (!prNumber || typeof prNumber !== 'number') {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: '`prNumber` (number) is required' },
+-      { status: 400 }
+-    )
+-  }
+-
+-  try {
+-    const pr = await syncPullRequest(prNumber)
+-    if (!pr) {
+-      return NextResponse.json<ApiResponse<never>>(
+-        { error: `PR #${prNumber} not found on GitHub` },
+-        { status: 404 }
+-      )
+-    }
+-    return NextResponse.json<ApiResponse<PullRequest>>({ data: pr })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/sync-pr POST] Error:', message)
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: message },
+-      { status: 500 }
+-    )
+-  }
+-}
+-
+-```
+-
+-### app/api/github/test-connection/route.ts
+-
+-```typescript
+-/**
+- * app/api/github/test-connection/route.ts
+- *
+- * GET /api/github/test-connection
+- * Validates the GitHub PAT and returns repo info.
+- * Returns { connected: true, login, repo, defaultBranch } or { connected: false, error }.
+- */
+-
+-import { NextResponse } from 'next/server'
+-import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
+-import { getGitHubClient } from '@/lib/github/client'
+-
+-export const dynamic = 'force-dynamic'
+-
+-export async function GET() {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json(
+-      {
+-        connected: false,
+-        error:
+-          'GitHub is not configured. Add GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, ' +
+-          'and GITHUB_WEBHOOK_SECRET to .env.local.',
+-      },
+-      { status: 200 }
+-    )
+-  }
+-
+-  try {
+-    const octokit = getGitHubClient()
+-    const config = getGitHubConfig()
+-    const { owner, repo } = getRepoCoordinates()
+-
+-    // Validate token by fetching authenticated user
+-    const { data: user } = await octokit.users.getAuthenticated()
+-
+-    // Fetch repo details
+-    const { data: repoData } = await octokit.repos.get({ owner, repo })
+-
+-    // Get token scopes from response headers
+-    const { headers } = await octokit.request('GET /user')
+-    const scopes = (headers['x-oauth-scopes'] as string | undefined) ?? 'unknown'
+-
+-    return NextResponse.json({
+-      connected: true,
+-      login: user.login,
+-      repo: repoData.full_name,
+-      defaultBranch: repoData.default_branch,
+-      private: repoData.private,
+-      scopes,
+-      webhookSecret: config.webhookSecret ? '***configured***' : 'not set',
+-    })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : String(err)
+-    console.error('[api/github/test-connection] Error:', message)
+-    return NextResponse.json(
+-      { connected: false, error: message },
+-      { status: 200 }
+-    )
+-  }
+-}
+-
+-```
+-
+-### app/api/github/trigger-agent/route.ts
+-
+-```typescript
+-import { NextResponse } from 'next/server'
+-import {
+-  createIssue,
+-  getIssueNodeId,
+-  assignCopilotViaGraphQL,
+-  triggerCopilotViaPR,
+-} from '@/lib/adapters/github-adapter'
+-import { isGitHubConfigured } from '@/lib/config/github'
+-
+-export const dynamic = 'force-dynamic'
+-
+-/**
+- * POST /api/github/trigger-agent
+- *
+- * Triggers the Copilot coding agent on an issue.
+- *
+- * Primary method: "pr-comment" — creates branch + draft PR + @copilot comment.
+- * This is the ONLY method that reliably triggers the agent (March 2026).
+- * "graphql" is kept as a fallback for when GitHub fixes issue-based triggers.
+- *
+- * Request body:
+- * {
+- *   // Option A: provide an existing issue number
+- *   "issueNumber": 12,
+- *
+- *   // Option B: create a new issue (if issueNumber is omitted)
+- *   "title": "[Cloud Agent] My task",
+- *   "body": "### Objective\n...",
+- *
+- *   // Common options
+- *   "method": "pr-comment" | "graphql",   // default: "pr-comment"
+- *   "model": "auto",                      // default: "auto" (see skill for model list)
+- *   "instructions": "..."                 // optional custom instructions
+- * }
+- */
+-export async function POST(request: Request) {
+-  if (!isGitHubConfigured()) {
+-    return NextResponse.json(
+-      { error: 'GitHub is not configured. Set GITHUB_TOKEN in .env.local' },
+-      { status: 503 },
+-    )
+-  }
+-
+-  try {
+-    const body = await request.json()
+-    const {
+-      issueNumber: providedIssueNumber,
+-      title,
+-      body: issueBody,
+-      method = 'pr-comment',
+-      model,
+-      instructions,
+-    } = body
+-
+-    // Validate
+-    if (!providedIssueNumber && (!title || !issueBody)) {
+-      return NextResponse.json(
+-        { error: 'Provide either issueNumber, or title + body to create a new issue.' },
+-        { status: 400 },
+-      )
+-    }
+-
+-    if (!['graphql', 'pr-comment'].includes(method)) {
+-      return NextResponse.json(
+-        { error: 'method must be "graphql" or "pr-comment".' },
+-        { status: 400 },
+-      )
+-    }
+-
+-    // Step 1: Get or create the issue
+-    let issueNumber = providedIssueNumber
+-    let issueTitle = title ?? ''
+-    let issueBdy = issueBody ?? ''
+-
+-    if (!issueNumber) {
+-      const created = await createIssue({ title, body: issueBody })
+-      issueNumber = created.number
+-      issueTitle = title
+-      issueBdy = issueBody
+-    } else if (!issueTitle || !issueBdy) {
+-      // Fetch issue details if we only have the number
+-      const { getGitHubClient } = await import('@/lib/github/client')
+-      const { getRepoCoordinates } = await import('@/lib/config/github')
+-      const octokit = getGitHubClient()
+-      const coords = getRepoCoordinates()
+-      const { data } = await octokit.issues.get({
+-        owner: coords.owner,
+-        repo: coords.repo,
+-        issue_number: issueNumber,
+-      })
+-      issueTitle = data.title
+-      issueBdy = data.body ?? ''
+-    }
+-
+-    // Step 2: Trigger Copilot
+-    if (method === 'graphql') {
+-      const nodeId = await getIssueNodeId(issueNumber)
+-      const result = await assignCopilotViaGraphQL({
+-        issueNodeId: nodeId,
+-        model,
+-        customInstructions: instructions,
+-      })
+-      return NextResponse.json({
+-        ok: true,
+-        method: 'graphql',
+-        issueNumber,
+-        model: model ?? 'auto',
+-        assignees: result.assignees,
+-        url: `https://github.com/${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO}/issues/${issueNumber}`,
+-      })
+-    }
+-
+-    // PR-comment method
+-    const result = await triggerCopilotViaPR({
+-      issueNumber,
+-      issueTitle,
+-      issueBody: issueBdy,
+-      model,
+-      customInstructions: instructions,
+-    })
+-    return NextResponse.json({
+-      ok: true,
+-      method: 'pr-comment',
+-      issueNumber,
+-      model: model ?? 'auto',
+-      prNumber: result.prNumber,
+-      prUrl: result.prUrl,
+-      branchName: result.branchName,
+-    })
+-  } catch (err) {
+-    const message = err instanceof Error ? err.message : 'Unknown error'
+-    console.error('[trigger-agent]', message)
+-    return NextResponse.json({ error: message }, { status: 500 })
+-  }
+-}
+-
+-```
+-
+-### app/api/ideas/materialize/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { getIdeaById } from '@/lib/services/ideas-service'
+-import { getDrillSessionByIdeaId } from '@/lib/services/drill-service'
+-import { materializeIdea } from '@/lib/services/materialization-service'
+-import { getProjects } from '@/lib/services/projects-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { Project } from '@/types/project'
+-
+-export async function POST(request: NextRequest) {
+-  try {
+-    const { ideaId } = await request.json()
+-
+-    if (!ideaId) {
+-      return NextResponse.json<ApiResponse<never>>({ error: 'ideaId is required' }, { status: 400 })
+-    }
+-
+-    const idea = await getIdeaById(ideaId)
+-    if (!idea) {
+-      return NextResponse.json<ApiResponse<never>>({ error: 'Idea not found' }, { status: 404 })
+-    }
+-
+-    // Idempotency guard: if idea is already materialized, return existing project
+-    if (idea.status === 'arena') {
+-      const allProjects = await getProjects()
+-      const existing = allProjects.find((p) => p.ideaId === ideaId)
+-      if (existing) {
+-        return NextResponse.json<ApiResponse<Project>>({ data: existing }, { status: 200 })
+-      }
+-    }
+-
+-    const drill = getDrillSessionByIdeaId(ideaId)
+-    if (!drill) {
+-      return NextResponse.json<ApiResponse<never>>({ error: 'Drill session not found for this idea' }, { status: 400 })
+-    }
+-
+-    const project = await materializeIdea(idea, drill)
+-
+-    return NextResponse.json<ApiResponse<Project>>({ data: project }, { status: 201 })
+-  } catch (err: any) {
+-    return NextResponse.json<ApiResponse<never>>({ error: err.message || 'Error processing request' }, { status: 500 })
+-  }
+-}
+-
+-```
+-
+-### app/api/ideas/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { getIdeas, createIdea } from '@/lib/services/ideas-service'
+-import { validateIdeaPayload } from '@/lib/validators/idea-validator'
+-import type { ApiResponse } from '@/types/api'
+-import type { Idea } from '@/types/idea'
+-
+-export async function GET(request: NextRequest) {
+-  const { searchParams } = new URL(request.url)
+-  const status = searchParams.get('status') as any
+-
+-  const ideas = await getIdeas()
+-  const filtered = status ? ideas.filter((i) => i.status === status) : ideas
+-
+-  return NextResponse.json<ApiResponse<Idea[]>>({ data: filtered })
+-}
+-
+-export async function POST(request: NextRequest) {
+-  const body = await request.json()
+-  const validation = validateIdeaPayload(body)
+-
+-  if (!validation.valid) {
+-    return NextResponse.json<ApiResponse<never>>(
+-      { error: validation.error },
+-      { status: 400 }
+-    )
+-  }
+-
+-  const idea = await createIdea(body)
+-  return NextResponse.json<ApiResponse<Idea>>({ data: idea }, { status: 201 })
+-}
+-
+-```
+-
+-### app/api/inbox/route.ts
+-
+-```typescript
+-import { NextResponse } from 'next/server'
+-import { getInboxEvents, markRead } from '@/lib/services/inbox-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { InboxEvent } from '@/types/inbox'
+-
+-export async function GET() {
+-  const events = await getInboxEvents()
+-  return NextResponse.json<ApiResponse<InboxEvent[]>>({ data: events })
+-}
+-
+-export async function PATCH(request: Request) {
+-  const { id } = await request.json()
+-  if (!id) {
+-    return NextResponse.json({ error: 'Missing event ID' }, { status: 400 })
+-  }
+-
+-  await markRead(id)
+-  return NextResponse.json({ success: true })
+-}
+-
+-```
+-
+-### app/api/projects/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { getProjects, getProjectsByState } from '@/lib/services/projects-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { Project, ProjectState } from '@/types/project'
+-
+-export async function GET(request: NextRequest) {
+-  const { searchParams } = new URL(request.url)
+-  const state = searchParams.get('state') as ProjectState | null
+-
+-  const projects = state ? await getProjectsByState(state) : await getProjects()
+-
+-  return NextResponse.json<ApiResponse<Project[]>>({ data: projects })
+-}
+-
+-```
+-
+-### app/api/prs/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { getPRsForProject, updatePR, getPRById } from '@/lib/services/prs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { PullRequest } from '@/types/pr'
+-import { ROUTES } from '@/lib/routes'
+-
+-export async function GET(request: NextRequest) {
+-  const { searchParams } = new URL(request.url)
+-  const projectId = searchParams.get('projectId')
+-
+-  if (!projectId) {
+-    return NextResponse.json<ApiResponse<never>>({ error: 'projectId is required' }, { status: 400 })
+-  }
+-
+-  const prs = await getPRsForProject(projectId)
+-  return NextResponse.json<ApiResponse<PullRequest[]>>({ data: prs })
+-}
+-
+-export async function PATCH(request: NextRequest) {
+-  const body = await request.json()
+-  const { prId, requestedChanges, reviewStatus } = body
+-
+-  if (!prId) {
+-    return NextResponse.json<ApiResponse<never>>({ error: 'prId is required' }, { status: 400 })
+-  }
+-
+-  const pr = await getPRById(prId)
+-  if (!pr) {
+-    return NextResponse.json<ApiResponse<never>>({ error: 'PR not found' }, { status: 404 })
+-  }
+-
+-  const updates: Partial<PullRequest> = {}
+-  if (requestedChanges !== undefined) updates.requestedChanges = requestedChanges
+-  if (reviewStatus !== undefined) updates.reviewStatus = reviewStatus
+-
+-  const updated = await updatePR(prId, updates)
+-  if (!updated) {
+-    return NextResponse.json<ApiResponse<never>>({ error: 'Update failed' }, { status: 500 })
+-  }
+-
+-  // Create inbox event for changes_requested
+-  if (reviewStatus === 'changes_requested' && requestedChanges) {
+-    await createInboxEvent({
+-      projectId: pr.projectId,
+-      type: 'changes_requested',
+-      title: `Changes requested on PR #${pr.number}`,
+-      body: requestedChanges,
+-      severity: 'warning',
+-      actionUrl: ROUTES.review(pr.id),
+-    })
+-  }
+-
+-  return NextResponse.json<ApiResponse<PullRequest>>({ data: updated })
+-}
+-
+-```
+-
+-### app/api/tasks/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { getTasksForProject } from '@/lib/services/tasks-service'
+-import type { ApiResponse } from '@/types/api'
+-import type { Task } from '@/types/task'
+-
+-export async function GET(request: NextRequest) {
+-  const { searchParams } = new URL(request.url)
+-  const projectId = searchParams.get('projectId')
+-
+-  if (!projectId) {
+-    return NextResponse.json<ApiResponse<never>>({ error: 'projectId is required' }, { status: 400 })
+-  }
+-
+-  const tasks = await getTasksForProject(projectId)
+-  return NextResponse.json<ApiResponse<Task[]>>({ data: tasks })
+-}
+-
+-```
+-
+-### app/api/webhook/github/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { verifyGitHubSignature } from '@/lib/github/signature'
+-import { routeGitHubEvent } from '@/lib/github/handlers'
+-import type { GitHubWebhookContext } from '@/types/webhook'
+-
+-export async function POST(request: NextRequest) {
+-  const rawBody = await request.text()
+-  const event = request.headers.get('x-github-event')
+-  const signature = request.headers.get('x-hub-signature-256')
+-  const delivery = request.headers.get('x-github-delivery')
+-
+-  if (!event) {
+-    return NextResponse.json({ error: 'Missing event header' }, { status: 400 })
+-  }
+-
+-  const secret = process.env.GITHUB_WEBHOOK_SECRET
+-  if (secret && !verifyGitHubSignature(rawBody, signature, secret)) {
+-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+-  }
+-
+-  try {
+-    const body = JSON.parse(rawBody)
+-    const ctx: GitHubWebhookContext = {
+-      event,
+-      action: body.action ?? '',
+-      delivery: delivery ?? '',
+-      repositoryFullName: body.repository?.full_name ?? '',
+-      sender: body.sender?.login ?? '',
+-      rawPayload: body,
+-    }
+-
+-    await routeGitHubEvent(ctx)
+-    return NextResponse.json({ message: `Event '${event}' processed` })
+-  } catch (error) {
+-    console.error('[webhook/github] Error processing webhook:', error)
+-    return NextResponse.json({ error: 'Failed to process webhook' }, { status: 500 })
+-  }
+-}
+-
+-```
+-
+-### app/api/webhook/gpt/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import { validateWebhookPayload } from '@/lib/validators/webhook-validator'
+-import { createIdea } from '@/lib/services/ideas-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import { parseGPTPayload } from '@/lib/adapters/gpt-adapter'
+-import type { ApiResponse } from '@/types/api'
+-
+-export async function POST(request: NextRequest) {
+-  const body = await request.json()
+-  const validation = validateWebhookPayload(body)
+-
+-  if (!validation.valid) {
+-    return NextResponse.json<ApiResponse<never>>({ error: validation.error }, { status: 400 })
+-  }
+-
+-  if (body.event === 'idea_captured' && body.data) {
+-    const parsed = parseGPTPayload(body.data as Parameters<typeof parseGPTPayload>[0])
+-    const idea = await createIdea(parsed)
+-    
+-    // Notify the user via inbox
+-    await createInboxEvent({
+-      type: 'idea_captured',
+-      title: 'New idea arrived from GPT',
+-      body: `"${idea.title}" has been captured and is ready for definition.`,
+-      timestamp: new Date().toISOString(),
+-      severity: 'info',
+-      read: false,
+-    })
+-
+-    return NextResponse.json<ApiResponse<unknown>>({ data: idea, message: 'Idea captured' }, { status: 201 })
+-  }
+-
+-  return NextResponse.json<ApiResponse<unknown>>({ message: 'Event received' })
+-}
+-
+-```
+-
+-### app/api/webhook/vercel/route.ts
+-
+-```typescript
+-import { NextRequest, NextResponse } from 'next/server'
+-import type { ApiResponse } from '@/types/api'
+-
+-export async function POST(request: NextRequest) {
+-  const body = await request.json()
+-  const event = body?.type ?? 'unknown'
+-
+-  console.log(`[webhook/vercel] event=${event}`, body)
+-
+-  return NextResponse.json<ApiResponse<unknown>>({ message: `Vercel event '${event}' received` })
+-}
+-
+-```
+-
+-### app/arena/[projectId]/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { notFound } from 'next/navigation'
+-import { getProjectById } from '@/lib/services/projects-service'
+-import { getTasksForProject } from '@/lib/services/tasks-service'
+-import { getPRsForProject } from '@/lib/services/prs-service'
+-import { buildArenaViewModel } from '@/lib/view-models/arena-view-model'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { ProjectAnchorPane } from '@/components/arena/project-anchor-pane'
+-import { ProjectEnginePane } from '@/components/arena/project-engine-pane'
+-import { ProjectRealityPane } from '@/components/arena/project-reality-pane'
+-import { ProjectHealthStrip } from '@/components/arena/project-health-strip'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-interface Props {
+-  params: { projectId: string }
+-}
+-
+-export default async function ArenaProjectPage({ params }: Props) {
+-  const project = await getProjectById(params.projectId)
+-  if (!project) notFound()
+-
+-  const tasks = await getTasksForProject(project.id)
+-  const prs = await getPRsForProject(project.id)
+-  const vm = buildArenaViewModel(project, tasks, prs)
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-6xl mx-auto">
+-        <div className="flex items-center gap-3 mb-6">
+-          <Link href={ROUTES.arena} className="text-[#94a3b8] hover:text-[#e2e8f0] text-sm transition-colors">
+-            ← In Progress
+-          </Link>
+-          <span className="text-[#1e1e2e]">/</span>
+-          <h1 className="text-sm font-medium text-[#e2e8f0]">{project.name}</h1>
+-        </div>
+-
+-        <div className="mb-4">
+-          <ProjectHealthStrip project={project} donePct={vm.donePct} />
+-        </div>
+-
+-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+-          <ProjectAnchorPane project={project} />
+-          <ProjectEnginePane tasks={tasks} />
+-          <ProjectRealityPane prs={prs} project={project} />
+-        </div>
+-
+-        <div className="mt-4 flex items-center gap-2 text-xs text-[#94a3b8]">
+-          <span>{vm.openPRCount} open PR{vm.openPRCount !== 1 ? 's' : ''}</span>
+-          <span>·</span>
+-          <span>{vm.blockedTaskCount} blocked task{vm.blockedTaskCount !== 1 ? 's' : ''}</span>
+-          <span>·</span>
+-          <span>{vm.donePct}% done</span>
+-        </div>
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/arena/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { getArenaProjects } from '@/lib/services/projects-service'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { EmptyState } from '@/components/common/empty-state'
+-import { ArenaProjectCard } from '@/components/arena/arena-project-card'
+-import { ActiveLimitBanner } from '@/components/arena/active-limit-banner'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-export default async function ArenaPage() {
+-  const projects = await getArenaProjects()
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-3xl mx-auto">
+-        <div className="flex items-center justify-between mb-6">
+-          <div>
+-            <h1 className="text-2xl font-bold text-[#e2e8f0]">In Progress</h1>
+-            <p className="text-sm text-[#94a3b8] mt-1">Active projects</p>
+-          </div>
+-          <Link
+-            href={ROUTES.send}
+-            className="px-3 py-1.5 text-xs bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+-          >
+-            + New
+-          </Link>
+-        </div>
+-
+-        <ActiveLimitBanner count={projects.length} />
+-
+-        {projects.length === 0 ? (
+-          <EmptyState
+-            title="No active projects"
+-            description="Define an idea to get started."
+-            icon="▶"
+-            action={
+-              <Link href={ROUTES.send} className="text-sm text-indigo-400 hover:text-indigo-300">
+-                Define an idea →
+-              </Link>
+-            }
+-          />
+-        ) : (
+-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+-            {projects.map((project) => (
+-              <ArenaProjectCard key={project.id} project={project} />
+-            ))}
+-          </div>
+-        )}
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/dev/github-playground/page.tsx
+-
+-```tsx
+-'use client'
+-
+-/**
+- * app/dev/github-playground/page.tsx
+- *
+- * Dev harness for testing GitHub integration.
+- * Sections:
+- *   1. Connection test  — GET /api/github/test-connection
+- *   2. Create issue     — POST /api/github/create-issue
+- *   3. List / Sync PRs  — GET/POST /api/github/sync-pr
+- *   4. Dispatch workflow — POST /api/github/dispatch-workflow
+- *   5. Merge PR         — POST /api/github/merge-pr
+- *
+- * Styled to match the gpt-send dev harness (dark studio theme).
+- */
+-
+-import { useState } from 'react'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-// ---------------------------------------------------------------------------
+-// Types
+-// ---------------------------------------------------------------------------
+-
+-type ResultState = {
+-  loading: boolean
+-  data: unknown
+-  error: string | null
+-}
+-
+-const defaultResult: ResultState = { loading: false, data: null, error: null }
+-
+-// ---------------------------------------------------------------------------
+-// Shared UI helpers
+-// ---------------------------------------------------------------------------
+-
+-function SectionCard({
+-  title,
+-  description,
+-  children,
+-}: {
+-  title: string
+-  description: string
+-  children: React.ReactNode
+-}) {
+-  return (
+-    <div className="p-8 bg-[#0d0d18] border border-[#1e1e2e] rounded-2xl shadow-2xl space-y-6">
+-      <div>
+-        <h2 className="text-lg font-semibold text-[#e2e8f0] mb-1">{title}</h2>
+-        <p className="text-[#64748b] text-sm">{description}</p>
+-      </div>
+-      {children}
+-    </div>
+-  )
+-}
+-
+-function ResultBlock({ result }: { result: ResultState }) {
+-  if (result.loading) {
+-    return (
+-      <div className="text-[#64748b] text-sm animate-pulse">Running…</div>
+-    )
+-  }
+-  if (result.error) {
+-    return (
+-      <pre className="mt-2 p-3 bg-red-950/30 border border-red-800/40 rounded-lg text-red-400 text-xs overflow-x-auto whitespace-pre-wrap">
+-        {result.error}
+-      </pre>
+-    )
+-  }
+-  if (result.data) {
+-    return (
+-      <pre className="mt-2 p-3 bg-[#12121a] border border-[#1e1e2e] rounded-lg text-indigo-300 text-xs overflow-x-auto whitespace-pre-wrap">
+-        {JSON.stringify(result.data, null, 2)}
+-      </pre>
+-    )
+-  }
+-  return null
+-}
+-
+-function InputField({
+-  label,
+-  value,
+-  onChange,
+-  placeholder,
+-  type = 'text',
+-}: {
+-  label: string
+-  value: string
+-  onChange: (v: string) => void
+-  placeholder?: string
+-  type?: string
+-}) {
+-  return (
+-    <div>
+-      <label className="block text-xs text-[#64748b] mb-1">{label}</label>
+-      <input
+-        type={type}
+-        value={value}
+-        onChange={(e) => onChange(e.target.value)}
+-        placeholder={placeholder}
+-        className="w-full px-3 py-2 bg-[#12121a] border border-[#1e1e2e] rounded-lg text-[#e2e8f0] text-sm placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500 transition-colors"
+-      />
+-    </div>
+-  )
+-}
+-
+-function TextAreaField({
+-  label,
+-  value,
+-  onChange,
+-  placeholder,
+-}: {
+-  label: string
+-  value: string
+-  onChange: (v: string) => void
+-  placeholder?: string
+-}) {
+-  return (
+-    <div>
+-      <label className="block text-xs text-[#64748b] mb-1">{label}</label>
+-      <textarea
+-        value={value}
+-        onChange={(e) => onChange(e.target.value)}
+-        placeholder={placeholder}
+-        rows={3}
+-        className="w-full px-3 py-2 bg-[#12121a] border border-[#1e1e2e] rounded-lg text-[#e2e8f0] text-sm placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+-      />
+-    </div>
+-  )
+-}
+-
+-function ActionButton({
+-  onClick,
+-  loading,
+-  children,
+-}: {
+-  onClick: () => void
+-  loading: boolean
+-  children: React.ReactNode
+-}) {
+-  return (
+-    <button
+-      onClick={onClick}
+-      disabled={loading}
+-      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-900 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+-    >
+-      {loading ? 'Working…' : children}
+-    </button>
+-  )
+-}
+-
+-// ---------------------------------------------------------------------------
+-// API caller utility
+-// ---------------------------------------------------------------------------
+-
+-async function callApi(
+-  url: string,
+-  method: 'GET' | 'POST',
+-  body?: unknown
+-): Promise<{ data?: unknown; error?: string }> {
+-  const res = await fetch(url, {
+-    method,
+-    headers: method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
+-    body: method === 'POST' ? JSON.stringify(body) : undefined,
+-  })
+-  const json = await res.json()
+-  return json
+-}
+-
+-// ---------------------------------------------------------------------------
+-// Section components
+-// ---------------------------------------------------------------------------
+-
+-function ConnectionSection() {
+-  const [result, setResult] = useState<ResultState>(defaultResult)
+-
+-  async function handleTest() {
+-    setResult({ loading: true, data: null, error: null })
+-    try {
+-      const json = await callApi('/api/github/test-connection', 'GET')
+-      setResult({ loading: false, data: json, error: null })
+-    } catch (e) {
+-      setResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  return (
+-    <SectionCard
+-      title="1 · Connection Test"
+-      description="Validates your GITHUB_TOKEN and confirms the repo is accessible."
+-    >
+-      <ActionButton onClick={handleTest} loading={result.loading}>
+-        Test Connection
+-      </ActionButton>
+-      <ResultBlock result={result} />
+-    </SectionCard>
+-  )
+-}
+-
+-function CreateIssueSection() {
+-  const [projectId, setProjectId] = useState('')
+-  const [title, setTitle] = useState('')
+-  const [body, setBody] = useState('')
+-  const [result, setResult] = useState<ResultState>(defaultResult)
+-
+-  async function handleSubmit() {
+-    setResult({ loading: true, data: null, error: null })
+-    try {
+-      const payload = projectId.trim()
+-        ? { projectId: projectId.trim() }
+-        : { title: title.trim(), body: body.trim() }
+-
+-      const json = await callApi('/api/github/create-issue', 'POST', payload)
+-      if (json.error) {
+-        setResult({ loading: false, data: null, error: json.error as string })
+-      } else {
+-        setResult({ loading: false, data: json.data, error: null })
+-      }
+-    } catch (e) {
+-      setResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  return (
+-    <SectionCard
+-      title="2 · Create Issue"
+-      description="Provide a Project ID to create from project, OR a title/body for a standalone issue."
+-    >
+-      <div className="space-y-3">
+-        <InputField
+-          label="Project ID (option A)"
+-          value={projectId}
+-          onChange={setProjectId}
+-          placeholder="proj-xxxx"
+-        />
+-        <p className="text-center text-[#4a4a6a] text-xs">— or standalone —</p>
+-        <InputField
+-          label="Issue Title (option B)"
+-          value={title}
+-          onChange={setTitle}
+-          placeholder="My feature request"
+-        />
+-        <TextAreaField
+-          label="Issue Body"
+-          value={body}
+-          onChange={setBody}
+-          placeholder="Describe the issue…"
+-        />
+-      </div>
+-      <ActionButton onClick={handleSubmit} loading={result.loading}>
+-        Create Issue
+-      </ActionButton>
+-      <ResultBlock result={result} />
+-    </SectionCard>
+-  )
+-}
+-
+-function SyncPRsSection() {
+-  const [prNumber, setPrNumber] = useState('')
+-  const [syncResult, setSyncResult] = useState<ResultState>(defaultResult)
+-  const [batchResult, setBatchResult] = useState<ResultState>(defaultResult)
+-
+-  async function handleSingleSync() {
+-    if (!prNumber.trim()) return
+-    setSyncResult({ loading: true, data: null, error: null })
+-    try {
+-      const json = await callApi('/api/github/sync-pr', 'POST', {
+-        prNumber: Number(prNumber),
+-      })
+-      if (json.error) {
+-        setSyncResult({ loading: false, data: null, error: json.error as string })
+-      } else {
+-        setSyncResult({ loading: false, data: json.data, error: null })
+-      }
+-    } catch (e) {
+-      setSyncResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  async function handleBatchSync() {
+-    setBatchResult({ loading: true, data: null, error: null })
+-    try {
+-      const json = await callApi('/api/github/sync-pr', 'GET')
+-      if (json.error) {
+-        setBatchResult({ loading: false, data: null, error: json.error as string })
+-      } else {
+-        setBatchResult({ loading: false, data: json.data, error: null })
+-      }
+-    } catch (e) {
+-      setBatchResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  return (
+-    <SectionCard
+-      title="3 · Sync PRs"
+-      description="Sync a single PR by number, or batch-sync all open PRs from GitHub."
+-    >
+-      <div className="space-y-3">
+-        <div className="flex gap-3 items-end">
+-          <div className="flex-1">
+-            <InputField
+-              label="PR Number"
+-              value={prNumber}
+-              onChange={setPrNumber}
+-              placeholder="42"
+-              type="number"
+-            />
+-          </div>
+-          <ActionButton onClick={handleSingleSync} loading={syncResult.loading}>
+-            Sync #
+-          </ActionButton>
+-        </div>
+-        <ResultBlock result={syncResult} />
+-
+-        <div className="border-t border-[#1e1e2e] pt-4">
+-          <ActionButton onClick={handleBatchSync} loading={batchResult.loading}>
+-            Sync All Open PRs
+-          </ActionButton>
+-          <ResultBlock result={batchResult} />
+-        </div>
+-      </div>
+-    </SectionCard>
+-  )
+-}
+-
+-function DispatchWorkflowSection() {
+-  const [projectId, setProjectId] = useState('')
+-  const [workflowId, setWorkflowId] = useState('')
+-  const [inputs, setInputs] = useState('')
+-  const [result, setResult] = useState<ResultState>(defaultResult)
+-
+-  async function handleDispatch() {
+-    if (!projectId.trim()) return
+-    setResult({ loading: true, data: null, error: null })
+-
+-    let parsedInputs: Record<string, string> | undefined
+-    if (inputs.trim()) {
+-      try {
+-        parsedInputs = JSON.parse(inputs) as Record<string, string>
+-      } catch {
+-        setResult({ loading: false, data: null, error: 'Inputs must be valid JSON' })
+-        return
+-      }
+-    }
+-
+-    try {
+-      const payload: Record<string, unknown> = { projectId: projectId.trim() }
+-      if (workflowId.trim()) payload.workflowId = workflowId.trim()
+-      if (parsedInputs) payload.inputs = parsedInputs
+-
+-      const json = await callApi('/api/github/dispatch-workflow', 'POST', payload)
+-      if (json.error) {
+-        setResult({ loading: false, data: null, error: json.error as string })
+-      } else {
+-        setResult({ loading: false, data: json.data, error: null })
+-      }
+-    } catch (e) {
+-      setResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  return (
+-    <SectionCard
+-      title="4 · Dispatch Workflow"
+-      description="Trigger a GitHub Actions workflow_dispatch event. Uses GITHUB_WORKFLOW_PROTOTYPE by default."
+-    >
+-      <div className="space-y-3">
+-        <InputField
+-          label="Project ID"
+-          value={projectId}
+-          onChange={setProjectId}
+-          placeholder="proj-xxxx"
+-        />
+-        <InputField
+-          label="Workflow ID (optional — overrides default)"
+-          value={workflowId}
+-          onChange={setWorkflowId}
+-          placeholder="copilot-prototype.yml"
+-        />
+-        <TextAreaField
+-          label='Inputs JSON (optional, e.g. {"key": "value"})'
+-          value={inputs}
+-          onChange={setInputs}
+-          placeholder='{"branch": "feat/my-feature"}'
+-        />
+-      </div>
+-      <ActionButton onClick={handleDispatch} loading={result.loading}>
+-        Dispatch Workflow
+-      </ActionButton>
+-      <ResultBlock result={result} />
+-    </SectionCard>
+-  )
+-}
+-
+-function MergePRSection() {
+-  const [projectId, setProjectId] = useState('')
+-  const [prNumber, setPrNumber] = useState('')
+-  const [mergeMethod, setMergeMethod] = useState<'merge' | 'squash' | 'rebase'>('squash')
+-  const [result, setResult] = useState<ResultState>(defaultResult)
+-
+-  async function handleMerge() {
+-    if (!projectId.trim() || !prNumber.trim()) return
+-    setResult({ loading: true, data: null, error: null })
+-
+-    try {
+-      const json = await callApi('/api/github/merge-pr', 'POST', {
+-        projectId: projectId.trim(),
+-        prNumber: Number(prNumber),
+-        mergeMethod,
+-      })
+-      if (json.error) {
+-        setResult({ loading: false, data: null, error: json.error as string })
+-      } else {
+-        setResult({ loading: false, data: json.data, error: null })
+-      }
+-    } catch (e) {
+-      setResult({ loading: false, data: null, error: String(e) })
+-    }
+-  }
+-
+-  return (
+-    <SectionCard
+-      title="5 · Merge PR"
+-      description="Merge a GitHub PR with real policy enforcement (PR must be open and conflict-free)."
+-    >
+-      <div className="space-y-3">
+-        <InputField
+-          label="Project ID"
+-          value={projectId}
+-          onChange={setProjectId}
+-          placeholder="proj-xxxx"
+-        />
+-        <InputField
+-          label="PR Number"
+-          value={prNumber}
+-          onChange={setPrNumber}
+-          placeholder="42"
+-          type="number"
+-        />
+-        <div>
+-          <label className="block text-xs text-[#64748b] mb-1">Merge Method</label>
+-          <div className="flex gap-3">
+-            {(['merge', 'squash', 'rebase'] as const).map((m) => (
+-              <label key={m} className="flex items-center gap-1.5 cursor-pointer">
+-                <input
+-                  type="radio"
+-                  name="mergeMethod"
+-                  value={m}
+-                  checked={mergeMethod === m}
+-                  onChange={() => setMergeMethod(m)}
+-                  className="accent-indigo-500"
+-                />
+-                <span className="text-sm text-[#e2e8f0] capitalize">{m}</span>
+-              </label>
+-            ))}
+-          </div>
+-        </div>
+-      </div>
+-      <ActionButton onClick={handleMerge} loading={result.loading}>
+-        Merge PR
+-      </ActionButton>
+-      <ResultBlock result={result} />
+-    </SectionCard>
+-  )
+-}
+-
+-// ---------------------------------------------------------------------------
+-// Page
+-// ---------------------------------------------------------------------------
+-
+-export default function GitHubPlaygroundPage() {
+-  return (
+-    <div className="max-w-2xl mx-auto space-y-10 py-10 px-4">
+-      {/* Header */}
+-      <div>
+-        <div className="flex items-center gap-2 mb-4">
+-          <Link
+-            href={ROUTES.home}
+-            className="text-[#4a4a6a] hover:text-[#e2e8f0] transition-colors text-sm"
+-          >
+-            ← Back to Studio
+-          </Link>
+-        </div>
+-        <h1 className="text-3xl font-bold text-[#e2e8f0] mb-2">
+-          Dev Harness: GitHub Integration
+-        </h1>
+-        <p className="text-[#64748b] text-sm leading-relaxed">
+-          Use this page to test GitHub API operations against the routes in{' '}
+-          <code className="mx-1 px-1.5 py-0.5 bg-[#12121a] text-indigo-400 rounded text-xs">
+-            /api/github/*
+-          </code>
+-          . All actions hit the real GitHub API — use a test repo.
+-        </p>
+-      </div>
+-
+-      {/* Sections */}
+-      <ConnectionSection />
+-      <CreateIssueSection />
+-      <SyncPRsSection />
+-      <DispatchWorkflowSection />
+-      <MergePRSection />
+-
+-      {/* Footer note */}
+-      <div className="text-center">
+-        <p className="text-[#4a4a6a] text-xs">
+-          Actions here hit real GitHub. Ensure your token has the required scopes (
+-          <code className="text-indigo-400 text-xs">repo</code>,{' '}
+-          <code className="text-indigo-400 text-xs">workflow</code>).
+-        </p>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### app/dev/gpt-send/page.tsx
+-
+-```tsx
+-import { AppShell } from '@/components/shell/app-shell'
+-import { GPTIdeaForm } from '@/components/dev/gpt-idea-form'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-export default function GPTSendPage() {
+-  return (
+-    <AppShell>
+-      <div className="max-w-2xl mx-auto space-y-10 py-10">
+-        <div>
+-          <div className="flex items-center gap-2 mb-4">
+-            <Link href={ROUTES.home} className="text-[#4a4a6a] hover:text-[#e2e8f0] transition-colors text-sm">
+-              ← Back to Studio
+-            </Link>
+-          </div>
+-          <h1 className="text-3xl font-bold text-[#e2e8f0] mb-2">Dev Harness: GPT Idea Capture</h1>
+-          <p className="text-[#64748b] text-sm leading-relaxed">
+-            Use this page to simulate an idea arriving from your custom GPT. It will POST to 
+-            <code className="mx-1 px-1.5 py-0.5 bg-[#12121a] text-indigo-400 rounded text-xs select-all">/api/webhook/gpt</code> 
+-            using the production contract, including data validation and inbox notification.
+-          </p>
+-        </div>
+-
+-        <div className="p-8 bg-[#0d0d18] border border-[#1e1e2e] rounded-2xl shadow-2xl">
+-          <GPTIdeaForm />
+-        </div>
+-
+-        <div className="text-center">
+-          <p className="text-[#4a4a6a] text-xs">
+-            The data sent here is persisted exactly like a real GPT submission.
+-          </p>
+-        </div>
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/drill/end/page.tsx
+-
+-```tsx
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-export default function DrillEndPage() {
+-  return (
+-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6 text-center">
+-      <div className="max-w-md w-full">
+-        <div className="mb-8 p-12 bg-red-500/5 rounded-full inline-block border border-red-500/10">
+-          <div className="text-5xl opacity-40 grayscale translate-y-[-2px]">†</div>
+-        </div>
+-        <h1 className="text-3xl font-bold text-[#e2e8f0] mb-3">Idea Removed.</h1>
+-        <p className="text-[#94a3b8] text-lg mb-10 leading-relaxed">
+-          The best way to ship great work is to kill almost everything else. 
+-          This idea has been moved to the Graveyard to keep your focus sharp.
+-        </p>
+-        <div className="flex flex-col gap-4">
+-          <Link
+-            href={ROUTES.send}
+-            className="px-6 py-4 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-2xl text-sm font-semibold hover:bg-indigo-500/20 transition-all active:scale-95"
+-          >
+-            See other ideas
+-          </Link>
+-          <Link
+-            href={ROUTES.home}
+-            className="px-6 py-4 bg-[#12121a] text-[#94a3b8] hover:text-[#e2e8f0] border border-[#1e1e2e] hover:border-[#2a2a3a] rounded-2xl text-sm font-medium transition-all"
+-          >
+-            Back to Home
+-          </Link>
+-          <div className="pt-4">
+-            <Link href={ROUTES.killed} className="text-xs text-[#4b5563] hover:text-[#94a3b8] transition-colors">
+-              Visit the Graveyard
+-            </Link>
+-          </div>
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### app/drill/kill-path/page.tsx
+-
+-```tsx
+-import { redirect } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-// Legacy path — redirect to canonical route
+-export default function DrillKillPathPage() {
+-  redirect(ROUTES.drillEnd)
+-}
+-
+-```
+-
+-### app/drill/page.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useEffect, useState, Suspense } from 'react'
+-import { useRouter, useSearchParams } from 'next/navigation'
+-import { DrillLayout } from '@/components/drill/drill-layout'
+-import { DrillProgress } from '@/components/drill/drill-progress'
+-import { GiantChoiceButton } from '@/components/drill/giant-choice-button'
+-import { ROUTES } from '@/lib/routes'
+-import { IdeaContextCard } from '@/components/drill/idea-context-card'
+-import type { Idea } from '@/types/idea'
+-
+-type Scope = 'small' | 'medium' | 'large'
+-type ExecutionPath = 'solo' | 'assisted' | 'delegated'
+-type Urgency = 'now' | 'later' | 'never'
+-type Decision = 'arena' | 'icebox' | 'killed'
+-
+-interface DrillState {
+-  intent: string
+-  successMetric: string
+-  scope: Scope | null
+-  executionPath: ExecutionPath | null
+-  urgency: Urgency | null
+-  decision: Decision | null
+-}
+-
+-const STEPS = ['intent', 'success_metric', 'scope', 'path', 'priority', 'decision'] as const
+-type Step = (typeof STEPS)[number]
+-const CHOICE_ADVANCE_DELAY_MS = 300
+-
+-export default function DrillPage() {
+-  return (
+-    <Suspense fallback={
+-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+-        <p className="text-[#94a3b8]">Loading…</p>
+-      </div>
+-    }>
+-      <DrillContent />
+-    </Suspense>
+-  )
+-}
+-
+-function DrillContent() {
+-  const router = useRouter()
+-  const searchParams = useSearchParams()
+-  const ideaId = searchParams.get('ideaId') ?? ''
+-
+-  const [currentStep, setCurrentStep] = useState(0)
+-  const [saving, setSaving] = useState(false)
+-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+-  const [idea, setIdea] = useState<Idea | null>(null)
+-  const [fetchingIdea, setFetchingIdea] = useState(true)
+-  const [state, setState] = useState<DrillState>({
+-    intent: '',
+-    successMetric: '',
+-    scope: null,
+-    executionPath: null,
+-    urgency: null,
+-    decision: null,
+-  })
+-
+-  useEffect(() => {
+-    if (!ideaId) {
+-      setFetchingIdea(false)
+-      return
+-    }
+-
+-    async function fetchIdea() {
+-      try {
+-        const res = await fetch('/api/ideas')
+-        if (!res.ok) throw new Error('Failed to fetch ideas')
+-        const data = await res.json()
+-        const found = (data.data as Idea[]).find((i) => i.id === ideaId)
+-        if (found) setIdea(found)
+-      } catch (err) {
+-        console.error('Error fetching idea for drill context:', err)
+-      } finally {
+-        setFetchingIdea(false)
+-      }
+-    }
+-
+-    fetchIdea()
+-  }, [ideaId])
+-
+-  const step = STEPS[currentStep]
+-  const totalSteps = STEPS.length
+-
+-  function advance() {
+-    if (currentStep < totalSteps - 1) {
+-      setCurrentStep((s) => s + 1)
+-    }
+-  }
+-
+-  function back() {
+-    if (currentStep > 0) {
+-      setCurrentStep((s) => s - 1)
+-    }
+-  }
+-
+-  useEffect(() => {
+-    function onKey(e: KeyboardEvent) {
+-      if (e.key === 'Enter' && step !== 'decision' && canAdvance() && !saving) {
+-        advance()
+-      }
+-    }
+-    window.addEventListener('keydown', onKey)
+-    return () => window.removeEventListener('keydown', onKey)
+-  }, [currentStep, state, saving, step])
+-
+-  function canAdvance(): boolean {
+-    if (step === 'intent') return state.intent.trim().length > 0
+-    if (step === 'success_metric') return state.successMetric.trim().length > 0
+-    if (step === 'scope') return state.scope !== null
+-    if (step === 'path') return state.executionPath !== null
+-    if (step === 'priority') return state.urgency !== null
+-    if (step === 'decision') return state.decision !== null
+-    return false
+-  }
+-
+-  async function handleDecision(decision: Decision) {
+-    const newState = { ...state, decision }
+-    setState(newState)
+-    await saveDrillAndNavigate(decision)
+-  }
+-
+-  async function saveDrillAndNavigate(decision: Decision) {
+-    setSaving(true)
+-    setErrorMsg(null)
+-
+-    try {
+-      const payload = {
+-        ideaId,
+-        intent: state.intent,
+-        successMetric: state.successMetric,
+-        scope: state.scope,
+-        executionPath: state.executionPath,
+-        urgencyDecision: state.urgency,
+-        finalDisposition: decision,
+-      }
+-
+-      const res = await fetch('/api/drill', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify(payload),
+-      })
+-
+-      if (!res.ok) {
+-        const data = await res.json()
+-        throw new Error(data.error || 'Failed to save drill session')
+-      }
+-
+-      // W5: Update status before navigation for icebox/killed
+-      if (decision === 'killed' || decision === 'icebox') {
+-        const endpoint = decision === 'killed' ? '/api/actions/kill-idea' : '/api/actions/move-to-icebox'
+-        const statusRes = await fetch(endpoint, {
+-          method: 'POST',
+-          headers: { 'Content-Type': 'application/json' },
+-          body: JSON.stringify({ ideaId }),
+-        })
+-        if (!statusRes.ok) {
+-          throw new Error(`Failed to update idea status to ${decision}`)
+-        }
+-      }
+-
+-      if (decision === 'arena') {
+-        router.push(`${ROUTES.drillSuccess}?ideaId=${ideaId}`)
+-      } else if (decision === 'killed') {
+-        router.push(`${ROUTES.drillEnd}?ideaId=${ideaId}`)
+-      } else {
+-        router.push(ROUTES.icebox)
+-      }
+-    } catch (err: any) {
+-      setErrorMsg(err.message)
+-      setSaving(false)
+-    }
+-  }
+-
+-  return (
+-    <DrillLayout
+-      progress={
+-        <DrillProgress
+-          current={currentStep + 1}
+-          total={totalSteps}
+-          stepLabel={`Step ${currentStep + 1} of ${totalSteps}`}
+-        />
+-      }
+-    >
+-      <div className="space-y-8">
+-        {idea && <IdeaContextCard idea={idea} />}
+-        
+-        {step === 'intent' && (
+-          <StepText
+-            question="What is this really?"
+-            hint="Strip the excitement. What is the actual thing?"
+-            value={state.intent}
+-            onChange={(v) => setState({ ...state, intent: v })}
+-            onNext={advance}
+-            onBack={currentStep > 0 ? back : undefined}
+-            canNext={canAdvance()}
+-          />
+-        )}
+-        {step === 'success_metric' && (
+-          <StepText
+-            question="How do you know it worked?"
+-            hint="One metric. If you can't name it, the idea isn't ready."
+-            value={state.successMetric}
+-            onChange={(v) => setState({ ...state, successMetric: v })}
+-            onNext={advance}
+-            onBack={back}
+-            canNext={canAdvance()}
+-          />
+-        )}
+-        {step === 'scope' && (
+-          <StepChoice
+-            question="How big is this?"
+-            hint="Be honest. Scope creep starts here."
+-            onBack={back}
+-          >
+-            <GiantChoiceButton
+-              label="Small"
+-              description="A week or less. Ship fast."
+-              selected={state.scope === 'small'}
+-              onClick={() => { setState({ ...state, scope: 'small' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-            />
+-            <GiantChoiceButton
+-              label="Medium"
+-              description="Two to four weeks. Needs a plan."
+-              selected={state.scope === 'medium'}
+-              onClick={() => { setState({ ...state, scope: 'medium' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-            />
+-            <GiantChoiceButton
+-              label="Large"
+-              description="Over a month. Be careful."
+-              selected={state.scope === 'large'}
+-              onClick={() => { setState({ ...state, scope: 'large' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-              variant="danger"
+-            />
+-          </StepChoice>
+-        )}
+-        {step === 'path' && (
+-          <StepChoice
+-            question="How does this get built?"
+-            hint="Solo, assisted, or fully delegated?"
+-            onBack={back}
+-          >
+-            <GiantChoiceButton
+-              label="Solo"
+-              description="You build it yourself."
+-              selected={state.executionPath === 'solo'}
+-              onClick={() => { setState({ ...state, executionPath: 'solo' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-            />
+-            <GiantChoiceButton
+-              label="Assisted"
+-              description="You lead, AI or others help."
+-              selected={state.executionPath === 'assisted'}
+-              onClick={() => { setState({ ...state, executionPath: 'assisted' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-            />
+-            <GiantChoiceButton
+-              label="Delegated"
+-              description="Handed off to someone else."
+-              selected={state.executionPath === 'delegated'}
+-              onClick={() => { setState({ ...state, executionPath: 'delegated' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-              variant="ice"
+-            />
+-          </StepChoice>
+-        )}
+-        {step === 'priority' && (
+-          <StepChoice
+-            question="Does this belong now?"
+-            hint="What would you not do if you commit to this?"
+-            onBack={back}
+-          >
+-            <GiantChoiceButton
+-              label="Now"
+-              description="This is urgent and important."
+-              selected={state.urgency === 'now'}
+-              onClick={() => { setState({ ...state, urgency: 'now' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-              variant="success"
+-            />
+-            <GiantChoiceButton
+-              label="Later"
+-              description="Good idea, wrong timing."
+-              selected={state.urgency === 'later'}
+-              onClick={() => { setState({ ...state, urgency: 'later' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-              variant="ice"
+-            />
+-            <GiantChoiceButton
+-              label="Never"
+-              description="Honest answer: this won't happen."
+-              selected={state.urgency === 'never'}
+-              onClick={() => { setState({ ...state, urgency: 'never' }); setTimeout(advance, CHOICE_ADVANCE_DELAY_MS) }}
+-              variant="danger"
+-            />
+-          </StepChoice>
+-        )}
+-        {step === 'decision' && (
+-          <div>
+-            <div className="mb-8">
+-              <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{"What's the call?"}</h2>
+-              <p className="text-[#94a3b8]">Commit, hold, or remove. Every idea gets a clear decision.</p>
+-            </div>
+-            {errorMsg && (
+-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+-                {errorMsg}
+-              </div>
+-            )}
+-            <div className="space-y-3 relative">
+-              {saving && (
+-                <div className="absolute inset-0 bg-[#0a0a0f]/60 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-xl border border-indigo-500/20">
+-                  <span className="text-indigo-300 font-medium animate-pulse">Saving session…</span>
+-                </div>
+-              )}
+-              <GiantChoiceButton
+-                label="Start building"
+-                description="This gets built. Now."
+-                onClick={() => handleDecision('arena')}
+-                variant="success"
+-                disabled={saving}
+-              />
+-              <GiantChoiceButton
+-                label="Put on hold"
+-                description="Not now. Maybe later."
+-                onClick={() => handleDecision('icebox')}
+-                variant="ice"
+-                disabled={saving}
+-              />
+-              <GiantChoiceButton
+-                label="Remove this idea"
+-                description="It's not worth pursuing. Let it go."
+-                onClick={() => handleDecision('killed')}
+-                variant="danger"
+-                disabled={saving}
+-              />
+-            </div>
+-            <div className="mt-6">
+-              <button onClick={back} disabled={saving} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors disabled:opacity-50">
+-                ← Back
+-              </button>
+-            </div>
+-          </div>
+-        )}
+-      </div>
+-    </DrillLayout>
+-  )
+-}
+-
+-function StepText({
+-  question,
+-  hint,
+-  value,
+-  onChange,
+-  onNext,
+-  onBack,
+-  canNext,
+-}: {
+-  question: string
+-  hint: string
+-  value: string
+-  onChange: (v: string) => void
+-  onNext: () => void
+-  onBack?: () => void
+-  canNext: boolean
+-}) {
+-  return (
+-    <div>
+-      <div className="mb-8">
+-        <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{question}</h2>
+-        <p className="text-[#94a3b8]">{hint}</p>
+-      </div>
+-      <textarea
+-        autoFocus
+-        value={value}
+-        onChange={(e) => onChange(e.target.value)}
+-        placeholder="Type your answer…"
+-        rows={4}
+-        className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-xl px-4 py-3 text-[#e2e8f0] placeholder-[#94a3b8]/50 text-lg resize-none focus:outline-none focus:border-indigo-500/40 transition-colors"
+-      />
+-      <div className="flex items-center justify-between mt-6">
+-        {onBack ? (
+-          <button onClick={onBack} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors">
+-            ← Back
+-          </button>
+-        ) : (
+-          <div />
+-        )}
+-        <button
+-          onClick={onNext}
+-          disabled={!canNext}
+-          className="px-6 py-2.5 bg-indigo-500/20 text-indigo-300 rounded-xl text-sm font-medium hover:bg-indigo-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+-        >
+-          Next →
+-        </button>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-function StepChoice({
+-  question,
+-  hint,
+-  children,
+-  onBack,
+-}: {
+-  question: string
+-  hint: string
+-  children: React.ReactNode
+-  onBack?: () => void
+-}) {
+-  return (
+-    <div>
+-      <div className="mb-8">
+-        <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{question}</h2>
+-        <p className="text-[#94a3b8]">{hint}</p>
+-      </div>
+-      <div className="space-y-3">{children}</div>
+-      {onBack && (
+-        <div className="mt-6">
+-          <button onClick={onBack} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors">
+-            ← Back
+-          </button>
+-        </div>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### app/drill/success/page.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useEffect, useState, Suspense } from 'react'
+-import { useRouter, useSearchParams } from 'next/navigation'
+-import Link from 'next/link'
+-import { MaterializationSequence } from '@/components/drill/materialization-sequence'
+-import { ROUTES } from '@/lib/routes'
+-import type { Project } from '@/types/project'
+-import type { ApiResponse } from '@/types/api'
+-
+-export default function DrillSuccessPage() {
+-  return (
+-    <Suspense fallback={
+-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+-        <p className="text-[#94a3b8]">Loading…</p>
+-      </div>
+-    }>
+-      <DrillSuccessContent />
+-    </Suspense>
+-  )
+-}
+-
+-function DrillSuccessContent() {
+-  const searchParams = useSearchParams()
+-  const ideaId = searchParams.get('ideaId')
+-  
+-  const [createdProject, setCreatedProject] = useState<Project | null>(null)
+-  const [error, setError] = useState<string | null>(null)
+-  const [loading, setLoading] = useState(true)
+-
+-  useEffect(() => {
+-    if (!ideaId) {
+-      setError('Missing ideaId')
+-      setLoading(false)
+-      return
+-    }
+-
+-    async function materialize() {
+-      try {
+-        const res = await fetch('/api/ideas/materialize', {
+-          method: 'POST',
+-          headers: { 'Content-Type': 'application/json' },
+-          body: JSON.stringify({ ideaId }),
+-        })
+-        
+-        const data = await res.json() as ApiResponse<Project>
+-        if (!res.ok) throw new Error(data.error || 'Failed to materialize idea')
+-        
+-        setCreatedProject(data.data!)
+-      } catch (err: any) {
+-        setError(err.message)
+-      } finally {
+-        setLoading(false)
+-      }
+-    }
+-
+-    materialize()
+-  }, [ideaId])
+-
+-  return (
+-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center p-6">
+-      <div className="max-w-md w-full">
+-        <div className="mb-8">
+-          <div className="text-4xl mb-4">◈</div>
+-          <h1 className="text-2xl font-bold text-[#e2e8f0] mb-1">Committed.</h1>
+-          <p className="text-[#94a3b8] text-sm">
+-            {loading ? 'Setting up your project…' : createdProject ? 'Your project is ready.' : 'Something went wrong.'}
+-          </p>
+-        </div>
+-
+-        {loading && <MaterializationSequence onComplete={() => {}} />}
+-        
+-        {error && (
+-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
+-            {error}
+-          </div>
+-        )}
+-
+-        {createdProject && (
+-          <div className="bg-[#12121a] border border-indigo-500/30 rounded-2xl p-6 shadow-2xl shadow-indigo-500/10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+-             <div className="text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-2">Project Created</div>
+-             <h2 className="text-xl font-bold text-[#f8fafc] mb-4">{createdProject.name}</h2>
+-             <Link 
+-               href={ROUTES.arenaProject(createdProject.id)}
+-               className="inline-flex items-center justify-center w-full px-6 py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/25 group"
+-             >
+-               View project
+-               <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
+-             </Link>
+-          </div>
+-        )}
+-
+-        {(error || (!loading && !createdProject)) && (
+-          <Link href={ROUTES.send} className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors underline underline-offset-4">
+-            Back to Ideas
+-          </Link>
+-        )}
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### app/globals.css
+-
+-```css
+-@tailwind base;
+-@tailwind components;
+-@tailwind utilities;
+-
+-:root {
+-  --studio-bg: #0a0a0f;
+-  --studio-surface: #12121a;
+-  --studio-border: #1e1e2e;
+-  --studio-accent: #6366f1;
+-  --studio-text: #e2e8f0;
+-  --studio-text-muted: #94a3b8;
+-  --studio-success: #10b981;
+-  --studio-warning: #f59e0b;
+-  --studio-danger: #ef4444;
+-  --studio-ice: #38bdf8;
+-}
+-
+-* {
+-  box-sizing: border-box;
+-  padding: 0;
+-  margin: 0;
+-}
+-
+-html,
+-body {
+-  max-width: 100vw;
+-  overflow-x: hidden;
+-  background: var(--studio-bg);
+-  color: var(--studio-text);
+-}
+-
+-::selection {
+-  background: #6366f133;
+-  color: #e2e8f0;
+-}
+-
+-::-webkit-scrollbar {
+-  width: 4px;
+-}
+-
+-::-webkit-scrollbar-track {
+-  background: var(--studio-bg);
+-}
+-
+-::-webkit-scrollbar-thumb {
+-  background: var(--studio-border);
+-  border-radius: 2px;
+-}
+-
+-```
+-
+-### app/icebox/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { getIdeas } from '@/lib/services/ideas-service'
+-import { getProjects } from '@/lib/services/projects-service'
+-import { buildIceboxViewModel } from '@/lib/view-models/icebox-view-model'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { EmptyState } from '@/components/common/empty-state'
+-import { IceboxCard } from '@/components/icebox/icebox-card'
+-
+-import { COPY } from '@/lib/studio-copy'
+-
+-export default async function IceboxPage() {
+-  const ideas = await getIdeas()
+-  const projects = await getProjects()
+-  const items = buildIceboxViewModel(ideas, projects)
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-2xl mx-auto">
+-        <div className="mb-6">
+-          <h1 className="text-2xl font-bold text-[#e2e8f0]">{COPY.icebox.heading}</h1>
+-          <p className="text-sm text-[#94a3b8] mt-1">{COPY.icebox.subheading}</p>
+-        </div>
+-
+-        {items.length === 0 ? (
+-          <EmptyState
+-            title={COPY.icebox.empty}
+-            description="Ideas are either in play or gone. Nothing deferred right now."
+-            icon="❄"
+-          />
+-        ) : (
+-          <div className="space-y-3">
+-            {items.map((item) => (
+-              <IceboxCard key={`${item.type}-${item.id}`} item={item} />
+-            ))}
+-          </div>
+-        )}
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/inbox/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { getInboxEvents } from '@/lib/services/inbox-service'
+-import { buildInboxViewModel } from '@/lib/view-models/inbox-view-model'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { InboxFeed } from '@/components/inbox/inbox-feed'
+-
+-export default async function InboxPage() {
+-  const events = await getInboxEvents()
+-  const vm = buildInboxViewModel(events)
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-2xl mx-auto">
+-        <div className="mb-6">
+-          <h1 className="text-2xl font-bold text-[#e2e8f0]">Inbox</h1>
+-          <p className="text-sm text-[#94a3b8] mt-1">
+-            {vm.unreadCount} unread
+-            {vm.errorCount > 0 && ` · ${vm.errorCount} error${vm.errorCount !== 1 ? 's' : ''}`}
+-          </p>
+-        </div>
+-        <InboxFeed events={events} />
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/killed/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { getProjectsByState } from '@/lib/services/projects-service'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { EmptyState } from '@/components/common/empty-state'
+-import { GraveyardCard } from '@/components/archive/graveyard-card'
+-
+-import { COPY } from '@/lib/studio-copy'
+-
+-export default async function KilledPage() {
+-  const projects = await getProjectsByState('killed')
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-2xl mx-auto">
+-        <div className="mb-6">
+-          <h1 className="text-2xl font-bold text-[#e2e8f0]">{COPY.killed.heading}</h1>
+-          <p className="text-sm text-[#94a3b8] mt-1">Projects removed from focus</p>
+-        </div>
+-
+-        {projects.length === 0 ? (
+-          <EmptyState
+-            title={COPY.killed.empty}
+-            description="Ideas that were put to rest live here."
+-            icon="†"
+-          />
+-        ) : (
+-          <div className="space-y-4">
+-            {projects.map((project) => (
+-              <GraveyardCard key={project.id} project={project} />
+-            ))}
+-          </div>
+-        )}
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/review/[prId]/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { notFound } from 'next/navigation'
+-import { getPRById } from '@/lib/services/prs-service'
+-import { getProjectById } from '@/lib/services/projects-service'
+-import { buildReviewViewModel } from '@/lib/view-models/review-view-model'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { SplitReviewLayout } from '@/components/review/split-review-layout'
+-import { PRSummaryCard } from '@/components/review/pr-summary-card'
+-import { DiffSummary } from '@/components/review/diff-summary'
+-import { BuildStatusChip } from '@/components/review/build-status-chip'
+-import { FixRequestBox } from '@/components/review/fix-request-box'
+-import { MergeActions } from '@/components/review/merge-actions'
+-import { PreviewFrame } from '@/components/arena/preview-frame'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-interface Props {
+-  params: { prId: string }
+-}
+-
+-export default async function ReviewPage({ params }: Props) {
+-  const prResult = await getPRById(params.prId)
+-  if (!prResult) notFound()
+-  // After notFound(), TypeScript doesn't know execution stops, so we re-assign
+-  const pr = prResult as NonNullable<typeof prResult>
+-
+-  const project = await getProjectById(pr.projectId)
+-  const vm = buildReviewViewModel(pr, project)
+-
+-  const breadcrumb = (
+-    <div className="flex items-center gap-2 text-sm">
+-      {project && (
+-        <>
+-          <Link
+-            href={ROUTES.arenaProject(project.id)}
+-            className="text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+-          >
+-            ← {project.name}
+-          </Link>
+-          <span className="text-[#1e1e2e]">/</span>
+-        </>
+-      )}
+-      <h1 className="font-medium text-[#e2e8f0]">Review PR #{pr.number}</h1>
+-    </div>
+-  )
+-
+-  const preview = <PreviewFrame previewUrl={pr.previewUrl} />
+-
+-  const sidebar = (
+-    <>
+-      <PRSummaryCard pr={pr} />
+-
+-      <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-        <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+-          Build Status
+-        </h3>
+-        <BuildStatusChip state={pr.buildState} />
+-      </div>
+-
+-      <DiffSummary />
+-
+-      <MergeActions
+-        prId={pr.id}
+-        canMerge={vm.canMerge}
+-        currentStatus={pr.status}
+-        reviewState={vm.reviewState}
+-      />
+-
+-      <FixRequestBox prId={pr.id} existingRequest={pr.requestedChanges} />
+-    </>
+-  )
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-7xl mx-auto">
+-        <SplitReviewLayout
+-          breadcrumb={breadcrumb}
+-          preview={preview}
+-          sidebar={sidebar}
+-        />
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/send/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { AppShell } from '@/components/shell/app-shell'
+-import { getIdeasByStatus } from '@/lib/services/ideas-service'
+-import { EmptyState } from '@/components/common/empty-state'
+-import { SendPageClient } from '@/components/send/send-page-client'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-export default async function SendPage() {
+-  const ideas = await getIdeasByStatus('captured')
+-
+-  if (ideas.length === 0) {
+-    return (
+-      <AppShell>
+-        <EmptyState
+-          title="No ideas waiting"
+-          description="Send an idea from the GPT to get started."
+-          icon="◎"
+-          action={
+-            <Link href={ROUTES.arena} className="text-sm text-indigo-400 hover:text-indigo-300">
+-              View In Progress →
+-            </Link>
+-          }
+-        />
+-      </AppShell>
+-    )
+-  }
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-xl mx-auto">
+-        <div className="mb-6">
+-          <h1 className="text-2xl font-bold text-[#e2e8f0] mb-1">
+-            {ideas.length} idea{ideas.length !== 1 ? 's' : ''} waiting
+-          </h1>
+-          <p className="text-[#94a3b8] text-sm">Define each one or let it go.</p>
+-        </div>
+-        <SendPageClient ideas={ideas} />
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### app/shipped/page.tsx
+-
+-```tsx
+-export const dynamic = 'force-dynamic'
+-
+-import { getProjectsByState } from '@/lib/services/projects-service'
+-import { AppShell } from '@/components/shell/app-shell'
+-import { EmptyState } from '@/components/common/empty-state'
+-import { TrophyCard } from '@/components/archive/trophy-card'
+-
+-import { COPY } from '@/lib/studio-copy'
+-
+-export default async function ShippedPage() {
+-  const projects = await getProjectsByState('shipped')
+-
+-  return (
+-    <AppShell>
+-      <div className="max-w-2xl mx-auto">
+-        <div className="mb-6">
+-          <h1 className="text-2xl font-bold text-[#e2e8f0]">{COPY.shipped.heading}</h1>
+-          <p className="text-sm text-[#94a3b8] mt-1">
+-            {projects.length} shipped project{projects.length !== 1 ? 's' : ''}
+-          </p>
+-        </div>
+-
+-        {projects.length === 0 ? (
+-          <EmptyState
+-            title={COPY.shipped.empty}
+-            description="Your completed work lives here."
+-            icon="✦"
+-          />
+-        ) : (
+-          <div className="space-y-4">
+-            {projects.map((project) => (
+-              <TrophyCard key={project.id} project={project} />
+-            ))}
+-          </div>
+-        )}
+-      </div>
+-    </AppShell>
+-  )
+-}
+-
+-```
+-
+-### components/archive/archive-filter-bar.tsx
+-
+-```tsx
+-'use client'
+-
+-interface ArchiveFilterBarProps {
+-  filter: 'all' | 'shipped' | 'killed'
+-  onChange: (filter: 'all' | 'shipped' | 'killed') => void
+-}
+-
+-export function ArchiveFilterBar({ filter, onChange }: ArchiveFilterBarProps) {
+-  const options = [
+-    { value: 'all' as const, label: 'All' },
+-    { value: 'shipped' as const, label: 'Shipped' },
+-    { value: 'killed' as const, label: 'Removed' },
+-  ]
+-
+-  return (
+-    <div className="flex gap-1 p-1 bg-[#12121a] border border-[#1e1e2e] rounded-lg w-fit">
+-      {options.map((opt) => (
+-        <button
+-          key={opt.value}
+-          onClick={() => onChange(opt.value)}
+-          className={`px-3 py-1.5 text-xs rounded transition-colors ${
+-            filter === opt.value
+-              ? 'bg-[#1e1e2e] text-[#e2e8f0]'
+-              : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+-          }`}
+-        >
+-          {opt.label}
+-        </button>
+-      ))}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/archive/graveyard-card.tsx
+-
+-```tsx
+-import type { Project } from '@/types/project'
+-import { formatDate } from '@/lib/date'
+-import { COPY } from '@/lib/studio-copy'
+-
+-interface GraveyardCardProps {
+-  project: Project
+-}
+-
+-export function GraveyardCard({ project }: GraveyardCardProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5 opacity-70 hover:opacity-100 transition-opacity">
+-      <div className="flex items-start justify-between gap-3 mb-3">
+-        <div>
+-          <span className="text-red-400/70 text-xs font-medium">{COPY.killed.heading}</span>
+-          <h3 className="text-lg font-semibold text-[#e2e8f0] mt-0.5 line-through decoration-[#94a3b8]/40">
+-            {project.name}
+-          </h3>
+-        </div>
+-        <span className="text-xl text-[#94a3b8]">†</span>
+-      </div>
+-      <p className="text-sm text-[#94a3b8] mb-3 leading-relaxed">{project.summary}</p>
+-      {project.killedReason && (
+-        <div className="p-3 bg-[#0a0a0f] border border-[#1e1e2e] rounded-lg">
+-          <p className="text-xs text-[#94a3b8] uppercase tracking-wide mb-1">Reason</p>
+-          <p className="text-xs text-[#e2e8f0]">{project.killedReason}</p>
+-        </div>
+-      )}
+-      {project.killedAt && (
+-        <p className="text-xs text-[#94a3b8] mt-3">Removed {formatDate(project.killedAt)}</p>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/archive/trophy-card.tsx
+-
+-```tsx
+-import type { Project } from '@/types/project'
+-import { formatDate } from '@/lib/date'
+-import { COPY } from '@/lib/studio-copy'
+-
+-interface TrophyCardProps {
+-  project: Project
+-}
+-
+-export function TrophyCard({ project }: TrophyCardProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <div className="flex items-start justify-between gap-3 mb-3">
+-        <div>
+-          <span className="text-emerald-400 text-xs font-medium">{COPY.shipped.heading}</span>
+-          <h3 className="text-lg font-semibold text-[#e2e8f0] mt-0.5">{project.name}</h3>
+-        </div>
+-        <span className="text-xl">✦</span>
+-      </div>
+-      <p className="text-sm text-[#94a3b8] mb-4 leading-relaxed">{project.summary}</p>
+-      {project.shippedAt && (
+-        <p className="text-xs text-[#94a3b8]">
+-          Shipped {formatDate(project.shippedAt)}
+-        </p>
+-      )}
+-      {project.activePreviewUrl && (
+-        <a
+-          href={project.activePreviewUrl}
+-          target="_blank"
+-          rel="noopener noreferrer"
+-          className="mt-3 inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+-        >
+-          ↗ View live
+-        </a>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/active-limit-banner.tsx
+-
+-```tsx
+-import { MAX_ARENA_PROJECTS } from '@/lib/constants'
+-
+-interface ActiveLimitBannerProps {
+-  count: number
+-}
+-
+-export function ActiveLimitBanner({ count }: ActiveLimitBannerProps) {
+-  const atCapacity = count >= MAX_ARENA_PROJECTS
+-
+-  return (
+-    <div
+-      className={`flex items-center justify-between px-4 py-2.5 rounded-lg text-sm mb-6 ${
+-        atCapacity
+-          ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+-          : 'bg-[#12121a] border border-[#1e1e2e] text-[#94a3b8]'
+-      }`}
+-    >
+-      <span>
+-        Active projects: {count}/{MAX_ARENA_PROJECTS}
+-      </span>
+-      {atCapacity && (
+-        <span className="text-xs font-medium">
+-          Ship or remove something to add more
+-        </span>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/arena-project-card.tsx
+-
+-```tsx
+-import type { Project } from '@/types/project'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-import { TimePill } from '@/components/common/time-pill'
+-
+-interface ArenaProjectCardProps {
+-  project: Project
+-}
+-
+-const healthColors: Record<Project['health'], string> = {
+-  green: 'bg-emerald-500',
+-  yellow: 'bg-amber-500',
+-  red: 'bg-red-500',
+-}
+-
+-const healthTextColors: Record<Project['health'], string> = {
+-  green: 'text-emerald-500',
+-  yellow: 'text-amber-500',
+-  red: 'text-red-500',
+-}
+-
+-const healthLabels: Record<Project['health'], string> = {
+-  green: 'On track',
+-  yellow: 'Needs attention',
+-  red: 'Blocked',
+-}
+-
+-export function ArenaProjectCard({ project }: ArenaProjectCardProps) {
+-  return (
+-    <Link
+-      href={ROUTES.arenaProject(project.id)}
+-      className="block bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5 hover:border-indigo-500/30 transition-all group"
+-    >
+-      <div className="flex items-start justify-between gap-3 mb-3">
+-        <div className="flex items-center gap-2">
+-          <span className={`w-2 h-2 rounded-full ${healthColors[project.health]} flex-shrink-0`} />
+-          <h3 className="font-semibold text-[#e2e8f0] group-hover:text-white transition-colors">
+-            {project.name}
+-          </h3>
+-        </div>
+-        <TimePill dateString={project.updatedAt} />
+-      </div>
+-      <p className="text-xs text-[#94a3b8] mb-4 line-clamp-2">{project.summary}</p>
+-      <div className="flex items-center justify-between">
+-        <div>
+-          <p className="text-xs text-[#94a3b8]">Phase</p>
+-          <p className="text-sm text-[#e2e8f0]">{project.currentPhase}</p>
+-        </div>
+-        {project.nextAction && (
+-          <div className="text-right">
+-            <p className="text-xs text-[#94a3b8]">Next</p>
+-            <p className="text-xs text-indigo-400 max-w-[140px] truncate">{project.nextAction}</p>
+-          </div>
+-        )}
+-      </div>
+-      <div className="mt-3 pt-3 border-t border-[#1e1e2e] flex items-center justify-between">
+-        <span className={`text-xs ${healthTextColors[project.health]}`}>
+-          {healthLabels[project.health]}
+-        </span>
+-        <span className="text-xs text-[#94a3b8] group-hover:text-indigo-400 transition-colors">
+-          View →
+-        </span>
+-      </div>
+-    </Link>
+-  )
+-}
+-
+-```
+-
+-### components/arena/issue-list.tsx
+-
+-```tsx
+-import type { Task } from '@/types/task'
+-
+-interface IssueListProps {
+-  tasks: Task[]
+-}
+-
+-const statusIcon: Record<Task['status'], string> = {
+-  pending: '○',
+-  in_progress: '◑',
+-  done: '●',
+-  blocked: '✕',
+-}
+-
+-const statusColor: Record<Task['status'], string> = {
+-  pending: 'text-[#94a3b8]',
+-  in_progress: 'text-indigo-400',
+-  done: 'text-emerald-400',
+-  blocked: 'text-red-400',
+-}
+-
+-const priorityDot: Record<Task['priority'], string> = {
+-  low: 'bg-slate-500',
+-  medium: 'bg-amber-500',
+-  high: 'bg-red-500',
+-}
+-
+-export function IssueList({ tasks }: IssueListProps) {
+-  if (tasks.length === 0) {
+-    return <p className="text-sm text-[#94a3b8]">No tasks yet.</p>
+-  }
+-
+-  return (
+-    <div className="space-y-2">
+-      {tasks.map((task) => (
+-        <div
+-          key={task.id}
+-          className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-[#0a0a0f] transition-colors"
+-        >
+-          <span className={`text-sm flex-shrink-0 ${statusColor[task.status]}`}>
+-            {statusIcon[task.status]}
+-          </span>
+-          <span className="flex-1 text-sm text-[#e2e8f0] truncate">{task.title}</span>
+-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${priorityDot[task.priority]}`} />
+-        </div>
+-      ))}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/merge-ship-panel.tsx
+-
+-```tsx
+-'use client'
+-
+-import type { PullRequest } from '@/types/pr'
+-
+-interface MergeShipPanelProps {
+-  pr: PullRequest
+-  onMerge?: () => void
+-}
+-
+-export function MergeShipPanel({ pr, onMerge }: MergeShipPanelProps) {
+-  const canMerge = pr.status === 'open' && pr.buildState === 'success' && pr.mergeable
+-
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+-        Merge & Ship
+-      </h3>
+-      <p className="text-sm text-[#e2e8f0] mb-3">{pr.title}</p>
+-      <div className="flex items-center gap-2 mb-4">
+-        <span
+-          className={`text-xs px-2 py-1 rounded ${
+-            pr.buildState === 'success'
+-              ? 'bg-emerald-500/10 text-emerald-400'
+-              : pr.buildState === 'failed'
+-              ? 'bg-red-500/10 text-red-400'
+-              : 'bg-amber-500/10 text-amber-400'
+-          }`}
+-        >
+-          {pr.buildState}
+-        </span>
+-        <span className="text-xs text-[#94a3b8]">#{pr.number}</span>
+-      </div>
+-      <button
+-        onClick={onMerge}
+-        disabled={!canMerge}
+-        className="w-full px-4 py-2.5 text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+-      >
+-        Merge PR
+-      </button>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/preview-frame.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState, useRef } from 'react'
+-
+-interface PreviewFrameProps {
+-  previewUrl?: string
+-}
+-
+-export function PreviewFrame({ previewUrl }: PreviewFrameProps) {
+-  const [loading, setLoading] = useState(true)
+-  const [error, setError] = useState(false)
+-  const iframeRef = useRef<HTMLIFrameElement>(null)
+-
+-  function handleRefresh() {
+-    if (iframeRef.current && previewUrl) {
+-      setLoading(true)
+-      setError(false)
+-      iframeRef.current.src = previewUrl
+-    }
+-  }
+-
+-  if (!previewUrl) {
+-    return (
+-      <div className="rounded-xl overflow-hidden border border-[#1e1e2e] bg-[#0a0a0f] flex flex-col items-center justify-center h-[500px]">
+-        <span className="text-3xl mb-3">🖥️</span>
+-        <p className="text-sm font-medium text-[#94a3b8]">No preview deployed yet</p>
+-        <p className="text-xs text-[#94a3b8]/60 mt-1">Preview will appear here once a build is available</p>
+-      </div>
+-    )
+-  }
+-
+-  return (
+-    <div className="rounded-xl overflow-hidden border border-[#1e1e2e] bg-[#0a0a0f]">
+-      {/* Toolbar */}
+-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#1e1e2e] bg-[#12121a]">
+-        <div className="flex gap-1.5">
+-          <span className="w-2.5 h-2.5 rounded-full bg-[#2a2a3a]" />
+-          <span className="w-2.5 h-2.5 rounded-full bg-[#2a2a3a]" />
+-          <span className="w-2.5 h-2.5 rounded-full bg-[#2a2a3a]" />
+-        </div>
+-        <span className="text-xs font-medium text-[#94a3b8] px-2 py-0.5 rounded bg-[#0a0a0f] flex-1 truncate">
+-          Preview
+-        </span>
+-        <span className="text-xs text-[#94a3b8] truncate max-w-[200px] hidden sm:block">{previewUrl}</span>
+-        <button
+-          onClick={handleRefresh}
+-          title="Refresh preview"
+-          className="text-xs text-[#94a3b8] hover:text-[#e2e8f0] transition-colors px-1"
+-        >
+-          ↺
+-        </button>
+-        <a
+-          href={previewUrl}
+-          target="_blank"
+-          rel="noopener noreferrer"
+-          className="text-xs text-sky-400 hover:text-sky-300 flex-shrink-0 transition-colors"
+-          title="Open in new tab"
+-        >
+-          ↗
+-        </a>
+-      </div>
+-
+-      {/* Loading skeleton */}
+-      {loading && !error && (
+-        <div className="h-[500px] flex items-center justify-center bg-[#0a0a0f] animate-pulse">
+-          <div className="text-center">
+-            <div className="w-8 h-8 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin mx-auto mb-3" />
+-            <p className="text-xs text-[#94a3b8]">Loading preview…</p>
+-          </div>
+-        </div>
+-      )}
+-
+-      {/* Error state */}
+-      {error && (
+-        <div className="h-[500px] flex flex-col items-center justify-center bg-[#0a0a0f]">
+-          <span className="text-3xl mb-3">⚠️</span>
+-          <p className="text-sm font-medium text-[#94a3b8]">Preview unavailable</p>
+-          <p className="text-xs text-[#94a3b8]/60 mt-1">Server may not be running</p>
+-          <button
+-            onClick={handleRefresh}
+-            className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+-          >
+-            Try again
+-          </button>
+-        </div>
+-      )}
+-
+-      {/* Actual iframe */}
+-      <iframe
+-        ref={iframeRef}
+-        src={previewUrl}
+-        title="Preview"
+-        className={`w-full h-[500px] border-0 bg-white transition-opacity ${loading || error ? 'opacity-0 h-0 absolute' : 'opacity-100'}`}
+-        onLoad={() => setLoading(false)}
+-        onError={() => { setLoading(false); setError(true) }}
+-      />
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/project-anchor-pane.tsx
+-
+-```tsx
+-import type { Project } from '@/types/project'
+-
+-interface ProjectAnchorPaneProps {
+-  project: Project
+-}
+-
+-export function ProjectAnchorPane({ project }: ProjectAnchorPaneProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-4">What This Is</h2>
+-      <h3 className="text-lg font-bold text-[#e2e8f0] mb-2">{project.name}</h3>
+-      <p className="text-sm text-[#94a3b8] leading-relaxed mb-4">{project.summary}</p>
+-      <div className="space-y-3">
+-        <div>
+-          <p className="text-xs text-[#94a3b8] mb-1">Current phase</p>
+-          <p className="text-sm text-[#e2e8f0]">{project.currentPhase}</p>
+-        </div>
+-        {project.nextAction && (
+-          <div>
+-            <p className="text-xs text-[#94a3b8] mb-1">Next action</p>
+-            <p className="text-sm text-indigo-400">{project.nextAction}</p>
+-          </div>
+-        )}
+-        {project.activePreviewUrl && (
+-          <div>
+-            <p className="text-xs text-[#94a3b8] mb-1">Preview</p>
+-            <a
+-              href={project.activePreviewUrl}
+-              target="_blank"
+-              rel="noopener noreferrer"
+-              className="text-xs text-sky-400 hover:text-sky-300 truncate block"
+-            >
+-              {project.activePreviewUrl}
+-            </a>
+-          </div>
+-        )}
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/project-engine-pane.tsx
+-
+-```tsx
+-import type { Task } from '@/types/task'
+-import { IssueList } from './issue-list'
+-
+-interface ProjectEnginePaneProps {
+-  tasks: Task[]
+-}
+-
+-export function ProjectEnginePane({ tasks }: ProjectEnginePaneProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <div className="flex items-center justify-between mb-4">
+-        <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide">What&apos;s Being Done</h2>
+-        <span className="text-xs text-[#94a3b8]">{tasks.length} total</span>
+-      </div>
+-      <IssueList tasks={tasks} />
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/project-health-strip.tsx
+-
+-```tsx
+-import type { Project } from '@/types/project'
+-
+-interface ProjectHealthStripProps {
+-  project: Project
+-  donePct?: number
+-}
+-
+-const healthBg: Record<Project['health'], string> = {
+-  green: 'bg-emerald-500',
+-  yellow: 'bg-amber-500',
+-  red: 'bg-red-500',
+-}
+-
+-export function ProjectHealthStrip({ project, donePct }: ProjectHealthStripProps) {
+-  return (
+-    <div className="flex items-center gap-4 p-3 bg-[#12121a] border border-[#1e1e2e] rounded-lg">
+-      <div className="flex items-center gap-2">
+-        <span className={`w-2 h-2 rounded-full ${healthBg[project.health]}`} />
+-        <span className="text-xs text-[#e2e8f0]">
+-          {project.health === 'green' ? 'On track' : project.health === 'yellow' ? 'Needs attention' : 'Blocked'}
+-        </span>
+-      </div>
+-      {donePct !== undefined && (
+-        <div className="flex-1 flex items-center gap-2">
+-          <div className="flex-1 h-1 bg-[#1e1e2e] rounded-full overflow-hidden">
+-            <div
+-              className="h-full bg-indigo-500 rounded-full"
+-              style={{ width: `${donePct}%` }}
+-            />
+-          </div>
+-          <span className="text-xs text-[#94a3b8]">{donePct}%</span>
+-        </div>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/arena/project-reality-pane.tsx
+-
+-```tsx
+-import type { PullRequest } from '@/types/pr'
+-import type { Project } from '@/types/project'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-import { TimePill } from '@/components/common/time-pill'
+-
+-interface ProjectRealityPaneProps {
+-  prs: PullRequest[]
+-  project: Project
+-}
+-
+-const buildStateColors: Record<PullRequest['buildState'], string> = {
+-  pending: 'text-[#94a3b8]',
+-  running: 'text-amber-400',
+-  success: 'text-emerald-400',
+-  failed: 'text-red-400',
+-}
+-
+-const buildStateLabels: Record<PullRequest['buildState'], string> = {
+-  pending: 'Pending',
+-  running: 'Building…',
+-  success: 'Passed',
+-  failed: 'Failed',
+-}
+-
+-export function ProjectRealityPane({ prs, project }: ProjectRealityPaneProps) {
+-  const openPRs = prs.filter((pr) => pr.status === 'open')
+-
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <div className="flex items-center justify-between mb-4">
+-        <h2 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide">Check It</h2>
+-        {openPRs.length > 0 && (
+-          <span className="text-xs bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded">
+-            {openPRs.length} open PR{openPRs.length !== 1 ? 's' : ''}
+-          </span>
+-        )}
+-      </div>
+-      {prs.length === 0 ? (
+-        <p className="text-sm text-[#94a3b8]">No pull requests yet.</p>
+-      ) : (
+-        <div className="space-y-3">
+-          {prs.map((pr) => (
+-            <Link
+-              key={pr.id}
+-              href={ROUTES.review(pr.id)}
+-              className="block p-3 bg-[#0a0a0f] border border-[#1e1e2e] rounded-lg hover:border-indigo-500/30 transition-colors"
+-            >
+-              <div className="flex items-start justify-between gap-2 mb-1">
+-                <span className="text-xs font-medium text-[#e2e8f0] line-clamp-1">{pr.title}</span>
+-                <span className="text-xs text-[#94a3b8] flex-shrink-0">#{pr.number}</span>
+-              </div>
+-              <div className="flex items-center gap-3">
+-                <span className={`text-xs ${buildStateColors[pr.buildState]}`}>
+-                  {buildStateLabels[pr.buildState]}
+-                </span>
+-                <TimePill dateString={pr.createdAt} />
+-              </div>
+-            </Link>
+-          ))}
+-        </div>
+-      )}
+-      {project.activePreviewUrl && (
+-        <div className="mt-4 pt-4 border-t border-[#1e1e2e]">
+-          <a
+-            href={project.activePreviewUrl}
+-            target="_blank"
+-            rel="noopener noreferrer"
+-            className="flex items-center gap-2 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+-          >
+-            <span>↗</span>
+-            Open Preview
+-          </a>
+-        </div>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/common/confirm-dialog.tsx
+-
+-```tsx
+-'use client'
+-
+-interface ConfirmDialogProps {
+-  open: boolean
+-  title: string
+-  description: string
+-  confirmLabel?: string
+-  cancelLabel?: string
+-  onConfirm: () => void
+-  onCancel: () => void
+-  variant?: 'danger' | 'default'
+-}
+-
+-export function ConfirmDialog({
+-  open,
+-  title,
+-  description,
+-  confirmLabel = 'Confirm',
+-  cancelLabel = 'Cancel',
+-  onConfirm,
+-  onCancel,
+-  variant = 'default',
+-}: ConfirmDialogProps) {
+-  if (!open) return null
+-
+-  return (
+-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
+-      <div className="relative bg-[#12121a] border border-[#1e1e2e] rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+-        <h3 className="text-lg font-semibold text-[#e2e8f0] mb-2">{title}</h3>
+-        <p className="text-sm text-[#94a3b8] mb-6">{description}</p>
+-        <div className="flex gap-3 justify-end">
+-          <button
+-            onClick={onCancel}
+-            className="px-4 py-2 text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+-          >
+-            {cancelLabel}
+-          </button>
+-          <button
+-            onClick={onConfirm}
+-            className={`px-4 py-2 text-sm rounded-lg font-medium transition-colors ${
+-              variant === 'danger'
+-                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+-                : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30'
+-            }`}
+-          >
+-            {confirmLabel}
+-          </button>
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/common/count-chip.tsx
+-
+-```tsx
+-interface CountChipProps {
+-  count: number
+-  variant?: 'default' | 'danger' | 'warning'
+-}
+-
+-export function CountChip({ count, variant = 'default' }: CountChipProps) {
+-  const variants = {
+-    default: 'bg-[#1e1e2e] text-[#94a3b8]',
+-    danger: 'bg-red-500/20 text-red-400',
+-    warning: 'bg-amber-500/20 text-amber-400',
+-  }
+-  return (
+-    <span
+-      className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded text-xs font-medium ${variants[variant]}`}
+-    >
+-      {count}
+-    </span>
+-  )
+-}
+-
+-```
+-
+-### components/common/empty-state.tsx
+-
+-```tsx
+-interface EmptyStateProps {
+-  title: string
+-  description?: string
+-  action?: React.ReactNode
+-  icon?: string
+-}
+-
+-export function EmptyState({ title, description, action, icon }: EmptyStateProps) {
+-  return (
+-    <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
+-      {icon && <div className="text-5xl mb-4">{icon}</div>}
+-      <h3 className="text-lg font-semibold text-[#e2e8f0] mb-2">{title}</h3>
+-      {description && (
+-        <p className="text-sm text-[#94a3b8] max-w-xs mb-6">{description}</p>
+-      )}
+-      {action && <div>{action}</div>}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/common/keyboard-hint.tsx
+-
+-```tsx
+-interface KeyboardHintProps {
+-  keys: string[]
+-  label?: string
+-}
+-
+-export function KeyboardHint({ keys, label }: KeyboardHintProps) {
+-  return (
+-    <span className="inline-flex items-center gap-1 text-xs text-[#94a3b8]">
+-      {keys.map((key) => (
+-        <kbd
+-          key={key}
+-          className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded bg-[#1e1e2e] border border-[#2a2a3a] text-[10px] font-mono"
+-        >
+-          {key}
+-        </kbd>
+-      ))}
+-      {label && <span className="ml-1">{label}</span>}
+-    </span>
+-  )
+-}
+-
+-```
+-
+-### components/common/loading-sequence.tsx
+-
+-```tsx
+-interface LoadingSequenceProps {
+-  steps: string[]
+-  currentStep?: number
+-}
+-
+-export function LoadingSequence({ steps, currentStep = 0 }: LoadingSequenceProps) {
+-  return (
+-    <div className="space-y-2">
+-      {steps.map((step, i) => (
+-        <div
+-          key={i}
+-          className={`flex items-center gap-3 text-sm transition-all duration-500 ${
+-            i < currentStep
+-              ? 'text-emerald-400'
+-              : i === currentStep
+-              ? 'text-[#e2e8f0]'
+-              : 'text-[#94a3b8]/40'
+-          }`}
+-        >
+-          <span className="w-4 h-4 flex items-center justify-center">
+-            {i < currentStep ? '✓' : i === currentStep ? '→' : '·'}
+-          </span>
+-          {step}
+-        </div>
+-      ))}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/common/next-action-badge.tsx
+-
+-```tsx
+-import Link from 'next/link'
+-
+-interface NextActionBadgeProps {
+-  label: string
+-  href?: string
+-  variant?: 'default' | 'warning' | 'error' | 'success'
+-}
+-
+-const variantStyles = {
+-  default: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+-  warning: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+-  error: 'text-red-400 bg-red-500/10 border-red-500/20',
+-  success: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+-}
+-
+-export function NextActionBadge({ label, href, variant = 'default' }: NextActionBadgeProps) {
+-  const classes = `inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium border rounded-full transition-opacity hover:opacity-80 ${variantStyles[variant]}`
+-
+-  if (href) {
+-    return (
+-      <Link href={href} className={classes}>
+-        {label}
+-      </Link>
+-    )
+-  }
+-
+-  return <span className={classes}>{label}</span>
+-}
+-
+-```
+-
+-### components/common/section-heading.tsx
+-
+-```tsx
+-interface SectionHeadingProps {
+-  title: string
+-  subtitle?: string
+-  action?: React.ReactNode
+-}
+-
+-export function SectionHeading({ title, subtitle, action }: SectionHeadingProps) {
+-  return (
+-    <div className="flex items-start justify-between mb-6">
+-      <div>
+-        <h1 className="text-2xl font-bold text-[#e2e8f0]">{title}</h1>
+-        {subtitle && (
+-          <p className="text-sm text-[#94a3b8] mt-1">{subtitle}</p>
+-        )}
+-      </div>
+-      {action && <div>{action}</div>}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/common/status-badge.tsx
+-
+-```tsx
+-interface StatusBadgeProps {
+-  status: string
+-  variant?: 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'ice'
+-}
+-
+-const variantClasses: Record<string, string> = {
+-  success: 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20',
+-  warning: 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20',
+-  danger: 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20',
+-  info: 'bg-indigo-500/10 text-indigo-400 ring-1 ring-indigo-500/20',
+-  neutral: 'bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20',
+-  ice: 'bg-sky-500/10 text-sky-400 ring-1 ring-sky-500/20',
+-}
+-
+-export function StatusBadge({ status, variant = 'neutral' }: StatusBadgeProps) {
+-  return (
+-    <span
+-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${variantClasses[variant]}`}
+-    >
+-      {status}
+-    </span>
+-  )
+-}
+-
+-```
+-
+-### components/common/time-pill.tsx
+-
+-```tsx
+-import { formatRelativeTime } from '@/lib/date'
+-
+-interface TimePillProps {
+-  dateString: string
+-  prefix?: string
+-}
+-
+-export function TimePill({ dateString, prefix }: TimePillProps) {
+-  return (
+-    <span className="inline-flex items-center text-xs text-[#94a3b8]">
+-      {prefix && <span className="mr-1">{prefix}</span>}
+-      <time dateTime={dateString}>{formatRelativeTime(dateString)}</time>
+-    </span>
+-  )
+-}
+-
+-```
+-
+-### components/dev/gpt-idea-form.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState } from 'react'
+-import { useRouter } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-export function GPTIdeaForm() {
+-  const router = useRouter()
+-  const [loading, setLoading] = useState(false)
+-  const [success, setSuccess] = useState(false)
+-  const [error, setError] = useState(null as string | null)
+-
+-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+-    e.preventDefault()
+-    setLoading(true)
+-    setError(null)
+-
+-    const formData = new FormData(e.currentTarget)
+-    const payload = {
+-      source: 'gpt',
+-      event: 'idea_captured',
+-      data: {
+-        title: formData.get('title'),
+-        rawPrompt: formData.get('rawPrompt'),
+-        gptSummary: formData.get('gptSummary'),
+-        vibe: formData.get('vibe') || undefined,
+-        audience: formData.get('audience') || undefined,
+-      },
+-      timestamp: new Date().toISOString(),
+-    }
+-
+-    try {
+-      const res = await fetch('/api/webhook/gpt', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify(payload),
+-      })
+-
+-      if (!res.ok) {
+-        const data = await res.json()
+-        throw new Error(data.error || 'Failed to send')
+-      }
+-
+-      setSuccess(true)
+-      setTimeout(() => {
+-        router.push(ROUTES.send)
+-      }, 1500)
+-    } catch (err: any) {
+-      setError(err.message)
+-    } finally {
+-      setLoading(false)
+-    }
+-  }
+-
+-  if (success) {
+-    return (
+-      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-8 text-center">
+-        <div className="text-emerald-400 text-4xl mb-4">✓</div>
+-        <h3 className="text-[#e2e8f0] font-semibold mb-2">Idea Sent!</h3>
+-        <p className="text-[#94a3b8] text-sm">Redirecting to capture list...</p>
+-      </div>
+-    )
+-  }
+-
+-  return (
+-    <form onSubmit={handleSubmit} className="space-y-6">
+-      {error && (
+-        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+-          {error}
+-        </div>
+-      )}
+-
+-      <div>
+-        <label htmlFor="title" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+-          Idea Title
+-        </label>
+-        <input
+-          required
+-          id="title"
+-          name="title"
+-          placeholder="e.g., Personal CRM for Solopreneurs"
+-          className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors"
+-        />
+-      </div>
+-
+-      <div>
+-        <label htmlFor="gptSummary" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+-          GPT Summary (One-liner)
+-        </label>
+-        <input
+-          required
+-          id="gptSummary"
+-          name="gptSummary"
+-          placeholder="A short, catchy summary of the idea."
+-          className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors"
+-        />
+-      </div>
+-
+-      <div>
+-        <label htmlFor="rawPrompt" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+-          Raw Prompt / Full Context
+-        </label>
+-        <textarea
+-          required
+-          id="rawPrompt"
+-          name="rawPrompt"
+-          rows={6}
+-          placeholder="Paste the full GPT conversation or raw prompt here..."
+-          className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors font-mono text-sm"
+-        />
+-      </div>
+-
+-      <div className="grid grid-cols-2 gap-4">
+-        <div>
+-          <label htmlFor="vibe" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+-            Vibe (optional)
+-          </label>
+-          <input
+-            id="vibe"
+-            name="vibe"
+-            placeholder="e.g., productivity"
+-            className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors text-sm"
+-          />
+-        </div>
+-        <div>
+-          <label htmlFor="audience" className="block text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+-            Audience (optional)
+-          </label>
+-          <input
+-            id="audience"
+-            name="audience"
+-            placeholder="e.g., indie hackers"
+-            className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-4 py-3 text-[#e2e8f0] placeholder-[#4a4a6a] focus:outline-none focus:border-indigo-500/50 transition-colors text-sm"
+-          />
+-        </div>
+-      </div>
+-
+-      <button
+-        disabled={loading}
+-        type="submit"
+-        className="w-full bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white font-semibold py-4 rounded-xl transition-all shadow-[0_4px_20px_rgba(99,102,241,0.2)]"
+-      >
+-        {loading ? 'Sending...' : 'Simulate GPT Send'}
+-      </button>
+-    </form>
+-  )
+-}
+-
+-```
+-
+-### components/drill/drill-layout.tsx
+-
+-```tsx
+-interface DrillLayoutProps {
+-  children: React.ReactNode
+-  progress?: React.ReactNode
+-}
+-
+-export function DrillLayout({ children, progress }: DrillLayoutProps) {
+-  return (
+-    <div className="min-h-screen bg-[#0a0a0f] flex flex-col">
+-      {progress && (
+-        <div className="w-full border-b border-[#1e1e2e]">
+-          {progress}
+-        </div>
+-      )}
+-      <div className="flex-1 flex items-center justify-center p-6">
+-        <div className="w-full max-w-2xl">
+-          {children}
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/drill/drill-progress.tsx
+-
+-```tsx
+-interface DrillProgressProps {
+-  current: number
+-  total: number
+-  stepLabel?: string
+-}
+-
+-export function DrillProgress({ current, total, stepLabel }: DrillProgressProps) {
+-  const pct = Math.round((current / total) * 100)
+-
+-  return (
+-    <div className="px-6 py-3 flex items-center gap-4">
+-      <div className="flex-1 h-1 bg-[#1e1e2e] rounded-full overflow-hidden">
+-        <div
+-          className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+-          style={{ width: `${pct}%` }}
+-        />
+-      </div>
+-      <span className="text-xs text-[#94a3b8] whitespace-nowrap">
+-        {stepLabel ?? `${current} / ${total}`}
+-      </span>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/drill/giant-choice-button.tsx
+-
+-```tsx
+-interface GiantChoiceButtonProps {
+-  label: string
+-  description?: string
+-  selected?: boolean
+-  onClick: () => void
+-  variant?: 'default' | 'danger' | 'success' | 'ice'
+-  disabled?: boolean
+-}
+-
+-const variantStyles: Record<string, string> = {
+-  default: 'border-[#1e1e2e] hover:border-indigo-500/40 hover:bg-indigo-500/5',
+-  danger: 'border-[#1e1e2e] hover:border-red-500/40 hover:bg-red-500/5',
+-  success: 'border-[#1e1e2e] hover:border-emerald-500/40 hover:bg-emerald-500/5',
+-  ice: 'border-[#1e1e2e] hover:border-sky-500/40 hover:bg-sky-500/5',
+-}
+-
+-const selectedStyles: Record<string, string> = {
+-  default: 'border-indigo-500/60 bg-indigo-500/10 text-indigo-300',
+-  danger: 'border-red-500/60 bg-red-500/10 text-red-300',
+-  success: 'border-emerald-500/60 bg-emerald-500/10 text-emerald-300',
+-  ice: 'border-sky-500/60 bg-sky-500/10 text-sky-300',
+-}
+-
+-export function GiantChoiceButton({
+-  label,
+-  description,
+-  selected = false,
+-  onClick,
+-  variant = 'default',
+-  disabled = false,
+-}: GiantChoiceButtonProps) {
+-  return (
+-    <button
+-      onClick={onClick}
+-      disabled={disabled}
+-      className={`w-full text-left p-5 rounded-xl border transition-all duration-200 ${
+-        selected
+-          ? selectedStyles[variant]
+-          : `bg-[#12121a] text-[#e2e8f0] ${variantStyles[variant]}`
+-      } ${disabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}
+-    >
+-      <div className="flex items-center gap-3">
+-        <div
+-          className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${
+-            selected ? 'border-current bg-current scale-75' : 'border-[#2a2a3a]'
+-          }`}
+-        />
+-        <div>
+-          <div className="font-medium">{label}</div>
+-          {description && (
+-            <div className="text-xs text-[#94a3b8] mt-0.5">{description}</div>
+-          )}
+-        </div>
+-      </div>
+-    </button>
+-  )
+-}
+-
+-```
+-
+-### components/drill/idea-context-card.tsx
+-
+-```tsx
+-'use client'
+-
+-import type { Idea } from '@/types/idea'
+-
+-interface IdeaContextCardProps {
+-  idea: Idea
+-}
+-
+-export function IdeaContextCard({ idea }: IdeaContextCardProps) {
+-  return (
+-    <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+-      <div className="flex items-center gap-2 mb-4">
+-        <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 text-[10px] font-bold uppercase tracking-widest rounded border border-indigo-500/20">
+-          Source: GPT
+-        </span>
+-        <div className="h-px flex-1 bg-gradient-to-r from-indigo-500/20 to-transparent" />
+-      </div>
+-
+-      <div className="bg-[#12121a]/40 border border-[#1e1e2e] rounded-2xl p-6 backdrop-blur-sm">
+-        <h3 className="text-xl font-bold text-[#f8fafc] mb-3">{idea.title}</h3>
+-        
+-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+-          <div>
+-            <h4 className="text-[10px] font-bold text-[#4b5563] uppercase tracking-wider mb-2">Original Brainstorm</h4>
+-            <p className="text-[#94a3b8] text-sm italic line-clamp-3">"{idea.rawPrompt}"</p>
+-          </div>
+-          <div>
+-            <h4 className="text-[10px] font-bold text-[#4b5563] uppercase tracking-wider mb-2">GPT Summary</h4>
+-            <p className="text-[#94a3b8] text-sm leading-relaxed">{idea.gptSummary}</p>
+-          </div>
+-        </div>
+-
+-        <div className="mt-6 pt-6 border-t border-[#1e1e2e] flex flex-wrap gap-2">
+-          {idea.vibe && (
+-            <span className="px-3 py-1 bg-amber-500/5 text-amber-400/80 text-xs rounded-full border border-amber-500/10">
+-              Vibe: {idea.vibe}
+-            </span>
+-          )}
+-          {idea.audience && (
+-            <span className="px-3 py-1 bg-emerald-500/5 text-emerald-400/80 text-xs rounded-full border border-emerald-500/10">
+-              For: {idea.audience}
+-            </span>
+-          )}
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/drill/materialization-sequence.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useEffect, useState } from 'react'
+-
+-const STEPS = [
+-  'Freezing idea',
+-  'Creating project',
+-  'Generating tasks',
+-  'Preparing execution',
+-  'Project ready',
+-]
+-
+-interface MaterializationSequenceProps {
+-  onComplete?: () => void
+-}
+-
+-const STEP_TRANSITION_DELAY_MS = 600
+-
+-export function MaterializationSequence({ onComplete }: MaterializationSequenceProps) {
+-  const [currentStep, setCurrentStep] = useState(0)
+-
+-  useEffect(() => {
+-    const interval = setInterval(() => {
+-      setCurrentStep((prev) => {
+-        if (prev >= STEPS.length - 1) {
+-          clearInterval(interval)
+-          onComplete?.()
+-          return prev
+-        }
+-        return prev + 1
+-      })
+-    }, STEP_TRANSITION_DELAY_MS)
+-    return () => clearInterval(interval)
+-  }, [onComplete])
+-
+-  return (
+-    <div className="space-y-3">
+-      {STEPS.map((step, i) => (
+-        <div
+-          key={step}
+-          className={`flex items-center gap-3 text-sm transition-all duration-500 ${
+-            i < currentStep
+-              ? 'text-emerald-400'
+-              : i === currentStep
+-              ? 'text-[#e2e8f0]'
+-              : 'text-[#94a3b8]/30'
+-          }`}
+-        >
+-          <span className="w-5 h-5 flex items-center justify-center text-base">
+-            {i < currentStep ? '✓' : i === currentStep ? '→' : '·'}
+-          </span>
+-          {step}
+-        </div>
+-      ))}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/icebox/icebox-card.tsx
+-
+-```tsx
+-import type { IceboxItem } from '@/lib/view-models/icebox-view-model'
+-import { COPY } from '@/lib/studio-copy'
+-
+-interface IceboxCardProps {
+-  item: IceboxItem
+-}
+-
+-export function IceboxCard({ item }: IceboxCardProps) {
+-  return (
+-    <div
+-      className={`bg-[#12121a] border rounded-xl p-5 transition-colors ${
+-        item.isStale ? 'border-amber-500/30' : 'border-[#1e1e2e]'
+-      }`}
+-    >
+-      <div className="flex items-start justify-between gap-3 mb-2">
+-        <div>
+-          <span className="text-xs text-[#94a3b8] uppercase tracking-wide">
+-            {item.type === 'idea' ? 'Idea' : 'Project'}
+-          </span>
+-          <h3 className="font-semibold text-[#e2e8f0] mt-0.5">{item.title}</h3>
+-        </div>
+-        <span
+-          className={`text-xs flex-shrink-0 ${
+-            item.isStale ? 'text-amber-400' : 'text-[#94a3b8]'
+-          }`}
+-        >
+-          {item.daysInIcebox}d
+-        </span>
+-      </div>
+-      <p className="text-sm text-[#94a3b8] line-clamp-2">{item.summary}</p>
+-      {item.isStale && (
+-        <p className="text-xs text-amber-400 mt-2">
+-          {COPY.icebox.staleWarning.replace('{days}', String(item.daysInIcebox))}
+-        </p>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/icebox/stale-idea-modal.tsx
+-
+-```tsx
+-'use client'
+-
+-interface StaleIdeaModalProps {
+-  open: boolean
+-  title: string
+-  daysInIcebox: number
+-  onPromote: () => void
+-  onDiscard: () => void
+-  onClose: () => void
+-}
+-
+-export function StaleIdeaModal({
+-  open,
+-  title,
+-  daysInIcebox,
+-  onPromote,
+-  onDiscard,
+-  onClose,
+-}: StaleIdeaModalProps) {
+-  if (!open) return null
+-
+-  return (
+-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+-      <div className="relative bg-[#12121a] border border-amber-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+-        <div className="text-2xl mb-3">❄</div>
+-        <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">{title}</h3>
+-        <p className="text-sm text-amber-400 mb-4">
+-          This has been on hold for {daysInIcebox} days. Time to decide.
+-        </p>
+-        <div className="flex flex-col gap-2">
+-          <button
+-            onClick={onPromote}
+-            className="px-4 py-2.5 text-sm font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+-          >
+-            Start building
+-          </button>
+-          <button
+-            onClick={onDiscard}
+-            className="px-4 py-2.5 text-sm text-red-400/80 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
+-          >
+-            Remove this idea
+-          </button>
+-          <button
+-            onClick={onClose}
+-            className="px-4 py-2 text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+-          >
+-            Keep on hold
+-          </button>
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/icebox/triage-actions.tsx
+-
+-```tsx
+-'use client'
+-
+-interface TriageActionsProps {
+-  onPromote: () => void
+-  onDiscard: () => void
+-}
+-
+-export function TriageActions({ onPromote, onDiscard }: TriageActionsProps) {
+-  return (
+-    <div className="flex gap-2">
+-      <button
+-        onClick={onPromote}
+-        className="flex-1 px-3 py-2 text-xs font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+-      >
+-        Promote
+-      </button>
+-      <button
+-        onClick={onDiscard}
+-        className="flex-1 px-3 py-2 text-xs text-red-400/70 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
+-      >
+-        Remove
+-      </button>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/inbox/inbox-event-card.tsx
+-
+-```tsx
+-'use client'
+-
+-import type { InboxEvent } from '@/types/inbox'
+-import { TimePill } from '@/components/common/time-pill'
+-import { COPY } from '@/lib/studio-copy'
+-import Link from 'next/link'
+-import { useRouter } from 'next/navigation'
+-import { useState } from 'react'
+-
+-interface InboxEventCardProps {
+-  event: InboxEvent
+-}
+-
+-const severityStyles: Record<InboxEvent['severity'], string> = {
+-  info: 'border-[#1e1e2e]',
+-  warning: 'border-amber-500/20',
+-  error: 'border-red-500/20',
+-  success: 'border-emerald-500/20',
+-}
+-
+-const severityDot: Record<InboxEvent['severity'], string> = {
+-  info: 'bg-indigo-500',
+-  warning: 'bg-amber-500',
+-  error: 'bg-red-500',
+-  success: 'bg-emerald-500',
+-}
+-
+-export function InboxEventCard({ event }: InboxEventCardProps) {
+-  const router = useRouter()
+-  const [isMarking, setIsMarking] = useState(false)
+-
+-  const handleMarkRead = async (e: React.MouseEvent) => {
+-    e.preventDefault()
+-    e.stopPropagation()
+-    if (isMarking || event.read) return
+-
+-    setIsMarking(true)
+-    try {
+-      await fetch('/api/inbox', {
+-        method: 'PATCH',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ id: event.id }),
+-      })
+-      router.refresh()
+-    } catch (err) {
+-      console.error('Failed to mark read:', err)
+-    } finally {
+-      setIsMarking(false)
+-    }
+-  }
+-
+-  const content = (
+-    <div
+-      className={`bg-[#12121a] border rounded-xl p-4 transition-all ${severityStyles[event.severity]} ${
+-        !event.read ? 'border-l-4 border-l-sky-500 shadow-[0_0_15px_rgba(56,189,248,0.05)]' : 'opacity-60'
+-      } hover:opacity-100 group`}
+-    >
+-      <div className="flex items-start gap-3">
+-        <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${severityDot[event.severity]}`} />
+-        <div className="flex-1 min-w-0">
+-          <div className="flex items-start justify-between gap-2 mb-1">
+-            <p className="text-sm font-medium text-[#e2e8f0]">{event.title}</p>
+-            <div className="flex items-center gap-2">
+-              {!event.read && (
+-                <button
+-                  onClick={handleMarkRead}
+-                  disabled={isMarking}
+-                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[#1e1e2e] rounded text-sky-400 transition-all"
+-                  title={COPY.inbox.markRead}
+-                >
+-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+-                  </svg>
+-                </button>
+-              )}
+-              <TimePill dateString={event.timestamp} />
+-            </div>
+-          </div>
+-          <p className="text-xs text-[#94a3b8] leading-relaxed">{event.body}</p>
+-        </div>
+-      </div>
+-    </div>
+-  )
+-
+-  if (event.actionUrl) {
+-    return (
+-      <Link href={event.actionUrl} className="block">
+-        {content}
+-      </Link>
+-    )
+-  }
+-
+-  return content
+-}
+-
+-```
+-
+-### components/inbox/inbox-feed.tsx
+-
+-```tsx
+-'use client'
+-
+-import type { InboxEvent } from '@/types/inbox'
+-import { InboxEventCard } from './inbox-event-card'
+-import { useState } from 'react'
+-import { InboxFilterTabs } from './inbox-filter-tabs'
+-
+-interface InboxFeedProps {
+-  events: InboxEvent[]
+-}
+-
+-type Filter = 'all' | 'unread' | 'errors'
+-
+-export function InboxFeed({ events }: InboxFeedProps) {
+-  const [filter, setFilter] = useState<Filter>('all')
+-
+-  const filtered = events.filter((e) => {
+-    if (filter === 'unread') return !e.read
+-    if (filter === 'errors') return e.severity === 'error'
+-    return true
+-  })
+-
+-  return (
+-    <div className="space-y-4">
+-      <InboxFilterTabs
+-        filter={filter}
+-        onChange={setFilter}
+-        counts={{
+-          all: events.length,
+-          unread: events.filter((e) => !e.read).length,
+-          errors: events.filter((e) => e.severity === 'error').length,
+-        }}
+-      />
+-      {filtered.length === 0 ? (
+-        <p className="text-sm text-[#94a3b8] text-center py-8">No events.</p>
+-      ) : (
+-        <div className="space-y-2">
+-          {filtered.map((event) => (
+-            <InboxEventCard key={event.id} event={event} />
+-          ))}
+-        </div>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/inbox/inbox-filter-tabs.tsx
+-
+-```tsx
+-import { COPY } from '@/lib/studio-copy'
+-
+-type Filter = 'all' | 'unread' | 'errors'
+-
+-interface InboxFilterTabsProps {
+-  filter: Filter
+-  onChange: (filter: Filter) => void
+-  counts?: {
+-    all: number
+-    unread: number
+-    errors: number
+-  }
+-}
+-
+-export function InboxFilterTabs({ filter, onChange, counts }: InboxFilterTabsProps) {
+-  const tabs: { value: Filter; label: string }[] = [
+-    { value: 'all', label: `${COPY.inbox.filters.all}${counts ? ` (${counts.all})` : ''}` },
+-    { value: 'unread', label: `${COPY.inbox.filters.unread}${counts ? ` (${counts.unread})` : ''}` },
+-    { value: 'errors', label: `${COPY.inbox.filters.errors}${counts ? ` (${counts.errors})` : ''}` },
+-  ]
+-
+-  return (
+-    <div className="flex gap-1 p-1 bg-[#12121a] border border-[#1e1e2e] rounded-lg w-fit">
+-      {tabs.map((tab) => (
+-        <button
+-          key={tab.value}
+-          onClick={() => onChange(tab.value)}
+-          className={`px-3 py-1.5 text-xs rounded transition-colors ${
+-            filter === tab.value
+-              ? 'bg-[#1e1e2e] text-[#e2e8f0]'
+-              : 'text-[#94a3b8] hover:text-[#e2e8f0]'
+-          }`}
+-        >
+-          {tab.label}
+-        </button>
+-      ))}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/build-status-chip.tsx
+-
+-```tsx
+-import type { PullRequest } from '@/types/pr'
+-
+-interface BuildStatusChipProps {
+-  state: PullRequest['buildState']
+-}
+-
+-const stateConfig: Record<PullRequest['buildState'], { label: string; className: string }> = {
+-  pending: { label: 'Pending', className: 'bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20' },
+-  running: { label: 'Building…', className: 'bg-amber-500/10 text-amber-400 ring-1 ring-amber-500/20' },
+-  success: { label: 'Build passed', className: 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20' },
+-  failed: { label: 'Build failed', className: 'bg-red-500/10 text-red-400 ring-1 ring-red-500/20' },
+-}
+-
+-export function BuildStatusChip({ state }: BuildStatusChipProps) {
+-  const config = stateConfig[state]
+-  return (
+-    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${config.className}`}>
+-      {config.label}
+-    </span>
+-  )
+-}
+-
+-```
+-
+-### components/review/diff-summary.tsx
+-
+-```tsx
+-export function DiffSummary() {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+-        Changes
+-      </h3>
+-      <div className="space-y-2">
+-        <div className="flex items-center gap-3 text-xs">
+-          <span className="text-emerald-400">+24</span>
+-          <span className="text-red-400">-8</span>
+-          <span className="text-[#94a3b8]">3 files changed</span>
+-        </div>
+-        <p className="text-xs text-[#94a3b8]">
+-          Diff details will appear here when connected to GitHub.
+-        </p>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/fix-request-box.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState } from 'react'
+-
+-interface FixRequestBoxProps {
+-  prId: string
+-  existingRequest?: string
+-}
+-
+-export function FixRequestBox({ prId, existingRequest }: FixRequestBoxProps) {
+-  const [value, setValue] = useState('')
+-  const [submitting, setSubmitting] = useState(false)
+-  const [submitted, setSubmitted] = useState(false)
+-  const [submittedText, setSubmittedText] = useState(existingRequest ?? '')
+-  const [error, setError] = useState<string | null>(null)
+-
+-  // If there's already a requested change, show it as submitted
+-  if (submittedText && (submitted || existingRequest)) {
+-    return (
+-      <div className="bg-[#12121a] border border-amber-500/20 rounded-xl p-4">
+-        <h3 className="text-xs font-medium text-amber-400 uppercase tracking-wide mb-2">
+-          Changes Requested
+-        </h3>
+-        <p className="text-sm text-[#e2e8f0] leading-relaxed">{submittedText}</p>
+-      </div>
+-    )
+-  }
+-
+-  async function handleSubmit() {
+-    if (!value.trim() || submitting) return
+-    setSubmitting(true)
+-    setError(null)
+-    try {
+-      const res = await fetch('/api/prs', {
+-        method: 'PATCH',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ prId, requestedChanges: value.trim(), reviewStatus: 'changes_requested' }),
+-      })
+-      const json = await res.json()
+-      if (!res.ok) {
+-        setError(json.error ?? 'Failed to submit request')
+-      } else {
+-        setSubmittedText(value.trim())
+-        setSubmitted(true)
+-        setValue('')
+-      }
+-    } catch {
+-      setError('Network error. Please try again.')
+-    } finally {
+-      setSubmitting(false)
+-    }
+-  }
+-
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-4">
+-      <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+-        Request Changes
+-      </h3>
+-      <textarea
+-        value={value}
+-        onChange={(e) => setValue(e.target.value)}
+-        placeholder="Describe what needs to change…"
+-        rows={3}
+-        className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] placeholder-[#94a3b8]/50 resize-none focus:outline-none focus:border-indigo-500/40 transition-colors"
+-      />
+-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+-      <button
+-        onClick={handleSubmit}
+-        disabled={!value.trim() || submitting}
+-        className="mt-2 px-4 py-2 text-xs font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+-      >
+-        {submitting ? 'Sending…' : 'Send fix request'}
+-      </button>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/merge-actions.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState } from 'react'
+-import type { ReviewStatus } from '@/types/pr'
+-
+-interface MergeActionsProps {
+-  prId: string
+-  canMerge: boolean
+-  currentStatus: string
+-  reviewState: ReviewStatus
+-}
+-
+-export function MergeActions({ prId, canMerge, currentStatus, reviewState }: MergeActionsProps) {
+-  const [merging, setMerging] = useState(false)
+-  const [approving, setApproving] = useState(false)
+-  const [localReviewState, setLocalReviewState] = useState<ReviewStatus>(reviewState)
+-  const [mergeError, setMergeError] = useState<string | null>(null)
+-  const [merged, setMerged] = useState(currentStatus === 'merged')
+-
+-  const reviewStateLabels: Record<ReviewStatus, { label: string; color: string }> = {
+-    pending: { label: 'Pending Review', color: 'text-[#94a3b8]' },
+-    approved: { label: 'Approved', color: 'text-emerald-400' },
+-    changes_requested: { label: 'Changes Requested', color: 'text-amber-400' },
+-    merged: { label: 'Merged', color: 'text-indigo-400' },
+-  }
+-
+-  const stateInfo = reviewStateLabels[merged ? 'merged' : localReviewState]
+-
+-  async function handleApprove() {
+-    if (approving || localReviewState === 'approved') return
+-    setApproving(true)
+-    try {
+-      const res = await fetch('/api/prs', {
+-        method: 'PATCH',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ prId, reviewStatus: 'approved' }),
+-      })
+-      if (res.ok) {
+-        setLocalReviewState('approved')
+-      }
+-    } catch {
+-      // silently fail — local dev
+-    } finally {
+-      setApproving(false)
+-    }
+-  }
+-
+-  async function handleMerge() {
+-    if (!canMerge || merging || merged) return
+-    setMerging(true)
+-    setMergeError(null)
+-    try {
+-      const res = await fetch('/api/actions/merge-pr', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ prId }),
+-      })
+-      const json = await res.json()
+-      if (!res.ok) {
+-        setMergeError(json.error ?? 'Merge failed')
+-      } else {
+-        setMerged(true)
+-        setLocalReviewState('merged')
+-      }
+-    } catch {
+-      setMergeError('Network error. Please try again.')
+-    } finally {
+-      setMerging(false)
+-    }
+-  }
+-
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5 space-y-4">
+-      {/* Review status indicator */}
+-      <div>
+-        <p className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-2">Review Status</p>
+-        <span className={`text-sm font-medium ${stateInfo.color}`}>
+-          {stateInfo.label}
+-        </span>
+-      </div>
+-
+-      <div className="space-y-2">
+-        {/* Approve button */}
+-        {!merged && (
+-          <button
+-            onClick={handleApprove}
+-            disabled={approving || localReviewState === 'approved'}
+-            className="w-full px-4 py-2.5 text-sm font-medium bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+-          >
+-            {approving ? 'Approving…' : localReviewState === 'approved' ? 'Approved ✓' : 'Approve'}
+-          </button>
+-        )}
+-
+-        {/* Merge button */}
+-        <button
+-          onClick={handleMerge}
+-          disabled={!canMerge || merging || merged}
+-          className="w-full px-4 py-2.5 text-sm font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+-        >
+-          {merging ? 'Merging…' : merged ? 'Merged ✓' : 'Merge PR'}
+-        </button>
+-
+-        {mergeError && (
+-          <p className="text-xs text-red-400 mt-1">{mergeError}</p>
+-        )}
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/preview-toolbar.tsx
+-
+-```tsx
+-interface PreviewToolbarProps {
+-  url: string
+-}
+-
+-export function PreviewToolbar({ url }: PreviewToolbarProps) {
+-  return (
+-    <div className="flex items-center gap-3 p-3 bg-[#12121a] border border-[#1e1e2e] rounded-xl">
+-      <span className="text-xs text-[#94a3b8] truncate flex-1 font-mono">{url}</span>
+-      <a
+-        href={url}
+-        target="_blank"
+-        rel="noopener noreferrer"
+-        className="text-xs text-sky-400 hover:text-sky-300 flex-shrink-0 transition-colors"
+-      >
+-        ↗ Open
+-      </a>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/pr-summary-card.tsx
+-
+-```tsx
+-import type { PullRequest } from '@/types/pr'
+-import { TimePill } from '@/components/common/time-pill'
+-
+-interface PRSummaryCardProps {
+-  pr: PullRequest
+-}
+-
+-export function PRSummaryCard({ pr }: PRSummaryCardProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+-      <div className="flex items-start justify-between gap-3 mb-3">
+-        <div>
+-          <span className="text-xs text-[#94a3b8]">PR #{pr.number}</span>
+-          <h3 className="font-semibold text-[#e2e8f0] mt-0.5">{pr.title}</h3>
+-        </div>
+-        <TimePill dateString={pr.createdAt} />
+-      </div>
+-      <div className="flex items-center gap-2 text-xs text-[#94a3b8]">
+-        <span className="px-2 py-0.5 bg-[#1e1e2e] rounded font-mono">{pr.branch}</span>
+-        <span>by {pr.author}</span>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/review/split-review-layout.tsx
+-
+-```tsx
+-import React from 'react'
+-
+-interface ReviewLayoutProps {
+-  breadcrumb: React.ReactNode
+-  preview: React.ReactNode
+-  sidebar: React.ReactNode
+-}
+-
+-export function SplitReviewLayout({ breadcrumb, preview, sidebar }: ReviewLayoutProps) {
+-  return (
+-    <div className="flex flex-col gap-4 h-full">
+-      {/* Breadcrumb */}
+-      <div>{breadcrumb}</div>
+-
+-      {/* Main content: preview hero + sidebar */}
+-      <div className="flex flex-col lg:flex-row gap-4 items-start">
+-        {/* Preview — ~65% width on desktop, full width on mobile */}
+-        <div className="w-full lg:w-[65%] flex-shrink-0">
+-          {preview}
+-        </div>
+-
+-        {/* Sidebar — ~35% width on desktop, full width on mobile */}
+-        <div className="w-full lg:w-[35%] flex flex-col gap-4">
+-          {sidebar}
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/send/captured-idea-card.tsx
+-
+-```tsx
+-'use client'
+-
+-import type { Idea } from '@/types/idea'
+-import { TimePill } from '@/components/common/time-pill'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-interface CapturedIdeaCardProps {
+-  idea: Idea
+-  onHold?: (ideaId: string) => void
+-  onRemove?: (ideaId: string) => void
+-}
+-
+-export function CapturedIdeaCard({ idea, onHold, onRemove }: CapturedIdeaCardProps) {
+-  return (
+-    <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl overflow-hidden">
+-      <div className="p-6">
+-        {/* Header: title + timestamp */}
+-        <div className="flex items-start justify-between gap-4 mb-3">
+-          <h2 className="text-xl font-bold text-[#e2e8f0] leading-snug">{idea.title}</h2>
+-          <TimePill dateString={idea.createdAt} />
+-        </div>
+-
+-        {/* GPT Summary */}
+-        <p className="text-sm text-[#cbd5e1] mb-4 leading-relaxed">{idea.gptSummary}</p>
+-
+-        {/* Raw prompt as blockquote */}
+-        {idea.rawPrompt && (
+-          <blockquote className="border-l-2 border-[#2e2e42] pl-3 mb-4">
+-            <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.rawPrompt}&rdquo;</p>
+-          </blockquote>
+-        )}
+-
+-        {/* Vibe + Audience chips */}
+-        <div className="flex flex-wrap gap-2 mb-2">
+-          {idea.vibe && (
+-            <span className="px-2 py-1 text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">
+-              {idea.vibe}
+-            </span>
+-          )}
+-          {idea.audience && (
+-            <span className="px-2 py-1 text-xs font-medium bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-full">
+-              for: {idea.audience}
+-            </span>
+-          )}
+-        </div>
+-      </div>
+-
+-      {/* Next action label */}
+-      <div className="px-6 py-2 bg-[#0a0a10] border-t border-[#1e1e2e]">
+-        <span className="text-xs text-indigo-400 font-medium tracking-wide uppercase">Next: Define this idea →</span>
+-      </div>
+-
+-      {/* Actions */}
+-      <div className="p-4 border-t border-[#1e1e2e] flex flex-col gap-2">
+-        <Link
+-          href={`${ROUTES.drill}?ideaId=${idea.id}`}
+-          className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-indigo-500/20 text-indigo-300 rounded-lg text-sm font-semibold hover:bg-indigo-500/30 transition-colors"
+-        >
+-          Define this →
+-        </Link>
+-        <div className="flex gap-2">
+-          <button
+-            onClick={() => onHold?.(idea.id)}
+-            className="flex-1 px-4 py-2 text-xs text-[#94a3b8] border border-[#1e1e2e] rounded-lg hover:border-[#2a2a3a] hover:text-[#e2e8f0] transition-colors"
+-          >
+-            Put on hold
+-          </button>
+-          <button
+-            onClick={() => onRemove?.(idea.id)}
+-            className="flex-1 px-4 py-2 text-xs text-red-400/70 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
+-          >
+-            Remove
+-          </button>
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/send/define-in-studio-hero.tsx
+-
+-```tsx
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-export function DefineInStudioHero() {
+-  return (
+-    <div className="text-center py-12 px-6">
+-      <div className="text-6xl mb-4">◈</div>
+-      <h2 className="text-2xl font-bold text-[#e2e8f0] mb-3">
+-        Chat is where ideas are born.
+-      </h2>
+-      <p className="text-[#94a3b8] mb-6 max-w-sm mx-auto">
+-        Studio is where ideas are forced into truth.
+-      </p>
+-      <Link
+-        href={ROUTES.send}
+-        className="inline-flex items-center gap-2 px-6 py-3 bg-indigo-500/20 text-indigo-300 rounded-xl font-medium hover:bg-indigo-500/30 transition-colors"
+-      >
+-        Define an Idea
+-      </Link>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/send/idea-summary-panel.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState } from 'react'
+-import type { Idea } from '@/types/idea'
+-import Link from 'next/link'
+-import { ROUTES } from '@/lib/routes'
+-
+-interface IdeaSummaryPanelProps {
+-  idea: Idea
+-}
+-
+-export function IdeaSummaryPanel({ idea }: IdeaSummaryPanelProps) {
+-  const [open, setOpen] = useState(true)
+-
+-  return (
+-    <div className="bg-[#0a0a10] border border-[#1e1e2e] rounded-lg overflow-hidden">
+-      {/* Toggle header */}
+-      <button
+-        onClick={() => setOpen((o) => !o)}
+-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[#12121a] transition-colors"
+-        aria-expanded={open}
+-      >
+-        <span className="text-xs font-semibold text-[#94a3b8] uppercase tracking-widest">Idea breakdown</span>
+-        <span className="text-[#4a4a6a] text-sm select-none">{open ? '▲' : '▼'}</span>
+-      </button>
+-
+-      {open && (
+-        <div className="divide-y divide-[#1e1e2e]">
+-          {/* From GPT section */}
+-          <div className="px-4 py-4 border-l-2 border-indigo-500/40">
+-            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-3">From GPT</h4>
+-            <div className="space-y-3">
+-              <div>
+-                <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Summary</span>
+-                <p className="text-sm text-[#cbd5e1] leading-relaxed">{idea.gptSummary}</p>
+-              </div>
+-              {idea.vibe && (
+-                <div className="flex gap-3">
+-                  <div>
+-                    <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Vibe</span>
+-                    <span className="inline-block px-2 py-0.5 text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-full">
+-                      {idea.vibe}
+-                    </span>
+-                  </div>
+-                  {idea.audience && (
+-                    <div>
+-                      <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Audience</span>
+-                      <span className="inline-block px-2 py-0.5 text-xs bg-violet-500/10 text-violet-400 border border-violet-500/20 rounded-full">
+-                        {idea.audience}
+-                      </span>
+-                    </div>
+-                  )}
+-                </div>
+-              )}
+-              {idea.rawPrompt && (
+-                <div>
+-                  <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Original prompt</span>
+-                  <blockquote className="border-l-2 border-[#2e2e42] pl-3">
+-                    <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.rawPrompt}&rdquo;</p>
+-                  </blockquote>
+-                </div>
+-              )}
+-            </div>
+-          </div>
+-
+-          {/* Needs your input section */}
+-          <div className="px-4 py-4 border-l-2 border-amber-500/30">
+-            <h4 className="text-[10px] font-bold text-amber-400/80 uppercase tracking-widest mb-3">
+-              Needs your input
+-            </h4>
+-            <ul className="space-y-2 mb-4">
+-              {[
+-                { label: 'What does success look like?', key: 'successMetric' },
+-                { label: 'What\'s the scope?', key: 'scope' },
+-                { label: 'How will it get built?', key: 'executionPath' },
+-                { label: 'How urgent is this?', key: 'urgency' },
+-              ].map(({ label }) => (
+-                <li key={label} className="flex items-center gap-2 text-xs text-[#64748b]">
+-                  <span className="w-1.5 h-1.5 rounded-full bg-[#2e2e42] flex-shrink-0" />
+-                  {label}
+-                </li>
+-              ))}
+-            </ul>
+-            <Link
+-              href={`${ROUTES.drill}?ideaId=${idea.id}`}
+-              className="inline-flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+-            >
+-              → Start defining
+-            </Link>
+-          </div>
+-        </div>
+-      )}
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/send/send-page-client.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useState } from 'react'
+-import { useRouter } from 'next/navigation'
+-import type { Idea } from '@/types/idea'
+-import { CapturedIdeaCard } from '@/components/send/captured-idea-card'
+-import { ConfirmDialog } from '@/components/common/confirm-dialog'
+-
+-interface SendPageClientProps {
+-  ideas: Idea[]
+-}
+-
+-export function SendPageClient({ ideas }: SendPageClientProps) {
+-  const router = useRouter()
+-  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
+-  const [busy, setBusy] = useState(false)
+-
+-  async function handleHold(ideaId: string) {
+-    if (busy) return
+-    setBusy(true)
+-    try {
+-      await fetch('/api/actions/move-to-icebox', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ ideaId }),
+-      })
+-      router.refresh()
+-    } finally {
+-      setBusy(false)
+-    }
+-  }
+-
+-  async function handleRemoveConfirmed() {
+-    if (!pendingRemoveId || busy) return
+-    setBusy(true)
+-    try {
+-      await fetch('/api/actions/kill-idea', {
+-        method: 'POST',
+-        headers: { 'Content-Type': 'application/json' },
+-        body: JSON.stringify({ ideaId: pendingRemoveId }),
+-      })
+-      setPendingRemoveId(null)
+-      router.refresh()
+-    } finally {
+-      setBusy(false)
+-    }
+-  }
+-
+-  return (
+-    <>
+-      <div className="space-y-4">
+-        {ideas.map((idea) => (
+-          <CapturedIdeaCard
+-            key={idea.id}
+-            idea={idea}
+-            onHold={handleHold}
+-            onRemove={(id) => setPendingRemoveId(id)}
+-          />
+-        ))}
+-      </div>
+-
+-      <ConfirmDialog
+-        open={pendingRemoveId !== null}
+-        title="Remove this idea?"
+-        description="This will move the idea to the Removed list. This can't be undone."
+-        confirmLabel="Remove"
+-        cancelLabel="Keep it"
+-        variant="danger"
+-        onConfirm={handleRemoveConfirmed}
+-        onCancel={() => setPendingRemoveId(null)}
+-      />
+-    </>
+-  )
+-}
+-
+-```
+-
+-### components/shell/app-shell.tsx
+-
+-```tsx
+-import { StudioSidebar } from './studio-sidebar'
+-import { StudioHeader } from './studio-header'
+-import { MobileNav } from './mobile-nav'
+-import { CommandBar } from './command-bar'
+-
+-interface AppShellProps {
+-  children: React.ReactNode
+-}
+-
+-export function AppShell({ children }: AppShellProps) {
+-  return (
+-    <div className="flex min-h-screen bg-[#0a0a0f]">
+-      <StudioSidebar />
+-      <div className="flex-1 flex flex-col min-w-0">
+-        <StudioHeader />
+-        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6">{children}</main>
+-      </div>
+-      <MobileNav />
+-      <CommandBar />
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/shell/command-bar.tsx
+-
+-```tsx
+-'use client'
+-
+-import { useEffect, useState } from 'react'
+-import { useRouter } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-const COMMANDS = [
+-  { label: 'Go to In Progress', href: ROUTES.arena },
+-  { label: 'Go to On Hold', href: ROUTES.icebox },
+-  { label: 'Go to Inbox', href: ROUTES.inbox },
+-  { label: 'Go to Shipped', href: ROUTES.shipped },
+-  { label: 'New Idea', href: ROUTES.send },
+-]
+-
+-export function CommandBar() {
+-  const [open, setOpen] = useState(false)
+-  const router = useRouter()
+-
+-  useEffect(() => {
+-    function handleKey(e: KeyboardEvent) {
+-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+-        e.preventDefault()
+-        setOpen((v) => !v)
+-      }
+-      if (e.key === 'Escape') setOpen(false)
+-    }
+-    window.addEventListener('keydown', handleKey)
+-    return () => window.removeEventListener('keydown', handleKey)
+-  }, [])
+-
+-  if (!open) return null
+-
+-  return (
+-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24">
+-      <div
+-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+-        onClick={() => setOpen(false)}
+-      />
+-      <div className="relative bg-[#12121a] border border-[#1e1e2e] rounded-xl overflow-hidden w-full max-w-lg mx-4 shadow-2xl">
+-        <div className="p-3 border-b border-[#1e1e2e]">
+-          <p className="text-xs text-[#94a3b8] text-center">Quick navigation</p>
+-        </div>
+-        <div className="py-1">
+-          {COMMANDS.map((cmd) => (
+-            <button
+-              key={cmd.href}
+-              onClick={() => {
+-                router.push(cmd.href)
+-                setOpen(false)
+-              }}
+-              className="flex items-center justify-between w-full px-4 py-3 text-sm text-[#e2e8f0] hover:bg-[#1e1e2e] transition-colors"
+-            >
+-              <span>{cmd.label}</span>
+-            </button>
+-          ))}
+-        </div>
+-      </div>
+-    </div>
+-  )
+-}
+-
+-```
+-
+-### components/shell/mobile-nav.tsx
+-
+-```tsx
+-'use client'
+-
+-import Link from 'next/link'
+-import { usePathname } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-import { COPY } from '@/lib/studio-copy'
+-
+-const NAV_ITEMS = [
+-  { label: 'Progress', href: ROUTES.arena, icon: '▶' },
+-  { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
+-  { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
+-  { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
+-]
+-
+-export function MobileNav() {
+-  const pathname = usePathname()
+-
+-  return (
+-    <nav className="md:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around h-16 bg-[#0a0a0f] border-t border-[#1e1e2e] z-40">
+-      {NAV_ITEMS.map((item) => {
+-        const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+-        return (
+-          <Link
+-            key={item.href}
+-            href={item.href}
+-            className={`flex flex-col items-center gap-1 px-4 py-2 transition-colors ${
+-              isActive ? 'text-[#6366f1]' : 'text-[#94a3b8]'
+-            }`}
+-          >
+-            <span className="text-lg">{item.icon}</span>
+-            <span className="text-[10px]">{item.label}</span>
+-          </Link>
+-        )
+-      })}
+-    </nav>
+-  )
+-}
+-
+-```
+-
+-### components/shell/studio-header.tsx
+-
+-```tsx
+-'use client'
+-
+-import Link from 'next/link'
+-import { usePathname } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-const PAGE_TITLES: Record<string, string> = {
+-  '/': 'Studio',
+-  '/send': 'Incoming Idea',
+-  '/drill': 'Drill',
+-  '/arena': 'In Progress',
+-  '/icebox': 'On Hold',
+-  '/shipped': 'Shipped',
+-  '/killed': 'Removed',
+-  '/inbox': 'Inbox',
+-}
+-
+-export function StudioHeader() {
+-  const pathname = usePathname()
+-  const title = PAGE_TITLES[pathname ?? '/'] ?? 'Studio'
+-
+-  return (
+-    <header className="md:hidden flex items-center justify-between h-14 px-4 border-b border-[#1e1e2e] bg-[#0a0a0f]">
+-      <Link href={ROUTES.home} className="flex items-center gap-2">
+-        <span className="text-lg font-bold text-[#6366f1]">◈</span>
+-        <span className="text-sm font-semibold text-[#e2e8f0]">Mira</span>
+-      </Link>
+-      <span className="text-sm text-[#94a3b8]">{title}</span>
+-      <Link
+-        href={ROUTES.send}
+-        className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+-      >
+-        + New
+-      </Link>
+-    </header>
+-  )
+-}
+-
+-```
+-
+-### components/shell/studio-sidebar.tsx
+-
+-```tsx
+-'use client'
+-
+-import Link from 'next/link'
+-import { usePathname } from 'next/navigation'
+-import { ROUTES } from '@/lib/routes'
+-
+-import { COPY } from '@/lib/studio-copy'
+-
+-const NAV_ITEMS = [
+-  { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
+-  { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
+-  { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
+-  { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
+-  { label: COPY.killed.heading, href: ROUTES.killed, icon: '†' },
+-]
+-
+-export function StudioSidebar() {
+-  const pathname = usePathname()
+-
+-  return (
+-    <aside className="hidden md:flex flex-col w-56 min-h-screen bg-[#0a0a0f] border-r border-[#1e1e2e]">
+-      <div className="p-4 border-b border-[#1e1e2e]">
+-        <Link href={ROUTES.home} className="flex items-center gap-2">
+-          <span className="text-xl font-bold text-[#6366f1]">◈</span>
+-          <span className="text-sm font-semibold text-[#e2e8f0]">Mira Studio</span>
+-        </Link>
+-      </div>
+-      <nav className="flex-1 p-3 space-y-0.5">
+-        {NAV_ITEMS.map((item) => {
+-          const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+-          return (
+-            <Link
+-              key={item.href}
+-              href={item.href}
+-              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+-                isActive
+-                  ? 'bg-[#1e1e2e] text-[#e2e8f0]'
+-                  : 'text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#12121a]'
+-              }`}
+-            >
+-              <span className="text-base">{item.icon}</span>
+-              {item.label}
+-            </Link>
+-          )
+-        })}
+-      </nav>
+-      <div className="p-3 border-t border-[#1e1e2e]">
+-        <Link
+-          href={ROUTES.send}
+-          className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-lg bg-indigo-500/10 text-indigo-400 text-sm font-medium hover:bg-indigo-500/20 transition-colors"
+-        >
+-          <span>+</span>
+-          New Idea
+-        </Link>
+-      </div>
+-    </aside>
+-  )
+-}
+-
+-```
+-
+-### lib/adapters/github-adapter.ts
+-
+-```typescript
+-/**
+- * GitHub Adapter — Provider Boundary
+- *
+- * Auth strategy:
+- * - Phase A (current): Personal Access Token via GITHUB_TOKEN env var
+- * - Phase B (future): GitHub App installation token via getGitHubClientForInstallation()
+- *
+- * All methods in this file use getGitHubClient() which currently resolves from PAT.
+- * When migrating to GitHub App, only client.ts needs to change.
+- */
+-
+-import { getGitHubClient } from '@/lib/github/client'
+-import { getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
+-
+-// ---------------------------------------------------------------------------
+-// Env helpers — delegate to lib/config/github.ts (Lane 1)
+-// ---------------------------------------------------------------------------
+-
+-function getOwner(): string {
+-  return getRepoCoordinates().owner
+-}
+-
+-function getRepo(): string {
+-  return getRepoCoordinates().repo
+-}
+-
+-function getDefaultBranch(): string {
+-  return getGitHubConfig().defaultBranch
+-}
+-
+-// ---------------------------------------------------------------------------
+-// W2 — Connectivity / repo
+-// ---------------------------------------------------------------------------
+-
+-export async function validateToken(): Promise<{ valid: boolean; login: string; scopes: string[] }> {
+-  const octokit = getGitHubClient()
+-  const response = await octokit.users.getAuthenticated()
+-  const scopeHeader = (response.headers as Record<string, string | undefined>)['x-oauth-scopes'] ?? ''
+-  const scopes = scopeHeader
+-    .split(',')
+-    .map((s) => s.trim())
+-    .filter(Boolean)
+-  return { valid: true, login: response.data.login, scopes }
+-}
+-
+-export async function getRepoInfo(): Promise<{
+-  name: string
+-  full_name: string
+-  default_branch: string
+-  private: boolean
+-}> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.repos.get({ owner: getOwner(), repo: getRepo() })
+-  return {
+-    name: data.name,
+-    full_name: data.full_name,
+-    default_branch: data.default_branch,
+-    private: data.private,
+-  }
+-}
+-
+-export async function getDefaultBranchName(): Promise<string> {
+-  const info = await getRepoInfo()
+-  return info.default_branch
+-}
+-
+-// ---------------------------------------------------------------------------
+-// W3 — Issue methods
+-// ---------------------------------------------------------------------------
+-
+-export async function createIssue(params: {
+-  title: string
+-  body: string
+-  labels?: string[]
+-  assignees?: string[]
+-}): Promise<{ number: number; url: string }> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.issues.create({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    title: params.title,
+-    body: params.body,
+-    labels: params.labels,
+-    assignees: params.assignees,
+-  })
+-  return { number: data.number, url: data.html_url }
+-}
+-
+-export async function updateIssue(
+-  issueNumber: number,
+-  params: { title?: string; body?: string; state?: 'open' | 'closed' },
+-): Promise<void> {
+-  const octokit = getGitHubClient()
+-  await octokit.issues.update({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    issue_number: issueNumber,
+-    ...(params.title !== undefined ? { title: params.title } : {}),
+-    ...(params.body !== undefined ? { body: params.body } : {}),
+-    ...(params.state !== undefined ? { state: params.state } : {}),
+-  })
+-}
+-
+-export async function addIssueComment(issueNumber: number, body: string): Promise<{ id: number }> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.issues.createComment({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    issue_number: issueNumber,
+-    body,
+-  })
+-  return { id: data.id }
+-}
+-
+-export async function addIssueLabels(issueNumber: number, labels: string[]): Promise<void> {
+-  const octokit = getGitHubClient()
+-  await octokit.issues.addLabels({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    issue_number: issueNumber,
+-    labels,
+-  })
+-}
+-
+-export async function closeIssue(issueNumber: number): Promise<void> {
+-  await updateIssue(issueNumber, { state: 'closed' })
+-}
+-
+-// ---------------------------------------------------------------------------
+-// W4 — Pull request methods
+-// ---------------------------------------------------------------------------
+-
+-export async function createBranch(
+-  branchName: string,
+-  fromSha?: string,
+-): Promise<{ ref: string }> {
+-  const octokit = getGitHubClient()
+-  let sha = fromSha
+-  if (!sha) {
+-    // Get the SHA of the default branch head
+-    const { data: ref } = await octokit.git.getRef({
+-      owner: getOwner(),
+-      repo: getRepo(),
+-      ref: `heads/${getDefaultBranch()}`,
+-    })
+-    sha = ref.object.sha
+-  }
+-  const { data } = await octokit.git.createRef({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    ref: `refs/heads/${branchName}`,
+-    sha,
+-  })
+-  return { ref: data.ref }
+-}
+-
+-export async function createPullRequest(params: {
+-  title: string
+-  body: string
+-  head: string
+-  base?: string
+-  draft?: boolean
+-}): Promise<{ number: number; url: string }> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.pulls.create({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    title: params.title,
+-    body: params.body,
+-    head: params.head,
+-    base: params.base ?? getDefaultBranch(),
+-    draft: params.draft ?? false,
+-  })
+-  return { number: data.number, url: data.html_url }
+-}
+-
+-export async function getPullRequest(prNumber: number): Promise<{
+-  number: number
+-  title: string
+-  url: string
+-  state: string
+-  head: { sha: string; ref: string }
+-  base: { ref: string }
+-  draft: boolean
+-  mergeable: boolean | null
+-  merged: boolean
+-}> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.pulls.get({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    pull_number: prNumber,
+-  })
+-  return {
+-    number: data.number,
+-    title: data.title,
+-    url: data.html_url,
+-    state: data.state,
+-    head: { sha: data.head.sha, ref: data.head.ref },
+-    base: { ref: data.base.ref },
+-    draft: data.draft ?? false,
+-    mergeable: data.mergeable ?? null,
+-    merged: data.merged,
+-  }
+-}
+-
+-export async function listPullRequestsForRepo(params?: {
+-  state?: 'open' | 'closed' | 'all'
+-}): Promise<Array<{ number: number; title: string; url: string; state: string }>> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.pulls.list({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    state: params?.state ?? 'open',
+-  })
+-  return data.map((pr) => ({
+-    number: pr.number,
+-    title: pr.title,
+-    url: pr.html_url,
+-    state: pr.state,
+-  }))
+-}
+-
+-export async function addPullRequestComment(
+-  prNumber: number,
+-  body: string,
+-): Promise<{ id: number }> {
+-  // PR comments use the issues API
+-  return addIssueComment(prNumber, body)
+-}
+-
+-export async function mergePullRequest(
+-  prNumber: number,
+-  params?: { merge_method?: 'merge' | 'squash' | 'rebase'; commit_title?: string },
+-): Promise<{ sha: string; merged: boolean }> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.pulls.merge({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    pull_number: prNumber,
+-    merge_method: params?.merge_method ?? 'squash',
+-    commit_title: params?.commit_title,
+-  })
+-  return { sha: data.sha ?? '', merged: data.merged }
+-}
+-
+-// ---------------------------------------------------------------------------
+-// W5 — Workflow / Actions methods
+-// ---------------------------------------------------------------------------
+-
+-export async function dispatchWorkflow(params: {
+-  workflowId: string
+-  ref?: string
+-  inputs?: Record<string, string>
+-}): Promise<void> {
+-  const octokit = getGitHubClient()
+-  await octokit.actions.createWorkflowDispatch({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    workflow_id: params.workflowId,
+-    ref: params.ref ?? getDefaultBranch(),
+-    inputs: params.inputs ?? {},
+-  })
+-}
+-
+-export async function getWorkflowRun(runId: number): Promise<{
+-  id: number
+-  name: string | null
+-  status: string | null
+-  conclusion: string | null
+-  url: string
+-  headSha: string
+-}> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.actions.getWorkflowRun({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    run_id: runId,
+-  })
+-  return {
+-    id: data.id,
+-    name: data.name ?? null,
+-    status: data.status ?? null,
+-    conclusion: data.conclusion ?? null,
+-    url: data.html_url,
+-    headSha: data.head_sha,
+-  }
+-}
+-
+-export async function listWorkflowRuns(params?: {
+-  workflowId?: string
+-  status?: string
+-  perPage?: number
+-}): Promise<
+-  Array<{
+-    id: number
+-    name: string | null
+-    status: string | null
+-    conclusion: string | null
+-    url: string
+-  }>
+-> {
+-  const octokit = getGitHubClient()
+-
+-  if (params?.workflowId) {
+-    const { data } = await octokit.actions.listWorkflowRuns({
+-      owner: getOwner(),
+-      repo: getRepo(),
+-      workflow_id: params.workflowId,
+-      per_page: params.perPage ?? 10,
+-    })
+-    return data.workflow_runs.map((run) => ({
+-      id: run.id,
+-      name: run.name ?? null,
+-      status: run.status ?? null,
+-      conclusion: run.conclusion ?? null,
+-      url: run.html_url,
+-    }))
+-  }
+-
+-  const { data } = await octokit.actions.listWorkflowRunsForRepo({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    per_page: params?.perPage ?? 10,
+-  })
+-  return data.workflow_runs.map((run) => ({
+-    id: run.id,
+-    name: run.name ?? null,
+-    status: run.status ?? null,
+-    conclusion: run.conclusion ?? null,
+-    url: run.html_url,
+-  }))
+-}
+-
+-// ---------------------------------------------------------------------------
+-// W6 — Copilot handoff
+-// ---------------------------------------------------------------------------
+-
+-/** Stable GraphQL node ID for the Copilot bot account. */
+-const COPILOT_BOT_NODE_ID = 'BOT_kgDOC9w8XQ'
+-
+-/**
+- * Get the GraphQL node ID for an issue (needed for GraphQL mutations).
+- */
+-export async function getIssueNodeId(issueNumber: number): Promise<string> {
+-  const octokit = getGitHubClient()
+-  const { data } = await octokit.issues.get({
+-    owner: getOwner(),
+-    repo: getRepo(),
+-    issue_number: issueNumber,
+-  })
+-  return data.node_id
+-}
+-
+-/**
+- * Assign Copilot coding agent via GraphQL with model selection.
+- *
+- * Uses the `addAssigneesToAssignable` mutation with `agentAssignment`
+- * and the required `GraphQL-Features: issues_copilot_assignment_api_support` header.
+- *
+- * This is the most reliable way to trigger Copilot with a specific model.
+- */
+-export async function assignCopilotViaGraphQL(params: {
+-  issueNodeId: string
+-  model?: string
+-  customInstructions?: string
+-  baseRef?: string
+-}): Promise<{ success: boolean; assignees: string[] }> {
+-  const config = getGitHubConfig()
+-  const token = config.token
+-
+-  const query = `
+-    mutation($input: AddAssigneesToAssignableInput!) {
+-      addAssigneesToAssignable(input: $input) {
+-        assignable {
+-          ... on Issue {
+-            number
+-            assignees(first: 5) { nodes { login } }
+-          }
+-        }
+-      }
+-    }
+-  `
+-
+-  const agentAssignment: Record<string, string> = {}
+-  if (params.model) agentAssignment.customAgent = params.model
+-  if (params.customInstructions) agentAssignment.customInstructions = params.customInstructions
+-  if (params.baseRef) agentAssignment.baseRef = params.baseRef
+-
+-  const variables = {
+-    input: {
+-      assignableId: params.issueNodeId,
+-      assigneeIds: [COPILOT_BOT_NODE_ID],
+-      ...(Object.keys(agentAssignment).length > 0 ? { agentAssignment } : {}),
+-    },
+-  }
+-
+-  const res = await fetch('https://api.github.com/graphql', {
+-    method: 'POST',
+-    headers: {
+-      'Authorization': `Bearer ${token}`,
+-      'Content-Type': 'application/json',
+-      'GraphQL-Features': 'issues_copilot_assignment_api_support',
+-    },
+-    body: JSON.stringify({ query, variables }),
+-  })
+-
+-  const data = await res.json()
+-
+-  if (data.errors) {
+-    const msg = data.errors[0]?.message ?? 'Unknown GraphQL error'
+-    throw new Error(`[github-adapter] assignCopilotViaGraphQL failed: ${msg}`)
+-  }
+-
+-  const nodes = data.data.addAssigneesToAssignable.assignable.assignees.nodes
+-  return {
+-    success: true,
+-    assignees: nodes.map((n: { login: string }) => n.login),
+-  }
+-}
+-
+-/**
+- * Trigger Copilot via PR-comment — the most reliable method.
+- *
+- * Flow:
+- * 1. Create branch `copilot/issue-<num>` from default branch
+- * 2. Create a draft PR linking to the issue
+- * 3. Post `@copilot` comment with task instructions
+- *
+- * This bypasses PAT/OAuth issues because @copilot mentions on PRs
+- * route through a different, more reliable product surface.
+- */
+-export async function triggerCopilotViaPR(params: {
+-  issueNumber: number
+-  issueTitle: string
+-  issueBody: string
+-  model?: string
+-  customInstructions?: string
+-}): Promise<{ prNumber: number; prUrl: string; branchName: string }> {
+-  const octokit = getGitHubClient()
+-  const owner = getOwner()
+-  const repo = getRepo()
+-  const branchName = `copilot/issue-${params.issueNumber}`
+-
+-  // Step 1: Create branch from default branch
+-  const { data: mainRef } = await octokit.git.getRef({
+-    owner, repo, ref: `heads/${getDefaultBranch()}`,
+-  })
+-  const baseSha = mainRef.object.sha
+-
+-  await octokit.git.createRef({
+-    owner, repo,
+-    ref: `refs/heads/${branchName}`,
+-    sha: baseSha,
+-  })
+-
+-  // Step 2: Add a placeholder commit (PR needs at least 1 diff commit)
+-  const taskContent = [
+-    `# Copilot Task: Issue #${params.issueNumber}`,
+-    '',
+-    `**${params.issueTitle}**`,
+-    '',
+-    params.issueBody,
+-    '',
+-    `> This file was created to bootstrap the Copilot coding agent.`,
+-  ].join('\n')
+-
+-  const { data: blob } = await octokit.git.createBlob({
+-    owner, repo,
+-    content: Buffer.from(taskContent).toString('base64'),
+-    encoding: 'base64',
+-  })
+-
+-  const { data: baseCommit } = await octokit.git.getCommit({
+-    owner, repo, commit_sha: baseSha,
+-  })
+-
+-  const { data: tree } = await octokit.git.createTree({
+-    owner, repo,
+-    base_tree: baseCommit.tree.sha,
+-    tree: [{ path: '.copilot-task.md', mode: '100644', type: 'blob', sha: blob.sha }],
+-  })
+-
+-  const { data: newCommit } = await octokit.git.createCommit({
+-    owner, repo,
+-    message: `chore: bootstrap Copilot task for issue #${params.issueNumber}`,
+-    tree: tree.sha,
+-    parents: [baseSha],
+-  })
+-
+-  await octokit.git.updateRef({
+-    owner, repo,
+-    ref: `heads/${branchName}`,
+-    sha: newCommit.sha,
+-  })
+-
+-  // Step 3: Create draft PR
+-  const prBody = [
+-    `Resolves #${params.issueNumber}`,
+-    '',
+-    '---',
+-    `**Issue:** ${params.issueTitle}`,
+-    '',
+-    params.issueBody,
+-  ].join('\n')
+-
+-  const pr = await createPullRequest({
+-    title: `[Copilot] ${params.issueTitle}`,
+-    body: prBody,
+-    head: branchName,
+-    draft: true,
+-  })
+-
+-  // Step 3: Trigger Copilot via @copilot mention
+-  const commentParts = [
+-    `@copilot Please work on this task.`,
+-    '',
+-    `## Instructions`,
+-    params.issueBody,
+-  ]
+-  if (params.model) {
+-    commentParts.push('', `**Preferred model:** ${params.model}`)
+-  }
+-  if (params.customInstructions) {
+-    commentParts.push('', `## Additional Instructions`, params.customInstructions)
+-  }
+-
+-  await addPullRequestComment(pr.number, commentParts.join('\n'))
+-
+-  return {
+-    prNumber: pr.number,
+-    prUrl: pr.url,
+-    branchName,
+-  }
+-}
+-
+-/**
+- * @deprecated Use assignCopilotViaGraphQL() or triggerCopilotViaPR() instead.
+- * REST API silently drops Copilot assignees. Kept for backwards compatibility.
+- */
+-export async function assignCopilotToIssue(issueNumber: number): Promise<void> {
+-  try {
+-    const octokit = getGitHubClient()
+-    await octokit.issues.addAssignees({
+-      owner: getOwner(),
+-      repo: getRepo(),
+-      issue_number: issueNumber,
+-      assignees: ['copilot-swe-agent'],
+-    })
+-  } catch (err) {
+-    console.warn(
+-      `[github-adapter] assignCopilotToIssue: Copilot not available for issue #${issueNumber}. Skipping.`,
+-      err,
+-    )
+-  }
+-}
+-
+-```
+-
+-### lib/adapters/gpt-adapter.ts
+-
+-```typescript
+-import type { Idea } from '@/types/idea'
+-
+-export interface GPTIdeaPayload {
+-  title: string
+-  rawPrompt: string
+-  gptSummary: string
+-  vibe?: string
+-  audience?: string
+-  intent?: string
+-}
+-
+-export function parseGPTPayload(payload: GPTIdeaPayload): Omit<Idea, 'id' | 'createdAt' | 'status'> {
+-  return {
+-    title: payload.title,
+-    rawPrompt: payload.rawPrompt,
+-    gptSummary: payload.gptSummary,
+-    vibe: payload.vibe ?? 'unknown',
+-    audience: payload.audience ?? 'unknown',
+-    intent: payload.intent ?? '',
+-  }
+-}
+-
+-```
+-
+-### lib/adapters/notifications-adapter.ts
+-
+-```typescript
+-import type { InboxEvent } from '@/types/inbox'
+-import { getInboxEvents, markRead } from '@/lib/services/inbox-service'
+-
+-export async function fetchInboxEvents(): Promise<InboxEvent[]> {
+-  return getInboxEvents()
+-}
+-
+-export async function markEventRead(eventId: string): Promise<void> {
+-  return markRead(eventId)
+-}
+-
+-```
+-
+-### lib/adapters/vercel-adapter.ts
+-
+-```typescript
+-import { getProjectById } from '@/lib/services/projects-service'
+-
+-export async function fetchPreviewUrl(projectId: string): Promise<string | null> {
+-  const project = await getProjectById(projectId)
+-  return project?.activePreviewUrl ?? null
+-}
+-
+-export async function fetchDeploymentStatus(_projectId: string): Promise<string> {
+-  return 'ready'
+-}
+-
+-```
+-
+-### lib/config/github.ts
+-
+-```typescript
+-/**
+- * lib/config/github.ts
+- * Centralized GitHub configuration — reads from env vars, validates presence
+- * of required vars (in dev), and exposes typed helpers for repo coordinates.
+- */
+-
+-export interface GitHubConfig {
+-  token: string
+-  owner: string
+-  repo: string
+-  defaultBranch: string
+-  webhookSecret: string
+-  /** Optional: name of the prototype workflow file (e.g. "copilot-prototype.yml") */
+-  workflowPrototype: string
+-  /** Optional: name of the fix-request workflow file */
+-  workflowFixRequest: string
+-  /** Optional: label prefix applied to GitHub issues created by Mira */
+-  labelPrefix: string
+-  /** Optional: public base URL for this deployment (e.g. "https://mira.vercel.app") */
+-  appBaseUrl: string
+-}
+-
+-const REQUIRED_VARS = [
+-  'GITHUB_TOKEN',
+-  'GITHUB_OWNER',
+-  'GITHUB_REPO',
+-  'GITHUB_WEBHOOK_SECRET',
+-] as const
+-
+-/**
+- * Returns true if the minimum required GitHub env vars are present.
+- * Use this for graceful degradation (local-only mode).
+- */
+-export function isGitHubConfigured(): boolean {
+-  return REQUIRED_VARS.every((key) => Boolean(process.env[key]))
+-}
+-
+-/**
+- * Returns the full "owner/repo" string.
+- * Throws if GitHub is not configured.
+- */
+-export function getRepoFullName(): string {
+-  const config = getGitHubConfig()
+-  return `${config.owner}/${config.repo}`
+-}
+-
+-/**
+- * Returns just the owner + repo fields as a plain object.
+- * Convenient for Octokit calls that take `{ owner, repo }`.
+- */
+-export function getRepoCoordinates(): { owner: string; repo: string } {
+-  const config = getGitHubConfig()
+-  return { owner: config.owner, repo: config.repo }
+-}
+-
+-/**
+- * Returns the full validated GitHub config object.
+- * In development, throws with a clear message if required vars are absent.
+- * In production (NODE_ENV === 'production'), returns a partial/empty config
+- * instead of throwing so the build step can succeed even without secrets.
+- */
+-export function getGitHubConfig(): GitHubConfig {
+-  const isDev = process.env.NODE_ENV !== 'production'
+-
+-  if (isDev) {
+-    const missing = REQUIRED_VARS.filter((key) => !process.env[key])
+-    if (missing.length > 0) {
+-      // Only throw when someone actually tries to use GitHub features — not at
+-      // import time — so the rest of the app still boots without GitHub vars.
+-      throw new Error(
+-        `[Mira] Missing required GitHub env vars: ${missing.join(', ')}. ` +
+-          `Check .env.local and wiring.md for setup instructions.`
+-      )
+-    }
+-  }
+-
+-  return {
+-    token: process.env.GITHUB_TOKEN ?? '',
+-    owner: process.env.GITHUB_OWNER ?? '',
+-    repo: process.env.GITHUB_REPO ?? '',
+-    defaultBranch: process.env.GITHUB_DEFAULT_BRANCH ?? 'main',
+-    webhookSecret: process.env.GITHUB_WEBHOOK_SECRET ?? '',
+-    workflowPrototype: process.env.GITHUB_WORKFLOW_PROTOTYPE ?? '',
+-    workflowFixRequest: process.env.GITHUB_WORKFLOW_FIX_REQUEST ?? '',
+-    labelPrefix: process.env.GITHUB_LABEL_PREFIX ?? 'mira:',
+-    appBaseUrl: process.env.APP_BASE_URL ?? '',
+-  }
+-}
+-
+-```
+-
+-### lib/constants.ts
+-
+-```typescript
+-export const MAX_ARENA_PROJECTS = 3
+-export const STALE_ICEBOX_DAYS = 14
+-
+-export const PROJECT_STATES = ['arena', 'icebox', 'shipped', 'killed'] as const
+-export const EXECUTION_PATHS = ['solo', 'assisted', 'delegated'] as const
+-export const SCOPE_OPTIONS = ['small', 'medium', 'large'] as const
+-
+-export const DRILL_STEPS = [
+-  'intent',
+-  'success_metric',
+-  'scope',
+-  'path',
+-  'priority',
+-  'decision',
+-] as const
+-
+-export type DrillStep = (typeof DRILL_STEPS)[number]
+-
+-export const STORAGE_DIR = '.local-data'
+-export const STORAGE_PATH = `${STORAGE_DIR}/studio.json`
+-
+-// --- Sprint 2: GitHub execution modes ---
+-
+-export const EXECUTION_MODES = [
+-  'copilot_issue_assignment',
+-  'custom_workflow_dispatch',
+-  'local_agent',
+-] as const
+-
+-export type ExecutionMode = (typeof EXECUTION_MODES)[number]
+-
+-export const AGENT_RUN_KINDS = [
+-  'prototype',
+-  'fix_request',
+-  'spec',
+-  'research_summary',
+-  'copilot_issue_assignment',
+-] as const
+-
+-export const AGENT_RUN_STATUSES = [
+-  'queued',
+-  'running',
+-  'succeeded',
+-  'failed',
+-  'blocked',
+-] as const
+-
+-
+-```
+-
+-### lib/date.ts
+-
+-```typescript
+-export function formatRelativeTime(dateString: string): string {
+-  const date = new Date(dateString)
+-  const now = new Date()
+-  const diffMs = now.getTime() - date.getTime()
+-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+-
+-  if (diffMinutes < 1) return 'just now'
+-  if (diffMinutes < 60) return `${diffMinutes}m ago`
+-  if (diffHours < 24) return `${diffHours}h ago`
+-  if (diffDays === 1) return 'yesterday'
+-  if (diffDays < 7) return `${diffDays}d ago`
+-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+-}
+-
+-export function formatDate(dateString: string): string {
+-  return new Date(dateString).toLocaleDateString('en-US', {
+-    year: 'numeric',
+-    month: 'long',
+-    day: 'numeric',
+-  })
+-}
+-
+-export function daysSince(dateString: string): number {
+-  const date = new Date(dateString)
+-  const now = new Date()
+-  return Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+-}
+-
+-```
+-
+-### lib/formatters/idea-formatters.ts
+-
+-```typescript
+-import type { Idea } from '@/types/idea'
+-
+-export function formatIdeaStatus(status: Idea['status']): string {
+-  const labels: Record<Idea['status'], string> = {
+-    captured: 'Captured',
+-    drilling: 'In Drill',
+-    arena: 'In Progress',
+-    icebox: 'Icebox',
+-    shipped: 'Shipped',
+-    killed: 'Killed',
+-  }
+-  return labels[status] ?? status
+-}
+-
+-```
+-
+-### lib/formatters/inbox-formatters.ts
+-
+-```typescript
+-import type { InboxEvent } from '@/types/inbox'
+-
+-export function formatEventType(type: InboxEvent['type']): string {
+-  const labels: Record<InboxEvent['type'], string> = {
+-    idea_captured: 'Idea captured',
+-    idea_deferred: 'Idea put on hold',
+-    drill_completed: 'Drill completed',
+-    project_promoted: 'Project promoted',
+-    task_created: 'Task created',
+-    pr_opened: 'PR opened',
+-    preview_ready: 'Preview ready',
+-    build_failed: 'Build failed',
+-    merge_completed: 'Merge completed',
+-    project_shipped: 'Project shipped',
+-    project_killed: 'Project killed',
+-    changes_requested: 'Changes requested',
+-    // GitHub lifecycle events
+-    github_issue_created: 'GitHub issue created',
+-    github_issue_closed: 'GitHub issue closed',
+-    github_workflow_dispatched: 'Workflow dispatched',
+-    github_workflow_failed: 'Workflow failed',
+-    github_workflow_succeeded: 'Workflow succeeded',
+-    github_pr_opened: 'GitHub PR opened',
+-    github_pr_merged: 'GitHub PR merged',
+-    github_review_requested: 'Review requested',
+-    github_changes_requested: 'Changes requested on GitHub',
+-    github_copilot_assigned: 'Copilot assigned',
+-    github_sync_failed: 'GitHub sync failed',
+-    github_connection_error: 'GitHub connection error',
+-  }
+-  return labels[type] ?? type
+-}
+-
+-
+-```
+-
+-### lib/formatters/pr-formatters.ts
+-
+-```typescript
+-import type { PullRequest } from '@/types/pr'
+-
+-export function formatBuildState(state: PullRequest['buildState']): string {
+-  const labels: Record<PullRequest['buildState'], string> = {
+-    pending: 'Pending',
+-    running: 'Building',
+-    success: 'Build passed',
+-    failed: 'Build failed',
+-  }
+-  return labels[state] ?? state
+-}
+-
+-export function formatPRStatus(status: PullRequest['status']): string {
+-  const labels: Record<PullRequest['status'], string> = {
+-    open: 'Open',
+-    merged: 'Merged',
+-    closed: 'Closed',
+-  }
+-  return labels[status] ?? status
+-}
+-
+-```
+-
+-### lib/formatters/project-formatters.ts
+-
+-```typescript
+-import type { Project } from '@/types/project'
+-
+-export function formatProjectState(state: Project['state']): string {
+-  const labels: Record<Project['state'], string> = {
+-    arena: 'In Progress',
+-    icebox: 'Icebox',
+-    shipped: 'Shipped',
+-    killed: 'Killed',
+-  }
+-  return labels[state] ?? state
+-}
+-
+-export function formatProjectHealth(health: Project['health']): string {
+-  const labels: Record<Project['health'], string> = {
+-    green: 'On track',
+-    yellow: 'Needs attention',
+-    red: 'Blocked',
+-  }
+-  return labels[health] ?? health
+-}
+-
+-```
+-
+-### lib/github/client.ts
+-
+-```typescript
+-import { Octokit } from '@octokit/rest'
+-
+-let _client: Octokit | null = null
+-
+-/**
+- * Returns the singleton Octokit client, initialised from GITHUB_TOKEN.
+- * Throws if the token is not set.
+- *
+- * Future: this becomes the boundary for GitHub App auth.
+- * export function getGitHubClientForInstallation(installationId: number): Octokit { ... }
+- */
+-export function getGitHubClient(): Octokit {
+-  if (!_client) {
+-    const token = process.env.GITHUB_TOKEN
+-    if (!token) throw new Error('GITHUB_TOKEN is not set')
+-    _client = new Octokit({ auth: token })
+-  }
+-  return _client
+-}
+-
+-```
+-
+-### lib/github/handlers/handle-issue-event.ts
+-
+-```typescript
+-import { GitHubWebhookContext } from '@/types/webhook'
+-import { getProjects, updateProjectState } from '@/lib/services/projects-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-
+-export async function handleIssueEvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const { action, rawPayload } = ctx
+-  const issue = rawPayload.issue as any
+-  if (!issue) return
+-
+-  const issueNumber = issue.number
+-  const projects = await getProjects()
+-  const project = projects.find((p) => p.githubIssueNumber === issueNumber)
+-
+-  if (!project) {
+-    console.log(`[webhook/github] No local project found for issue #${issueNumber}`)
+-    return
+-  }
+-
+-  console.log(`[webhook/github] Handling issue.${action} for project ${project.id}`)
+-
+-  switch (action) {
+-    case 'opened':
+-    case 'reopened':
+-      // Status remains 'arena' or similar, but maybe log it
+-      await createInboxEvent({
+-        type: 'github_issue_created',
+-        title: `GitHub Issue #${issueNumber} ${action}`,
+-        body: `Issue "${issue.title}" was ${action} on GitHub.`,
+-        severity: 'info',
+-        projectId: project.id,
+-        actionUrl: `/arena/${project.id}`
+-      })
+-      break
+-
+-    case 'closed':
+-      // If we use issue closure as a signal for project status, update it.
+-      // For now, just create an inbox event.
+-      await createInboxEvent({
+-        type: 'project_shipped', // mapped loosely
+-        title: `GitHub Issue #${issueNumber} closed`,
+-        body: `The linked issue for "${project.name}" was closed.`,
+-        severity: 'success',
+-        projectId: project.id
+-      })
+-      break
+-
+-    case 'assigned':
+-      const assignee = (rawPayload.assignee as any)?.login
+-      if (assignee) {
+-        await createInboxEvent({
+-          type: 'github_copilot_assigned',
+-          title: 'Developer assigned',
+-          body: `${assignee} was assigned to issue #${issueNumber}.`,
+-          severity: 'info',
+-          projectId: project.id
+-        })
+-      }
+-      break
+-
+-    default:
+-      console.log(`[webhook/github] Action ${action} for issue ${issueNumber} not specifically handled.`)
+-  }
+-}
+-
+-```
+-
+-### lib/github/handlers/handle-pr-event.ts
+-
+-```typescript
+-import { GitHubWebhookContext } from '@/types/webhook'
+-import { getProjects } from '@/lib/services/projects-service'
+-import { createPR, updatePR, getPRsForProject } from '@/lib/services/prs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import type { PullRequest } from '@/types/pr'
+-import type { InboxEventType } from '@/types/inbox'
+-
+-export async function handlePREvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const { action, rawPayload, repositoryFullName } = ctx
+-  const pr = rawPayload.pull_request as any
+-  if (!pr) return
+-
+-  console.log(`[webhook/github] Handling pull_request.${action} for PR #${pr.number} in ${repositoryFullName}`)
+-
+-  // Search for the project this PR belongs to
+-  const projects = await getProjects()
+-  
+-  // Try to find the project by repo name first.
+-  // Then try to refine by looking for the issue number in the PR body (e.g., "Fixes #123")
+-  const repoProjects = projects.filter(
+-    (p) => 
+-      (p.githubRepoFullName === repositoryFullName) || 
+-      (p.githubRepo && repositoryFullName.endsWith(p.githubRepo))
+-  )
+-
+-  let project = repoProjects.find(p => {
+-    const issueNumStr = p.githubIssueNumber?.toString()
+-    return pr.body?.includes(`#${issueNumStr}`) || pr.title?.includes(`#${issueNumStr}`)
+-  })
+-  
+-  // Fallback: if there's only one active project in the repo, assume it's that one
+-  if (!project && repoProjects.length === 1) {
+-    project = repoProjects[0]
+-  }
+-
+-  if (!project) {
+-    console.log(`[webhook/github] PR #${pr.number} could not be accurately linked to a local project.`)
+-    return
+-  }
+-
+-  const existingPRs = await getPRsForProject(project.id)
+-  const existingPR = existingPRs.find((p: PullRequest) => p.number === pr.number)
+-
+-  switch (action) {
+-    case 'opened':
+-    case 'reopened':
+-    case 'ready_for_review':
+-      if (existingPR) {
+-        await updatePR(existingPR.id, {
+-          status: pr.state === 'open' ? 'open' : (pr.merged ? 'merged' : 'closed'),
+-          title: pr.title,
+-          branch: pr.head.ref,
+-          author: pr.user.login,
+-          mergeable: pr.mergeable ?? true,
+-        })
+-      } else {
+-        const newPR = await createPR({
+-          projectId: project.id,
+-          title: pr.title,
+-          branch: pr.head.ref,
+-          status: 'open',
+-          author: pr.user.login,
+-          buildState: 'pending',
+-          mergeable: pr.mergeable ?? true,
+-          previewUrl: '', // To be updated by deployment webhooks
+-        })
+-        await updatePR(newPR.id, { number: pr.number })
+-      }
+-
+-      await createInboxEvent({
+-        type: 'github_pr_opened' as InboxEventType,
+-        title: `PR #${pr.number} ${action}`,
+-        body: `New pull request "${pr.title}" for project "${project.name}".`,
+-        severity: 'info',
+-        projectId: project.id,
+-        actionUrl: `/review/${pr.number}` // Or however the review page is keyed
+-      })
+-      break
+-
+-    case 'closed':
+-      if (existingPR) {
+-        const isMerged = pr.merged === true
+-        await updatePR(existingPR.id, {
+-          status: isMerged ? 'merged' : 'closed',
+-          mergeable: false,
+-        })
+-
+-        await createInboxEvent({
+-          type: isMerged ? 'github_pr_merged' : 'project_killed',
+-          title: `PR #${pr.number} ${isMerged ? 'merged' : 'closed'}`,
+-          body: `Pull request "${pr.title}" was ${isMerged ? 'merged' : 'closed without merging'}.`,
+-          severity: isMerged ? 'success' : 'warning',
+-          projectId: project.id
+-        })
+-      }
+-      break
+-
+-    case 'synchronize':
+-      if (existingPR) {
+-        await updatePR(existingPR.id, {
+-          buildState: 'running', // Assume a new build starts on synchronize
+-        })
+-      }
+-      break
+-
+-    default:
+-      console.log(`[webhook/github] PR action ${action} not explicitly handled.`)
+-  }
+-}
+-
+-```
+-
+-### lib/github/handlers/handle-pr-review-event.ts
+-
+-```typescript
+-import { GitHubWebhookContext } from '@/types/webhook'
+-import { getCollection } from '@/lib/storage'
+-import { updatePR } from '@/lib/services/prs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import type { PullRequest, ReviewStatus } from '@/types/pr'
+-
+-export async function handlePRReviewEvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const { action, rawPayload } = ctx
+-  const pr = rawPayload.pull_request as any
+-  const review = rawPayload.review as any
+-  if (!pr || !review) return
+-
+-  const prNumber = pr.number
+-  console.log(`[webhook/github] Handling pull_request_review.${action} for PR #${prNumber}`)
+-
+-  // Find local PR by number
+-  const prs = getCollection('prs') as PullRequest[]
+-  const localPR = prs.find((p) => p.number === prNumber)
+-
+-  if (!localPR) {
+-    console.log(`[webhook/github] No local PR found for number ${prNumber}`)
+-    return
+-  }
+-
+-  switch (action) {
+-    case 'submitted':
+-      const reviewState = review.state.toLowerCase() // approved, changes_requested, commented
+-      let reviewStatus: ReviewStatus = 'pending'
+-      let eventType: 'github_pr_opened' | 'github_changes_requested' | 'github_review_requested' = 'github_review_requested'
+-
+-      if (reviewState === 'approved') {
+-        reviewStatus = 'approved'
+-      } else if (reviewState === 'changes_requested') {
+-        reviewStatus = 'changes_requested'
+-        eventType = 'github_changes_requested'
+-      } else {
+-        // Commented or other states we might not map directly to status but maybe event
+-        console.log(`[webhook/github] Review state ${reviewState} for PR #${prNumber} logged but status unchanged.`)
+-      }
+-
+-      if (reviewStatus !== 'pending') {
+-        await updatePR(localPR.id, { reviewStatus })
+-        
+-        await createInboxEvent({
+-          type: eventType as any,
+-          title: `Review ${reviewState}: PR #${prNumber}`,
+-          body: `Reviewer ${review.user.login} submitted review state "${reviewState}".`,
+-          severity: reviewState === 'approved' ? 'success' : 'warning',
+-          projectId: localPR.projectId,
+-          actionUrl: review.html_url
+-        })
+-      }
+-      break
+-
+-    case 'dismissed':
+-      await updatePR(localPR.id, { reviewStatus: 'pending' })
+-      break
+-
+-    default:
+-      console.log(`[webhook/github] Review action ${action} not explicitly handled.`)
+-  }
+-}
+-
+-```
+-
+-### lib/github/handlers/handle-workflow-run-event.ts
+-
+-```typescript
+-import { GitHubWebhookContext } from '@/types/webhook'
+-import { getCollection } from '@/lib/storage'
+-import { setAgentRunStatus } from '@/lib/services/agent-runs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import type { AgentRun } from '@/types/agent-run'
+-
+-export async function handleWorkflowRunEvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const { action, rawPayload } = ctx
+-  const workflowRun = rawPayload.workflow_run as any
+-  if (!workflowRun) return
+-
+-  const githubWorkflowRunId = workflowRun.id.toString()
+-  console.log(`[webhook/github] Handling workflow_run.${action} for ID ${githubWorkflowRunId}`)
+-
+-  // Find the agent run by GitHub workflow run ID
+-  const agentRuns = getCollection('agentRuns') as AgentRun[]
+-  const agentRun = agentRuns.find((r) => r.githubWorkflowRunId === githubWorkflowRunId)
+-
+-  if (!agentRun) {
+-    console.log(`[webhook/github] No local agent run found for workflow ID ${githubWorkflowRunId}`)
+-    return
+-  }
+-
+-  switch (action) {
+-    case 'requested':
+-    case 'in_progress':
+-      setAgentRunStatus(agentRun.id, 'running')
+-      break
+-
+-    case 'completed':
+-      const conclusion = workflowRun.conclusion // success, failure, cancelled, etc.
+-      const status = conclusion === 'success' ? 'succeeded' : 'failed'
+-      
+-      setAgentRunStatus(agentRun.id, status, {
+-        summary: `GitHub workflow ${conclusion}: ${workflowRun.html_url}`,
+-        error: conclusion === 'failure' ? 'Workflow run failed on GitHub.' : undefined
+-      })
+-
+-      await createInboxEvent({
+-        type: conclusion === 'success' ? 'github_workflow_succeeded' : 'github_workflow_failed',
+-        title: `Workflow ${conclusion}`,
+-        body: `Mira execution for project "${agentRun.projectId}" ${conclusion}.`,
+-        severity: conclusion === 'success' ? 'success' : 'error',
+-        projectId: agentRun.projectId,
+-        actionUrl: workflowRun.html_url
+-      })
+-      break
+-
+-    default:
+-      console.log(`[webhook/github] Workflow run action ${action} not specifically handled.`)
+-  }
+-}
+-
+-```
+-
+-### lib/github/handlers/index.ts
+-
+-```typescript
+-import type { GitHubWebhookContext } from '@/types/webhook'
+-import { handleIssueEvent } from './handle-issue-event'
+-import { handlePREvent } from './handle-pr-event'
+-import { handleWorkflowRunEvent } from './handle-workflow-run-event'
+-import { handlePRReviewEvent } from './handle-pr-review-event'
+-
+-const handlers: Record<string, (ctx: GitHubWebhookContext) => Promise<void>> = {
+-  issues: handleIssueEvent,
+-  pull_request: handlePREvent,
+-  workflow_run: handleWorkflowRunEvent,
+-  pull_request_review: handlePRReviewEvent,
+-}
+-
+-export async function routeGitHubEvent(ctx: GitHubWebhookContext): Promise<void> {
+-  const handler = handlers[ctx.event]
+-  if (handler) {
+-    console.log(`[webhook/github] Handling ${ctx.event}.${ctx.action}`)
+-    await handler(ctx)
+-  } else {
+-    console.log(`[webhook/github] Unhandled event: ${ctx.event}`)
+-  }
+-}
+-
+-```
+-
+-### lib/github/signature.ts
+-
+-```typescript
+-import crypto from 'crypto'
+-
+-export function verifyGitHubSignature(
+-  payload: string,
+-  signature: string | null,
+-  secret: string
+-): boolean {
+-  if (!signature) return false
+-  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(payload).digest('hex')
+-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+-}
+-
+-```
+-
+-### lib/guards.ts
+-
+-```typescript
+-import type { Idea } from '@/types/idea'
+-import type { Project } from '@/types/project'
+-
+-export function isIdea(value: unknown): value is Idea {
+-  return (
+-    typeof value === 'object' &&
+-    value !== null &&
+-    'id' in value &&
+-    'title' in value &&
+-    'status' in value
+-  )
+-}
+-
+-export function isProject(value: unknown): value is Project {
+-  return (
+-    typeof value === 'object' &&
+-    value !== null &&
+-    'id' in value &&
+-    'state' in value &&
+-    'health' in value
+-  )
+-}
+-
+-```
+-
+-### lib/routes.ts
+-
+-```typescript
+-export const ROUTES = {
+-  home: '/',
+-  send: '/send',
+-  drill: '/drill',
+-  drillSuccess: '/drill/success',
+-  drillEnd: '/drill/end',
+-  arena: '/arena',
+-  arenaProject: (id: string) => `/arena/${id}`,
+-  icebox: '/icebox',
+-  shipped: '/shipped',
+-  killed: '/killed',
+-  review: (prId: string) => `/review/${prId}`,
+-  inbox: '/inbox',
+-  devGptSend: '/dev/gpt-send',
+-  // GitHub pages + API routes
+-  githubPlayground: '/dev/github-playground',
+-  githubTestConnection: '/api/github/test-connection',
+-  githubCreateIssue: '/api/github/create-issue',
+-  githubDispatchWorkflow: '/api/github/dispatch-workflow',
+-  githubCreatePR: '/api/github/create-pr',
+-  githubSyncPR: '/api/github/sync-pr',
+-  githubMergePR: '/api/github/merge-pr',
+-  githubTriggerAgent: '/api/github/trigger-agent',
+-} as const
+-
+-```
+-
+-### lib/seed-data.ts
+-
+-```typescript
+-import type { StudioStore } from './storage'
+-
+-export function getSeedData(): StudioStore {
+-  return {
+-    ideas: [
+-      {
+-        id: 'idea-001',
+-        title: 'AI-powered code review assistant',
+-        rawPrompt: 'What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?',
+-        gptSummary: 'A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.',
+-        vibe: 'productivity',
+-        audience: 'engineering teams',
+-        intent: 'Reduce code review bottlenecks and maintain code quality at scale.',
+-        createdAt: '2026-03-22T00:13:00.000Z',
+-        status: 'captured',
+-      },
+-      {
+-        id: 'idea-002',
+-        title: 'Team onboarding checklist builder',
+-        rawPrompt: 'Build something to help companies create interactive onboarding flows for new hires',
+-        gptSummary: 'A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.',
+-        vibe: 'operations',
+-        audience: 'HR teams and new employees',
+-        intent: 'Cut onboarding time and reduce "what do I do next" anxiety.',
+-        createdAt: '2026-03-20T00:43:00.000Z',
+-        status: 'icebox',
+-      },
+-    ],
+-    drillSessions: [
+-      {
+-        id: 'drill-001',
+-        ideaId: 'idea-001',
+-        intent: 'Reduce code review bottlenecks and maintain code quality at scale.',
+-        successMetric: 'PR review time drops by 40% in first month',
+-        scope: 'medium',
+-        executionPath: 'assisted',
+-        urgencyDecision: 'now',
+-        finalDisposition: 'arena',
+-        completedAt: '2026-03-22T00:23:00.000Z',
+-      },
+-    ],
+-    projects: [
+-      {
+-        id: 'proj-001',
+-        ideaId: 'idea-003',
+-        name: 'Mira Studio v1',
+-        summary: 'The Vercel-hosted studio UI for managing ideas from capture to execution.',
+-        state: 'arena',
+-        health: 'green',
+-        currentPhase: 'Core UI',
+-        nextAction: 'Review open PRs',
+-        activePreviewUrl: 'https://preview.vercel.app/mira-studio',
+-        createdAt: '2026-03-19T00:43:00.000Z',
+-        updatedAt: '2026-03-21T22:43:00.000Z',
+-      },
+-      {
+-        id: 'proj-002',
+-        ideaId: 'idea-004',
+-        name: 'Custom GPT Intake Layer',
+-        summary: 'The ChatGPT custom action that sends structured idea payloads to Mira.',
+-        state: 'arena',
+-        health: 'yellow',
+-        currentPhase: 'Integration',
+-        nextAction: 'Fix webhook auth',
+-        createdAt: '2026-03-15T00:43:00.000Z',
+-        updatedAt: '2026-03-21T00:43:00.000Z',
+-      },
+-      {
+-        id: 'proj-003',
+-        ideaId: 'idea-005',
+-        name: 'Analytics Dashboard',
+-        summary: 'Shipped product metrics for internal tracking.',
+-        state: 'shipped',
+-        health: 'green',
+-        currentPhase: 'Shipped',
+-        nextAction: '',
+-        activePreviewUrl: 'https://analytics.example.com',
+-        createdAt: '2026-02-20T00:43:00.000Z',
+-        updatedAt: '2026-03-17T00:43:00.000Z',
+-        shippedAt: '2026-03-17T00:43:00.000Z',
+-      },
+-      {
+-        id: 'proj-004',
+-        ideaId: 'idea-006',
+-        name: 'Mobile App v2',
+-        summary: 'Complete rebuild of mobile experience.',
+-        state: 'killed',
+-        health: 'red',
+-        currentPhase: 'Killed',
+-        nextAction: '',
+-        createdAt: '2026-02-05T00:43:00.000Z',
+-        updatedAt: '2026-03-12T00:43:00.000Z',
+-        killedAt: '2026-03-12T00:43:00.000Z',
+-        killedReason: 'Scope too large for current team. Web-first is the right call.',
+-      },
+-    ],
+-    tasks: [
+-      {
+-        id: 'task-001',
+-        projectId: 'proj-001',
+-        title: 'Implement drill tunnel flow',
+-        status: 'in_progress',
+-        priority: 'high',
+-        createdAt: '2026-03-21T00:43:00.000Z',
+-      },
+-      {
+-        id: 'task-002',
+-        projectId: 'proj-001',
+-        title: 'Build arena project card',
+-        status: 'done',
+-        priority: 'high',
+-        linkedPrId: 'pr-001',
+-        createdAt: '2026-03-20T12:43:00.000Z',
+-      },
+-      {
+-        id: 'task-003',
+-        projectId: 'proj-001',
+-        title: 'Wire API routes to mock data',
+-        status: 'pending',
+-        priority: 'medium',
+-        createdAt: '2026-03-21T12:43:00.000Z',
+-      },
+-      {
+-        id: 'task-004',
+-        projectId: 'proj-002',
+-        title: 'Fix webhook signature validation',
+-        status: 'blocked',
+-        priority: 'high',
+-        createdAt: '2026-03-21T18:43:00.000Z',
+-      },
+-    ],
+-    prs: [
+-      {
+-        id: 'pr-001',
+-        projectId: 'proj-001',
+-        title: 'feat: arena project cards',
+-        branch: 'feat/arena-cards',
+-        status: 'merged',
+-        previewUrl: 'https://preview.vercel.app/arena-cards',
+-        buildState: 'success',
+-        mergeable: true,
+-        number: 12,
+-        author: 'builder',
+-        createdAt: '2026-03-21T00:43:00.000Z',
+-      },
+-      {
+-        id: 'pr-002',
+-        projectId: 'proj-001',
+-        title: 'feat: drill tunnel components',
+-        branch: 'feat/drill-tunnel',
+-        status: 'open',
+-        previewUrl: 'https://preview.vercel.app/drill-tunnel',
+-        buildState: 'running',
+-        mergeable: true,
+-        number: 14,
+-        author: 'builder',
+-        createdAt: '2026-03-21T22:43:00.000Z',
+-      },
+-    ],
+-    inbox: [
+-      {
+-        id: 'evt-001',
+-        type: 'idea_captured',
+-        title: 'New idea arrived',
+-        body: 'AI-powered code review assistant — ready for drill.',
+-        timestamp: '2026-03-22T00:13:00.000Z',
+-        severity: 'info',
+-        actionUrl: '/send',
+-        read: false,
+-      },
+-      {
+-        id: 'evt-002',
+-        projectId: 'proj-001',
+-        type: 'pr_opened',
+-        title: 'PR opened: feat/drill-tunnel',
+-        body: 'A new pull request is ready for review.',
+-        timestamp: '2026-03-21T22:43:00.000Z',
+-        severity: 'info',
+-        actionUrl: '/review/pr-002',
+-        read: false,
+-      },
+-      {
+-        id: 'evt-003',
+-        projectId: 'proj-002',
+-        type: 'build_failed',
+-        title: 'Build failed: Custom GPT Intake',
+-        body: 'Webhook auth integration is failing. Action needed.',
+-        timestamp: '2026-03-21T00:43:00.000Z',
+-        severity: 'error',
+-        actionUrl: '/arena/proj-002',
+-        read: false,
+-      },
+-    ],
+-    // Sprint 2: new collections (start empty)
+-    agentRuns: [],
+-    externalRefs: [],
+-  }
+-}
+-
+-```
+-
+-### lib/services/agent-runs-service.ts
+-
+-```typescript
+-/**
+- * lib/services/agent-runs-service.ts
+- * CRUD service for AgentRun entities — tracks GitHub workflow / Copilot runs.
+- * All reads/writes go through lib/storage.ts (SOP-6).
+- */
+-
+-import type { AgentRun, AgentRunKind, AgentRunStatus } from '@/types/agent-run'
+-import type { ExecutionMode } from '@/lib/constants'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-type CreateAgentRunInput = {
+-  projectId: string
+-  taskId?: string
+-  kind: AgentRunKind
+-  executionMode: ExecutionMode
+-  triggeredBy: string
+-  githubWorkflowRunId?: string
+-  githubIssueNumber?: number
+-}
+-
+-/** Create and persist a new AgentRun. Returns the created record. */
+-export function createAgentRun(data: CreateAgentRunInput): AgentRun {
+-  const runs = getCollection('agentRuns')
+-  const run: AgentRun = {
+-    id: `run-${generateId()}`,
+-    status: 'queued',
+-    startedAt: new Date().toISOString(),
+-    ...data,
+-  }
+-  runs.push(run)
+-  saveCollection('agentRuns', runs)
+-  return run
+-}
+-
+-/** Retrieve a single AgentRun by its ID. Returns undefined if not found. */
+-export function getAgentRun(id: string): AgentRun | undefined {
+-  const runs = getCollection('agentRuns')
+-  return runs.find((r) => r.id === id)
+-}
+-
+-/** All AgentRuns for a given project, sorted by startedAt descending. */
+-export function getAgentRunsForProject(projectId: string): AgentRun[] {
+-  const runs = getCollection('agentRuns')
+-  return runs
+-    .filter((r) => r.projectId === projectId)
+-    .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+-}
+-
+-/** Partial-update an AgentRun by ID. Merges supplied fields into the record. */
+-export function updateAgentRun(
+-  id: string,
+-  updates: Partial<Omit<AgentRun, 'id' | 'projectId'>>
+-): AgentRun | undefined {
+-  const runs = getCollection('agentRuns')
+-  const idx = runs.findIndex((r) => r.id === id)
+-  if (idx === -1) return undefined
+-  runs[idx] = { ...runs[idx], ...updates }
+-  saveCollection('agentRuns', runs)
+-  return runs[idx]
+-}
+-
+-/** Convenience: the most recently started run for a project. */
+-export function getLatestRunForProject(projectId: string): AgentRun | undefined {
+-  return getAgentRunsForProject(projectId)[0]
+-}
+-
+-/** Update just the status field (and optionally finishedAt) atomically. */
+-export function setAgentRunStatus(
+-  id: string,
+-  status: AgentRunStatus,
+-  opts?: { summary?: string; error?: string }
+-): AgentRun | undefined {
+-  const finishedAt =
+-    status === 'succeeded' || status === 'failed'
+-      ? new Date().toISOString()
+-      : undefined
+-  return updateAgentRun(id, { status, finishedAt, ...opts })
+-}
+-
+-```
+-
+-### lib/services/drill-service.ts
+-
+-```typescript
+-import type { DrillSession } from '@/types/drill'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-export function getDrillSessionByIdeaId(ideaId: string): DrillSession | undefined {
+-  const sessions = getCollection('drillSessions')
+-  return sessions.find((s) => s.ideaId === ideaId)
+-}
+-
+-export function saveDrillSession(data: Omit<DrillSession, 'id'>): DrillSession {
+-  const sessions = getCollection('drillSessions')
+-  const session: DrillSession = {
+-    ...data,
+-    id: `drill-${generateId()}`,
+-    completedAt: data.completedAt ?? new Date().toISOString(),
+-  }
+-  sessions.push(session)
+-  saveCollection('drillSessions', sessions)
+-  return session
+-}
+-
+-```
+-
+-### lib/services/external-refs-service.ts
+-
+-```typescript
+-/**
+- * lib/services/external-refs-service.ts
+- * Bidirectional mapping between local Mira entities and external provider records
+- * (GitHub issues/PRs, Vercel deployments, etc.).
+- *
+- * Primary use-case: GitHub webhook event arrives with a PR number → look up
+- * which local project it belongs to.
+- *
+- * All reads/writes go through lib/storage.ts (SOP-6).
+- */
+-
+-import type { ExternalRef, ExternalProvider } from '@/types/external-ref'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-type CreateExternalRefInput = Omit<ExternalRef, 'id' | 'createdAt'>
+-
+-/** Create and persist a new ExternalRef. Returns the created record. */
+-export function createExternalRef(data: CreateExternalRefInput): ExternalRef {
+-  const refs = getCollection('externalRefs')
+-  const ref: ExternalRef = {
+-    id: `ref-${generateId()}`,
+-    createdAt: new Date().toISOString(),
+-    ...data,
+-  }
+-  refs.push(ref)
+-  saveCollection('externalRefs', refs)
+-  return ref
+-}
+-
+-/** All ExternalRefs for a specific local entity (e.g. all refs for project "proj-001"). */
+-export function getExternalRefsForEntity(
+-  entityType: ExternalRef['entityType'],
+-  entityId: string
+-): ExternalRef[] {
+-  const refs = getCollection('externalRefs')
+-  return refs.filter((r) => r.entityType === entityType && r.entityId === entityId)
+-}
+-
+-/**
+- * Reverse lookup — given a provider + external ID (e.g. GitHub issue number "42"),
+- * find the matching local entity reference.
+- *
+- * @param provider  'github' | 'vercel' | 'supabase'
+- * @param externalId  The external system's identifier string (can be a number stringified)
+- */
+-export function findByExternalId(
+-  provider: ExternalProvider,
+-  externalId: string
+-): ExternalRef | undefined {
+-  const refs = getCollection('externalRefs')
+-  return refs.find((r) => r.provider === provider && r.externalId === externalId)
+-}
+-
+-/**
+- * Reverse lookup by external number (e.g. GitHub PR number as a JS number).
+- * Convenience wrapper around findByExternalId.
+- */
+-export function findByExternalNumber(
+-  provider: ExternalProvider,
+-  entityType: ExternalRef['entityType'],
+-  externalNumber: number
+-): ExternalRef | undefined {
+-  const refs = getCollection('externalRefs')
+-  return refs.find(
+-    (r) =>
+-      r.provider === provider &&
+-      r.entityType === entityType &&
+-      r.externalNumber === externalNumber
+-  )
+-}
+-
+-/** Delete an ExternalRef by its local ID. No-op if not found. */
+-export function deleteExternalRef(id: string): void {
+-  const refs = getCollection('externalRefs')
+-  const filtered = refs.filter((r) => r.id !== id)
+-  saveCollection('externalRefs', filtered)
+-}
+-
+-```
+-
+-### lib/services/github-factory-service.ts
+-
+-```typescript
+-/**
+- * lib/services/github-factory-service.ts
+- *
+- * Orchestration layer for GitHub write operations.
+- * Routes call THIS service — never the adapter directly (SOP-8).
+- *
+- * Each method:
+- *   1. Loads local data
+- *   2. Validates / finds GitHub linkage
+- *   3. Calls the GitHub adapter
+- *   4. Updates local records (project, PR, externalRefs)
+- *   5. Creates inbox events
+- *
+- * If GitHub is not configured (no token), every method throws with a
+- * clear message so routes can return a 503 without crashing.
+- */
+-
+-import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
+-import { getGitHubClient } from '@/lib/github/client'
+-import { getProjectById } from '@/lib/services/projects-service'
+-import { createPR, getPRsForProject, updatePR } from '@/lib/services/prs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import { readStore, writeStore } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-import type { PullRequest } from '@/types/pr'
+-import type { ExternalRef } from '@/types/external-ref'
+-
+-// ---------------------------------------------------------------------------
+-// Internal helpers
+-// ---------------------------------------------------------------------------
+-
+-function requireGitHub(): void {
+-  if (!isGitHubConfigured()) {
+-    throw new Error(
+-      '[github-factory] GitHub is not configured. ' +
+-        'Add GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, and GITHUB_WEBHOOK_SECRET to .env.local.'
+-    )
+-  }
+-}
+-
+-/** Persist an ExternalRef record.
+- * TODO(Lane 1): replace with external-refs-service once that module ships. */
+-function saveExternalRef(ref: Omit<ExternalRef, 'id' | 'createdAt'>): void {
+-  const store = readStore()
+-  const refs: ExternalRef[] = (store as unknown as Record<string, unknown>).externalRefs as ExternalRef[] ?? []
+-  const record: ExternalRef = {
+-    ...ref,
+-    id: `xref-${generateId()}`,
+-    createdAt: new Date().toISOString(),
+-  }
+-  refs.push(record)
+-  ;(store as unknown as Record<string, unknown>).externalRefs = refs
+-  writeStore(store)
+-}
+-
+-// ---------------------------------------------------------------------------
+-// Public API
+-// ---------------------------------------------------------------------------
+-
+-/**
+- * Create a GitHub issue from a local project.
+- * Updates the project with the issue number + URL.
+- */
+-export async function createIssueFromProject(
+-  projectId: string,
+-  options?: { assignAgent?: boolean }
+-): Promise<{ issueNumber: number; issueUrl: string }> {
+-  requireGitHub()
+-
+-  const project = await getProjectById(projectId)
+-  if (!project) throw new Error(`Project not found: ${projectId}`)
+-
+-  const config = getGitHubConfig()
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  const body =
+-    `> Created by Mira Studio\n\n` +
+-    `**Summary:** ${project.summary}\n\n` +
+-    `**Next action:** ${project.nextAction}`
+-
+-  const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
+-
+-  // Atomic handoff: assign copilot-swe-agent at creation time (not after)
+-  // so the coding agent picks up the issue immediately.
+-  const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
+-
+-  const { data: issue } = await octokit.issues.create({
+-    owner,
+-    repo,
+-    title: project.name,
+-    body,
+-    labels,
+-    assignees,
+-  })
+-
+-  // Update project with GitHub issue linkage
+-  const store = readStore()
+-  const projects = store.projects
+-  const idx = projects.findIndex((p) => p.id === projectId)
+-  if (idx !== -1) {
+-    projects[idx] = {
+-      ...projects[idx],
+-      githubIssueNumber: issue.number,
+-      githubIssueUrl: issue.html_url,
+-      githubOwner: owner,
+-      githubRepo: repo,
+-      lastSyncedAt: new Date().toISOString(),
+-      updatedAt: new Date().toISOString(),
+-    }
+-  }
+-  writeStore(store)
+-
+-  // Track external ref
+-  saveExternalRef({
+-    entityType: 'project',
+-    entityId: projectId,
+-    provider: 'github',
+-    externalId: String(issue.number),
+-    externalNumber: issue.number,
+-    url: issue.html_url,
+-  })
+-
+-  await createInboxEvent({
+-    type: 'task_created',
+-    title: `GitHub issue created: #${issue.number}`,
+-    body: `Issue "${project.name}" created at ${issue.html_url}`,
+-    severity: 'info',
+-    projectId,
+-    actionUrl: issue.html_url,
+-  })
+-
+-  return { issueNumber: issue.number, issueUrl: issue.html_url }
+-}
+-
+-/**
+- * Assign Copilot coding agent to the GitHub issue linked to a project.
+- * Requires the project to already have a githubIssueNumber.
+- */
+-export async function assignCopilotToProject(projectId: string): Promise<void> {
+-  requireGitHub()
+-
+-  const project = await getProjectById(projectId)
+-  if (!project) throw new Error(`Project not found: ${projectId}`)
+-  if (!project.githubIssueNumber) {
+-    throw new Error(
+-      `Project ${projectId} has no linked GitHub issue. Run createIssueFromProject first.`
+-    )
+-  }
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  // Assign the "copilot" user (GitHub Copilot Workspace agent login)
+-  await octokit.issues.addAssignees({
+-    owner,
+-    repo,
+-    issue_number: project.githubIssueNumber,
+-    assignees: ['copilot'],
+-  })
+-
+-  // Update project to record assignment timestamp
+-  const store = readStore()
+-  const projects = store.projects
+-  const idx = projects.findIndex((p) => p.id === projectId)
+-  if (idx !== -1) {
+-    projects[idx] = {
+-      ...projects[idx],
+-      copilotAssignedAt: new Date().toISOString(),
+-      updatedAt: new Date().toISOString(),
+-    }
+-  }
+-  writeStore(store)
+-
+-  await createInboxEvent({
+-    type: 'task_created',
+-    title: `Copilot assigned to issue #${project.githubIssueNumber}`,
+-    body: `GitHub Copilot has been assigned to work on "${project.name}".`,
+-    severity: 'info',
+-    projectId,
+-  })
+-}
+-
+-/**
+- * Dispatch a prototype GitHub Actions workflow for a project.
+- */
+-export async function dispatchPrototypeWorkflow(
+-  projectId: string,
+-  inputs?: Record<string, string>
+-): Promise<void> {
+-  requireGitHub()
+-
+-  const project = await getProjectById(projectId)
+-  if (!project) throw new Error(`Project not found: ${projectId}`)
+-
+-  const config = getGitHubConfig()
+-  const workflowId = config.workflowPrototype
+-  if (!workflowId) {
+-    throw new Error(
+-      'GITHUB_WORKFLOW_PROTOTYPE is not set. Add the workflow filename to .env.local.'
+diff --git a/dump01.md b/dump01.md
+deleted file mode 100644
+index 417fd6d..0000000
+--- a/dump01.md
++++ /dev/null
+@@ -1,8000 +0,0 @@
+-    )
+-  }
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  await octokit.actions.createWorkflowDispatch({
+-    owner,
+-    repo,
+-    workflow_id: workflowId,
+-    ref: config.defaultBranch,
+-    inputs: {
+-      project_id: projectId,
+-      project_name: project.name,
+-      ...inputs,
+-    },
+-  })
+-
+-  // Update project workflow status
+-  const store = readStore()
+-  const projects = store.projects
+-  const idx = projects.findIndex((p) => p.id === projectId)
+-  if (idx !== -1) {
+-    projects[idx] = {
+-      ...projects[idx],
+-      githubWorkflowStatus: 'queued',
+-      updatedAt: new Date().toISOString(),
+-    }
+-  }
+-  writeStore(store)
+-
+-  await createInboxEvent({
+-    type: 'task_created',
+-    title: `Workflow dispatched: ${workflowId}`,
+-    body: `Prototype workflow triggered for "${project.name}".`,
+-    severity: 'info',
+-    projectId,
+-  })
+-}
+-
+-/**
+- * Create a GitHub PR from a project (manual path, not Copilot).
+- */
+-export async function createPRFromProject(
+-  projectId: string,
+-  params: {
+-    title: string
+-    body: string
+-    head: string
+-    draft?: boolean
+-  }
+-): Promise<{ prNumber: number; prUrl: string }> {
+-  requireGitHub()
+-
+-  const project = await getProjectById(projectId)
+-  if (!project) throw new Error(`Project not found: ${projectId}`)
+-
+-  const config = getGitHubConfig()
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  const { data: ghPR } = await octokit.pulls.create({
+-    owner,
+-    repo,
+-    title: params.title,
+-    body: params.body,
+-    head: params.head,
+-    base: config.defaultBranch,
+-    draft: params.draft ?? false,
+-  })
+-
+-  // Create local PR record
+-  const localPR = await createPR({
+-    projectId,
+-    title: params.title,
+-    branch: params.head,
+-    status: 'open',
+-    previewUrl: undefined,
+-    buildState: 'pending',
+-    mergeable: false,
+-    reviewStatus: 'pending',
+-    author: 'local',
+-  })
+-
+-  // Update local PR with GitHub data
+-  await updatePR(localPR.id, {
+-    number: ghPR.number,
+-  })
+-
+-  // Track external ref
+-  saveExternalRef({
+-    entityType: 'pr',
+-    entityId: localPR.id,
+-    provider: 'github',
+-    externalId: String(ghPR.number),
+-    externalNumber: ghPR.number,
+-    url: ghPR.html_url,
+-  })
+-
+-  // Update project with Copilot PR linkage
+-  const store = readStore()
+-  const projects = store.projects
+-  const idx = projects.findIndex((p) => p.id === projectId)
+-  if (idx !== -1) {
+-    projects[idx] = {
+-      ...projects[idx],
+-      copilotPrNumber: ghPR.number,
+-      copilotPrUrl: ghPR.html_url,
+-      updatedAt: new Date().toISOString(),
+-    }
+-  }
+-  writeStore(store)
+-
+-  await createInboxEvent({
+-    type: 'pr_opened',
+-    title: `PR #${ghPR.number} opened`,
+-    body: `"${params.title}" is open and awaiting review.`,
+-    severity: 'info',
+-    projectId,
+-    actionUrl: ghPR.html_url,
+-  })
+-
+-  return { prNumber: ghPR.number, prUrl: ghPR.html_url }
+-}
+-
+-/**
+- * Request revisions on a PR by adding a review comment.
+- */
+-export async function requestRevision(
+-  projectId: string,
+-  prNumber: number,
+-  message: string
+-): Promise<void> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  await octokit.issues.createComment({
+-    owner,
+-    repo,
+-    issue_number: prNumber,
+-    body: `> ✏️ **Revision request from Mira Studio**\n\n${message}`,
+-  })
+-
+-  // Find local PR and update requestedChanges
+-  const prs = await getPRsForProject(projectId)
+-  const pr = prs.find((p) => p.number === prNumber)
+-  if (pr) {
+-    await updatePR(pr.id, {
+-      reviewStatus: 'changes_requested',
+-      requestedChanges: message,
+-    })
+-  }
+-
+-  await createInboxEvent({
+-    type: 'changes_requested',
+-    title: `Changes requested on PR #${prNumber}`,
+-    body: message.length > 120 ? `${message.slice(0, 120)}…` : message,
+-    severity: 'warning',
+-    projectId,
+-  })
+-}
+-
+-/**
+- * Merge a GitHub PR for a project (direct GitHub operation).
+- * For the /api/actions/merge-pr product action, see that route.
+- */
+-export async function mergeProjectPR(
+-  projectId: string,
+-  prNumber: number,
+-  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
+-): Promise<{ sha: string; merged: boolean }> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  // Validate the PR exists and is mergeable
+-  const { data: ghPR } = await octokit.pulls.get({
+-    owner,
+-    repo,
+-    pull_number: prNumber,
+-  })
+-
+-  if (ghPR.state !== 'open') {
+-    throw new Error(`PR #${prNumber} is not open (state: ${ghPR.state})`)
+-  }
+-  if (ghPR.mergeable === false) {
+-    throw new Error(`PR #${prNumber} is not mergeable (conflicts may exist)`)
+-  }
+-
+-  const { data: mergeResult } = await octokit.pulls.merge({
+-    owner,
+-    repo,
+-    pull_number: prNumber,
+-    merge_method: mergeMethod,
+-  })
+-
+-  // Update local PR record
+-  const prs = await getPRsForProject(projectId)
+-  const pr = prs.find((p) => p.number === prNumber)
+-  if (pr) {
+-    await updatePR(pr.id, { status: 'merged', reviewStatus: 'merged' })
+-  }
+-
+-  await createInboxEvent({
+-    type: 'merge_completed',
+-    title: `PR #${prNumber} merged`,
+-    body: `"${ghPR.title}" was merged successfully.`,
+-    severity: 'success',
+-    projectId,
+-  })
+-
+-  return {
+-    sha: mergeResult.sha ?? '',
+-    merged: mergeResult.merged ?? false,
+-  }
+-}
+-
+-```
+-
+-### lib/services/github-sync-service.ts
+-
+-```typescript
+-/**
+- * lib/services/github-sync-service.ts
+- *
+- * Pull GitHub state INTO local records.
+- * Used by webhook handlers (Lane 3) and manual sync routes (Lane 4).
+- *
+- * Each sync method:
+- *   1. Calls Octokit to get current GitHub state
+- *   2. Finds or creates local record
+- *   3. Updates fields from GitHub data
+- *   4. Logs what changed
+- *
+- * NOTE: agentRuns are stored via direct store access.
+- * TODO(Lane 1): refactor to agent-runs-service once that module ships.
+- */
+-
+-import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
+-import { getGitHubClient } from '@/lib/github/client'
+-import { getProjects } from '@/lib/services/projects-service'
+-import { getPRsForProject, updatePR, createPR } from '@/lib/services/prs-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-import { readStore, writeStore } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-import type { PullRequest } from '@/types/pr'
+-import type { AgentRun } from '@/types/agent-run'
+-
+-// ---------------------------------------------------------------------------
+-// Internal helpers
+-// ---------------------------------------------------------------------------
+-
+-function requireGitHub(): void {
+-  if (!isGitHubConfigured()) {
+-    throw new Error(
+-      '[github-sync] GitHub is not configured. Check .env.local and wiring.md.'
+-    )
+-  }
+-}
+-
+-/** Find local PR by PR number across all projects. */
+-async function findLocalPRByNumber(
+-  prNumber: number
+-): Promise<{ pr: PullRequest; projectId: string } | null> {
+-  const projects = await getProjects()
+-  for (const project of projects) {
+-    const prs = await getPRsForProject(project.id)
+-    const match = prs.find((pr) => pr.number === prNumber)
+-    if (match) return { pr: match, projectId: project.id }
+-  }
+-  return null
+-}
+-
+-
+-// ---------------------------------------------------------------------------
+-// Public API
+-// ---------------------------------------------------------------------------
+-
+-/**
+- * Sync a single GitHub PR into the local PR record.
+- * Creates a new local record if none exists.
+- */
+-export async function syncPullRequest(prNumber: number): Promise<PullRequest | null> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  let ghPR: Awaited<ReturnType<typeof octokit.pulls.get>>['data']
+-  try {
+-    const res = await octokit.pulls.get({ owner, repo, pull_number: prNumber })
+-    ghPR = res.data
+-  } catch (err) {
+-    console.error(`[github-sync] Pull request #${prNumber} not found on GitHub:`, err)
+-    return null
+-  }
+-
+-  const existing = await findLocalPRByNumber(prNumber)
+-
+-  // Derive status
+-  const status: PullRequest['status'] =
+-    ghPR.merged ? 'merged' : ghPR.state === 'closed' ? 'closed' : 'open'
+-  const reviewStatus: PullRequest['reviewStatus'] =
+-    ghPR.merged ? 'merged' : 'pending'
+-
+-  if (existing) {
+-    const updated = await updatePR(existing.pr.id, {
+-      title: ghPR.title,
+-      branch: ghPR.head.ref,
+-      status,
+-      mergeable: ghPR.mergeable ?? false,
+-      reviewStatus,
+-    })
+-    console.log(`[github-sync] Updated local PR ${existing.pr.id} from GitHub #${prNumber}`)
+-    return updated
+-  }
+-
+-  // Try to find a project by copilotPrNumber
+-  const projects = await getProjects()
+-  const linkedProject = projects.find((p) => p.copilotPrNumber === prNumber)
+-  const projectId = linkedProject?.id ?? `unknown-${generateId()}`
+-
+-  const newPR = await createPR({
+-    projectId,
+-    title: ghPR.title,
+-    branch: ghPR.head.ref,
+-    status,
+-    previewUrl: undefined,
+-    buildState: 'pending',
+-    mergeable: ghPR.mergeable ?? false,
+-    reviewStatus,
+-    author: ghPR.user?.login ?? 'unknown',
+-  })
+-
+-  console.log(`[github-sync] Created local PR ${newPR.id} for GitHub #${prNumber}`)
+-  return newPR
+-}
+-
+-/**
+- * Sync a GitHub workflow run into the local agentRuns store.
+- * TODO(Lane 1): refactor to use agent-runs-service once available.
+- */
+-export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  let run: Awaited<ReturnType<typeof octokit.actions.getWorkflowRun>>['data']
+-  try {
+-    const res = await octokit.actions.getWorkflowRun({ owner, repo, run_id: runId })
+-    run = res.data
+-  } catch (err) {
+-    console.error(`[github-sync] Workflow run #${runId} not found:`, err)
+-    return null
+-  }
+-
+-  const status: AgentRun['status'] =
+-    run.status === 'completed'
+-      ? run.conclusion === 'success'
+-        ? 'succeeded'
+-        : 'failed'
+-      : run.status === 'in_progress'
+-      ? 'running'
+-      : 'queued'
+-
+-  const now = new Date().toISOString()
+-
+-  // TODO(Lane 1): replace with agent-runs-service once available
+-  const store = readStore()
+-  const agentRuns: AgentRun[] = (store as unknown as Record<string, unknown>).agentRuns as AgentRun[] ?? []
+-  const existingIdx = agentRuns.findIndex(
+-    (ar: AgentRun) => ar.githubWorkflowRunId === String(runId)
+-  )
+-
+-  if (existingIdx !== -1) {
+-    agentRuns[existingIdx] = {
+-      ...agentRuns[existingIdx],
+-      status,
+-      finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
+-      summary: run.conclusion ?? undefined,
+-    }
+-    ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
+-    writeStore(store)
+-    console.log(`[github-sync] Updated AgentRun for workflow run #${runId}`)
+-    return agentRuns[existingIdx]
+-  }
+-
+-  const newRun: AgentRun = {
+-    id: `ar-${generateId()}`,
+-    projectId: '',
+-    kind: 'prototype',
+-    status,
+-    executionMode: 'delegated' as AgentRun['executionMode'],
+-    triggeredBy: 'github',
+-    githubWorkflowRunId: String(runId),
+-    startedAt: run.created_at ?? now,
+-    finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
+-    summary: run.conclusion ?? undefined,
+-  }
+-
+-  agentRuns.push(newRun)
+-  ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
+-  writeStore(store)
+-  console.log(`[github-sync] Created AgentRun for workflow run #${runId}`)
+-  return newRun
+-}
+-
+-/**
+- * Sync a GitHub issue's state into the local project record.
+- */
+-export async function syncIssue(issueNumber: number): Promise<void> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  let issue: Awaited<ReturnType<typeof octokit.issues.get>>['data']
+-  try {
+-    const res = await octokit.issues.get({ owner, repo, issue_number: issueNumber })
+-    issue = res.data
+-  } catch (err) {
+-    console.error(`[github-sync] Issue #${issueNumber} not found:`, err)
+-    return
+-  }
+-
+-  // Find local project linked to this issue
+-  const store = readStore()
+-  const projects = store.projects
+-  const idx = projects.findIndex((p) => p.githubIssueNumber === issueNumber)
+-
+-  if (idx === -1) {
+-    console.log(`[github-sync] No local project linked to issue #${issueNumber}`)
+-    return
+-  }
+-
+-  const before = projects[idx].githubWorkflowStatus
+-  const issueState = issue.state
+-
+-  projects[idx] = {
+-    ...projects[idx],
+-    githubWorkflowStatus: issueState,
+-    lastSyncedAt: new Date().toISOString(),
+-    updatedAt: new Date().toISOString(),
+-  }
+-  writeStore(store)
+-
+-  console.log(
+-    `[github-sync] Issue #${issueNumber} synced. State: ${before} → ${issueState}`
+-  )
+-}
+-
+-/**
+- * Batch sync: pull all open PRs from GitHub for the configured repo.
+- * Note: pulls.list() doesn't return mergeable — use mergeable: false as default.
+- */
+-export async function syncAllOpenPRs(): Promise<{ synced: number; created: number }> {
+-  requireGitHub()
+-
+-  const { owner, repo } = getRepoCoordinates()
+-  const octokit = getGitHubClient()
+-
+-  const { data: openPRs } = await octokit.pulls.list({
+-    owner,
+-    repo,
+-    state: 'open',
+-    per_page: 100,
+-  })
+-
+-  let synced = 0
+-  let created = 0
+-
+-  for (const ghPR of openPRs) {
+-    const existing = await findLocalPRByNumber(ghPR.number)
+-    if (existing) {
+-      await updatePR(existing.pr.id, {
+-        title: ghPR.title,
+-        branch: ghPR.head.ref,
+-        status: 'open',
+-        // mergeable not available from list — requires individual pulls.get call
+-        // set to false conservatively; syncPullRequest(number) gets the accurate value
+-      })
+-      synced++
+-    } else {
+-      const projects = await getProjects()
+-      const linked = projects.find((p) => p.copilotPrNumber === ghPR.number)
+-      await createPR({
+-        projectId: linked?.id ?? `unknown-${generateId()}`,
+-        title: ghPR.title,
+-        branch: ghPR.head.ref,
+-        status: 'open',
+-        previewUrl: undefined,
+-        buildState: 'pending',
+-        mergeable: false, // conservative default; accurate after syncPullRequest(number)
+-        reviewStatus: 'pending',
+-        author: ghPR.user?.login ?? 'unknown',
+-      })
+-      created++
+-    }
+-  }
+-
+-  console.log(`[github-sync] Batch sync complete: ${synced} updated, ${created} created`)
+-  await createInboxEvent({
+-    type: 'pr_opened',
+-    title: `PR sync complete`,
+-    body: `${synced} PRs updated, ${created} new PRs imported from GitHub.`,
+-    severity: 'info',
+-  })
+-
+-  return { synced, created }
+-}
+-
+-```
+-
+-### lib/services/ideas-service.ts
+-
+-```typescript
+-import type { Idea, IdeaStatus } from '@/types/idea'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-export async function getIdeas(): Promise<Idea[]> {
+-  return getCollection('ideas')
+-}
+-
+-export async function getIdeaById(id: string): Promise<Idea | undefined> {
+-  const ideas = await getIdeas()
+-  return ideas.find((i) => i.id === id)
+-}
+-
+-export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
+-  const ideas = await getIdeas()
+-  return ideas.filter((i) => i.status === status)
+-}
+-
+-export async function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Promise<Idea> {
+-  const ideas = await getIdeas()
+-  const idea: Idea = {
+-    ...data,
+-    id: `idea-${generateId()}`,
+-    createdAt: new Date().toISOString(),
+-    status: 'captured',
+-  }
+-  ideas.push(idea)
+-  saveCollection('ideas', ideas)
+-  return idea
+-}
+-
+-export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
+-  const ideas = await getIdeas()
+-  const idea = ideas.find((i) => i.id === id)
+-  if (!idea) return null
+-  idea.status = status
+-  saveCollection('ideas', ideas)
+-  return idea
+-}
+-
+-```
+-
+-### lib/services/inbox-service.ts
+-
+-```typescript
+-import type { InboxEvent, InboxEventType } from '@/types/inbox'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-export async function getInboxEvents(): Promise<InboxEvent[]> {
+-  return getCollection('inbox')
+-}
+-
+-export async function createInboxEvent(data: {
+-  type: InboxEventType
+-  title: string
+-  body: string
+-  severity: InboxEvent['severity']
+-  projectId?: string
+-  actionUrl?: string
+-  githubUrl?: string
+-  timestamp?: string
+-  read?: boolean
+-}): Promise<InboxEvent> {
+-  const inbox = await getInboxEvents()
+-  const event: InboxEvent = {
+-    ...data,
+-    id: `evt-${generateId()}`,
+-    timestamp: data.timestamp ?? new Date().toISOString(),
+-    read: data.read ?? false,
+-  }
+-  inbox.push(event)
+-  saveCollection('inbox', inbox)
+-  return event
+-}
+-
+-export async function markRead(eventId: string): Promise<void> {
+-  const inbox = await getInboxEvents()
+-  const event = inbox.find((e) => e.id === eventId)
+-  if (event) {
+-    event.read = true
+-    saveCollection('inbox', inbox)
+-  }
+-}
+-
+-export async function getUnreadCount(): Promise<number> {
+-  const inbox = await getInboxEvents()
+-  return inbox.filter((e) => !e.read).length
+-}
+-
+-export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Promise<InboxEvent[]> {
+-  const inbox = await getInboxEvents()
+-  switch (filter) {
+-    case 'unread':
+-      return inbox.filter((e) => !e.read)
+-    case 'errors':
+-      return inbox.filter((e) => e.severity === 'error')
+-    case 'all':
+-    default:
+-      return inbox
+-  }
+-}
+-
+-/**
+- * Convenience wrapper for creating GitHub lifecycle inbox events.
+- * Sets `severity: 'info'` by default and passes through an optional `githubUrl`
+- * so consumers don't need to repeat the boilerplate.
+- */
+-export async function createGitHubInboxEvent(params: {
+-  type: InboxEventType
+-  projectId: string
+-  title: string
+-  body: string
+-  githubUrl?: string
+-  severity?: InboxEvent['severity']
+-}): Promise<InboxEvent> {
+-  return createInboxEvent({
+-    type: params.type,
+-    projectId: params.projectId,
+-    title: params.title,
+-    body: params.body,
+-    severity: params.severity ?? 'info',
+-    githubUrl: params.githubUrl,
+-  })
+-}
+-
+-
+-```
+-
+-### lib/services/materialization-service.ts
+-
+-```typescript
+-import type { DrillSession } from '@/types/drill'
+-import type { Project } from '@/types/project'
+-import type { Idea } from '@/types/idea'
+-import { createProject } from '@/lib/services/projects-service'
+-import { updateIdeaStatus } from '@/lib/services/ideas-service'
+-import { createInboxEvent } from '@/lib/services/inbox-service'
+-
+-export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<Project> {
+-  const project = await createProject({
+-    ideaId: idea.id,
+-    name: idea.title,
+-    summary: idea.gptSummary,
+-    state: 'arena',
+-    health: 'green',
+-    currentPhase: 'Getting started',
+-    nextAction: 'Define first task',
+-    activePreviewUrl: undefined,
+-  })
+-
+-  await updateIdeaStatus(idea.id, 'arena')
+-
+-  // W4: Create inbox event to notify about project promotion
+-  await createInboxEvent({
+-    type: 'project_promoted',
+-    title: 'Project created',
+-    body: `"${idea.title}" is now in progress (scope: ${drill.scope}).`,
+-    severity: 'info',
+-    projectId: project.id,
+-    actionUrl: `/arena/${project.id}`,
+-  })
+-
+-  return project
+-}
+-
+-```
+-
+-### lib/services/projects-service.ts
+-
+-```typescript
+-import type { Project, ProjectState } from '@/types/project'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-import { MAX_ARENA_PROJECTS } from '@/lib/constants'
+-
+-export async function getProjects(): Promise<Project[]> {
+-  return getCollection('projects')
+-}
+-
+-export async function getProjectById(id: string): Promise<Project | undefined> {
+-  const projects = await getProjects()
+-  return projects.find((p) => p.id === id)
+-}
+-
+-export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
+-  const projects = await getProjects()
+-  return projects.filter((p) => p.state === state)
+-}
+-
+-export async function getArenaProjects(): Promise<Project[]> {
+-  return getProjectsByState('arena')
+-}
+-
+-export async function isArenaAtCapacity(): Promise<boolean> {
+-  const arena = await getArenaProjects()
+-  return arena.length >= MAX_ARENA_PROJECTS
+-}
+-
+-export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+-  const projects = await getProjects()
+-  const project: Project = {
+-    ...data,
+-    id: `proj-${generateId()}`,
+-    createdAt: new Date().toISOString(),
+-    updatedAt: new Date().toISOString(),
+-  }
+-  projects.push(project)
+-  saveCollection('projects', projects)
+-  return project
+-}
+-
+-export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
+-  const projects = await getProjects()
+-  const project = projects.find((p) => p.id === id)
+-  if (!project) return null
+-  
+-  project.state = state
+-  project.updatedAt = new Date().toISOString()
+-  if (extra) Object.assign(project, extra)
+-  
+-  saveCollection('projects', projects)
+-  return project
+-}
+-
+-```
+-
+-### lib/services/prs-service.ts
+-
+-```typescript
+-import type { PullRequest } from '@/types/pr'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-export async function getPRsForProject(projectId: string): Promise<PullRequest[]> {
+-  const prs = getCollection('prs')
+-  return prs.filter((pr) => pr.projectId === projectId)
+-}
+-
+-export async function getPRById(id: string): Promise<PullRequest | undefined> {
+-  const prs = getCollection('prs')
+-  return prs.find((pr) => pr.id === id)
+-}
+-
+-export async function createPR(data: Omit<PullRequest, 'id' | 'createdAt' | 'number'>): Promise<PullRequest> {
+-  const prs = getCollection('prs')
+-  const lastPr = prs[prs.length - 1]
+-  const nextNumber = lastPr ? lastPr.number + 1 : 1
+-  
+-  const pr: PullRequest = {
+-    ...data,
+-    id: `pr-${generateId()}`,
+-    number: nextNumber,
+-    createdAt: new Date().toISOString(),
+-  }
+-  prs.push(pr)
+-  saveCollection('prs', prs)
+-  return pr
+-}
+-
+-export async function updatePR(id: string, updates: Partial<PullRequest>): Promise<PullRequest | null> {
+-  const prs = getCollection('prs')
+-  const index = prs.findIndex((pr) => pr.id === id)
+-  if (index === -1) return null
+-  
+-  prs[index] = { ...prs[index], ...updates }
+-  saveCollection('prs', prs)
+-  return prs[index]
+-}
+-
+-```
+-
+-### lib/services/tasks-service.ts
+-
+-```typescript
+-import type { Task } from '@/types/task'
+-import { getCollection, saveCollection } from '@/lib/storage'
+-import { generateId } from '@/lib/utils'
+-
+-export async function getTasksForProject(projectId: string): Promise<Task[]> {
+-  const tasks = getCollection('tasks')
+-  return tasks.filter((t) => t.projectId === projectId)
+-}
+-
+-export async function createTask(data: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
+-  const tasks = getCollection('tasks')
+-  const task: Task = {
+-    ...data,
+-    id: `task-${generateId()}`,
+-    createdAt: new Date().toISOString(),
+-  }
+-  tasks.push(task)
+-  saveCollection('tasks', tasks)
+-  return task
+-}
+-
+-export async function updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
+-  const tasks = getCollection('tasks')
+-  const index = tasks.findIndex((t) => t.id === id)
+-  if (index === -1) return null
+-  
+-  tasks[index] = { ...tasks[index], ...updates }
+-  saveCollection('tasks', tasks)
+-  return tasks[index]
+-}
+-
+-```
+-
+-### lib/state-machine.ts
+-
+-```typescript
+-import type { IdeaStatus } from '@/types/idea'
+-import type { ProjectState } from '@/types/project'
+-import type { ReviewStatus } from '@/types/pr'
+-
+-type IdeaTransition = {
+-  from: IdeaStatus
+-  to: IdeaStatus
+-  action: string
+-}
+-
+-type ProjectTransition = {
+-  from: ProjectState
+-  to: ProjectState
+-  action: string
+-}
+-
+-export const IDEA_TRANSITIONS: IdeaTransition[] = [
+-  { from: 'captured', to: 'drilling', action: 'start_drill' },
+-  { from: 'drilling', to: 'arena', action: 'commit_to_arena' },
+-  { from: 'drilling', to: 'icebox', action: 'send_to_icebox' },
+-  { from: 'drilling', to: 'killed', action: 'kill_from_drill' },
+-  { from: 'captured', to: 'icebox', action: 'defer_from_send' },
+-  { from: 'captured', to: 'killed', action: 'kill_from_send' },
+-]
+-
+-export const PROJECT_TRANSITIONS: ProjectTransition[] = [
+-  { from: 'arena', to: 'shipped', action: 'mark_shipped' },
+-  { from: 'arena', to: 'killed', action: 'kill_project' },
+-  { from: 'arena', to: 'icebox', action: 'move_to_icebox' },
+-  { from: 'icebox', to: 'arena', action: 'promote_to_arena' },
+-  { from: 'icebox', to: 'killed', action: 'kill_from_icebox' },
+-  // GitHub-backed transitions (project stays in arena but gains linkage / execution state)
+-  { from: 'arena', to: 'arena', action: 'github_issue_created' },
+-  { from: 'arena', to: 'arena', action: 'workflow_dispatched' },
+-  { from: 'arena', to: 'arena', action: 'pr_received' },
+-  // Merge = ship (optional auto-ship path when real GitHub PR merges)
+-  { from: 'arena', to: 'shipped', action: 'github_pr_merged' },
+-]
+-
+-export function canTransitionIdea(from: IdeaStatus, action: string): boolean {
+-  return IDEA_TRANSITIONS.some((t) => t.from === from && t.action === action)
+-}
+-
+-export function canTransitionProject(from: ProjectState, action: string): boolean {
+-  return PROJECT_TRANSITIONS.some((t) => t.from === from && t.action === action)
+-}
+-
+-export function getNextIdeaState(from: IdeaStatus, action: string): IdeaStatus | null {
+-  const transition = IDEA_TRANSITIONS.find(
+-    (t) => t.from === from && t.action === action
+-  )
+-  return transition ? transition.to : null
+-}
+-
+-export function getNextProjectState(from: ProjectState, action: string): ProjectState | null {
+-  const transition = PROJECT_TRANSITIONS.find(
+-    (t) => t.from === from && t.action === action
+-  )
+-  return transition ? transition.to : null
+-}
+-
+-// ---------------------------------------------------------------------------
+-// PR State Machine
+-// ---------------------------------------------------------------------------
+-
+-export type PRTransitionAction =
+-  | 'open'
+-  | 'request_changes'
+-  | 'approve'
+-  | 'merge'
+-  | 'close'
+-  | 'reopen'
+-
+-export const PR_TRANSITIONS: Array<{
+-  from: ReviewStatus
+-  to: ReviewStatus
+-  action: PRTransitionAction
+-}> = [
+-  { from: 'pending', to: 'changes_requested', action: 'request_changes' },
+-  { from: 'pending', to: 'approved', action: 'approve' },
+-  { from: 'pending', to: 'merged', action: 'merge' },
+-  { from: 'changes_requested', to: 'approved', action: 'approve' },
+-  { from: 'changes_requested', to: 'merged', action: 'merge' },
+-  { from: 'approved', to: 'merged', action: 'merge' },
+-  { from: 'approved', to: 'changes_requested', action: 'request_changes' },
+-]
+-
+-export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction): boolean {
+-  return PR_TRANSITIONS.some((t) => t.from === from && t.action === action)
+-}
+-
+-export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null {
+-  const transition = PR_TRANSITIONS.find(
+-    (t) => t.from === from && t.action === action
+-  )
+-  return transition ? transition.to : null
+-}
+-
+-```
+-
+-### lib/storage.ts
+-
+-```typescript
+-import fs from 'fs'
+-import path from 'path'
+-import os from 'os'
+-import type { Idea } from '@/types/idea'
+-import type { Project } from '@/types/project'
+-import type { Task } from '@/types/task'
+-import type { PullRequest } from '@/types/pr'
+-import type { InboxEvent } from '@/types/inbox'
+-import type { DrillSession } from '@/types/drill'
+-import type { AgentRun } from '@/types/agent-run'
+-import type { ExternalRef } from '@/types/external-ref'
+-import { STORAGE_DIR, STORAGE_PATH } from '@/lib/constants'
+-import { getSeedData } from '@/lib/seed-data'
+-
+-export interface StudioStore {
+-  ideas: Idea[]
+-  drillSessions: DrillSession[]
+-  projects: Project[]
+-  tasks: Task[]
+-  prs: PullRequest[]
+-  inbox: InboxEvent[]
+-  agentRuns: AgentRun[]       // Sprint 2: GitHub workflow / Copilot runs
+-  externalRefs: ExternalRef[] // Sprint 2: GitHub ↔ local entity mapping
+-}
+-
+-// Full paths for fs operations
+-const FULL_STORAGE_DIR = path.join(process.cwd(), STORAGE_DIR)
+-const FULL_STORAGE_PATH = path.join(process.cwd(), STORAGE_PATH)
+-
+-function ensureDir(): void {
+-  if (!fs.existsSync(FULL_STORAGE_DIR)) {
+-    fs.mkdirSync(FULL_STORAGE_DIR, { recursive: true })
+-  }
+-}
+-
+-/** Defaults for keys added in Sprint 2 — ensures old JSON files auto-migrate. */
+-const STORE_DEFAULTS: Pick<StudioStore, 'agentRuns' | 'externalRefs'> = {
+-  agentRuns: [],
+-  externalRefs: [],
+-}
+-
+-export function readStore(): StudioStore {
+-  ensureDir()
+-  if (!fs.existsSync(FULL_STORAGE_PATH)) {
+-    const seed = getSeedData()
+-    writeStore(seed)
+-    return seed
+-  }
+-  const raw = fs.readFileSync(FULL_STORAGE_PATH, 'utf-8')
+-  const parsed = JSON.parse(raw) as Partial<StudioStore>
+-  // Auto-migrate: merge any missing keys introduced in later sprints
+-  return { ...STORE_DEFAULTS, ...parsed } as StudioStore
+-}
+-
+-export function writeStore(data: StudioStore): void {
+-  ensureDir()
+-  // Atomic write: write to a temp file then rename to avoid partial reads
+-  const tmpPath = path.join(os.tmpdir(), `studio-${Date.now()}.tmp.json`)
+-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
+-  fs.renameSync(tmpPath, FULL_STORAGE_PATH)
+-}
+-
+-export function getCollection<K extends keyof StudioStore>(name: K): StudioStore[K] {
+-  const store = readStore()
+-  return store[name]
+-}
+-
+-export function saveCollection<K extends keyof StudioStore>(name: K, data: StudioStore[K]): void {
+-  const store = readStore()
+-  store[name] = data
+-  writeStore(store)
+-}
+-
+-
+-```
+-
+-### lib/studio-copy.ts
+-
+-```typescript
+-export const COPY = {
+-  app: {
+-    name: 'Mira',
+-    tagline: 'Your ideas, shaped and shipped.',
+-  },
+-  home: {
+-    heading: 'Studio',
+-    subheading: 'Your attention cockpit.',
+-    sections: {
+-      attention: 'Needs attention',
+-      inProgress: 'In progress',
+-      activity: 'Recent activity',
+-    },
+-    attentionCaughtUp: "You're all caught up.",
+-    activitySeeAll: 'See all →',
+-  },
+-  send: {
+-    heading: 'Ideas from GPT',
+-    subheading: 'Review what arrived and decide what to do next.',
+-    ctaPrimary: 'Define in Studio',
+-    ctaIcebox: 'Put on hold',
+-    ctaKill: 'Remove',
+-  },
+-  drill: {
+-    heading: "Let's define this.",
+-    progress: 'Step {current} of {total}',
+-    steps: {
+-      intent: {
+-        question: 'What is this really?',
+-        hint: 'Strip the excitement. What is the actual thing?',
+-      },
+-      success_metric: {
+-        question: 'How do you know it worked?',
+-        hint: "One metric. If you can't name it, the idea isn't ready.",
+-      },
+-      scope: {
+-        question: 'How big is this?',
+-        hint: 'Be honest. Scope creep starts here.',
+-      },

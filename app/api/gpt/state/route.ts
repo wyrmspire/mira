@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server'
 import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
-  const userId = searchParams.get('userId') || 'default-user'
+  const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
     const packet = await buildGPTStatePacket(userId)
