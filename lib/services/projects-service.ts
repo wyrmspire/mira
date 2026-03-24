@@ -1,10 +1,11 @@
 import type { Project, ProjectState } from '@/types/project'
-import { getCollection, saveCollection } from '@/lib/storage'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 import { MAX_ARENA_PROJECTS } from '@/lib/constants'
 
 export async function getProjects(): Promise<Project[]> {
-  return getCollection('projects')
+  const adapter = getStorageAdapter()
+  return adapter.getCollection<Project>('projects')
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
@@ -27,27 +28,26 @@ export async function isArenaAtCapacity(): Promise<boolean> {
 }
 
 export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
-  const projects = await getProjects()
+  const adapter = getStorageAdapter()
   const project: Project = {
     ...data,
-    id: `proj-${generateId()}`,
+    id: generateId(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
-  projects.push(project)
-  saveCollection('projects', projects)
-  return project
+  return adapter.saveItem<Project>('projects', project)
 }
 
 export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
-  const projects = await getProjects()
-  const project = projects.find((p) => p.id === id)
-  if (!project) return null
-  
-  project.state = state
-  project.updatedAt = new Date().toISOString()
-  if (extra) Object.assign(project, extra)
-  
-  saveCollection('projects', projects)
-  return project
+  const adapter = getStorageAdapter()
+  const updates: Partial<Project> = {
+    state,
+    updatedAt: new Date().toISOString(),
+    ...extra,
+  }
+  try {
+    return await adapter.updateItem<Project>('projects', id, updates)
+  } catch {
+    return null
+  }
 }

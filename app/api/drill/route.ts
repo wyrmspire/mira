@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const session = saveDrillSession(body)
+    const session = await saveDrillSession(body)
     return NextResponse.json<ApiResponse<DrillSession>>({ data: session }, { status: 201 })
   } catch (err: any) {
     return NextResponse.json<ApiResponse<never>>(

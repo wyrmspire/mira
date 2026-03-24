@@ -1,20 +1,19 @@
 import type { DrillSession } from '@/types/drill'
-import { getCollection, saveCollection } from '@/lib/storage'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
-export function getDrillSessionByIdeaId(ideaId: string): DrillSession | undefined {
-  const sessions = getCollection('drillSessions')
+export async function getDrillSessionByIdeaId(ideaId: string): Promise<DrillSession | undefined> {
+  const adapter = getStorageAdapter()
+  const sessions = await adapter.getCollection<DrillSession>('drillSessions')
   return sessions.find((s) => s.ideaId === ideaId)
 }
 
-export function saveDrillSession(data: Omit<DrillSession, 'id'>): DrillSession {
-  const sessions = getCollection('drillSessions')
+export async function saveDrillSession(data: Omit<DrillSession, 'id'>): Promise<DrillSession> {
+  const adapter = getStorageAdapter()
   const session: DrillSession = {
     ...data,
-    id: `drill-${generateId()}`,
+    id: generateId(),
     completedAt: data.completedAt ?? new Date().toISOString(),
   }
-  sessions.push(session)
-  saveCollection('drillSessions', sessions)
-  return session
+  return adapter.saveItem<DrillSession>('drillSessions', session)
 }

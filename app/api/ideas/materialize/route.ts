@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const drill = getDrillSessionByIdeaId(ideaId)
+    const drill = await getDrillSessionByIdeaId(ideaId)
     if (!drill) {
       return NextResponse.json<ApiResponse<never>>({ error: 'Drill session not found for this idea' }, { status: 400 })
     }

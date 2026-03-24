@@ -1,30 +1,28 @@
 import type { Task } from '@/types/task'
-import { getCollection, saveCollection } from '@/lib/storage'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
 export async function getTasksForProject(projectId: string): Promise<Task[]> {
-  const tasks = getCollection('tasks')
+  const adapter = getStorageAdapter()
+  const tasks = await adapter.getCollection<Task>('tasks')
   return tasks.filter((t) => t.projectId === projectId)
 }
 
 export async function createTask(data: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
-  const tasks = getCollection('tasks')
+  const adapter = getStorageAdapter()
   const task: Task = {
     ...data,
-    id: `task-${generateId()}`,
+    id: generateId(),
     createdAt: new Date().toISOString(),
   }
-  tasks.push(task)
-  saveCollection('tasks', tasks)
-  return task
+  return adapter.saveItem<Task>('tasks', task)
 }
 
 export async function updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
-  const tasks = getCollection('tasks')
-  const index = tasks.findIndex((t) => t.id === id)
-  if (index === -1) return null
-  
-  tasks[index] = { ...tasks[index], ...updates }
-  saveCollection('tasks', tasks)
-  return tasks[index]
+  const adapter = getStorageAdapter()
+  try {
+    return await adapter.updateItem<Task>('tasks', id, updates)
+  } catch {
+    return null
+  }
 }

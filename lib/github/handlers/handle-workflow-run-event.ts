@@ -1,7 +1,7 @@
 import { GitHubWebhookContext } from '@/types/webhook'
-import { getCollection } from '@/lib/storage'
-import { setAgentRunStatus } from '@/lib/services/agent-runs-service'
+import { getAgentRun, setAgentRunStatus } from '@/lib/services/agent-runs-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import type { AgentRun } from '@/types/agent-run'
 
 export async function handleWorkflowRunEvent(ctx: GitHubWebhookContext): Promise<void> {
@@ -13,7 +13,8 @@ export async function handleWorkflowRunEvent(ctx: GitHubWebhookContext): Promise
   console.log(`[webhook/github] Handling workflow_run.${action} for ID ${githubWorkflowRunId}`)
 
   // Find the agent run by GitHub workflow run ID
-  const agentRuns = getCollection('agentRuns') as AgentRun[]
+  const adapter = getStorageAdapter()
+  const agentRuns = await adapter.getCollection<AgentRun>('agentRuns')
   const agentRun = agentRuns.find((r) => r.githubWorkflowRunId === githubWorkflowRunId)
 
   if (!agentRun) {
@@ -24,14 +25,14 @@ export async function handleWorkflowRunEvent(ctx: GitHubWebhookContext): Promise
   switch (action) {
     case 'requested':
     case 'in_progress':
-      setAgentRunStatus(agentRun.id, 'running')
+      await setAgentRunStatus(agentRun.id, 'running')
       break
 
     case 'completed':
-      const conclusion = workflowRun.conclusion // success, failure, cancelled, etc.
+      const conclusion = workflowRun.conclusion
       const status = conclusion === 'success' ? 'succeeded' : 'failed'
       
-      setAgentRunStatus(agentRun.id, status, {
+      await setAgentRunStatus(agentRun.id, status, {
         summary: `GitHub workflow ${conclusion}: ${workflowRun.html_url}`,
         error: conclusion === 'failure' ? 'Workflow run failed on GitHub.' : undefined
       })

@@ -2,16 +2,7 @@
  * lib/services/github-sync-service.ts
  *
  * Pull GitHub state INTO local records.
- * Used by webhook handlers (Lane 3) and manual sync routes (Lane 4).
- *
- * Each sync method:
- *   1. Calls Octokit to get current GitHub state
- *   2. Finds or creates local record
- *   3. Updates fields from GitHub data
- *   4. Logs what changed
- *
- * NOTE: agentRuns are stored via direct store access.
- * TODO(Lane 1): refactor to agent-runs-service once that module ships.
+ * All persistence goes through the storage adapter (SOP-9).
  */
 
 import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
@@ -19,11 +10,13 @@ import { getGitHubClient } from '@/lib/github/client'
 import { getProjects } from '@/lib/services/projects-service'
 import { getPRsForProject, updatePR, createPR } from '@/lib/services/prs-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
-import { readStore, writeStore } from '@/lib/storage'
+import { createAgentRun, getAgentRun } from '@/lib/services/agent-runs-service'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
 import type { PullRequest } from '@/types/pr'
 import type { AgentRun } from '@/types/agent-run'
+import type { Project } from '@/types/project'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -57,7 +50,6 @@ async function findLocalPRByNumber(
 
 /**
  * Sync a single GitHub PR into the local PR record.
- * Creates a new local record if none exists.
  */
 export async function syncPullRequest(prNumber: number): Promise<PullRequest | null> {
   requireGitHub()
@@ -76,7 +68,6 @@ export async function syncPullRequest(prNumber: number): Promise<PullRequest | n
 
   const existing = await findLocalPRByNumber(prNumber)
 
-  // Derive status
   const status: PullRequest['status'] =
     ghPR.merged ? 'merged' : ghPR.state === 'closed' ? 'closed' : 'open'
   const reviewStatus: PullRequest['reviewStatus'] =
@@ -94,7 +85,6 @@ export async function syncPullRequest(prNumber: number): Promise<PullRequest | n
     return updated
   }
 
-  // Try to find a project by copilotPrNumber
   const projects = await getProjects()
   const linkedProject = projects.find((p) => p.copilotPrNumber === prNumber)
   const projectId = linkedProject?.id ?? `unknown-${generateId()}`
@@ -117,7 +107,6 @@ export async function syncPullRequest(prNumber: number): Promise<PullRequest | n
 
 /**
  * Sync a GitHub workflow run into the local agentRuns store.
- * TODO(Lane 1): refactor to use agent-runs-service once available.
  */
 export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
   requireGitHub()
@@ -145,42 +134,31 @@ export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
 
   const now = new Date().toISOString()
 
-  // TODO(Lane 1): replace with agent-runs-service once available
-  const store = readStore()
-  const agentRuns: AgentRun[] = (store as unknown as Record<string, unknown>).agentRuns as AgentRun[] ?? []
-  const existingIdx = agentRuns.findIndex(
-    (ar: AgentRun) => ar.githubWorkflowRunId === String(runId)
+  // Check for existing agent run via adapter
+  const adapter = getStorageAdapter()
+  const agentRuns = await adapter.getCollection<AgentRun>('agentRuns')
+  const existing = agentRuns.find(
+    (ar) => ar.githubWorkflowRunId === String(runId)
   )
 
-  if (existingIdx !== -1) {
-    agentRuns[existingIdx] = {
-      ...agentRuns[existingIdx],
+  if (existing) {
+    const updated = await adapter.updateItem<AgentRun>('agentRuns', existing.id, {
       status,
       finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
       summary: run.conclusion ?? undefined,
-    }
-    ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
-    writeStore(store)
+    } as Partial<AgentRun>)
     console.log(`[github-sync] Updated AgentRun for workflow run #${runId}`)
-    return agentRuns[existingIdx]
+    return updated
   }
 
-  const newRun: AgentRun = {
-    id: `ar-${generateId()}`,
+  const newRun = await createAgentRun({
     projectId: '',
     kind: 'prototype',
-    status,
     executionMode: 'delegated' as AgentRun['executionMode'],
     triggeredBy: 'github',
     githubWorkflowRunId: String(runId),
-    startedAt: run.created_at ?? now,
-    finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
-    summary: run.conclusion ?? undefined,
-  }
+  })
 
-  agentRuns.push(newRun)
-  ;(store as unknown as Record<string, unknown>).agentRuns = agentRuns
-  writeStore(store)
   console.log(`[github-sync] Created AgentRun for workflow run #${runId}`)
   return newRun
 }
@@ -203,26 +181,23 @@ export async function syncIssue(issueNumber: number): Promise<void> {
     return
   }
 
-  // Find local project linked to this issue
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.githubIssueNumber === issueNumber)
+  const projects = await getProjects()
+  const project = projects.find((p) => p.githubIssueNumber === issueNumber)
 
-  if (idx === -1) {
+  if (!project) {
     console.log(`[github-sync] No local project linked to issue #${issueNumber}`)
     return
   }
 
-  const before = projects[idx].githubWorkflowStatus
+  const before = project.githubWorkflowStatus
   const issueState = issue.state
 
-  projects[idx] = {
-    ...projects[idx],
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', project.id, {
     githubWorkflowStatus: issueState,
     lastSyncedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-  }
-  writeStore(store)
+  } as Partial<Project>)
 
   console.log(
     `[github-sync] Issue #${issueNumber} synced. State: ${before} → ${issueState}`
@@ -231,7 +206,6 @@ export async function syncIssue(issueNumber: number): Promise<void> {
 
 /**
  * Batch sync: pull all open PRs from GitHub for the configured repo.
- * Note: pulls.list() doesn't return mergeable — use mergeable: false as default.
  */
 export async function syncAllOpenPRs(): Promise<{ synced: number; created: number }> {
   requireGitHub()
@@ -256,8 +230,6 @@ export async function syncAllOpenPRs(): Promise<{ synced: number; created: numbe
         title: ghPR.title,
         branch: ghPR.head.ref,
         status: 'open',
-        // mergeable not available from list — requires individual pulls.get call
-        // set to false conservatively; syncPullRequest(number) gets the accurate value
       })
       synced++
     } else {
@@ -270,7 +242,7 @@ export async function syncAllOpenPRs(): Promise<{ synced: number; created: numbe
         status: 'open',
         previewUrl: undefined,
         buildState: 'pending',
-        mergeable: false, // conservative default; accurate after syncPullRequest(number)
+        mergeable: false,
         reviewStatus: 'pending',
         author: ghPR.user?.login ?? 'unknown',
       })

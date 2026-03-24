@@ -3,27 +3,18 @@
  *
  * Orchestration layer for GitHub write operations.
  * Routes call THIS service — never the adapter directly (SOP-8).
- *
- * Each method:
- *   1. Loads local data
- *   2. Validates / finds GitHub linkage
- *   3. Calls the GitHub adapter
- *   4. Updates local records (project, PR, externalRefs)
- *   5. Creates inbox events
- *
- * If GitHub is not configured (no token), every method throws with a
- * clear message so routes can return a 503 without crashing.
+ * All persistence goes through the storage adapter (SOP-9).
  */
 
 import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
 import { getGitHubClient } from '@/lib/github/client'
-import { getProjectById } from '@/lib/services/projects-service'
+import { getProjectById, updateProjectState } from '@/lib/services/projects-service'
 import { createPR, getPRsForProject, updatePR } from '@/lib/services/prs-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
-import { readStore, writeStore } from '@/lib/storage'
+import { createExternalRef } from '@/lib/services/external-refs-service'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
-import type { PullRequest } from '@/types/pr'
-import type { ExternalRef } from '@/types/external-ref'
+import type { Project } from '@/types/project'
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -38,28 +29,12 @@ function requireGitHub(): void {
   }
 }
 
-/** Persist an ExternalRef record.
- * TODO(Lane 1): replace with external-refs-service once that module ships. */
-function saveExternalRef(ref: Omit<ExternalRef, 'id' | 'createdAt'>): void {
-  const store = readStore()
-  const refs: ExternalRef[] = (store as unknown as Record<string, unknown>).externalRefs as ExternalRef[] ?? []
-  const record: ExternalRef = {
-    ...ref,
-    id: `xref-${generateId()}`,
-    createdAt: new Date().toISOString(),
-  }
-  refs.push(record)
-  ;(store as unknown as Record<string, unknown>).externalRefs = refs
-  writeStore(store)
-}
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Create a GitHub issue from a local project.
- * Updates the project with the issue number + URL.
  */
 export async function createIssueFromProject(
   projectId: string,
@@ -80,9 +55,6 @@ export async function createIssueFromProject(
     `**Next action:** ${project.nextAction}`
 
   const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
-
-  // Atomic handoff: assign copilot-swe-agent at creation time (not after)
-  // so the coding agent picks up the issue immediately.
   const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
 
   const { data: issue } = await octokit.issues.create({
@@ -95,24 +67,18 @@ export async function createIssueFromProject(
   })
 
   // Update project with GitHub issue linkage
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      githubIssueNumber: issue.number,
-      githubIssueUrl: issue.html_url,
-      githubOwner: owner,
-      githubRepo: repo,
-      lastSyncedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    githubIssueNumber: issue.number,
+    githubIssueUrl: issue.html_url,
+    githubOwner: owner,
+    githubRepo: repo,
+    lastSyncedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
 
   // Track external ref
-  saveExternalRef({
+  await createExternalRef({
     entityType: 'project',
     entityId: projectId,
     provider: 'github',
@@ -135,7 +101,6 @@ export async function createIssueFromProject(
 
 /**
  * Assign Copilot coding agent to the GitHub issue linked to a project.
- * Requires the project to already have a githubIssueNumber.
  */
 export async function assignCopilotToProject(projectId: string): Promise<void> {
   requireGitHub()
@@ -151,7 +116,6 @@ export async function assignCopilotToProject(projectId: string): Promise<void> {
   const { owner, repo } = getRepoCoordinates()
   const octokit = getGitHubClient()
 
-  // Assign the "copilot" user (GitHub Copilot Workspace agent login)
   await octokit.issues.addAssignees({
     owner,
     repo,
@@ -159,18 +123,11 @@ export async function assignCopilotToProject(projectId: string): Promise<void> {
     assignees: ['copilot'],
   })
 
-  // Update project to record assignment timestamp
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      copilotAssignedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    copilotAssignedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
 
   await createInboxEvent({
     type: 'task_created',
@@ -216,18 +173,11 @@ export async function dispatchPrototypeWorkflow(
     },
   })
 
-  // Update project workflow status
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      githubWorkflowStatus: 'queued',
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    githubWorkflowStatus: 'queued',
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
 
   await createInboxEvent({
     type: 'task_created',
@@ -269,7 +219,6 @@ export async function createPRFromProject(
     draft: params.draft ?? false,
   })
 
-  // Create local PR record
   const localPR = await createPR({
     projectId,
     title: params.title,
@@ -282,13 +231,9 @@ export async function createPRFromProject(
     author: 'local',
   })
 
-  // Update local PR with GitHub data
-  await updatePR(localPR.id, {
-    number: ghPR.number,
-  })
+  await updatePR(localPR.id, { number: ghPR.number })
 
-  // Track external ref
-  saveExternalRef({
+  await createExternalRef({
     entityType: 'pr',
     entityId: localPR.id,
     provider: 'github',
@@ -297,19 +242,12 @@ export async function createPRFromProject(
     url: ghPR.html_url,
   })
 
-  // Update project with Copilot PR linkage
-  const store = readStore()
-  const projects = store.projects
-  const idx = projects.findIndex((p) => p.id === projectId)
-  if (idx !== -1) {
-    projects[idx] = {
-      ...projects[idx],
-      copilotPrNumber: ghPR.number,
-      copilotPrUrl: ghPR.html_url,
-      updatedAt: new Date().toISOString(),
-    }
-  }
-  writeStore(store)
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    copilotPrNumber: ghPR.number,
+    copilotPrUrl: ghPR.html_url,
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
 
   await createInboxEvent({
     type: 'pr_opened',
@@ -343,7 +281,6 @@ export async function requestRevision(
     body: `> ✏️ **Revision request from Mira Studio**\n\n${message}`,
   })
 
-  // Find local PR and update requestedChanges
   const prs = await getPRsForProject(projectId)
   const pr = prs.find((p) => p.number === prNumber)
   if (pr) {
@@ -363,8 +300,7 @@ export async function requestRevision(
 }
 
 /**
- * Merge a GitHub PR for a project (direct GitHub operation).
- * For the /api/actions/merge-pr product action, see that route.
+ * Merge a GitHub PR for a project.
  */
 export async function mergeProjectPR(
   projectId: string,
@@ -376,7 +312,6 @@ export async function mergeProjectPR(
   const { owner, repo } = getRepoCoordinates()
   const octokit = getGitHubClient()
 
-  // Validate the PR exists and is mergeable
   const { data: ghPR } = await octokit.pulls.get({
     owner,
     repo,
@@ -397,7 +332,6 @@ export async function mergeProjectPR(
     merge_method: mergeMethod,
   })
 
-  // Update local PR record
   const prs = await getPRsForProject(projectId)
   const pr = prs.find((p) => p.number === prNumber)
   if (pr) {

@@ -1,9 +1,10 @@
 import type { InboxEvent, InboxEventType } from '@/types/inbox'
-import { getCollection, saveCollection } from '@/lib/storage'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
 export async function getInboxEvents(): Promise<InboxEvent[]> {
-  return getCollection('inbox')
+  const adapter = getStorageAdapter()
+  return adapter.getCollection<InboxEvent>('inbox')
 }
 
 export async function createInboxEvent(data: {
@@ -17,25 +18,19 @@ export async function createInboxEvent(data: {
   timestamp?: string
   read?: boolean
 }): Promise<InboxEvent> {
-  const inbox = await getInboxEvents()
+  const adapter = getStorageAdapter()
   const event: InboxEvent = {
     ...data,
-    id: `evt-${generateId()}`,
+    id: generateId(),
     timestamp: data.timestamp ?? new Date().toISOString(),
     read: data.read ?? false,
   }
-  inbox.push(event)
-  saveCollection('inbox', inbox)
-  return event
+  return adapter.saveItem<InboxEvent>('inbox', event)
 }
 
 export async function markRead(eventId: string): Promise<void> {
-  const inbox = await getInboxEvents()
-  const event = inbox.find((e) => e.id === eventId)
-  if (event) {
-    event.read = true
-    saveCollection('inbox', inbox)
-  }
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<InboxEvent>('inbox', eventId, { read: true } as Partial<InboxEvent>)
 }
 
 export async function getUnreadCount(): Promise<number> {
@@ -58,8 +53,6 @@ export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Pr
 
 /**
  * Convenience wrapper for creating GitHub lifecycle inbox events.
- * Sets `severity: 'info'` by default and passes through an optional `githubUrl`
- * so consumers don't need to repeat the boilerplate.
  */
 export async function createGitHubInboxEvent(params: {
   type: InboxEventType
@@ -78,4 +71,3 @@ export async function createGitHubInboxEvent(params: {
     githubUrl: params.githubUrl,
   })
 }
-

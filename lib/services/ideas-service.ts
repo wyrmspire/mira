@@ -1,9 +1,10 @@
 import type { Idea, IdeaStatus } from '@/types/idea'
-import { getCollection, saveCollection } from '@/lib/storage'
+import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
 export async function getIdeas(): Promise<Idea[]> {
-  return getCollection('ideas')
+  const adapter = getStorageAdapter()
+  return adapter.getCollection<Idea>('ideas')
 }
 
 export async function getIdeaById(id: string): Promise<Idea | undefined> {
@@ -17,23 +18,21 @@ export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
 }
 
 export async function createIdea(data: Omit<Idea, 'id' | 'createdAt' | 'status'>): Promise<Idea> {
-  const ideas = await getIdeas()
+  const adapter = getStorageAdapter()
   const idea: Idea = {
     ...data,
-    id: `idea-${generateId()}`,
+    id: generateId(),
     createdAt: new Date().toISOString(),
     status: 'captured',
   }
-  ideas.push(idea)
-  saveCollection('ideas', ideas)
-  return idea
+  return adapter.saveItem<Idea>('ideas', idea)
 }
 
 export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
-  const ideas = await getIdeas()
-  const idea = ideas.find((i) => i.id === id)
-  if (!idea) return null
-  idea.status = status
-  saveCollection('ideas', ideas)
-  return idea
+  const adapter = getStorageAdapter()
+  try {
+    return await adapter.updateItem<Idea>('ideas', id, { status } as Partial<Idea>)
+  } catch {
+    return null
+  }
 }
