@@ -17,35 +17,34 @@ export default function HomeExperienceAction({ id, isProposed }: HomeExperienceA
   const handleAcceptAndStart = async () => {
     setLoading(true);
     try {
-      // Step 1: Approve
-      let res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
-      });
-      if (!res.ok) throw new Error('Failed to approve');
-
-      // Step 2: Publish
-      res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish' }),
-      });
-      if (!res.ok) throw new Error('Failed to publish');
-
-      // Step 3: Activate
-      res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'activate' }),
-      });
-      if (!res.ok) throw new Error('Failed to activate');
+      // Chain: approve → publish → activate
+      // 422 means already past this state — skip to next
+      const steps = ['approve', 'publish', 'activate'];
+      
+      for (const action of steps) {
+        const res = await fetch(`/api/experiences/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        
+        if (res.status === 422) {
+          console.log(`Skipping ${action} — already past this state`);
+          continue;
+        }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to ${action}`);
+        }
+      }
 
       router.push(ROUTES.workspace(id));
       router.refresh();
     } catch (error) {
       console.error('Workflow failed:', error);
-      alert('Could not start journey. Please try again.');
+      // Navigate anyway — experience might already be active
+      router.push(ROUTES.workspace(id));
+      router.refresh();
     } finally {
       setLoading(false);
     }

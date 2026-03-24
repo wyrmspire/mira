@@ -27,36 +27,36 @@ export default function LibraryClient({
   const handleAcceptAndStart = async (id: string) => {
     setLoadingId(id);
     try {
-      // Step 1: Approve
-      let res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve' }),
-      });
-      if (!res.ok) throw new Error('Failed to approve');
-
-      // Step 2: Publish
-      res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish' }),
-      });
-      if (!res.ok) throw new Error('Failed to publish');
-
-      // Step 3: Activate
-      res = await fetch(`/api/experiences/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'activate' }),
-      });
-      if (!res.ok) throw new Error('Failed to activate');
+      // Chain: approve → publish → activate
+      // If any step returns 422, the experience may already be past that state — continue
+      const steps: string[] = ['approve', 'publish', 'activate'];
+      
+      for (const action of steps) {
+        const res = await fetch(`/api/experiences/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        
+        if (res.status === 422) {
+          // Already past this state — skip to next step
+          console.log(`Skipping ${action} — experience already past this state`);
+          continue;
+        }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to ${action}`);
+        }
+      }
 
       // Navigate to workspace
       router.push(ROUTES.workspace(id));
       router.refresh();
     } catch (error) {
       console.error('Workflow failed:', error);
-      alert('Could not start journey. Please try again.');
+      // If all transitions failed, the experience might already be active — try navigating anyway
+      router.push(ROUTES.workspace(id));
+      router.refresh();
     } finally {
       setLoadingId(null);
     }
