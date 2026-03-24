@@ -1,6 +1,7 @@
 import type { IdeaStatus } from '@/types/idea'
 import type { ProjectState } from '@/types/project'
 import type { ReviewStatus } from '@/types/pr'
+import type { ExperienceStatus } from '@/types/experience'
 
 type IdeaTransition = {
   from: IdeaStatus
@@ -91,6 +92,70 @@ export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction):
 
 export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null {
   const transition = PR_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+
+// ---------------------------------------------------------------------------
+// Experience State Machine
+// ---------------------------------------------------------------------------
+
+export type ExperienceTransitionAction =
+  | 'draft'
+  | 'submit_for_review'
+  | 'request_changes'
+  | 'approve'
+  | 'publish'
+  | 'activate'
+  | 'complete'
+  | 'archive'
+  | 'supersede'
+  | 'start'
+
+type ExperienceTransition = {
+  from: ExperienceStatus
+  to: ExperienceStatus
+  action: ExperienceTransitionAction
+}
+
+export const EXPERIENCE_TRANSITIONS: ExperienceTransition[] = [
+  // Persistent Flow
+  { from: 'proposed', to: 'drafted', action: 'draft' },
+  { from: 'drafted', to: 'ready_for_review', action: 'submit_for_review' },
+  { from: 'ready_for_review', to: 'drafted', action: 'request_changes' },
+  { from: 'ready_for_review', to: 'approved', action: 'approve' },
+  { from: 'approved', to: 'published', action: 'publish' },
+  { from: 'published', to: 'active', action: 'activate' },
+  { from: 'active', to: 'completed', action: 'complete' },
+  { from: 'completed', to: 'archived', action: 'archive' },
+
+  // Pre-completed supersede
+  { from: 'proposed', to: 'superseded', action: 'supersede' },
+  { from: 'drafted', to: 'superseded', action: 'supersede' },
+  { from: 'ready_for_review', to: 'superseded', action: 'supersede' },
+  { from: 'approved', to: 'superseded', action: 'supersede' },
+  { from: 'published', to: 'superseded', action: 'supersede' },
+  { from: 'active', to: 'superseded', action: 'supersede' },
+
+  // Ephemeral Flow
+  { from: 'injected', to: 'active', action: 'start' },
+  { from: 'active', to: 'completed', action: 'complete' },
+  { from: 'completed', to: 'archived', action: 'archive' },
+]
+
+export function canTransitionExperience(
+  from: ExperienceStatus,
+  action: ExperienceTransitionAction
+): boolean {
+  return EXPERIENCE_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function getNextExperienceState(
+  from: ExperienceStatus,
+  action: ExperienceTransitionAction
+): ExperienceStatus | null {
+  const transition = EXPERIENCE_TRANSITIONS.find(
     (t) => t.from === from && t.action === action
   )
   return transition ? transition.to : null

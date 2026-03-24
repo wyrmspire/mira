@@ -47,11 +47,19 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
 
 | Lane | Focus | Status |
 |------|-------|--------|
-| 🔴 Lane 1 | Supabase + Storage Adapter | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| 🟢 Lane 2 | Core Types + State Machine | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
-| 🔵 Lane 3 | Experience Services + API | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ |
-| 🟡 Lane 4 | Minimal Workspace Renderer | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
-| 🟣 Lane 5 | Interaction Capture | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ |
+| 🔴 Lane 1 | Supabase + Storage Adapter | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+- **Done**: Installed Supabase, created clients, wrote 3 migrations, implemented storage adapter with JSON fallback, and added experience constants.
+| 🟢 Lane 2 | Core Types + State Machine | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ |
+- **Done**: Created types/experience.ts with ExperienceClass, ExperienceStatus, InstanceType, Resolution, ReentryContract, and Instance types.
+- **Done**: Created types/interaction.ts with InteractionEventType, InteractionEvent, and Artifact types.
+- **Done**: Created types/synthesis.ts with SynthesisSnapshot, ProfileFacet, FacetType, FrictionLevel, and GPTStatePacket types.
+- **Done**: Added ExperienceTransition types and EXPERIENCE_TRANSITIONS state machine to lib/state-machine.ts, along with transition helpers.
+- **Done**: Added experience type guards and strict resolution validation to lib/guards.ts.
+| 🔵 Lane 3 | Experience Services + API | ✅ W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 |
+- **Done**: Full experience/interaction/synthesis logic and API surface implemented, with routes and copy updated.
+| 🟡 Lane 4 | Minimal Workspace Renderer | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ |
+| 🟣 Lane 5 | Interaction Capture | W1 ✅ W2 ✅ W3 ✅ W4 ✅ |
+- **Done**: Implemented `useInteractionCapture` hook with time-on-step tracking and created `CAPTURE_CONTRACT.md`. All items complete.
 | 🏁 Lane 6 | Integration + Proof | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ |
 
 ---
@@ -274,7 +282,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
   - `getRenderer(stepType: string)` — returns component or fallback
   - `FallbackStep` — simple "Unsupported step type: {type}" component
 - Import types from `types/experience.ts`
-- Done when: registry compiles and exports `StepRenderer` type
+- **Done**: Created the renderer registry with support for extensible step renderers and a fallback for unknown types.
 
 **W2 — QuestionnaireStep renderer**
 - Create `components/experience/steps/QuestionnaireStep.tsx`:
@@ -282,7 +290,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
   - Renders each question as a form field
   - On submit: calls `onComplete({ answers: Record<string, string> })`
   - Basic Tailwind styling (dark theme compatible), no design obsession
-- Done when: component renders a multi-question form and calls onComplete with answers
+- **Done**: Implemented a multi-questionnaire renderer supporting text, multi-choice, and scale input types.
 
 **W3 — LessonStep renderer**
 - Create `components/experience/steps/LessonStep.tsx`:
@@ -290,7 +298,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
   - Renders sections as scrollable content
   - Checkpoints require user to click "Got it" before proceeding
   - On complete: calls `onComplete()`
-- Done when: component renders structured text content with checkpoint gates
+- **Done**: Built a lesson renderer with structured sections and checkpoint gates for progression.
 
 **W4 — ExperienceRenderer orchestrator**
 - Create `components/experience/ExperienceRenderer.tsx`:
@@ -304,7 +312,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
     - `light` — no header/progress, just the step content
     - `medium` — progress bar + step title
     - `heavy` — full header with goal, progress bar, step title, description
-- Done when: orchestrator renders steps in sequence, resolution controls chrome level
+- **Done**: Orchestrated the step flow and implemented resolution-aware UI chrome (light/medium/heavy).
 
 **W5 — Workspace page**
 - Create `app/workspace/[instanceId]/page.tsx`:
@@ -316,7 +324,7 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
   - `'use client'` component
   - Receives instance + steps as props
   - Renders `ExperienceRenderer`
-- Done when: navigating to `/workspace/{id}` renders the experience from DB data
+- **Done**: Established the workspace route surface, connecting backend data to the renderer engine via Page/Client components.
 
 ---
 
@@ -439,11 +447,11 @@ Lane 6 (Wrap):    [W1] → [W2] → [W3] → [W4] → [W5]                 ← I
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Lane 1 | ⬜ | ⬜ | |
+| Lane 1 | ✅ | ⬜ | All W1-W7 items pass TSC. |
 | Lane 2 | ⬜ | ⬜ | |
-| Lane 3 | ⬜ | ⬜ | |
-| Lane 4 | ⬜ | ⬜ | |
-| Lane 5 | ⬜ | ⬜ | |
+| Lane 3 | ✅ | ⬜ | |
+| Lane 4 | ✅ | ⬜ | |
+| Lane 5 | ✅ | ⬜ | |
 | Lane 6 | ⬜ | ⬜ | |
 
 ---

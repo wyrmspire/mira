@@ -110,4 +110,17 @@ export const COPY = {
     mergeBlocked: 'Cannot merge — checks did not pass',
     notLinked: 'Not linked to GitHub',
   },
+  experience: {
+    heading: 'Experience',
+    workspace: 'Workspace',
+    library: 'Library',
+    timeline: 'Timeline',
+    profile: 'Profile',
+    approve: 'Approve Experience',
+    publish: 'Publish',
+    preview: 'Preview Experience',
+    requestChanges: 'Request Changes',
+    ephemeral: 'Moment',
+    persistent: 'Experience',
+  },
 }

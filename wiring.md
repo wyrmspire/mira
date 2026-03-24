@@ -82,18 +82,42 @@ When ready to move beyond PAT:
 
 ---
 
-## Future: Supabase Persistence (Post Sprint 2)
+## Phase C: Supabase Setup (Sprint 3)
 
-Supabase credentials are already in `.env.local`. When ready:
+Canonical runtime storage for experiences, interactions, and user synthesis.
 
-1. Create tables matching the `StudioStore` schema
-2. Migrate `lib/storage.ts` from JSON file to Supabase client calls
-3. Enable Row Level Security
-4. Use Supabase Realtime for live inbox updates
+### 1. Create a Supabase project
 
-This is a separate sprint. The JSON file store is sufficient for the GitHub factory experiment.
+1. Go to [https://supabase.com/dashboard/](https://supabase.com/dashboard/)
+2. Create a new project in your organization.
+3. Choose a region close to your Vercel deployment if applicable.
 
----
+### 2. Add required env vars to `.env.local`
+
+From your project settings (Settings → API), add these to `.env.local`:
+
+```env
+# ─── Supabase ───
+# The URL of your Supabase project (from Project Settings → API)
+NEXT_PUBLIC_SUPABASE_URL=
+
+# The anon/public key for your Supabase project (used in browser)
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# The service role key (used for administrative tasks/services, bypasses RLS)
+# From Settings → API → service_role (keep this secret!)
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+### 3. Run database migrations
+
+Lane 1 provides SQL migration files in `lib/supabase/migrations/`. 
+
+1. Go to your Supabase project's **SQL Editor**.
+2. Run the contents of each file in order:
+    - `001_preserved_entities.sql`
+    - `002_evolved_entities.sql`
+    - `003_experience_tables.sql`
 
 ## Copilot Coding Agent (SWE) — Verify Access
 

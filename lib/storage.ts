@@ -19,8 +19,18 @@ export interface StudioStore {
   tasks: Task[]
   prs: PullRequest[]
   inbox: InboxEvent[]
-  agentRuns: AgentRun[]       // Sprint 2: GitHub workflow / Copilot runs
-  externalRefs: ExternalRef[] // Sprint 2: GitHub ↔ local entity mapping
+  agentRuns: AgentRun[]
+  externalRefs: ExternalRef[]
+  
+  // Sprint 3: Experience Engine (JSON fallback collections)
+  experience_templates?: any[]
+  experience_instances?: any[]
+  experience_steps?: any[]
+  interaction_events?: any[]
+  artifacts?: any[]
+  synthesis_snapshots?: any[]
+  profile_facets?: any[]
+  conversations?: any[]
 }
 
 // Full paths for fs operations
@@ -33,10 +43,18 @@ function ensureDir(): void {
   }
 }
 
-/** Defaults for keys added in Sprint 2 — ensures old JSON files auto-migrate. */
-const STORE_DEFAULTS: Pick<StudioStore, 'agentRuns' | 'externalRefs'> = {
+/** Defaults for keys added in Sprint 2 & 3 — ensures old JSON files auto-migrate. */
+const STORE_DEFAULTS: Partial<StudioStore> = {
   agentRuns: [],
   externalRefs: [],
+  experience_templates: [],
+  experience_instances: [],
+  experience_steps: [],
+  interaction_events: [],
+  artifacts: [],
+  synthesis_snapshots: [],
+  profile_facets: [],
+  conversations: [],
 }
 
 export function readStore(): StudioStore {

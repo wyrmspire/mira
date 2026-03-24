@@ -21,4 +21,10 @@ export const ROUTES = {
   githubSyncPR: '/api/github/sync-pr',
   githubMergePR: '/api/github/merge-pr',
   githubTriggerAgent: '/api/github/trigger-agent',
+
+  // --- Sprint 3: Experience Engine ---
+  workspace: (id: string) => `/workspace/${id}`,
+  library: '/library',
+  timeline: '/timeline',
+  profile: '/profile',
 } as const
