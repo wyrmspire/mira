@@ -38,9 +38,19 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
   const totalSteps = steps.length;
   const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
 
-  // Track experience start on mount
+  // Track experience start and transition to 'active' if needed
   useEffect(() => {
     capture.trackExperienceStart();
+    
+    // Auto-transition from injected (ephemeral) or published (persistent) to active
+    if (instance.status === 'injected' || instance.status === 'published') {
+      const action = instance.instance_type === 'ephemeral' ? 'start' : 'activate';
+      fetch(`/api/experiences/${instance.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      }).catch((err) => console.warn('[ExperienceRenderer] Failed to auto-activate:', err));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -85,7 +95,20 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'complete' }),
-      }).catch((err) => console.warn('[ExperienceRenderer] Failed to mark completed:', err));
+      })
+      .then(() => {
+        // Trigger synthesis so the GPT knows what happened
+        return fetch('/api/synthesis', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userId: instance.user_id,
+            sourceType: instance.instance_type,
+            sourceId: instance.id
+          }),
+        });
+      })
+      .catch((err) => console.warn('[ExperienceRenderer] Failed to mark completed or synthesize:', err));
       setIsCompleted(true);
     }
   };

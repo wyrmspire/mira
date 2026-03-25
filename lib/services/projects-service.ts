@@ -1,21 +1,35 @@
 import type { Project, ProjectState } from '@/types/project'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
 import { MAX_ARENA_PROJECTS } from '@/lib/constants'
 
+/**
+ * QUARANTINED: projects-service
+ *
+ * The TABLE_MAP previously routed 'projects' → 'realizations', but the
+ * Supabase `realizations` table uses snake_case columns (idea_id, current_phase,
+ * active_preview_url, created_at) while the TypeScript `Project` interface uses
+ * camelCase (ideaId, currentPhase, activePreviewUrl, createdAt).
+ *
+ * Until a proper migration adds field mapping or aligns the schema,
+ * this service returns empty arrays to prevent runtime crashes.
+ *
+ * Legacy surfaces affected: Arena, Icebox, Shipped, Killed pages.
+ */
+
+const QUARANTINE_MSG = '[projects-service] ⚠️  QUARANTINED: realizations table schema does not match Project TS type. Returning empty.'
+
 export async function getProjects(): Promise<Project[]> {
-  const adapter = getStorageAdapter()
-  return adapter.getCollection<Project>('projects')
+  console.warn(QUARANTINE_MSG)
+  return []
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
-  const projects = await getProjects()
-  return projects.find((p) => p.id === id)
+  console.warn(QUARANTINE_MSG)
+  return undefined
 }
 
 export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
-  const projects = await getProjects()
-  return projects.filter((p) => p.state === state)
+  console.warn(QUARANTINE_MSG)
+  return []
 }
 
 export async function getArenaProjects(): Promise<Project[]> {
@@ -28,26 +42,11 @@ export async function isArenaAtCapacity(): Promise<boolean> {
 }
 
 export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
-  const adapter = getStorageAdapter()
-  const project: Project = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-  return adapter.saveItem<Project>('projects', project)
+  throw new Error('[projects-service] QUARANTINED: Cannot create projects until realizations schema is aligned.')
 }
 
 export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
-  const adapter = getStorageAdapter()
-  const updates: Partial<Project> = {
-    state,
-    updatedAt: new Date().toISOString(),
-    ...extra,
-  }
-  try {
-    return await adapter.updateItem<Project>('projects', id, updates)
-  } catch {
-    return null
-  }
+  console.warn(QUARANTINE_MSG)
+  return null
 }
+

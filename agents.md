@@ -18,7 +18,7 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 - Runtime truth lives in Supabase (what the user did)
 - Realization truth lives in GitHub (what the coder built)
 
-**Local development model:** The user is the local dev. API endpoints are the same contract the Custom GPT hits in production. In local mode, ideas are entered via `/dev/gpt-send` harness. JSON file fallback via `.local-data/studio.json` works when Supabase is not configured.
+**Local development model:** The user is the local dev. API endpoints are the same contract the Custom GPT hits in production. In local mode, ideas are entered via `/dev/gpt-send` harness. JSON file fallback requires explicit `USE_JSON_FALLBACK=true` in `.env.local` — see SOP-15. Dev harnesses exist at `/api/dev/diagnostic` (adapter/env/counts) and `/api/dev/test-experience` (creates test ephemeral + persistent).
 
 ---
 
@@ -30,7 +30,7 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS 3.4, dark studio theme |
 | Database | Supabase (Postgres) — canonical runtime store |
-| Fallback data | JSON file storage under `.local-data/` (survives server restarts) |
+| Fallback data | JSON file storage under `.local-data/` (explicit opt-in only via `USE_JSON_FALLBACK=true`) |
 | State logic | `lib/state-machine.ts` — idea + project + experience + PR transition tables |
 | Copy/Labels | `lib/studio-copy.ts` — centralized UI copy |
 | Routing | `lib/routes.ts` — centralized route map |
@@ -65,6 +65,9 @@ app/
     gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
     github-playground/  ← Dev harness: test GitHub operations
   api/
+    dev/
+      diagnostic/       ← GET dev-only: adapter, env, row counts, quarantined surfaces
+      test-experience/  ← POST dev-only: creates ephemeral + persistent for DEFAULT_USER_ID
     ideas/route.ts       ← GET/POST ideas
     ideas/materialize/   ← POST convert idea→project
     drill/route.ts       ← POST save drill session
@@ -175,8 +178,23 @@ npx tsc --noEmit     # type check
 
 ## Common Pitfalls
 
-### Data persistence has two backends
-`lib/storage.ts` is the legacy JSON file store. Supabase is the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the JSON file fallback activates automatically. **Do not** call `fs` directly from services — always go through the adapter.
+### Data persistence has two backends (fail-fast, not silent fallback)
+`lib/storage.ts` is the legacy JSON file store. Supabase is the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the adapter **throws an error** instead of silently falling back. To use JSON locally, set `USE_JSON_FALLBACK=true` in `.env.local`. **Do not** call `fs` directly from services — always go through the adapter.
+
+### Next.js 14 caches all `fetch()` calls by default — including Supabase
+`@supabase/supabase-js` uses `fetch()` internally. Next.js App Router patches `fetch()` and caches responses by default. **If you don't add `cache: 'no-store'` to the Supabase client's global fetch override, server components will serve stale data.** The fix is in `lib/supabase/client.ts` — `global.fetch` wrapper passes `cache: 'no-store'`. Do NOT remove this. `force-dynamic` on a page does NOT disable fetch-level caching.
+
+### Legacy entity services are quarantined
+`projects-service.ts` and `prs-service.ts` return empty arrays with warnings. The underlying Supabase tables (`realizations`, `realization_reviews`) exist but use snake_case columns (`idea_id`, `current_phase`) while the TypeScript types use camelCase (`ideaId`, `currentPhase`). They are intentionally quarantined until a proper schema migration aligns them. Arena, Review, Icebox, Shipped, and Killed pages show empty as a result.
+
+### Ephemeral experiences start in `injected` status
+Unlike persistent experiences which start in `proposed`, ephemeral experiences injected via API start as `injected`. Both must reach `active` status before they can transition to `completed`. `ExperienceRenderer` now handles this by auto-triggering the `start` (ephemeral) or `activate` (persistent) transition on mount if the experience is in its initial terminal status.
+
+### LessonStep expects `sections` array, not `content` string
+The `LessonStep` renderer does NOT support raw markdown strings. It requires a `payload.sections` array of `{ heading, body, type }`. If an agent sends a single `content` blob, the lesson will render as empty.
+
+### Synthesis Loop Automation
+State synthesis (generating insights for GPT) is not automated in the backend. `ExperienceRenderer` must explicitly call `POST /api/synthesis` with `userId`, `sourceType`, and `sourceId` upon experience completion to ensure the `gpt/state` packet contains the latest user insights.
 
 ### Drill page is a client component
 `app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
@@ -226,6 +244,15 @@ Single-user dev mode uses `DEFAULT_USER_ID = 'a0000000-0000-0000-0000-0000000000
 
 ### Supabase project is live
 Project ID: `bbdhhlungcjqzghwovsx`. 16 tables exist. Dev user and 6 templates are seeded.
+
+### Inbox uses `timeline_events` with normalization
+`inbox-service.ts` reads/writes to the `timeline_events` Supabase table, which uses snake_case (`project_id`, `action_url`, `github_url`). The service has `fromDB()`/`toDB()` normalization functions that map to/from the camelCase TypeScript `InboxEvent` type. Always go through the service, never query `timeline_events` directly.
+
+### Seeded template IDs use `b0000000-` prefix
+Experience templates are seeded with IDs like `b0000000-0000-0000-0000-000000000001` through `...000006`. If you create test experiences, use these IDs — foreign key constraints will reject any template_id that doesn't exist in `experience_templates`.
+
+### `gptschema.md` documents the GPT API contract
+All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, `gpt_summary`, `created_at`). The `CaptureIdeaRequest` accepts **both** camelCase and snake_case — the `normalizeIdeaPayload` function in `idea-validator.ts` handles both. If you change API response shapes, update `gptschema.md` to match.
 
 ---
 
@@ -318,6 +345,35 @@ Project ID: `bbdhhlungcjqzghwovsx`. 16 tables exist. Dev user and 6 templates ar
 - ✅ Concrete, obvious, slightly ugly but working
 - Why: Working code that ships beats elegant code that drifts.
 
+### SOP-14: Supabase client must use `cache: 'no-store'` in Next.js
+**Learned from**: Stale library state bug (Sprint 4 stabilization)
+
+- ❌ `createClient(url, key, { auth: { ... } })` (no fetch override)
+- ✅ `createClient(url, key, { auth: { ... }, global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) } })`
+- Why: Next.js 14 patches `fetch()` and caches all responses by default. Supabase JS uses `fetch` internally. Without `cache: 'no-store'`, server components render stale data even with `force-dynamic`. This caused a multi-sprint bug where the homepage and library showed wrong experience statuses.
+
+### SOP-15: Storage adapter must fail fast — never silently fallback
+**Learned from**: Split-brain diagnosis (Sprint 4 stabilization)
+
+- ❌ `if (!supabaseUrl) { return new JsonFileStorageAdapter() }` (silent fallback)
+- ✅ `if (!supabaseUrl) { throw new Error('FATAL: Supabase not configured') }`
+- ✅ Only fallback when `USE_JSON_FALLBACK=true` is explicitly set in `.env.local`
+- Why: Silent fallback caused a "split-brain" where the app appeared to run but read/wrote to JSON while the user expected Supabase. Data mutations were invisible. The adapter now logs which backend is active on first use.
+
+### SOP-16: Experiences Must Auto-Activate on Mount
+**Learned from**: 422 errors on ephemeral completion (Phase 7 stabilization)
+
+- ❌ Trying to transition from `injected` directly to `completed`.
+- ✅ Handle `start` (ephemeral) or `activate` (persistent) on mount in `ExperienceRenderer.tsx`.
+- Why: The state machine requires an `active` state before `completed`. We ensure the user enters that state as soon as they view the workspace.
+
+### SOP-17: Automate Synthesis on Completion
+**Learned from**: GPT state stale snapshots (Phase 7 stabilization)
+
+- ❌ Finishing an experience and relying on "eventual" background synthesis.
+- ✅ Explicitly call `POST /api/synthesis` after marking an instance as `completed`.
+- Why: High-latency background workers aren't built yet. To ensure the GPT re-entry loop is "intelligent" immediately after user action, we trigger a high-priority snapshot sync.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -327,3 +383,5 @@ Project ID: `bbdhhlungcjqzghwovsx`. 16 tables exist. Dev user and 6 templates ar
 - **2026-03-22**: Sprint 2 boardinit — GitHub factory. Added SOP-7 (adapter boundary), SOP-8 (service layer). Updated repo map with GitHub integration files.
 - **2026-03-23**: Sprint 3 boardinit — Runtime Foundation. Added SOP-9 (Supabase through services), SOP-10 (resolution mandatory). Updated product summary to experience-engine model. Added Supabase to tech stack. Updated repo map with experience, interaction, synthesis files. Updated SOP-6 with adapter pattern.
 - **2026-03-23**: Sprint 4 boardinit — Experience Engine. Added SOP-11 (persistent = clone of ephemeral), SOP-12 (no GitHub for experience review), SOP-13 (no premature abstraction). Updated repo map with workspace page details, interaction events, renderer registry. Added pitfalls for resolution UX enforcement, UUID discipline, and DEFAULT_USER_ID.
+- **2026-03-24**: Split-brain stabilization. Root cause: silent JSON fallback + Next.js fetch caching of Supabase responses. Added SOP-14 (Supabase `cache: no-store`), SOP-15 (fail-fast storage). Quarantined `projects-service` and `prs-service` (realizations/realization_reviews schema mismatch). Added inbox normalization layer. Added `/api/dev/diagnostic` and `/api/dev/test-experience`. Updated pitfalls for fetch caching, quarantined services, inbox normalization, template ID prefix, and gptschema contract.
+- **2026-03-24 (Phase 7)**: Feedback Loop & Robustness. Added SOP-16 (Auto-activation) and SOP-17 (Synthesis Trigger). Fixed synthesis 404 by exposing `POST /api/synthesis`. Aligned `LessonStep` sections schema. Verified closed-loop intelligence awareness in `/api/gpt/state`.

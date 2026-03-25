@@ -1,39 +1,38 @@
 import type { PullRequest } from '@/types/pr'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
+
+/**
+ * QUARANTINED: prs-service
+ *
+ * The TABLE_MAP previously routed 'prs' → 'realization_reviews', but the
+ * Supabase table uses snake_case columns (project_id, preview_url, build_state,
+ * review_status, local_number, created_at) while the TypeScript `PullRequest`
+ * interface uses camelCase (projectId, previewUrl, buildState, reviewStatus,
+ * number, createdAt).
+ *
+ * Until a proper migration adds field mapping or aligns the schema,
+ * this service returns empty arrays to prevent runtime crashes.
+ *
+ * Legacy surfaces affected: Review page, PR cards.
+ */
+
+const QUARANTINE_MSG = '[prs-service] ⚠️  QUARANTINED: realization_reviews table schema does not match PullRequest TS type. Returning empty.'
 
 export async function getPRsForProject(projectId: string): Promise<PullRequest[]> {
-  const adapter = getStorageAdapter()
-  const prs = await adapter.getCollection<PullRequest>('prs')
-  return prs.filter((pr) => pr.projectId === projectId)
+  console.warn(QUARANTINE_MSG)
+  return []
 }
 
 export async function getPRById(id: string): Promise<PullRequest | undefined> {
-  const adapter = getStorageAdapter()
-  const prs = await adapter.getCollection<PullRequest>('prs')
-  return prs.find((pr) => pr.id === id)
+  console.warn(QUARANTINE_MSG)
+  return undefined
 }
 
 export async function createPR(data: Omit<PullRequest, 'id' | 'createdAt' | 'number'>): Promise<PullRequest> {
-  const adapter = getStorageAdapter()
-  const prs = await adapter.getCollection<PullRequest>('prs')
-  const lastPr = prs[prs.length - 1]
-  const nextNumber = lastPr ? lastPr.number + 1 : 1
-  
-  const pr: PullRequest = {
-    ...data,
-    id: generateId(),
-    number: nextNumber,
-    createdAt: new Date().toISOString(),
-  }
-  return adapter.saveItem<PullRequest>('prs', pr)
+  throw new Error('[prs-service] QUARANTINED: Cannot create PRs until realization_reviews schema is aligned.')
 }
 
 export async function updatePR(id: string, updates: Partial<PullRequest>): Promise<PullRequest | null> {
-  const adapter = getStorageAdapter()
-  try {
-    return await adapter.updateItem<PullRequest>('prs', id, updates)
-  } catch {
-    return null
-  }
+  console.warn(QUARANTINE_MSG)
+  return null
 }
+

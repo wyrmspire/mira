@@ -19,13 +19,14 @@ interface LessonStepProps {
 
 export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps) {
   const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
-  const payload = step.payload as LessonPayload;
+  const payload = step.payload as LessonPayload | null;
+  const sections = payload?.sections ?? [];
 
   const handleCheckpoint = (index: number) => {
     setCheckpoints((prev) => ({ ...prev, [index]: true }));
   };
 
-  const isComplete = payload.sections.every(
+  const isComplete = sections.length === 0 || sections.every(
     (s, i) => s.type !== 'checkpoint' || checkpoints[i]
   );
 
@@ -36,7 +37,13 @@ export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps
       </div>
 
       <div className="space-y-10">
-        {payload.sections.map((section, idx) => (
+        {sections.length === 0 && (
+          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+            <p className="text-[#64748b] text-lg">This lesson is being prepared by the experience builder.</p>
+            <p className="text-[#475569] text-sm mt-2">Content will appear here once it's ready.</p>
+          </div>
+        )}
+        {sections.map((section, idx) => (
           <div key={idx} className={`relative ${section.type === 'callout' ? 'p-6 bg-indigo-500/5 border-l-2 border-indigo-500 rounded-r-xl' : ''}`}>
             {section.heading && (
               <h3 className="text-xl font-semibold text-[#e2e8f0] mb-3">{section.heading}</h3>

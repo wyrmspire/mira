@@ -12,24 +12,29 @@ export interface StorageAdapter {
 
 /**
  * Maps local collection names to Supabase table names.
- * Standardizes pluralization and naming differences.
+ *
+ * QUARANTINED (removed in stabilization pass):
+ *   projects → realizations    — camelCase TS type vs snake_case DB columns
+ *   prs      → realization_reviews — same mismatch
+ *   tasks    → experience_steps    — collision with direct experience_steps usage
+ *   inbox    → timeline_events     — handled by inbox-service normalization layer
  */
 const TABLE_MAP: Record<string, string> = {
   ideas: 'ideas',
   drillSessions: 'drill_sessions',
-  projects: 'realizations',
-  tasks: 'experience_steps',
-  prs: 'realization_reviews',
   inbox: 'timeline_events',
   agentRuns: 'agent_runs',
   externalRefs: 'external_refs',
   experience_templates: 'experience_templates',
   experience_instances: 'experience_instances',
+  experience_steps: 'experience_steps',
   interaction_events: 'interaction_events',
   artifacts: 'artifacts',
   synthesis_snapshots: 'synthesis_snapshots',
   profile_facets: 'profile_facets',
 }
+
+let _adapterLogged = false
 
 export class SupabaseStorageAdapter implements StorageAdapter {
   private client = getSupabaseClient()
@@ -90,7 +95,7 @@ export class SupabaseStorageAdapter implements StorageAdapter {
 
 /**
  * Adapter for existing JSON file storage.
- * Note: existing storage.ts methods are synchronous, we wrap them in Promises.
+ * Only active when USE_JSON_FALLBACK=true is explicitly set.
  */
 export class JsonFileStorageAdapter implements StorageAdapter {
   async getCollection<T>(name: string): Promise<T[]> {
@@ -130,13 +135,30 @@ export class JsonFileStorageAdapter implements StorageAdapter {
 }
 
 export function getStorageAdapter(): StorageAdapter {
+  // Explicit JSON fallback — only when explicitly opted in
+  if (process.env.USE_JSON_FALLBACK === 'true') {
+    if (!_adapterLogged) {
+      console.log('[StorageAdapter] ⚠️  JSON fallback explicitly enabled via USE_JSON_FALLBACK=true')
+      _adapterLogged = true
+    }
+    return new JsonFileStorageAdapter()
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (supabaseUrl && supabaseKey) {
+    if (!_adapterLogged) {
+      console.log('[StorageAdapter] ✅ Using SupabaseStorageAdapter')
+      _adapterLogged = true
+    }
     return new SupabaseStorageAdapter()
-  } else {
-    console.warn('[StorageAdapter] Supabase not configured, using JSON fallback.')
-    return new JsonFileStorageAdapter()
   }
+
+  // Fail fast — no more silent fallback
+  throw new Error(
+    '[StorageAdapter] FATAL: Supabase not configured. ' +
+    'Set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env.local, ' +
+    'or set USE_JSON_FALLBACK=true for local JSON mode.'
+  )
 }

@@ -14,6 +14,11 @@ export const dynamic = 'force-dynamic';
 export default async function LibraryPage() {
   const userId = DEFAULT_USER_ID;
 
+  // DEBUG: Check which storage adapter is being used
+  const { getStorageAdapter } = await import('@/lib/storage-adapter');
+  const adapter = getStorageAdapter();
+  console.log('[Library] Storage adapter:', adapter.constructor.name);
+
   // Parallel fetch for all sections
   const [active, completed, moments, proposed] = await Promise.all([
     getActiveExperiences(userId),
@@ -21,6 +26,10 @@ export default async function LibraryPage() {
     getEphemeralExperiences(userId),
     getProposedExperiences(userId),
   ]);
+
+  console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length}`);
+  active.forEach(e => console.log(`  [ACTIVE] ${e.title}`));
+  proposed.forEach(e => console.log(`  [PROPOSED] ${e.title}`));
 
   return (
     <AppShell>

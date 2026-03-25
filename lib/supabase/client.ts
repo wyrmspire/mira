@@ -16,5 +16,16 @@ export function getSupabaseClient() {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: {
+      // Next.js 14 App Router caches ALL fetch() calls by default.
+      // The Supabase JS client uses fetch internally, so without this override,
+      // every Supabase query result gets cached indefinitely — causing stale UI data.
+      fetch: (url, options = {}) => {
+        return fetch(url, {
+          ...options,
+          cache: 'no-store',
+        })
+      },
+    },
   })
 }

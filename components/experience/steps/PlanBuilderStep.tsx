@@ -18,7 +18,8 @@ interface PlanBuilderStepProps {
 
 export default function PlanBuilderStep({ step, onComplete, onSkip }: PlanBuilderStepProps) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
-  const payload = step.payload as PlanBuilderPayload;
+  const payload = step.payload as PlanBuilderPayload | null;
+  const sections = payload?.sections ?? [];
 
   const sectionIcons: Record<string, string> = {
     goals: '🎯',
@@ -32,10 +33,10 @@ export default function PlanBuilderStep({ step, onComplete, onSkip }: PlanBuilde
     resources: 'Resources',
   };
 
-  const allItems = payload.sections.flatMap((s, si) =>
+  const allItems = sections.flatMap((s, si) =>
     s.items.map((item, ii) => `${si}-${ii}`)
   );
-  const allChecked = allItems.every((key) => checked[key]);
+  const allChecked = allItems.length === 0 || allItems.every((key) => checked[key]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -45,7 +46,13 @@ export default function PlanBuilderStep({ step, onComplete, onSkip }: PlanBuilde
       </div>
 
       <div className="space-y-8">
-        {payload.sections.map((section, si) => (
+        {sections.length === 0 && (
+          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+            <p className="text-[#64748b] text-lg">Your plan is being assembled by the experience builder.</p>
+            <p className="text-[#475569] text-sm mt-2">Goals, milestones, and resources will appear here.</p>
+          </div>
+        )}
+        {sections.map((section, si) => (
           <div key={si} className="space-y-3">
             <h3 className="text-lg font-semibold text-[#e2e8f0] flex items-center gap-2">
               <span>{sectionIcons[section.type] || '•'}</span>

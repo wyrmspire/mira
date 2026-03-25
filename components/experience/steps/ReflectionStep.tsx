@@ -19,7 +19,8 @@ interface ReflectionStepProps {
 
 export default function ReflectionStep({ step, onComplete, onSkip }: ReflectionStepProps) {
   const [responses, setResponses] = useState<Record<string, string>>({});
-  const payload = step.payload as ReflectionPayload;
+  const payload = step.payload as ReflectionPayload | null;
+  const prompts = payload?.prompts ?? [];
 
   const handleChange = (promptId: string, value: string) => {
     setResponses((prev) => ({ ...prev, [promptId]: value }));
@@ -30,7 +31,7 @@ export default function ReflectionStep({ step, onComplete, onSkip }: ReflectionS
     onComplete({ reflections: responses });
   };
 
-  const isComplete = payload.prompts.every((p) => !!responses[p.id]?.trim());
+  const isComplete = prompts.length === 0 || prompts.every((p) => !!responses[p.id]?.trim());
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -40,7 +41,12 @@ export default function ReflectionStep({ step, onComplete, onSkip }: ReflectionS
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {payload.prompts.map((prompt) => (
+        {prompts.length === 0 && (
+          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+            <p className="text-[#64748b] text-lg">Reflection prompts are being prepared.</p>
+          </div>
+        )}
+        {prompts.map((prompt) => (
           <div key={prompt.id} className="space-y-3">
             <label className="block text-lg font-medium text-[#94a3b8] leading-relaxed">
               {prompt.text}

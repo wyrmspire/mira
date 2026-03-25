@@ -19,7 +19,8 @@ interface ChallengeStepProps {
 
 export default function ChallengeStep({ step, onComplete, onSkip }: ChallengeStepProps) {
   const [completed, setCompleted] = useState<Record<string, string>>({});
-  const payload = step.payload as ChallengePayload;
+  const payload = step.payload as ChallengePayload | null;
+  const objectives = payload?.objectives ?? [];
 
   const handleProofChange = (objectiveId: string, value: string) => {
     setCompleted((prev) => ({ ...prev, [objectiveId]: value }));
@@ -30,7 +31,7 @@ export default function ChallengeStep({ step, onComplete, onSkip }: ChallengeSte
     onComplete({ completedObjectives: completed });
   };
 
-  const allDone = payload.objectives.every((obj) => !!completed[obj.id]);
+  const allDone = objectives.length === 0 || objectives.every((obj) => !!completed[obj.id]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -40,7 +41,12 @@ export default function ChallengeStep({ step, onComplete, onSkip }: ChallengeSte
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {payload.objectives.map((obj, idx) => (
+        {objectives.length === 0 && (
+          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+            <p className="text-[#64748b] text-lg">Challenge objectives are being prepared.</p>
+          </div>
+        )}
+        {objectives.map((obj, idx) => (
           <div
             key={obj.id}
             className={`p-5 rounded-xl border transition-all ${

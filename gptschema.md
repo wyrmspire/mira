@@ -653,15 +653,16 @@ components:
 
     Idea:
       type: object
+      description: "An idea captured from conversation. Note: all fields use snake_case."
       properties:
         id:
           type: string
         title:
           type: string
-        rawPrompt:
+        raw_prompt:
           type: string
           description: "The raw text from the conversation that triggered this idea"
-        gptSummary:
+        gpt_summary:
           type: string
           description: "GPT's structured summary of the idea"
         vibe:
@@ -676,11 +677,13 @@ components:
         status:
           type: string
           enum: [captured, drilling, arena, icebox, shipped, killed]
-        createdAt:
+        created_at:
           type: string
+          format: date-time
 
     CaptureIdeaRequest:
       type: object
+      description: "Accepts both camelCase and snake_case field names. The normalizer handles both."
       required:
         - title
         - rawPrompt
@@ -691,10 +694,10 @@ components:
           description: "Short idea title"
         rawPrompt:
           type: string
-          description: "The raw text from the conversation that triggered this idea. Quote or paraphrase what the user said."
+          description: "The raw text from the conversation that triggered this idea. Quote or paraphrase what the user said. (Also accepts raw_prompt)"
         gptSummary:
           type: string
-          description: "Your structured summary of the idea — what it is, why it matters, what it could become."
+          description: "Your structured summary of the idea — what it is, why it matters, what it could become. (Also accepts gpt_summary)"
         vibe:
           type: string
           description: "The energy or feel — e.g. 'ambitious', 'playful', 'urgent', 'exploratory'"
