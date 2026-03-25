@@ -83,7 +83,15 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
       ? payload as Record<string, any>
       : undefined;
 
-    capture.trackComplete(currentStep.id, safePayload);
+    // Emit the correct telemetry event type based on step type.
+    // Questionnaire and Reflection steps need answer_submitted for downstream scoring/profile.
+    // Other step types use task_completed.
+    const stepType = currentStep.step_type;
+    if (stepType === 'questionnaire' || stepType === 'reflection') {
+      capture.trackAnswer(currentStep.id, safePayload || {});
+    } else {
+      capture.trackComplete(currentStep.id, safePayload);
+    }
 
     if (currentStepIndex < totalSteps - 1) {
       setCurrentStepIndex((prev) => prev + 1);
@@ -119,6 +127,10 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
     if (currentStepIndex < totalSteps - 1) {
       setCurrentStepIndex((prev) => prev + 1);
     }
+  };
+
+  const handleDraftStep = (draft: Record<string, any>) => {
+    capture.trackDraft(currentStep.id, draft);
   };
 
   const StepComponent = getRenderer(currentStep?.step_type);
@@ -210,6 +222,7 @@ export default function ExperienceRenderer({ instance, steps }: ExperienceRender
             step={currentStep} 
             onComplete={handleCompleteStep} 
             onSkip={handleSkipStep} 
+            onDraft={handleDraftStep}
           />
         ) : (
           <div className="text-[#94a3b8] italic">Initializing experience steps…</div>

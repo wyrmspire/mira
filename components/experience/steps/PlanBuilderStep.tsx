@@ -12,14 +12,17 @@ interface PlanBuilderPayload {
 
 interface PlanBuilderStepProps {
   step: ExperienceStep;
-  onComplete: (payload: { acknowledged: boolean }) => void;
+  onComplete: (payload: { acknowledged: boolean; sections?: any[] }) => void;
   onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
 }
 
-export default function PlanBuilderStep({ step, onComplete, onSkip }: PlanBuilderStepProps) {
-  const [checked, setChecked] = useState<Record<string, boolean>>({});
+export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: PlanBuilderStepProps) {
   const payload = step.payload as PlanBuilderPayload | null;
-  const sections = payload?.sections ?? [];
+  const initialSections = payload?.sections ?? [];
+  
+  const [sections, setSections] = useState(initialSections);
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
 
   const sectionIcons: Record<string, string> = {
     goals: '🎯',
@@ -33,81 +36,192 @@ export default function PlanBuilderStep({ step, onComplete, onSkip }: PlanBuilde
     resources: 'Resources',
   };
 
+  const toggleCheck = (sectionIdx: number, itemIdx: number) => {
+    const key = `${sectionIdx}-${itemIdx}`;
+    const newState = { ...checked, [key]: !checked[key] };
+    setChecked(newState);
+    if (onDraft) {
+      onDraft({ checked: newState, sections });
+    }
+  };
+
+  const moveItem = (sectionIdx: number, itemIdx: number, direction: 'up' | 'down') => {
+    const newSections = [...sections];
+    const section = { ...newSections[sectionIdx] };
+    const items = [...section.items];
+    
+    const targetIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
+    if (targetIdx < 0 || targetIdx >= items.length) return;
+    
+    [items[itemIdx], items[targetIdx]] = [items[targetIdx], items[itemIdx]];
+    section.items = items;
+    newSections[sectionIdx] = section;
+    setSections(newSections);
+    
+    // Adjust checked state for moved items
+    const currentKey = `${sectionIdx}-${itemIdx}`;
+    const targetKey = `${sectionIdx}-${targetIdx}`;
+    const newChecked = { ...checked };
+    const currentVal = !!checked[currentKey];
+    const targetVal = !!checked[targetKey];
+    newChecked[currentKey] = targetVal;
+    newChecked[targetKey] = currentVal;
+    setChecked(newChecked);
+
+    if (onDraft) {
+      onDraft({ checked: newChecked, sections: newSections });
+    }
+  };
+
+  const addItem = (sectionIdx: number) => {
+    const newSections = [...sections];
+    const section = { ...newSections[sectionIdx] };
+    const newItem = {
+      id: crypto.randomUUID(),
+      text: 'New action item'
+    };
+    section.items = [...section.items, newItem];
+    newSections[sectionIdx] = section;
+    setSections(newSections);
+  };
+
+  const handleComplete = () => {
+    onComplete({ acknowledged: true, sections });
+  };
+
   const allItems = sections.flatMap((s, si) =>
-    s.items.map((item, ii) => `${si}-${ii}`)
+    s.items.map((_, ii) => `${si}-${ii}`)
   );
-  const allChecked = allItems.length === 0 || allItems.every((key) => checked[key]);
+  const allChecked = allItems.length === 0 || allItems.every((key) => !!checked[key]);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="mb-6">
-        <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{step.title}</h2>
-        <p className="text-sm text-cyan-400/70 uppercase tracking-widest font-bold">Plan Builder</p>
+    <div className="space-y-12 animate-in slide-in-from-bottom-10 fade-in duration-700 max-w-3xl mx-auto">
+      <div className="border-b border-[#1e1e2e] pb-6">
+        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+        <p className="text-sm text-cyan-400 uppercase tracking-widest font-bold">Execution Plan</p>
       </div>
 
-      <div className="space-y-8">
+      <div className="space-y-16">
         {sections.length === 0 && (
-          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
-            <p className="text-[#64748b] text-lg">Your plan is being assembled by the experience builder.</p>
-            <p className="text-[#475569] text-sm mt-2">Goals, milestones, and resources will appear here.</p>
+          <div className="p-12 border border-dashed border-[#33334d] rounded-2xl text-center bg-[#12121a]/50">
+            <p className="text-[#64748b] text-lg">No plan sections defined yet.</p>
           </div>
         )}
-        {sections.map((section, si) => (
-          <div key={si} className="space-y-3">
-            <h3 className="text-lg font-semibold text-[#e2e8f0] flex items-center gap-2">
-              <span>{sectionIcons[section.type] || '•'}</span>
-              {sectionLabels[section.type] || section.type}
-            </h3>
+        
+        {sections.map((section, sIdx) => {
+          const sectionCheckedCount = section.items.filter((_, iIdx) => checked[`${sIdx}-${iIdx}`]).length;
+          const sectionTotal = section.items.length;
+          const isSectionDone = sectionTotal > 0 && sectionCheckedCount === sectionTotal;
 
-            <div className="space-y-2">
-              {section.items.map((item, ii) => {
-                const key = `${si}-${ii}`;
-                const label = typeof item === 'string' ? item : item.title || item.description || JSON.stringify(item);
-                const subtitle = typeof item === 'object' && item.target_date ? `Target: ${item.target_date}` : null;
+          return (
+            <div key={sIdx} className="space-y-6">
+              <div className="flex justify-between items-center group">
+                <div className="flex items-center gap-4">
+                  <span className="text-2xl">{sectionIcons[section.type] || '•'}</span>
+                  <h3 className="text-2xl font-bold text-[#e2e8f0] tracking-tight">
+                    {sectionLabels[section.type] || section.type}
+                  </h3>
+                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                    isSectionDone 
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                      : 'bg-[#1a1a2e] border-[#33334d] text-[#475569]'
+                  }`}>
+                    {sectionCheckedCount} / {sectionTotal} READY
+                  </div>
+                </div>
+                <button 
+                  onClick={() => addItem(sIdx)}
+                  className="opacity-0 group-hover:opacity-100 text-xs font-bold text-cyan-400 hover:text-cyan-300 transition-all px-3 py-1 rounded-lg border border-cyan-400/20 bg-cyan-400/5 shadow-sm"
+                >
+                  + ADD ITEM
+                </button>
+              </div>
 
-                return (
-                  <button
-                    key={key}
-                    onClick={() => setChecked((prev) => ({ ...prev, [key]: !prev[key] }))}
-                    className={`w-full text-left flex items-start gap-3 p-4 rounded-xl border transition-all ${
-                      checked[key]
-                        ? 'bg-cyan-500/5 border-cyan-500/30'
-                        : 'bg-[#12121a] border-[#1e1e2e] hover:border-[#33334d]'
-                    }`}
-                  >
-                    <span className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center text-xs border ${
-                      checked[key]
-                        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-                        : 'bg-[#1a1a2e] border-[#33334d] text-transparent'
-                    }`}>
-                      ✓
-                    </span>
-                    <div>
-                      <span className="text-[#e2e8f0] font-medium">{label}</span>
-                      {subtitle && <span className="block text-xs text-[#64748b] mt-0.5">{subtitle}</span>}
+              <div className="grid gap-4">
+                {section.items.map((item, iIdx) => {
+                  const key = `${sIdx}-${iIdx}`;
+                  // Canonical contract: { id, text }. Fallback reads title/description for legacy data.
+                  const label = typeof item === 'string' ? item : item.text || item.title || item.description || 'Untitled';
+                  const subtitle = typeof item === 'object' && item.target_date ? `Target: ${item.target_date}` : null;
+
+                  return (
+                    <div
+                      key={key}
+                      className={`group/item flex items-center gap-4 p-5 rounded-2xl border transition-all duration-300 ${
+                        checked[key]
+                          ? 'bg-emerald-500/5 border-emerald-500/20 translate-x-1'
+                          : 'bg-[#12121a] border-[#1e1e2e] hover:border-cyan-500/30'
+                      }`}
+                    >
+                      <button
+                        onClick={() => toggleCheck(sIdx, iIdx)}
+                        className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                          checked[key]
+                            ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
+                            : 'bg-transparent border-[#33334d] hover:border-cyan-500/50'
+                        }`}
+                      >
+                        {checked[key] && <span className="text-[14px]">✓</span>}
+                      </button>
+                      
+                      <div className="flex-1">
+                        <p className={`font-semibold transition-all ${
+                          checked[key] ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
+                        }`}>
+                          {label}
+                        </p>
+                        {subtitle && (
+                          <p className="text-sm text-[#475569] mt-0.5">{subtitle}</p>
+                        )}
+                      </div>
+
+                      <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => moveItem(sIdx, iIdx, 'up')}
+                          disabled={iIdx === 0}
+                          className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7"></path></svg>
+                        </button>
+                        <button
+                          onClick={() => moveItem(sIdx, iIdx, 'down')}
+                          disabled={iIdx === section.items.length - 1}
+                          className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                        </button>
+                      </div>
                     </div>
-                  </button>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          );
+        })}
 
-      <div className="flex items-center justify-between pt-4 border-t border-[#1e1e2e]">
-        <button
-          onClick={onSkip}
-          className="text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
-        >
-          Skip for now
-        </button>
-        <button
-          onClick={() => onComplete({ acknowledged: true })}
-          disabled={!allChecked}
-          className="px-8 py-3 bg-cyan-500/20 text-cyan-300 rounded-xl text-sm font-bold hover:bg-cyan-500/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-cyan-500/20"
-        >
-          Plan Reviewed →
-        </button>
+        <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
+          <button
+            onClick={onSkip}
+            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
+          >
+            Skip for now
+          </button>
+          
+          <div className="flex flex-col items-end gap-3">
+             {!allChecked && (
+               <p className="text-[10px] text-cyan-400/70 font-mono tracking-widest">
+                 CONFIRM ALL ITEMS TO COMMIT
+               </p>
+             )}
+            <button
+              onClick={handleComplete}
+              disabled={!allChecked}
+              className="px-12 py-4 bg-cyan-500 text-[#0a0a0f] rounded-xl text-sm font-extrabold hover:bg-cyan-400 transition-all shadow-xl shadow-cyan-500/20 active:scale-95 disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed"
+            >
+              Commit to Plan →
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

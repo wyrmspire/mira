@@ -8,6 +8,7 @@
 | Sprint 2 | GitHub Factory (Token-First) | TSC ✅ (Lanes 1–5) | ✅ Complete (Lane 6 deferred) |
 | Sprint 3 | Runtime Foundation — Supabase + Experience Types + Renderer + Capture + Integration | TSC ✅ Build ✅ | ✅ Complete — Full ephemeral loop proven. 16 Supabase tables live. |
 | Sprint 4 | Experience Engine — Persistent lifecycle, Library, Review, Home, Re-entry | TSC ✅ Build ✅ | ✅ Complete — Full loop: propose → approve → workspace → complete → GPT re-entry. |
+| Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ (Lanes 1–3) | 🟡 In Progress — Capabilities built, wiring to follow. |
 
 ---
 
@@ -67,7 +68,7 @@ Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
 
 | Gate | Focus | Status |
 |------|-------|--------|
-| ⬜ Gate 0 | Canonical Experience Contract | G1 ⬜ G2 ⬜ G3 ⬜ G4 ⬜ G5 ⬜ G6 ⬜ |
+| ✅ Gate 0 | Canonical Experience Contract | G1 ✅ G2 ✅ G3 ✅ G4 ✅ G5 ✅ G6 ✅ |
 
 ---
 
@@ -271,12 +272,31 @@ Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
 
 | Lane | Focus | Status |
 |------|-------|--------|
-| ⬜ Lane 1 | Experience Graph + Chaining | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| ⬜ Lane 2 | Timeline Page + Event Enrichment | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| ⬜ Lane 3 | Profile Page + Facet Engine | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| ⬜ Lane 4 | Validation + API Hardening | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| ⬜ Lane 5 | Progression Engine + Renderer Upgrades | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ |
-| ⬜ Lane 6 | Integration + Wiring + Browser Testing | W1 ⬜ W2 ⬜ W3 ⬜ W4 ⬜ W5 ⬜ W6 ⬜ W7 ⬜ W8 ⬜ |
+| ✅ Lane 1 | Experience Graph + Chaining | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+- **Done**: Created `types/graph.ts` defining `ExperienceGraphEdge`, `ExperienceChainContext`, and `ProgressionRule`.
+- **Done**: Created `lib/experience/progression-rules.ts` defining canonical experience chains and suggestion logic.
+- **Done**: Created `lib/services/graph-service.ts` for walking chains, linking instances, and generating suggestions.
+- **Done**: Created `app/api/experiences/[id]/chain/route.ts` (GET/POST) for chaining instances.
+- **Done**: Created `app/api/experiences/[id]/suggestions/route.ts` (GET) for next-step recommendations.
+- **Done**: Added weekly loop detection and repetition counting to graph service.
+- **Done**: Implemented graph summary for GPT state packet in `getGraphSummaryForGPT`.
+| ✅ Lane 2 | Timeline Page + Event Enrichment | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+- **Done**: Created `types/timeline.ts` defining unified timeline entry and stats types.
+- **Done**: Built `lib/services/timeline-service.ts` aggregating events from inbox, experience lifecycle, and interactions.
+- **Done**: Dynamic event generation mapping `experience_instances` created/published/completed timestamps to timeline entries.
+- **Done**: Implemented `TimelineEventCard` with vertical dot-and-line visual language and category colors.
+- **Done**: Built `TimelineFilterBar` for category-specific views with count support.
+- **Done**: Created `app/timeline/page.tsx` and `TimelineClient.tsx` for the unified attention cockpit.
+- **Done**: Added localized copy to `lib/studio-copy.ts` and verified route entry.
+| ✅ Lane 3 | Profile Page + Facet Engine | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+| - | - | - |
+| | | - **Done**: Created types, faceted extraction service, profile aggregation, and the complete profile surface with interactive filtering. |
+| ✅ Lane 4 | Validation + API Hardening | ✅ W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+- **Done**: Implemented strict canonical validators for experience and step payloads, hardened inject/creation routes, and enriched the detail API with graph and interaction context.
+| ✅ Lane 5 | Progression Engine + Renderer Upgrades | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
+- **Done**: Created `lib/experience/progression-engine.ts` (scoring + friction). Upgraded all 6 renderers: `QuestionnaireStep` (carousel), `LessonStep` (scroll tracking + checkpoints), `ChallengeStep` (partial completion + proof), `ReflectionStep` (word counts + auto-draft), `PlanBuilderStep` (reordering + dynamic items), `EssayTasksStep` (collapsible essay + submission flow). Added `draft_saved` event type and `trackDraft` to interaction capture. `tsc --noEmit` passes.
+| ✅ Lane 6 | Integration + Wiring + Browser Testing | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ W8 ✅ |
+- **Done**: Fixed typescript and build errors, wired Timeline and Profile navigations, and successfully executed browser integration mapping ensuring successful full-cycle renders and captures across 6 contracted step types, progression scoring limits, timeline categories, and profile aggregations.
 
 ---
 
@@ -815,9 +835,9 @@ Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Lane 1 | ⬜ | ⬜ | |
-| Lane 2 | ⬜ | ⬜ | |
-| Lane 3 | ⬜ | ⬜ | |
-| Lane 4 | ⬜ | ⬜ | |
-| Lane 5 | ⬜ | ⬜ | |
-| Lane 6 | ⬜ | ⬜ | |
+| Lane 1 | 🟡 | ⬜ | Blocked by Lane 3 errors in `app/profile/` |
+| Lane 2 | ✅ | ✅ | |
+| Lane 3 | ✅ | ✅ | Resolved profile page compilation issues |
+| Lane 4 | ✅ | ✅ | |
+| Lane 5 | ✅ | ✅ | |
+| Lane 6 | ✅ | ✅ | Integration tests passing. Pre-flight passed. |

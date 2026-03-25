@@ -16,6 +16,17 @@ Sometimes the system explains why it's creating an experience. Sometimes it just
 
 ---
 
+## The Paradigm Shift: Multi-Agent Experience Engine
+
+Mira is actively moving away from the saturated "AI Chatbot" space (which suffers from "chat contamination") and into a **Multi-Agent Experience Engine**. It acts as an orchestrator: taking messy human intent (via Custom GPT), mapping it into a durable structured workspace (the App + Supabase), and tagging in heavy-lifters (the Genkit internal intelligence layer or GitHub SWE Coder) when complexity exceeds text generation.
+
+### High-Impact Modes
+1. **The "Zero-to-One" Project Incubator**: Takes a messy brain-dump, scaffolds a structured multi-phase experience, and escalates to a SWE agent to build live infrastructure (e.g., scaffolding a Next.js landing page).
+2. **Adaptive Deep-Learning**: Multi-pass construction of daily educational modules (Education, Challenge, Reflection) with hybrid escalation (e.g., inline live tutoring inside a broken repo).
+3. **Cognitive & Executive Scaffolding**: Avoids heavy task lists for overwhelmed users. Heavy reliance on ephemeral experiences, synthesis snapshots, and proactive low-friction state reconstruction.
+
+---
+
 ## Where We Are Today
 
 ### ✅ Sprint 1 — Local Control Plane (Complete)
@@ -439,6 +450,20 @@ These are a nice-to-have once the experience loop is running. Do not over-invest
 
 ---
 
+## Strategic UX & Utility Upgrades (The "Glass Box")
+To make the orchestration transparent and powerful, these UX paradigms guide future development:
+
+1. **The Spatial "Split-Brain" Interface**: A dual-pane UI where the left pane is the "Stream" (ephemeral chat) and the right pane is the "Scaffold" (the durable Workspace). Users watch the GPT extract goals and snap them into beautifully rendered Modules in real-time.
+2. **Visualizing the "Multi-Pass" Engine**: Do not hide generation behind spinners. Expose stages dynamically: _"Inferring constraints..."_ → _"Scaffolding timeline..."_ → _"Injecting challenges..."_
+3. **The "Glass Box" Profile Surfacing**: An "Inferred Profile" dashboard showing exactly what the system thinks the user's constraints, means, and skill levels are, tightly coupled to the `profile_facets` table. Manual overrides instantly re-align GPT strategy.
+4. **Coder Escalation as a Hero Moment**: When the SWE agent is invoked, the UI dims and a "Realization Work" widget appears in plain-English showing real-time GitHub Actions infrastructure being built.
+5. **Hidden Scratchpad Actions**: The GPT quietly upserts user insights into Supabase before generating modules, preventing prompt context overload.
+6. **Micro-Regeneration**: Ability to highlight a specific module inside an App Workspace and click **"Tune."** Opens a micro-chat only for that module to break it down further.
+7. **"Interrupt & Re-Route" Safety Valve**: An unstructured brain-dump button when life derails a plan. The GPT dynamically rewrites remaining runtime state to adapt without inducing failure states.
+8. **Escalation Ledger to Template Factory**: Strip PII from highly-used SWE Coder escalations (e.g. "build calendar sync") and turn them into reusable "Starter Kit Modules".
+
+---
+
 ## Sprint Roadmap
 
 ### ✅ Sprint 1 — Local Control Plane (Complete)
@@ -522,7 +547,20 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 6 — Proposal → Realization → Coder Pipeline (Deferred)
+### 🔲 Sprint 6 — Genkit Intelligence Layer (Backend Brain)
+
+> **Goal:** Based on AI Coach analysis, embed intelligence *inside* the backend using Genkit to process data mutations into insight, decoupling deep analysis from the conversational GPT.
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | Genkit Infrastructure | Install `genkit` and initialize Google AI plugin. Create `lib/ai/genkit.ts`. |
+| 2 | Intelligent Synthesis Flow | Build `synthesizeExperienceFlow` (`gemini-2.5-flash`). Replace naive string summaries in `synthesis_snapshots` with AI-extracted narrative, actual signals, and next-step candidates running automatically at the end of an experience. |
+| 3 | AI Profile Facet Extraction | Build `extractFacetsFlow`. Replace mechanical comma-split extraction `facet-service.ts` with semantic reading of user reflections to pull high-confidence interests and friction signatures. |
+| 4 | Smart Next Suggestions | Build `suggestNextExperienceFlow`. Move beyond static progression chains to context-aware templated recommendations based on actual facet states. |
+
+---
+
+### 🔲 Sprint 7 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
@@ -652,7 +690,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 7 — Chained Experiences + Spontaneity
+### 🔲 Sprint 8 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -679,7 +717,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 8 — GitHub Hardening + GitHub App
+### 🔲 Sprint 9 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
@@ -694,7 +732,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 9 — Personalization + Coder Knowledge
+### 🔲 Sprint 10 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -710,7 +748,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 10 — Production Deployment
+### 🔲 Sprint 11 — Production Deployment
 
 > **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
 >

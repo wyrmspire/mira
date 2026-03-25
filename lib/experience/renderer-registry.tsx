@@ -5,6 +5,7 @@ export type StepRenderer = React.ComponentType<{
   step: ExperienceStep;
   onComplete: (payload?: unknown) => void;
   onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
 }>;
 
 const registry: Record<string, StepRenderer> = {};

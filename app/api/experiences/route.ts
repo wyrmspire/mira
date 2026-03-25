@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getExperienceInstances, createExperienceInstance, ExperienceStatus, InstanceType, ExperienceInstance } from '@/lib/services/experience-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
+import { validateExperiencePayload } from '@/lib/validators/experience-validator'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -24,45 +25,50 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { templateId, userId, title, goal, resolution, reentry, previousExperienceId, steps } = body
-
-    if (!templateId || !userId || !resolution) {
-      return NextResponse.json({ error: 'Missing required fields: templateId, userId, resolution' }, { status: 400 })
+    
+    // 1. Validate & Normalize
+    const { valid, errors, normalized } = validateExperiencePayload(body)
+    if (!valid) {
+      return NextResponse.json({ 
+        error: 'Contract violation', 
+        details: errors 
+      }, { status: 400 })
     }
 
+    // 2. Map to instance data
     const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
-      user_id: userId,
-      template_id: templateId,
+      user_id: normalized.userId,
+      template_id: normalized.templateId,
       idea_id: null,
-      title: title || 'Untitled Experience',
-      goal: goal || '',
+      title: normalized.title,
+      goal: normalized.goal,
       instance_type: 'persistent',
       status: 'proposed',
-      resolution,
-      reentry: reentry || null,
-      previous_experience_id: previousExperienceId || null,
+      resolution: normalized.resolution,
+      reentry: normalized.reentry,
+      previous_experience_id: normalized.previousExperienceId,
       next_suggested_ids: [],
       friction_level: null,
-      source_conversation_id: null,
-      generated_by: null,
+      source_conversation_id: normalized.source_conversation_id,
+      generated_by: normalized.generated_by || 'api',
       realization_id: null,
       published_at: null
     }
 
     const instance = await createExperienceInstance(instanceData)
 
-    // Create steps if provided
-    if (steps && Array.isArray(steps)) {
+    // 3. Create steps if provided
+    if (normalized.steps && normalized.steps.length > 0) {
       const { createExperienceStep } = await import('@/lib/services/experience-service')
-      for (let i = 0; i < steps.length; i++) {
-        const stepData = steps[i]
+      for (let i = 0; i < normalized.steps.length; i++) {
+        const step = normalized.steps[i]
         await createExperienceStep({
           instance_id: instance.id,
           step_order: i,
-          step_type: stepData.type,
-          title: stepData.title,
-          payload: stepData.payload,
-          completion_rule: stepData.completion_rule || null
+          step_type: step.step_type,
+          title: step.title,
+          payload: step.payload,
+          completion_rule: step.completion_rule
         })
       }
     }

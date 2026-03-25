@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { ExperienceStep } from '@/types/experience';
 
 interface LessonPayload {
   sections: Array<{
-    heading: string;
+    heading?: string;
     body: string;
     type?: 'text' | 'callout' | 'checkpoint';
   }>;
@@ -15,59 +15,122 @@ interface LessonStepProps {
   step: ExperienceStep;
   onComplete: () => void;
   onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
 }
 
-export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps) {
+export default function LessonStep({ step, onComplete, onSkip, onDraft }: LessonStepProps) {
   const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
+  const [readSections, setReadSections] = useState<Record<number, boolean>>({});
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  
   const payload = step.payload as LessonPayload | null;
   const sections = payload?.sections ?? [];
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.getAttribute('data-index'));
+            setReadSections((prev) => ({ ...prev, [index]: true }));
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    return () => observerRef.current?.disconnect();
+  }, []);
+
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  useEffect(() => {
+    sectionRefs.current.forEach((ref) => {
+      if (ref && observerRef.current) {
+        observerRef.current.observe(ref);
+      }
+    });
+  }, [sections]);
 
   const handleCheckpoint = (index: number) => {
     setCheckpoints((prev) => ({ ...prev, [index]: true }));
   };
 
-  const isComplete = sections.length === 0 || sections.every(
+  const allCheckpointsDone = sections.every(
     (s, i) => s.type !== 'checkpoint' || checkpoints[i]
   );
+  
+  const allSectionsRead = sections.length === 0 || sections.every((_, i) => readSections[i]);
+  const isComplete = allCheckpointsDone && allSectionsRead;
+
+  const readPercent = sections.length > 0 
+    ? Math.round((Object.keys(readSections).length / sections.length) * 100) 
+    : 100;
 
   return (
-    <div className="space-y-12 animate-in slide-in-from-bottom-10 fade-in duration-700">
-      <div className="mb-8">
-        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{step.title}</h2>
+    <div className="space-y-12 animate-in slide-in-from-bottom-10 fade-in duration-700 max-w-2xl mx-auto">
+      <div className="flex justify-between items-end border-b border-[#1e1e2e] pb-6 sticky top-0 bg-[#0a0a0f]/80 backdrop-blur-md z-10 pt-4">
+        <div>
+          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{step.title}</h2>
+          <p className="text-sm text-indigo-400 font-mono mt-1">READING PROGRESS: {readPercent}%</p>
+        </div>
       </div>
 
-      <div className="space-y-10">
+      <div className="space-y-16">
         {sections.length === 0 && (
           <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
-            <p className="text-[#64748b] text-lg">This lesson is being prepared by the experience builder.</p>
-            <p className="text-[#475569] text-sm mt-2">Content will appear here once it's ready.</p>
+            <p className="text-[#64748b] text-lg">This lesson is being prepared.</p>
           </div>
         )}
         {sections.map((section, idx) => (
-          <div key={idx} className={`relative ${section.type === 'callout' ? 'p-6 bg-indigo-500/5 border-l-2 border-indigo-500 rounded-r-xl' : ''}`}>
-            {section.heading && (
-              <h3 className="text-xl font-semibold text-[#e2e8f0] mb-3">{section.heading}</h3>
-            )}
-            
-            <p className="text-lg leading-relaxed text-[#94a3b8] whitespace-pre-wrap">
-              {section.body}
-            </p>
-
-            {section.type === 'checkpoint' && (
-              <div className="mt-6 flex items-center justify-center border border-dashed border-[#33334d] p-6 rounded-xl">
-                {checkpoints[idx] ? (
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                    <span className="w-6 h-6 rounded-full bg-emerald-400/20 flex items-center justify-center">✓</span>
-                    Understood
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => handleCheckpoint(idx)}
-                    className="px-6 py-2 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/30 hover:bg-indigo-500/30 transition-all font-medium"
-                  >
-                    Got it
-                  </button>
+          <div 
+            key={idx} 
+            data-index={idx}
+            ref={(el) => (sectionRefs.current[idx] = el) as any}
+            className={`transition-opacity duration-700 ${readSections[idx] ? 'opacity-100' : 'opacity-40'}`}
+          >
+            {section.type === 'callout' ? (
+              <div className="p-8 bg-indigo-500/5 border-l-4 border-indigo-500 rounded-r-2xl shadow-[0_0_30px_rgba(99,102,241,0.05)]">
+                {section.heading && (
+                  <h3 className="text-indigo-300 font-bold uppercase tracking-wider text-xs mb-4">Key Insight</h3>
                 )}
+                <p className="text-xl leading-relaxed text-[#e2e8f0] font-medium">
+                  {section.body}
+                </p>
+              </div>
+            ) : section.type === 'checkpoint' ? (
+              <div className={`p-8 rounded-2xl border transition-all duration-500 ${
+                checkpoints[idx] 
+                  ? 'bg-emerald-500/5 border-emerald-500/30' 
+                  : 'bg-[#12121a] border-[#1e1e2e]'
+              }`}>
+                {section.heading && <h3 className="text-xl font-bold text-[#f1f5f9] mb-4">{section.heading}</h3>}
+                <p className="text-lg text-[#94a3b8] mb-8 leading-relaxed">{section.body}</p>
+                
+                <div className="flex justify-center">
+                  {checkpoints[idx] ? (
+                    <div className="flex items-center gap-3 text-emerald-400 font-bold bg-emerald-500/10 px-6 py-3 rounded-full border border-emerald-500/20">
+                      <span className="w-6 h-6 rounded-full bg-emerald-400 text-[#0a0a0f] flex items-center justify-center text-xs">✓</span>
+                      Concept Confirmed
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleCheckpoint(idx)}
+                      className="px-8 py-3 bg-indigo-500/20 text-indigo-300 rounded-full border border-indigo-500/40 hover:bg-indigo-500/30 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all font-bold"
+                    >
+                      I Understand
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {section.heading && (
+                  <h3 className="text-2xl font-bold text-[#e2e8f0] tracking-tight">{section.heading}</h3>
+                )}
+                <p className="text-xl leading-[1.8] text-[#94a3b8] whitespace-pre-wrap font-serif">
+                  {section.body}
+                </p>
               </div>
             )}
           </div>
@@ -76,18 +139,25 @@ export default function LessonStep({ step, onComplete, onSkip }: LessonStepProps
         <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
           <button
             onClick={onSkip}
-            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
+            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
           >
             Skip for now
           </button>
           
-          <button
-            onClick={() => onComplete()}
-            disabled={!isComplete}
-            className="px-10 py-3 bg-indigo-600/20 text-indigo-100 rounded-xl text-sm font-bold hover:bg-indigo-600/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed border border-indigo-600/30 shadow-lg shadow-indigo-900/10"
-          >
-            Continue →
-          </button>
+          <div className="flex flex-col items-end gap-3">
+            {!isComplete && (
+              <p className="text-xs text-amber-500/70 font-mono">
+                {!allSectionsRead ? 'SCROLL TO BOTTOM' : 'CONFIRM ALL CHECKPOINTS'}
+              </p>
+            )}
+            <button
+              onClick={() => onComplete()}
+              disabled={!isComplete}
+              className="px-12 py-4 bg-indigo-500 text-white rounded-xl text-sm font-extrabold hover:bg-indigo-600 transition-all disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed shadow-xl shadow-indigo-500/20 active:scale-95"
+            >
+              Continue Journey →
+            </button>
+          </div>
         </div>
       </div>
     </div>

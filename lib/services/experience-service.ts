@@ -129,3 +129,39 @@ export async function getResumeStepIndex(instanceId: string): Promise<number> {
 
   return Math.min(highestOrder + 1, steps.length - 1)
 }
+
+/**
+ * Batch creation of experience steps.
+ * Assigns IDs and inserts all in one go (adapter-dependent).
+ */
+export async function createExperienceSteps(steps: Omit<ExperienceStep, 'id'>[]): Promise<ExperienceStep[]> {
+  const adapter = getStorageAdapter()
+  const created: ExperienceStep[] = []
+  
+  for (const stepData of steps) {
+    const step: ExperienceStep = {
+      ...stepData,
+      id: generateId()
+    } as ExperienceStep
+    const saved = await adapter.saveItem<ExperienceStep>('experience_steps', step)
+    created.push(saved)
+  }
+  
+  return created
+}
+
+/**
+ * Update an individual step's payload, title, or completion rule.
+ */
+export async function updateExperienceStep(stepId: string, updates: Partial<ExperienceStep>): Promise<ExperienceStep | null> {
+  const adapter = getStorageAdapter()
+  return adapter.updateItem<ExperienceStep>('experience_steps', stepId, updates)
+}
+
+/**
+ * Permanently remove a step from an experience.
+ */
+export async function deleteExperienceStep(stepId: string): Promise<void> {
+  const adapter = getStorageAdapter()
+  await adapter.deleteItem('experience_steps', stepId)
+}

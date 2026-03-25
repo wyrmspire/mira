@@ -10,6 +10,7 @@ export const INTERACTION_EVENTS = {
   TIME_ON_STEP: 'time_on_step',
   EXPERIENCE_STARTED: 'experience_started',
   EXPERIENCE_COMPLETED: 'experience_completed',
+  DRAFT_SAVED: 'draft_saved',
 } as const;
 
 export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];

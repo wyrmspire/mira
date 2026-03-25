@@ -50,6 +50,10 @@ export function useInteractionCapture(instanceId: string) {
     postEvent(INTERACTION_EVENTS.EXPERIENCE_COMPLETED);
   };
 
+  const trackDraft = (stepId: string, draft: Record<string, any>) => {
+    postEvent(INTERACTION_EVENTS.DRAFT_SAVED, stepId, draft);
+  };
+
   const startStepTimer = (stepId: string) => {
     stepTimers.current[stepId] = Date.now();
   };
@@ -71,6 +75,7 @@ export function useInteractionCapture(instanceId: string) {
     trackComplete,
     trackExperienceStart,
     trackExperienceComplete,
+    trackDraft,
     startStepTimer,
     endStepTimer,
   };

@@ -226,16 +226,74 @@ export async function POST() {
       completion_rule: null,
     })
 
-    // Step 2: Reflection (uses `prompts` array with stable ids)
+    // Step 2: Challenge
     await createValidatedStep({
       instance_id: persistent.id,
       step_order: 2,
+      step_type: 'challenge',
+      title: 'Action Time',
+      payload: {
+        objectives: [
+          { id: 'c1', description: 'Find a quiet place.' },
+          { id: 'c2', description: 'Work for 25 minutes without distraction.', proof_required: true },
+          { id: 'c3', description: 'Reflect on the session.' },
+        ]
+      },
+      completion_rule: null,
+    })
+
+    // Step 3: Reflection (uses `prompts` array with stable ids)
+    await createValidatedStep({
+      instance_id: persistent.id,
+      step_order: 3,
       step_type: 'reflection',
       title: 'Apply to Your Plan',
       payload: {
         prompts: [
           { id: 'ref1', text: 'Given the principles of Deep Work, does your plan feel realistic?', format: 'free_text' },
           { id: 'ref2', text: 'What is the first ritual you could build this week?', format: 'free_text' },
+        ]
+      },
+      completion_rule: null,
+    })
+
+    // Step 4: Plan Builder
+    await createValidatedStep({
+      instance_id: persistent.id,
+      step_order: 4,
+      step_type: 'plan_builder',
+      title: 'Next Week\'s Plan',
+      payload: {
+        sections: [
+          {
+            type: 'goals',
+            items: [
+              { id: 'g1', text: 'Master focus' },
+              { id: 'g2', text: 'Ship the integration' }
+            ]
+          },
+          {
+            type: 'milestones',
+            items: [
+              { id: 'm1', text: 'Draft PR submitted' }
+            ]
+          }
+        ]
+      },
+      completion_rule: null,
+    })
+
+    // Step 5: Essay + Tasks
+    await createValidatedStep({
+      instance_id: persistent.id,
+      step_order: 5,
+      step_type: 'essay_tasks',
+      title: 'The Final Exam',
+      payload: {
+        content: 'This represents a long-form essay that the user must read. It details advanced strategies for maintaining focus in chaotic environments. When done, they should complete the tasks below.',
+        tasks: [
+          { id: 't1', description: 'Read the essay thoroughly' },
+          { id: 't2', description: 'Review your focus ritual' }
         ]
       },
       completion_rule: null,

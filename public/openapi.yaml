@@ -1,4 +1,4 @@
-```yaml
+
 openapi: 3.1.0
 info:
   title: Mira Studio API
@@ -723,8 +723,8 @@ components:
           description: "Step ID if the event is step-specific"
         eventType:
           type: string
-          enum: [step_viewed, answer_submitted, task_completed, step_skipped, time_on_step, experience_started, experience_completed]
+          enum: [step_viewed, answer_submitted, task_completed, step_skipped, time_on_step, experience_started, experience_completed, draft_saved]
         eventPayload:
           type: object
           description: "Event-specific data"
-```
+

@@ -125,6 +125,18 @@ export const COPY = {
     requestChanges: 'Request Changes',
     ephemeral: 'Moment',
     persistent: 'Experience',
+    timelinePage: {
+      heading: 'Timeline',
+      subheading: 'Everything that happened, in order.',
+      emptyAll: 'No events yet.',
+      emptyExperiences: 'No experience events.',
+      emptyIdeas: 'No idea events.',
+      emptySystem: 'No system events.',
+      filterAll: 'All',
+      filterExperiences: 'Experiences',
+      filterIdeas: 'Ideas',
+      filterSystem: 'System',
+    }
   },
   library: {
     heading: 'Library',
@@ -146,4 +158,15 @@ export const COPY = {
     returnToLibrary: 'View Library',
     returnToChat: 'Your next conversation with Mira will pick up from here.',
   },
+  profilePage: {
+    heading: 'Profile',
+    subheading: 'Your direction, compiled from action.',
+    emptyState: 'Your profile builds as you complete experiences.',
+    sections: {
+      interests: 'Interests',
+      skills: 'Skills',
+      goals: 'Goals',
+      preferences: 'Preferences',
+    }
+  }
 }
