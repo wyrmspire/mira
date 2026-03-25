@@ -5,9 +5,119 @@ import type { ExperienceInstance } from '@/types/experience'
 
 export const dynamic = 'force-dynamic'
 
+// ---------------------------------------------------------------------------
+// Payload Contract Validators
+// ---------------------------------------------------------------------------
+// These mirror the exact interfaces consumed by each step renderer.
+// If a renderer changes its contract, the corresponding validator MUST change.
+
+type StepType = 'questionnaire' | 'lesson' | 'reflection' | 'challenge' | 'plan_builder' | 'essay_tasks'
+
+interface ValidationResult {
+  valid: boolean
+  errors: string[]
+}
+
+const VALIDATORS: Record<StepType, (payload: any) => ValidationResult> = {
+  questionnaire: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.questions)) errors.push('missing `questions` array')
+    else p.questions.forEach((q: any, i: number) => {
+      if (!q.id) errors.push(`questions[${i}] missing \`id\``)
+      if (!q.label) errors.push(`questions[${i}] missing \`label\` (renderer uses label, not text)`)
+      if (!['text', 'choice', 'scale'].includes(q.type)) errors.push(`questions[${i}] invalid \`type\` (must be text|choice|scale)`)
+      if (q.type === 'choice' && !Array.isArray(q.options)) errors.push(`questions[${i}] choice type requires \`options\` array`)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  lesson: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.sections)) errors.push('missing `sections` array (renderer uses sections, not content)')
+    else p.sections.forEach((s: any, i: number) => {
+      if (!s.heading && !s.body) errors.push(`sections[${i}] needs at least \`heading\` or \`body\``)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  reflection: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.prompts)) errors.push('missing `prompts` array (renderer uses prompts[], not prompt string)')
+    else p.prompts.forEach((pr: any, i: number) => {
+      if (!pr.id) errors.push(`prompts[${i}] missing \`id\``)
+      if (!pr.text) errors.push(`prompts[${i}] missing \`text\``)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  challenge: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.objectives)) errors.push('missing `objectives` array')
+    else p.objectives.forEach((o: any, i: number) => {
+      if (!o.id) errors.push(`objectives[${i}] missing \`id\``)
+      if (!o.description) errors.push(`objectives[${i}] missing \`description\``)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  plan_builder: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.sections)) errors.push('missing `sections` array')
+    else p.sections.forEach((s: any, i: number) => {
+      if (!['goals', 'milestones', 'resources'].includes(s.type)) errors.push(`sections[${i}] invalid \`type\` (must be goals|milestones|resources)`)
+      if (!Array.isArray(s.items)) errors.push(`sections[${i}] missing \`items\` array`)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  essay_tasks: (p) => {
+    const errors: string[] = []
+    if (typeof p?.content !== 'string') errors.push('missing `content` string')
+    if (!Array.isArray(p?.tasks)) errors.push('missing `tasks` array')
+    else p.tasks.forEach((t: any, i: number) => {
+      if (!t.id) errors.push(`tasks[${i}] missing \`id\``)
+      if (!t.description) errors.push(`tasks[${i}] missing \`description\``)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+}
+
+function validateStepPayload(stepType: string, payload: any): ValidationResult {
+  const validator = VALIDATORS[stepType as StepType]
+  if (!validator) {
+    return { valid: true, errors: [] } // Unknown types fall through to FallbackStep renderer
+  }
+  return validator(payload)
+}
+
+// ---------------------------------------------------------------------------
+// Validated step creation helper
+// ---------------------------------------------------------------------------
+
+async function createValidatedStep(params: {
+  instance_id: string
+  step_order: number
+  step_type: string
+  title: string
+  payload: any
+  completion_rule: string | null
+}): Promise<void> {
+  const result = validateStepPayload(params.step_type, params.payload)
+  if (!result.valid) {
+    throw new Error(
+      `Contract violation for step_type "${params.step_type}" (step_order ${params.step_order}, title "${params.title}"): ${result.errors.join('; ')}`
+    )
+  }
+  await createExperienceStep(params)
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/dev/test-experience
+// ---------------------------------------------------------------------------
+
 /**
- * POST /api/dev/test-experience
  * Dev-only: creates one ephemeral + one persistent experience for DEFAULT_USER_ID.
+ * All payloads are validated against renderer contracts before insertion.
  * Returns IDs and where each should appear in the UI.
  */
 export async function POST() {
@@ -16,7 +126,6 @@ export async function POST() {
   }
 
   const userId = DEFAULT_USER_ID
-  // Use the first seeded template ID (questionnaire template)
   const templateId = 'b0000000-0000-0000-0000-000000000001'
 
   try {
@@ -40,16 +149,20 @@ export async function POST() {
       published_at: null,
     }
     const ephemeral = await createExperienceInstance(ephemeralData)
-    await createExperienceStep({
+    await createValidatedStep({
       instance_id: ephemeral.id,
       step_order: 0,
       step_type: 'reflection',
       title: 'Quick thought',
-      payload: { prompt: 'What is one thing you want to focus on today?' },
+      payload: {
+        prompts: [
+          { id: 'r1', text: 'What is one thing you want to focus on today?', format: 'free_text' },
+        ]
+      },
       completion_rule: null,
     })
 
-    // --- Persistent experience ---
+    // --- Persistent experience (3-step Mastery Journey) ---
     const persistentData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
       user_id: userId,
       template_id: templateId,
@@ -69,20 +182,24 @@ export async function POST() {
       published_at: null,
     }
     const persistent = await createExperienceInstance(persistentData)
-    await createExperienceStep({
+
+    // Step 0: Questionnaire (uses `label`, not `text`)
+    await createValidatedStep({
       instance_id: persistent.id,
       step_order: 0,
       step_type: 'questionnaire',
       title: 'What matters most?',
       payload: {
         questions: [
-          { id: 'q1', text: 'What is your top priority this week?', type: 'text' },
-          { id: 'q2', text: 'How much time can you commit?', type: 'choice', options: ['1-2 hours', '3-5 hours', 'Full day'] },
+          { id: 'q1', label: 'What is your top priority this week?', type: 'text' },
+          { id: 'q2', label: 'How much time can you commit?', type: 'choice', options: ['1-2 hours', '3-5 hours', 'Full day'] },
         ]
       },
       completion_rule: 'all_answered',
     })
-    await createExperienceStep({
+
+    // Step 1: Lesson (uses `sections` array)
+    await createValidatedStep({
       instance_id: persistent.id,
       step_order: 1,
       step_type: 'lesson',
@@ -91,7 +208,7 @@ export async function POST() {
         sections: [
           {
             heading: 'The Core of Deep Work',
-            body: 'Deep work is the ability to focus without distraction on a cognitively demanding task. It’s a skill that allows you to quickly master complicated information and produce better results in less time.',
+            body: "Deep work is the ability to focus without distraction on a cognitively demanding task. It\u2019s a skill that allows you to quickly master complicated information and produce better results in less time.",
             type: 'text'
           },
           {
@@ -108,17 +225,24 @@ export async function POST() {
       },
       completion_rule: null,
     })
-    await createExperienceStep({
+
+    // Step 2: Reflection (uses `prompts` array with stable ids)
+    await createValidatedStep({
       instance_id: persistent.id,
       step_order: 2,
       step_type: 'reflection',
       title: 'Apply to Your Plan',
-      payload: { prompt: 'Given the principles of Deep Work, look at your answers above. Does your plan feel realistic?' },
+      payload: {
+        prompts: [
+          { id: 'ref1', text: 'Given the principles of Deep Work, does your plan feel realistic?', format: 'free_text' },
+          { id: 'ref2', text: 'What is the first ritual you could build this week?', format: 'free_text' },
+        ]
+      },
       completion_rule: null,
     })
 
     return NextResponse.json({
-      message: 'Test experiences created successfully',
+      message: 'Test experiences created successfully (all payloads contract-validated)',
       ephemeral: {
         id: ephemeral.id,
         appearsIn: 'Library > Moments',
@@ -133,6 +257,10 @@ export async function POST() {
     }, { status: 201 })
   } catch (error: any) {
     console.error('[dev/test-experience] Error:', error)
+    // Surface contract violations as 400 with clear message
+    if (error.message?.includes('Contract violation')) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
     return NextResponse.json({ error: error.message || 'Failed to create test experiences' }, { status: 500 })
   }
 }
