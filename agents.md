@@ -57,6 +57,9 @@ app/
   icebox/page.tsx       ← Deferred ideas + projects
   shipped/page.tsx      ← Completed projects
   killed/page.tsx       ← Removed projects
+  library/              ← Experience library (Active, Completed, Moments, Suggested)
+    page.tsx            ← Server component: fetches + groups experiences
+    LibraryClient.tsx   ← Client component: "Accept & Start" actions
   workspace/            ← Lived experience surface
     [instanceId]/
       page.tsx          ← Server component: fetch instance + steps
@@ -110,7 +113,9 @@ components/
   inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
   icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
   archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
-  experience/            ← ExperienceRenderer, step renderers (Questionnaire, Lesson)
+  experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
+                           step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
+                           Reflection, EssayTasks)
   dev/                   ← GPT send form, dev tools
 
 lib/
@@ -126,6 +131,7 @@ lib/
     migrations/          ← SQL migration files (001, 002, 003)
   experience/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
+    reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
     interaction-events.ts← Event type constants + payload builder
     CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
   hooks/
@@ -374,6 +380,20 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ Explicitly call `POST /api/synthesis` after marking an instance as `completed`.
 - Why: High-latency background workers aren't built yet. To ensure the GPT re-entry loop is "intelligent" immediately after user action, we trigger a high-priority snapshot sync.
 
+### SOP-18: Dev harness must validate renderer contracts before inserting
+**Learned from**: Broken test experiences (Sprint 4 stabilization)
+
+- ❌ Creating test experience steps with payloads that don't match what the renderer reads (e.g., `content` string instead of `sections[]` for LessonStep).
+- ✅ The dev harness (`/api/dev/test-experience`) validates every step payload against the same contracts the renderers use before inserting.
+- Why: If the harness creates broken data, all downstream testing is meaningless. The harness is the first trust boundary.
+
+### SOP-19: New pages must use `export const dynamic = 'force-dynamic'`
+**Learned from**: Stale server component data (Sprint 4)
+
+- ❌ Server component pages without `dynamic` export serving cached data.
+- ✅ Always add `export const dynamic = 'force-dynamic'` on pages that read from Supabase.
+- Why: Combined with SOP-14, this ensures both the page and the underlying fetch calls bypass Next.js caching.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -385,3 +405,4 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-23**: Sprint 4 boardinit — Experience Engine. Added SOP-11 (persistent = clone of ephemeral), SOP-12 (no GitHub for experience review), SOP-13 (no premature abstraction). Updated repo map with workspace page details, interaction events, renderer registry. Added pitfalls for resolution UX enforcement, UUID discipline, and DEFAULT_USER_ID.
 - **2026-03-24**: Split-brain stabilization. Root cause: silent JSON fallback + Next.js fetch caching of Supabase responses. Added SOP-14 (Supabase `cache: no-store`), SOP-15 (fail-fast storage). Quarantined `projects-service` and `prs-service` (realizations/realization_reviews schema mismatch). Added inbox normalization layer. Added `/api/dev/diagnostic` and `/api/dev/test-experience`. Updated pitfalls for fetch caching, quarantined services, inbox normalization, template ID prefix, and gptschema contract.
 - **2026-03-24 (Phase 7)**: Feedback Loop & Robustness. Added SOP-16 (Auto-activation) and SOP-17 (Synthesis Trigger). Fixed synthesis 404 by exposing `POST /api/synthesis`. Aligned `LessonStep` sections schema. Verified closed-loop intelligence awareness in `/api/gpt/state`.
+- **2026-03-24**: Sprint 5 boardinit — Groundwork sprint. Added SOP-18 (harness validates contracts), SOP-19 (force-dynamic on pages). Updated repo map with library page, ExperienceCard, HomeExperienceAction, reentry-engine. 5 heavy coding lanes: Graph+Chaining, Timeline, Profile+Facets, Validation+API Hardening, Progression+Renderer Upgrades. Lane 6 for integration/wiring/browser testing.
