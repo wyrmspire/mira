@@ -23,6 +23,16 @@ export interface StepContractBase {
   /** Typed per step_type — see individual payload contracts below. */
   payload: unknown
   completion_rule: string | null
+  /** @evolving — v1.1 status and scheduling */
+  status?: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  /** @evolving — v1.1 scheduling: ISO 8601 date (YYYY-MM-DD) */
+  scheduled_date?: string | null;
+  /** @evolving — v1.1 scheduling: ISO 8601 date (YYYY-MM-DD) */
+  due_date?: string | null;
+  /** @evolving — v1.1 scheduling */
+  estimated_minutes?: number | null;
+  /** @evolving — v1.1 completion timestamp */
+  completed_at?: string | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -20,11 +20,14 @@ interface ChallengeStepProps {
 
 export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: ChallengeStepProps) {
   const [completed, setCompleted] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const payload = step.payload as ChallengePayload | null;
   const objectives = payload?.objectives ?? [];
 
-  const handleProofChange = (objectiveId: string, value: string) => {
-    setCompleted((prev) => ({ ...prev, [objectiveId]: value }));
+  const handleBlur = (objectiveId: string) => {
+    if (onDraft && completed[objectiveId]) {
+      onDraft({ objectiveId, proof: completed[objectiveId] });
+    }
   };
 
   const completedCount = Object.values(completed).filter(v => !!v.trim()).length;
@@ -69,40 +72,68 @@ export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: Cha
         )}
         {objectives.map((obj, idx) => {
           const isDone = !!completed[obj.id]?.trim();
+          const isExpanded = expandedId === obj.id;
           return (
             <div
               key={obj.id}
-              className={`p-6 rounded-2xl border transition-all duration-500 group ${
+              className={`p-6 rounded-2xl border transition-all duration-500 group cursor-pointer ${
                 isDone
                   ? 'bg-emerald-500/5 border-emerald-500/30'
-                  : 'bg-[#12121a] border-[#1e1e2e] hover:border-amber-500/20'
+                  : isExpanded
+                    ? 'bg-[#1a1a2e] border-amber-500/40 shadow-lg'
+                    : 'bg-[#12121a] border-[#1e1e2e] hover:border-amber-500/20'
               }`}
+              onClick={() => setExpandedId(isExpanded ? null : obj.id)}
             >
-              <div className="flex items-start gap-4 mb-4">
-                <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all ${
+              <div className="flex items-start gap-4">
+                <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all flex-shrink-0 ${
                   isDone
                     ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 rotate-[360deg]'
                     : 'bg-[#1a1a2e] border-[#33334d] text-[#475569] group-hover:border-amber-500/30'
                 }`}>
                   {isDone ? '✓' : idx + 1}
                 </div>
-                <p className={`text-lg font-medium transition-all ${
-                  isDone ? 'text-emerald-400/70 line-through' : 'text-[#e2e8f0]'
-                }`}>
-                  {obj.description}
-                </p>
-              </div>
-
-              <div className="ml-11">
-                <textarea
-                  value={completed[obj.id] || ''}
-                  onChange={(e) => handleProofChange(obj.id, e.target.value)}
-                  placeholder="Record your progress or results…"
-                  rows={2}
-                  className={`w-full bg-[#0d0d18] border rounded-xl px-4 py-3 text-sm text-[#e2e8f0] placeholder-[#94a3b8]/30 focus:outline-none transition-all resize-none ${
-                    isDone ? 'border-emerald-500/20 focus:border-emerald-500/40' : 'border-[#1e1e2e] focus:border-amber-500/40'
-                  }`}
-                />
+                <div className="flex-1 min-w-0">
+                  <p className={`text-lg font-medium transition-all ${
+                    isDone ? 'text-emerald-400/70 line-through' : 'text-[#e2e8f0]'
+                  }`}>
+                    {obj.description}
+                  </p>
+                  
+                  {isExpanded && (
+                    <div 
+                      className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {obj.proof && (
+                        <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                          <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Requirement</p>
+                          <p className="text-sm text-[#94a3b8] italic">{obj.proof}</p>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-[#475569] uppercase tracking-[0.2em] ml-1">Record Evidence</label>
+                        <textarea
+                          value={completed[obj.id] || ''}
+                          onChange={(e) => setCompleted((prev) => ({ ...prev, [obj.id]: e.target.value }))}
+                          onBlur={() => handleBlur(obj.id)}
+                          placeholder="What did you achieve? Paste results or describe your progress…"
+                          rows={6}
+                          className={`w-full bg-[#0a0a0f] border rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none transition-all ${
+                            isDone ? 'border-emerald-500/20 focus:border-emerald-500/40' : 'border-[#1e1e2e] focus:border-amber-500/40'
+                          }`}
+                          style={{ minHeight: '150px', maxHeight: '500px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!isExpanded && (
+                  <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                    <svg className="w-5 h-5 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                )}
               </div>
             </div>
           );

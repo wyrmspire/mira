@@ -16,10 +16,12 @@ interface ReflectionStepProps {
   onComplete: (payload: { reflections: Record<string, string> }) => void;
   onSkip: () => void;
   onDraft?: (draft: Record<string, any>) => void;
+  readOnly?: boolean;
+  initialResponses?: Record<string, string>;
 }
 
-export default function ReflectionStep({ step, onComplete, onSkip, onDraft }: ReflectionStepProps) {
-  const [responses, setResponses] = useState<Record<string, string>>({});
+export default function ReflectionStep({ step, onComplete, onSkip, onDraft, readOnly, initialResponses }: ReflectionStepProps) {
+  const [responses, setResponses] = useState<Record<string, string>>(initialResponses || {});
   const payload = step.payload as ReflectionPayload | null;
   const prompts = payload?.prompts ?? [];
 
@@ -39,6 +41,32 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft }: Re
   };
 
   const isComplete = prompts.length === 0 || prompts.every((p) => !!responses[p.id]?.trim());
+
+  if (readOnly) {
+    return (
+      <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">
+        <div className="border-l-4 border-violet-500 pl-6 mb-12">
+          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+          <p className="text-sm text-violet-400 uppercase tracking-[0.2em] font-bold">Past Perspective</p>
+        </div>
+        
+        <div className="space-y-16">
+          {prompts.map((p) => (
+            <div key={p.id} className="space-y-6">
+              <label className="block text-xl font-bold text-[#475569] leading-relaxed">
+                {p.text}
+              </label>
+              <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
+                <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
+                  "{responses[p.id] || 'No reflection logged.'}"
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">

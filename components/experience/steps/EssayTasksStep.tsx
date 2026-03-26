@@ -20,7 +20,7 @@ interface EssayTasksStepProps {
 
 export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: EssayTasksStepProps) {
   const [completed, setCompleted] = useState<Record<string, boolean>>({});
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [taskResponses, setTaskResponses] = useState<Record<string, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   
   const payload = step.payload as EssayTasksPayload | null;
@@ -35,7 +35,13 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
     }
   };
 
-  const allDone = tasks.length === 0 || tasks.every((t) => !!completed[t.id]);
+  const handleBlur = (taskId: string) => {
+    if (onDraft && taskResponses[taskId]) {
+      onDraft({ taskId, response: taskResponses[taskId] });
+    }
+  };
+
+  const allDone = tasks.length === 0 || tasks.every((t) => !!completed[t.id] || !!taskResponses[t.id]?.trim());
 
   const handleSubmit = () => {
     setIsSubmitted(true);
@@ -60,31 +66,18 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
         )}
       </div>
 
-      <div className={`rounded-3xl border transition-all duration-700 ${
-        isExpanded ? 'bg-[#12121a] border-rose-500/30' : 'bg-[#0d0d12] border-[#1e1e2e] hover:border-rose-500/10'
-      }`}>
-        <button 
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="w-full text-left p-8 flex justify-between items-center group"
-        >
-          <div>
-            <h3 className="text-xl font-bold text-[#f1f5f9] mb-1">Essay & Instructions</h3>
-            <p className="text-sm text-[#475569]">Click to {isExpanded ? 'collapse' : 'expand and read'}</p>
-          </div>
-          <div className={`w-10 h-10 rounded-full border border-[#1e1e2e] flex items-center justify-center transition-all group-hover:bg-rose-500/10 group-hover:border-rose-500/30 ${isExpanded ? 'rotate-180' : ''}`}>
-             <svg className="w-5 h-5 text-[#475569] group-hover:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
-          </div>
-        </button>
+      <div className="rounded-3xl border bg-[#12121a] border-rose-500/20 p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-[#f1f5f9]">Essay & Instructions</h3>
+        </div>
         
-        {isExpanded && (
-          <div className="px-8 pb-10 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="prose prose-invert max-w-none">
-              <div className="text-[#94a3b8] leading-[1.8] text-lg whitespace-pre-wrap font-serif italic border-l-2 border-[#1e1e2e] pl-6 py-2">
-                {content || 'Detailed instructions are being prepared.'}
-              </div>
+        <div className="animate-in fade-in duration-500">
+          <div className="prose prose-invert max-w-none">
+            <div className="text-[#94a3b8] leading-[1.8] text-lg whitespace-pre-wrap font-serif italic border-l-2 border-[#1e1e2e] pl-6 py-2">
+              {content || 'Detailed instructions are being prepared.'}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -97,29 +90,45 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
           )}
           {tasks.map((task) => {
             const isTaskDone = !!completed[task.id];
+            const wordCount = taskResponses[task.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
             return (
-              <button
+              <div
                 key={task.id}
-                onClick={() => toggleTask(task.id)}
-                className={`w-full text-left flex items-start gap-5 p-6 rounded-2xl border transition-all duration-300 ${
+                className={`w-full p-6 rounded-2xl border transition-all duration-300 ${
                   isTaskDone
                     ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.03)]'
-                    : 'bg-[#0d0d12] border-[#1e1e2e] hover:border-rose-500/20'
+                    : 'bg-[#0d0d12] border-[#1e1e2e]'
                 }`}
               >
-                <div className={`mt-0.5 w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
-                  isTaskDone
-                    ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
-                    : 'bg-transparent border-[#33334d]'
-                }`}>
-                  {isTaskDone && <span className="text-[14px]">✓</span>}
+                <div className="flex items-start justify-between mb-4">
+                  <span className={`text-lg font-bold transition-all ${
+                    isTaskDone ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
+                  }`}>
+                    {task.description}
+                  </span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] font-mono text-[#475569]">{wordCount} WORDS</span>
+                    <button
+                      onClick={() => toggleTask(task.id)}
+                      className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                        isTaskDone
+                          ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
+                          : 'bg-transparent border-[#33334d] hover:border-emerald-500/50'
+                      }`}
+                    >
+                      {isTaskDone && <span className="text-[14px]">✓</span>}
+                    </button>
+                  </div>
                 </div>
-                <span className={`text-lg font-medium transition-all ${
-                  isTaskDone ? 'text-emerald-400/60 line-through' : 'text-[#e2e8f0]'
-                }`}>
-                  {task.description}
-                </span>
-              </button>
+                <textarea
+                  value={taskResponses[task.id] || ''}
+                  onChange={(e) => setTaskResponses({ ...taskResponses, [task.id]: e.target.value })}
+                  onBlur={() => handleBlur(task.id)}
+                  placeholder="Draft your response here…"
+                  rows={8}
+                  className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none focus:border-rose-500/30 transition-all resize-none font-serif leading-relaxed"
+                />
+              </div>
             );
           })}
         </div>

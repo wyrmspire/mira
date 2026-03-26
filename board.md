@@ -8,810 +8,477 @@
 | Sprint 2 | GitHub Factory (Token-First) | TSC ✅ (Lanes 1–5) | ✅ Complete (Lane 6 deferred) |
 | Sprint 3 | Runtime Foundation — Supabase + Experience Types + Renderer + Capture + Integration | TSC ✅ Build ✅ | ✅ Complete — Full ephemeral loop proven. 16 Supabase tables live. |
 | Sprint 4 | Experience Engine — Persistent lifecycle, Library, Review, Home, Re-entry | TSC ✅ Build ✅ | ✅ Complete — Full loop: propose → approve → workspace → complete → GPT re-entry. |
-| Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ (Lanes 1–3) | 🟡 In Progress — Capabilities built, wiring to follow. |
+| Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ Build ✅ | ✅ Complete — Gate 0 contracts, experience graph, timeline, profile, validators, renderer upgrades. All 6 lanes done. |
+| Sprint 6 | Experience Workspace: Navigator, Drafts, Renderer Upgrades, Steps API, Scheduling | TSC ✅ Build ✅ | ✅ Complete — Non-linear workspace model, draft persistence, sidebar/topbar navigators, step status/scheduling migration. All 6 lanes done. |
 
 ---
 
-## Sprint 5 — Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression
+## Sprint 6 — Experience Workspace: Navigation, Drafts, Renderers, Steps API, Scheduling
 
-> **Goal:** Lay down the infrastructure for chaining, temporal awareness, user intelligence, and production-grade validation. These 5 coding lanes are pure build — no browser testing. Lane 6 wires them together and tests everything.
+> **Goal:** Transform experiences from linear form-wizards into navigable workspaces where users do real work over multiple sessions. Based on Sprint 5B field-test findings (see `roadmap.md` R1–R10). The GPT already creates excellent multi-step curricula — the renderers must catch up.
 
-> **Strategy:** Two phases. **Sprint 5A** defines the canonical experience contracts that all lanes build against — this prevents hardening today's incidental payload shapes too early. **Sprint 5B** runs 5 heavy parallel coding lanes with zero file conflicts, then Lane 6 integrates and browser-tests.
+> **Strategy:** 5 parallel coding lanes, zero file conflicts, no browser until Lane 6. Each lane is self-contained and TSC-testable independently.
 
-### Execution Rules
+### What This Sprint Delivers
 
-1. **Gate 0 (Sprint 5A) must be approved before any Sprint 5B lane begins.**
-2. Lanes 1–3 can begin once Gate 0 contract is committed.
-3. Lane 4 validators must be **version-aware** and validate only **contracted fields** — not incidental structure.
-4. Lane 5 renderer upgrades must rely only on **contracted payload fields**, not ad-hoc conventions.
-5. Graph/timeline/profile stay **capability-oriented** (what the system can do), not product-taxonomy-locked.
+By the end of Sprint 6, a user should be able to:
+1. Open an 18-step experience and see **all steps** in a navigable overview (not page→page)
+2. Jump freely between steps, with blocked/completed/available status
+3. Write real text in lesson checkpoints, essay tasks, and challenge workspaces
+4. Close the browser, come back tomorrow, and find all their drafts restored
+5. See a progress dashboard showing what they've done and what's next
+6. Have the GPT add/update/remove steps on an existing experience (multi-pass enrichment)
 
 ### Dependency Graph
 
 ```
-                      ┌──────────────────────┐
-                      │  GATE 0 (Sprint 5A)  │
-                      │  Canonical Contracts  │
-                      └──────────┬───────────┘
-                                 │ approved
-              ┌──────────────────┼──────────────────┐
-              ↓                  ↓                  ↓
-Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
-  GRAPH+CHAIN               TIMELINE           PROFILE+FACETS
-              ↓                  ↓                  ↓
-         Lane 4: [W1–W7]             Lane 5: [W1–W7]
-         VALIDATION (contract-aware)  RENDERERS (contract-aware)
-              └──────────────────┬──────────────────┘
-                                 ↓ all 5 complete
-                      Lane 6: [W1–W8]
-                      INTEGRATION + BROWSER TESTING
+Lane 1: [W1–W6]          Lane 2: [W1–W5]          Lane 3: [W1–W6]
+  WORKSPACE NAVIGATOR       DRAFT PERSISTENCE        RENDERER UPGRADES
+  (ExperienceRenderer,       (service, hook,           (Lesson, Essay,
+   WorkspaceClient,           API route)                Challenge, PlanBuilder)
+   step nav, overview)
+
+Lane 4: [W1–W5]          Lane 5: [W1–W5]
+  STEPS API + MULTI-PASS     STEP SCHEDULING +
+  (CRUD, update, insert,     STEP STATUS +
+   reorder endpoints)        DB SCHEMA ADDITIONS
+
+ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
 ```
 
 **Lanes 1–5 are fully parallel** — zero file conflicts between them.
-**Lanes 4–5** must reference the Gate 0 contract (not incidental payload shapes).
-**Lane 6 runs AFTER** Lanes 1–5. Lane 6 resolves cross-lane integration, wires up navigation, and does all browser testing.
+**Lane 6 runs AFTER** Lanes 1–5. Lane 6 resolves cross-lane issues, wires everything together, and does all browser testing.
 
 ---
 
-## Sprint 5A — Gate 0: Canonical Experience Contract
-
-> **Purpose:** Define the v1 contracts that all Sprint 5B lanes build against. Prevents validators and renderers from hardening incidental structure.
-
-### Gate 0 Ownership Zones
-
-| Zone | Files | Gate 0 |
-|------|-------|--------|
-| Experience contracts | `lib/contracts/experience-contract.ts` [NEW], `lib/contracts/step-contracts.ts` [NEW], `lib/contracts/resolution-contract.ts` [NEW] | Gate 0 |
-| Contract documentation | `docs/contracts/v1-experience-contract.md` [NEW] | Gate 0 |
-
-### Gate 0 Status
-
-| Gate | Focus | Status |
-|------|-------|--------|
-| ✅ Gate 0 | Canonical Experience Contract | G1 ✅ G2 ✅ G3 ✅ G4 ✅ G5 ✅ G6 ✅ |
-
----
-
-### Gate 0 — Canonical Experience Contract
-
-**Owns: contract type definitions, contract documentation. Defines the grammar. NO implementation, NO services, NO API routes.**
-
-**G1 — v1 Experience Instance Contract**
-- Create `lib/contracts/experience-contract.ts`:
-  ```ts
-  /**
-   * v1 Experience Instance Contract
-   * All fields here are CONTRACTED — validators and renderers may depend on them.
-   * Adding a field = non-breaking. Removing/renaming = breaking (requires version bump).
-   */
-  export const EXPERIENCE_CONTRACT_VERSION = 1;
-
-  export interface ExperienceInstanceContractV1 {
-    // Identity
-    id: string;
-    user_id: string;
-    template_id: string;
-
-    // Content
-    title: string;         // max 200 chars
-    goal: string;          // max 1000 chars
-
-    // Classification
-    instance_type: 'persistent' | 'ephemeral';
-    status: ExperienceStatus;  // from state machine
-
-    // Behavior
-    resolution: ResolutionContractV1;
-    reentry: ReentryContractV1 | null;
-
-    // Graph
-    previous_experience_id: string | null;
-    next_suggested_ids: string[];
-
-    // Metadata
-    generated_by: string | null;        // 'gpt' | 'dev-harness' | 'api' | 'coder'
-    source_conversation_id: string | null;
-    created_at: string;                 // ISO 8601
-    published_at: string | null;        // ISO 8601, set on publish transition
-
-    // Computed (write-only during synthesis, read by GPT)
-    friction_level: 'low' | 'medium' | 'high' | null;
-  }
-  ```
-- Define **field stability levels**: `stable` (will not change), `evolving` (may gain options), `computed` (system-written, read-only to creators)
-- Done when: contract type compiles, field stability documented in JSDoc
-
-**G2 — v1 Step Payload Contracts (per step type)**
-- Create `lib/contracts/step-contracts.ts`:
-  - Define a **base contract** all steps share:
-    ```ts
-    export interface StepContractBase {
-      id: string;
-      instance_id: string;
-      step_order: number;
-      step_type: string;   // registered type key
-      title: string;
-      payload: unknown;    // typed per step_type below
-      completion_rule: string | null;
-    }
-    ```
-  - Define **per-type payload contracts** (only contracted fields — renderers must not depend on anything else):
-    - `QuestionnairePayloadV1`: `{ questions: { id: string; label: string; type: 'text' | 'choice' | 'scale'; options?: string[] }[] }`
-    - `LessonPayloadV1`: `{ sections: { heading?: string; body: string; type?: 'text' | 'callout' | 'checkpoint' }[] }`
-    - `ChallengePayloadV1`: `{ objectives: { id: string; description: string; proof_required?: boolean }[] }`
-    - `ReflectionPayloadV1`: `{ prompts: { id: string; text: string; format?: 'free_text' | 'rating' }[] }`
-    - `PlanBuilderPayloadV1`: `{ sections: { type: 'goals' | 'milestones' | 'resources'; title?: string; items: { id: string; text: string; done?: boolean }[] }[] }`
-    - `EssayTasksPayloadV1`: `{ content: string; tasks: { id: string; description: string; done?: boolean }[] }`
-  - Export a discriminated union: `StepPayloadV1 = QuestionnairePayloadV1 | LessonPayloadV1 | ...`
-  - Export `CONTRACTED_STEP_TYPES` array: `['questionnaire', 'lesson', 'challenge', 'reflection', 'plan_builder', 'essay_tasks']`
-- Done when: all 6 payload contracts compile; discriminated union is usable
-
-**G3 — Payload Versioning Strategy**
-- Add to `lib/contracts/experience-contract.ts`:
-  - `PAYLOAD_VERSION_FIELD = 'v'` — optional field on step payloads
-  - If absent, assume v1
-  - Validators must check: `if (payload.v && payload.v > SUPPORTED_VERSION) → pass-through with warning (don't reject future versions)`
-  - Renderers must check: `if (payload.v && payload.v > SUPPORTED_VERSION) → fall back to FallbackStep (don't crash)`
-  - Rule: **new fields are additive-only at the same version. Removing/renaming a field = version bump.**
-- Add `StepPayloadEnvelope`:
-  ```ts
-  export interface StepPayloadEnvelope<T = unknown> {
-    v?: number;       // payload version, defaults to 1
-    data: T;          // the typed payload
-  }
-  ```
-  - Decision: **v1 does NOT wrap in envelope** (too late, existing data has no `v` field). Instead, the `v` field is a top-level optional field on the payload itself. Validators treat its absence as v1.
-- Done when: versioning strategy documented and types defined
-
-**G4 — Resolution + Re-entry Contract**
-- Create `lib/contracts/resolution-contract.ts`:
-  ```ts
-  export interface ResolutionContractV1 {
-    depth: 'light' | 'medium' | 'heavy';
-    mode: 'illuminate' | 'practice' | 'challenge' | 'build' | 'reflect';
-    timeScope: 'immediate' | 'session' | 'multi_day' | 'ongoing';
-    intensity: 'low' | 'medium' | 'high';
-  }
-
-  export interface ReentryContractV1 {
-    trigger: 'time' | 'completion' | 'inactivity' | 'manual';
-    prompt: string;          // max 500 chars — what GPT says on re-entry
-    contextScope: 'minimal' | 'full' | 'focused';
-  }
-  ```
-  - Define **resolution-to-chrome mapping** (formalize the existing practice):
-    ```ts
-    export const RESOLUTION_CHROME_MAP: Record<ResolutionContractV1['depth'], { showHeader: boolean; showProgress: boolean; showGoal: boolean }> = {
-      light:  { showHeader: false, showProgress: false, showGoal: false },
-      medium: { showHeader: false, showProgress: true,  showGoal: false },
-      heavy:  { showHeader: true,  showProgress: true,  showGoal: true  },
-    };
-    ```
-  - This makes the renderer chrome lookup contractual, not hand-wired.
-- Done when: resolution and re-entry contracts compile with chrome mapping
-
-**G5 — Unknown Step Fallback Policy**
-- Add to `lib/contracts/step-contracts.ts`:
-  ```ts
-  /**
-   * UNKNOWN STEP POLICY (v1):
-   * - Validators: PASS unknown step types (don't reject — future step types
-   *   should not fail validation). Log a warning.
-   * - Renderers: Fall back to FallbackStep component (already exists in
-   *   renderer-registry.tsx). FallbackStep renders step_type + raw payload
-   *   as formatted JSON.
-   * - GPT: May create steps with unregistered types. The system accepts them
-   *   gracefully. The codec registers new step types; the contract doesn't
-   *   enumerate all possible types — it enumerates CONTRACTED types.
-   *
-   * This ensures forward compatibility: a v2 GPT can emit step types that v1
-   * renderers don't understand, and the system degrades gracefully instead of
-   * crashing.
-   */
-  export const UNKNOWN_STEP_POLICY = 'pass-through-with-fallback' as const;
-  ```
-- Done when: policy is documented as code and referenced by validators/renderers
-
-**G6 — Module-Role Mapping (capability roles)**
-- Add to `lib/contracts/experience-contract.ts`:
-  ```ts
-  /**
-   * MODULE ROLES — capability-oriented, not product-taxonomy.
-   * These describe what a module DOES, not what it IS.
-   * The same step_type can serve different roles in different experiences.
-   *
-   * This mapping is for graph/timeline/profile to stay generic.
-   * Example: a "questionnaire" step has role "capture" — it captures user input.
-   *          a "lesson" step has role "deliver" — it delivers content.
-   *          a "challenge" step has role "activate" — it activates the user.
-   */
-  export type ModuleRole = 'capture' | 'deliver' | 'activate' | 'synthesize' | 'plan' | 'produce';
-
-  export const STEP_TYPE_ROLES: Record<string, ModuleRole> = {
-    questionnaire: 'capture',
-    lesson: 'deliver',
-    challenge: 'activate',
-    reflection: 'synthesize',
-    plan_builder: 'plan',
-    essay_tasks: 'produce',
-  };
-
-  /**
-   * Capability role descriptions — used by graph/timeline/profile for
-   * generic labeling that won't break when step types are renamed/added.
-   */
-  export const MODULE_ROLE_LABELS: Record<ModuleRole, string> = {
-    capture: 'Input captured',
-    deliver: 'Content delivered',
-    activate: 'Challenge completed',
-    synthesize: 'Reflection recorded',
-    plan: 'Plan built',
-    produce: 'Artifact produced',
-  };
-  ```
-- Done when: module roles compile and map all 6 step types to capability roles
-
----
-
-## Sprint 5B — Coding Lanes (begins after Gate 0 approval)
-
-### Sprint 5B Ownership Zones
+### Sprint 6 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| Experience graph service + chaining API | `lib/services/graph-service.ts` [NEW], `lib/experience/progression-rules.ts` [NEW], `app/api/experiences/[id]/chain/route.ts` [NEW], `app/api/experiences/[id]/suggestions/route.ts` [NEW], `types/graph.ts` [NEW] | Lane 1 |
-| Timeline page + event service | `app/timeline/page.tsx` [NEW], `app/timeline/TimelineClient.tsx` [NEW], `components/timeline/TimelineEventCard.tsx` [NEW], `components/timeline/TimelineFilterBar.tsx` [NEW], `lib/services/timeline-service.ts` [NEW], `types/timeline.ts` [NEW] | Lane 2 |
-| Profile page + facet engine | `app/profile/page.tsx` [NEW], `app/profile/ProfileClient.tsx` [NEW], `components/profile/FacetCard.tsx` [NEW], `components/profile/DirectionSummary.tsx` [NEW], `lib/services/facet-service.ts` [NEW], `types/profile.ts` [NEW] | Lane 3 |
-| Payload validation + API hardening | `lib/validators/experience-validator.ts` [NEW], `lib/validators/step-payload-validator.ts` [NEW], `app/api/experiences/inject/route.ts` [MODIFY], `app/api/experiences/route.ts` [MODIFY], `app/api/experiences/[id]/steps/route.ts` [NEW], `app/api/experiences/[id]/route.ts` [MODIFY] | Lane 4 |
-| Progression engine + renderer upgrades | `lib/experience/progression-engine.ts` [NEW], `components/experience/steps/QuestionnaireStep.tsx` [MODIFY], `components/experience/steps/LessonStep.tsx` [MODIFY], `components/experience/steps/ChallengeStep.tsx` [MODIFY], `components/experience/steps/ReflectionStep.tsx` [MODIFY], `components/experience/steps/PlanBuilderStep.tsx` [MODIFY], `components/experience/steps/EssayTasksStep.tsx` [MODIFY] | Lane 5 |
-| Integration + wiring + browser testing | All files (read + targeted fixes) | Lane 6 |
+| Workspace navigator + overview | `components/experience/ExperienceRenderer.tsx` [REWRITE], `components/experience/StepNavigator.tsx` [NEW], `components/experience/ExperienceOverview.tsx` [NEW], `app/workspace/[instanceId]/WorkspaceClient.tsx` [MODIFY] | Lane 1 |
+| Draft persistence service + hook | `lib/services/draft-service.ts` [NEW], `lib/hooks/useDraftPersistence.ts` [NEW], `app/api/drafts/route.ts` [NEW], `app/api/drafts/[stepId]/route.ts` [NEW] | Lane 2 |
+| Step renderer upgrades | `components/experience/steps/LessonStep.tsx` [MODIFY], `components/experience/steps/EssayTasksStep.tsx` [MODIFY], `components/experience/steps/ChallengeStep.tsx` [MODIFY], `components/experience/steps/PlanBuilderStep.tsx` [MODIFY] | Lane 3 |
+| Steps API + multi-pass endpoints | `app/api/experiences/[id]/steps/route.ts` [MODIFY], `app/api/experiences/[id]/steps/[stepId]/route.ts` [NEW], `app/api/experiences/[id]/steps/reorder/route.ts` [NEW], `lib/services/experience-service.ts` [MODIFY — append only] | Lane 4 |
+| Step status + scheduling schema | `types/experience.ts` [MODIFY], `lib/contracts/step-contracts.ts` [MODIFY], `app/api/experiences/[id]/progress/route.ts` [NEW] | Lane 5 |
+| Integration + browser testing | All files (read + targeted fixes) | Lane 6 |
 
 ---
 
-### Lane Status
+### Lane 1 — Workspace Navigator + Experience Overview ✅
 
-| Lane | Focus | Status |
-|------|-------|--------|
-| ✅ Lane 1 | Experience Graph + Chaining | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-- **Done**: Created `types/graph.ts` defining `ExperienceGraphEdge`, `ExperienceChainContext`, and `ProgressionRule`.
-- **Done**: Created `lib/experience/progression-rules.ts` defining canonical experience chains and suggestion logic.
-- **Done**: Created `lib/services/graph-service.ts` for walking chains, linking instances, and generating suggestions.
-- **Done**: Created `app/api/experiences/[id]/chain/route.ts` (GET/POST) for chaining instances.
-- **Done**: Created `app/api/experiences/[id]/suggestions/route.ts` (GET) for next-step recommendations.
-- **Done**: Added weekly loop detection and repetition counting to graph service.
-- **Done**: Implemented graph summary for GPT state packet in `getGraphSummaryForGPT`.
-| ✅ Lane 2 | Timeline Page + Event Enrichment | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-- **Done**: Created `types/timeline.ts` defining unified timeline entry and stats types.
-- **Done**: Built `lib/services/timeline-service.ts` aggregating events from inbox, experience lifecycle, and interactions.
-- **Done**: Dynamic event generation mapping `experience_instances` created/published/completed timestamps to timeline entries.
-- **Done**: Implemented `TimelineEventCard` with vertical dot-and-line visual language and category colors.
-- **Done**: Built `TimelineFilterBar` for category-specific views with count support.
-- **Done**: Created `app/timeline/page.tsx` and `TimelineClient.tsx` for the unified attention cockpit.
-- **Done**: Added localized copy to `lib/studio-copy.ts` and verified route entry.
-| ✅ Lane 3 | Profile Page + Facet Engine | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-| - | - | - |
-| | | - **Done**: Created types, faceted extraction service, profile aggregation, and the complete profile surface with interactive filtering. |
-| ✅ Lane 4 | Validation + API Hardening | ✅ W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-- **Done**: Implemented strict canonical validators for experience and step payloads, hardened inject/creation routes, and enriched the detail API with graph and interaction context.
-| ✅ Lane 5 | Progression Engine + Renderer Upgrades | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ |
-- **Done**: Created `lib/experience/progression-engine.ts` (scoring + friction). Upgraded all 6 renderers: `QuestionnaireStep` (carousel), `LessonStep` (scroll tracking + checkpoints), `ChallengeStep` (partial completion + proof), `ReflectionStep` (word counts + auto-draft), `PlanBuilderStep` (reordering + dynamic items), `EssayTasksStep` (collapsible essay + submission flow). Added `draft_saved` event type and `trackDraft` to interaction capture. `tsc --noEmit` passes.
-| ✅ Lane 6 | Integration + Wiring + Browser Testing | W1 ✅ W2 ✅ W3 ✅ W4 ✅ W5 ✅ W6 ✅ W7 ✅ W8 ✅ |
-- **Done**: Fixed typescript and build errors, wired Timeline and Profile navigations, and successfully executed browser integration mapping ensuring successful full-cycle renders and captures across 6 contracted step types, progression scoring limits, timeline categories, and profile aggregations.
+**Owns: ExperienceRenderer rewrite, StepNavigator component, ExperienceOverview component, WorkspaceClient updates. NO backend changes. NO step renderer modifications.**
+
+**Reading list:** `components/experience/ExperienceRenderer.tsx`, `app/workspace/[instanceId]/WorkspaceClient.tsx`, `types/experience.ts`, `lib/contracts/resolution-contract.ts`, `lib/experience/renderer-registry.tsx`
+
+**W1 — Create StepNavigator component** ✅
+- **Done**: Created `StepNavigator.tsx` supporting vertical sidebar (heavy) and compact top-bar (medium) layouts with status indicators.
+
+**W2 — Create ExperienceOverview component** ✅
+- **Done**: Created `ExperienceOverview.tsx` with title, goal, progress grid, and resume button.
+
+**W3 — Rewrite ExperienceRenderer with navigator model** ✅
+- **Done**: Refactored `ExperienceRenderer` as a view dispatcher supporting Overview, Step, and Completion modes.
+
+**W4 — Derive step statuses from interaction data** ✅
+- **Done**: Statuses derived from `resumeStepIndex` and persisted to `sessionStorage` in `WorkspaceClient`.
+
+**W5 — Update WorkspaceClient layout** ✅
+- **Done**: Implemented state management, sidebar navigation, and header in `WorkspaceClient`.
+
+**W6 — Add studio-copy entries** ✅
+- **Done**: Added `workspace` copy group to `lib/studio-copy.ts`.
 
 ---
 
-### ⬜ Lane 1 — Experience Graph + Chaining
+### Lane 2 — Draft Persistence + Hydration 🟡
 
-**Owns: graph service, progression rules, chaining API routes, graph types. NO frontend. NO modifications to existing services.**
+**Owns: draft service, draft API routes, `useDraftPersistence` hook. NO renderer changes. NO existing service modifications. Renderers will consume the hook in Lane 6.**
 
-**W1 — Create graph types**
-- Create `types/graph.ts`:
+**Reading list:** `lib/hooks/useInteractionCapture.ts`, `lib/services/interaction-service.ts`, `lib/services/experience-service.ts`, `types/experience.ts`
+
+**W1 — Create draft service ✅**
+- **Done**: Created `lib/services/draft-service.ts` with typed CRUD operations on the `artifacts` table for step-level drafts.
+- Create `lib/services/draft-service.ts`:
+  - `saveDraft(instanceId: string, stepId: string, userId: string, content: Record<string, any>): Promise<void>`
+    - Upserts to the `artifacts` table with `artifact_type = 'step_draft'`
+    - `metadata` stores: `{ step_id, instance_id, saved_at }`, `content` stores the actual draft JSON
+    - Match on `instance_id + step_id + artifact_type = 'step_draft'` for upsert (don't create duplicates)
+  - `getDraft(instanceId: string, stepId: string): Promise<Record<string, any> | null>`
+    - Queries `artifacts` for matching draft, returns `content` parsed as JSON or null
+  - `getDraftsForInstance(instanceId: string): Promise<Record<string, Record<string, any>>>`
+    - Returns a map: `{ [stepId]: draftContent }` for all steps with saved drafts
+  - `deleteDraft(instanceId: string, stepId: string): Promise<void>`
+    - Removes the draft artifact
+- Done when: service compiles with typed CRUD on artifacts table
+
+**W2 — Create draft API routes ✅**
+- **Done**: Created `app/api/drafts/route.ts` and `app/api/drafts/[stepId]/route.ts` for draft CRUD.
+- Create `app/api/drafts/route.ts`:
+  - POST: `{ instanceId, stepId, userId, content }` → calls `saveDraft()`, returns 200
+  - GET: `?instanceId=xxx` → calls `getDraftsForInstance()`, returns draft map
+- Create `app/api/drafts/[stepId]/route.ts`:
+  - GET: `?instanceId=xxx` → calls `getDraft()`, returns single draft or 404
+  - DELETE: `?instanceId=xxx` → calls `deleteDraft()`, returns 200
+- Done when: all CRUD endpoints compile and return correct shapes
+
+**W3 — Create `useDraftPersistence` hook ✅**
+- **Done**: Created `lib/hooks/useDraftPersistence.ts` with debounced auto-save and initial hydration from API.
+- Create `lib/hooks/useDraftPersistence.ts` (`'use client'`):
+  - `useDraftPersistence(instanceId: string)` returns:
+    - `drafts: Record<string, Record<string, any>>` — all loaded drafts for the instance
+    - `saveDraft(stepId: string, content: Record<string, any>): void` — debounced save (500ms)
+    - `getDraft(stepId: string): Record<string, any> | null` — returns from local cache
+    - `isLoading: boolean` — true during initial fetch
+    - `lastSaved: Record<string, string>` — last save timestamp per step
+  - On mount: fetches all drafts for the instance via `GET /api/drafts?instanceId=xxx`
+  - On save: updates local cache immediately, debounced POST to API
+  - Internal: uses `useRef` for debounce timer, `useState` for draft cache
+- Done when: hook compiles and provides load/save/get interface
+
+**W4 — Add draft hydration to ExperienceRenderer contract ✅**
+- **Done**: Created `DraftContext` interface in the hook and `DraftProvider.tsx` context provider.
+- Create `lib/hooks/useDraftPersistence.ts` exports a type:
   ```ts
-  export interface ExperienceGraphEdge {
-    fromInstanceId: string;
-    toInstanceId: string;
-    edgeType: 'chain' | 'suggestion' | 'loop' | 'branch';
-    metadata?: Record<string, any>;
-  }
-
-  export interface ExperienceChainContext {
-    previousExperience: { id: string; title: string; status: string; class: string };
-    suggestedNext: { id: string; title: string; reason: string }[];
-    chainDepth: number;
-    resolutionCarryForward: boolean;
-  }
-
-  export interface ProgressionRule {
-    fromClass: string;
-    toClass: string;
-    condition: 'completion' | 'score_threshold' | 'time_elapsed' | 'always';
-    resolutionEscalation: boolean;
-    reason: string;
+  export interface DraftContext {
+    drafts: Record<string, Record<string, any>>;
+    saveDraft: (stepId: string, content: Record<string, any>) => void;
+    getDraft: (stepId: string) => Record<string, any> | null;
+    isLoading: boolean;
+    lastSaved: Record<string, string>;
   }
   ```
-- Done when: types compile and cover graph edges, chain context, and progression rules
+- This type is what Lane 1's ExperienceRenderer and Lane 3's renderers will consume
+- Create a thin context provider `components/experience/DraftProvider.tsx`:
+  - Wraps children with `DraftContext` via React context
+  - ExperienceRenderer (Lane 1) will mount this, step renderers (Lane 3) will consume it
+- Done when: context provider and type compile
 
-**W2 — Create progression rules**
-- Create `lib/experience/progression-rules.ts`:
-  - Define `PROGRESSION_RULES: ProgressionRule[]` — the canonical chain map:
-    - `questionnaire → plan_builder` (always, "Structure your answers into action")
-    - `questionnaire → challenge` (always, "Put your thinking into practice")
-    - `lesson → challenge` (always, "Apply what you learned")
-    - `lesson → reflection` (completion, "Reflect on what you absorbed")
-    - `plan_builder → challenge` (always, "Execute your plan")
-    - `challenge → reflection` (completion, "Process the challenge")
-    - `reflection → questionnaire` (always, "Weekly loop — check in again")
-    - `essay_tasks → reflection` (completion, "Synthesize your reading")
-  - Export `getProgressionSuggestions(fromClass: string): ProgressionRule[]`
-  - Export `shouldEscalateResolution(rule: ProgressionRule, currentDepth: string): string` — returns new depth
-- Done when: progression rules compile and return valid suggestions
-
-**W3 — Create graph service**
-- Create `lib/services/graph-service.ts`:
-  - `getExperienceChain(instanceId: string): Promise<ExperienceChainContext>` — walks `previous_experience_id` backwards + reads `next_suggested_ids` forward
-  - `linkExperiences(fromId: string, toId: string, edgeType: string): Promise<void>` — sets `previous_experience_id` on the target and adds the target id to `next_suggested_ids` on the source
-  - `getChainDepth(instanceId: string): Promise<number>` — walks backwards counting links
-  - `getSuggestionsForCompletion(instanceId: string): Promise<{ templateClass: string; reason: string; resolution: any }[]>` — uses the instance's template class + progression rules to suggest next experiences
-- Done when: service compiles and all methods return typed results
-
-**W4 — Create chaining API route**
-- Create `app/api/experiences/[id]/chain/route.ts`:
-  - POST body: `{ targetId: string, edgeType: 'chain' | 'suggestion' | 'loop' | 'branch' }`
-  - Calls `linkExperiences()` from graph service
-  - Returns the updated source instance
-  - GET: returns the full chain context via `getExperienceChain()`
-- Done when: both GET and POST compile and return correct shapes
-
-**W5 — Create suggestions API route**
-- Create `app/api/experiences/[id]/suggestions/route.ts`:
-  - GET: calls `getSuggestionsForCompletion(id)` and returns typed suggestion array
-  - The GPT will call this after an experience completes to know what to propose next
-- Done when: GET returns progression-rule-based suggestions
-
-**W6 — Add weekly loop detection**
-- Add to `lib/services/graph-service.ts`:
-  - `getLoopInstances(userId: string, templateId: string): Promise<ExperienceInstance[]>` — finds all instances of the same template for a user, sorted by `created_at`
-  - `getLoopCount(userId: string, templateId: string): Promise<number>` — count of same-template instances
-  - This enables "Weekly reflection #4" labeling and loop-aware GPT re-entry
-- Done when: both methods compile and return correct results
-
-**W7 — Update synthesis to include graph context**
-- Add to `lib/services/graph-service.ts`:
-  - `getGraphSummaryForGPT(userId: string): Promise<{ activeChains: number; totalCompleted: number; loopingTemplates: string[]; deepestChain: number }>` — aggregate graph stats for GPT state packet
-- Done when: method compiles and produces a meaningful summary object
+**W5 — Add `lastSavedIndicator` utility component ✅**
+- **Done**: Created `components/common/DraftIndicator.tsx` using `formatRelativeTime` utility for save-status feedback.
+- Create `components/common/DraftIndicator.tsx`:
+  - Props: `{ lastSaved: string | null; isSaving?: boolean }`
+  - Shows: "Last saved 3m ago" or "Saving…" or nothing if null
+  - Small, subtle indicator for embedding in step renderers
+- Done when: component renders save status
 
 ---
 
-### ⬜ Lane 2 — Timeline Page + Event Enrichment
+### Lane 3 — Step Renderer Upgrades ✅
 
-**Owns: timeline page, timeline components, timeline service, timeline types. NO modifications to existing services or inbox. Reads from `timeline_events` + `experience_instances` + `interaction_events`.**
+**Owns: LessonStep, EssayTasksStep, ChallengeStep, PlanBuilderStep modifications. NO backend. NO ExperienceRenderer. NO new services. These renderers receive `step`, `onComplete`, `onSkip`, `onDraft` props exactly as before — Lane 6 wires draft context in.**
 
-**W1 — Create timeline types**
-- Create `types/timeline.ts`:
-  ```ts
-  export type TimelineCategory = 'experience' | 'idea' | 'system' | 'github'
+**Reading list:** `components/experience/steps/LessonStep.tsx`, `components/experience/steps/EssayTasksStep.tsx`, `components/experience/steps/ChallengeStep.tsx`, `components/experience/steps/PlanBuilderStep.tsx`, `lib/contracts/step-contracts.ts`
 
-  export interface TimelineEntry {
-    id: string;
-    timestamp: string;
-    category: TimelineCategory;
-    title: string;
-    body?: string;
-    entityId?: string;
-    entityType?: 'experience' | 'idea' | 'project' | 'pr';
-    actionUrl?: string;
-    metadata?: Record<string, any>;
-  }
-
-  export interface TimelineFilter {
-    category?: TimelineCategory;
-    dateRange?: { from: string; to: string };
-    limit?: number;
-  }
-  ```
-- Done when: types compile and cover the timeline surface needs
-
-**W2 — Create timeline service**
-- Create `lib/services/timeline-service.ts`:
-  - `getTimelineEntries(userId: string, filter?: TimelineFilter): Promise<TimelineEntry[]>` — aggregates from multiple sources:
-    - `timeline_events` table (existing inbox events, normalized to `TimelineEntry`)
-    - `experience_instances` table (created_at, published_at → entries for "Experience proposed", "Experience activated", "Experience completed")
-    - `interaction_events` table (aggregated: "Completed step X of Y" entries)
-  - All sorted by timestamp descending
-  - Category filtering supported
-  - Limit defaults to 50
-  - `getTimelineStats(userId: string): Promise<{ totalEvents: number; experienceEvents: number; ideaEvents: number; thisWeek: number }>` — summary counts
-- Done when: service compiles and returns unified, sorted timeline
-
-**W3 — Create experience lifecycle event generation**
-- Add to `lib/services/timeline-service.ts`:
-  - `generateExperienceTimelineEntries(userId: string): Promise<TimelineEntry[]>` — queries `experience_instances` for all status-bearing timestamps:
-    - `created_at` → "Experience proposed: {title}"
-    - `published_at` → "Experience published: {title}"
-    - For `status = 'completed'` → "Experience completed: {title}"
-    - For `status = 'active'` → "Experience started: {title}" (uses created_at as proxy)
-  - Each entry gets `category: 'experience'`, `entityId: instance.id`, `entityType: 'experience'`, `actionUrl: /workspace/{id}`
-- Done when: method produces correct timeline entries from experience lifecycle
-
-**W4 — Create TimelineEventCard component**
-- Create `components/timeline/TimelineEventCard.tsx`:
-  - Props: `{ entry: TimelineEntry }`
-  - Visual: vertical timeline dot + connector line on the left, card on the right
-  - Category-colored dot: experience = indigo, idea = amber, system = slate, github = green
-  - Shows: timestamp (relative), title, optional body preview, actionUrl as "→ View"
-  - Dark studio theme matching existing aesthetic
-- Done when: component renders with category-colored timeline dot
-
-**W5 — Create TimelineFilterBar component**
-- Create `components/timeline/TimelineFilterBar.tsx`:
-  - Filter tabs: All | Experiences | Ideas | System
-  - Maps to `TimelineCategory` values
-  - Uses studio aesthetic (dark tabs with active indicator)
-  - Client component (`'use client'`)
-  - Calls `onFilterChange(category?: TimelineCategory)` callback
-- Done when: filter bar renders tabs with active state
-
-**W6 — Create Timeline page**
-- Create `app/timeline/page.tsx` (server component):
-  - Fetches timeline entries via `getTimelineEntries(DEFAULT_USER_ID)`
-  - Wraps in `AppShell`
-  - Uses page heading from `COPY.experience.timeline` ("Timeline")
-  - Passes data to `TimelineClient.tsx`
-  - `export const dynamic = 'force-dynamic'`
-- Create `app/timeline/TimelineClient.tsx` (`'use client'`):
-  - Renders `TimelineFilterBar` at top
-  - Renders filtered `TimelineEventCard` list below
-  - Client-side filtering (no re-fetch — all entries loaded)
-  - Empty state per filter category
-- Done when: timeline page renders entries with filter bar
-
-**W7 — Add copy and route entries**
-- Add to `lib/studio-copy.ts` under `experience` section:
-  ```ts
-  timelinePage: {
-    heading: 'Timeline',
-    subheading: 'Everything that happened, in order.',
-    emptyAll: 'No events yet.',
-    emptyExperiences: 'No experience events.',
-    emptyIdeas: 'No idea events.',
-    emptySystem: 'No system events.',
-    filterAll: 'All',
-    filterExperiences: 'Experiences',
-    filterIdeas: 'Ideas',
-    filterSystem: 'System',
-  }
-  ```
-- Verify `ROUTES.timeline` exists in `lib/routes.ts` (it does: `/timeline`)
-- Done when: copy compiles and is used by timeline components
-
----
-
-### ⬜ Lane 3 — Profile Page + Facet Engine
-
-**Owns: profile page, profile components, facet service, profile types. NO modifications to existing services. Reads from `profile_facets` + `synthesis_snapshots` + `experience_instances`.**
-
-**W1 — Create profile types**
-- Create `types/profile.ts`:
-  ```ts
-  export type FacetType = 'interest' | 'skill' | 'goal' | 'effort_area' | 'preferred_depth' | 'preferred_mode'
-
-  export interface ProfileFacet {
-    id: string;
-    user_id: string;
-    facet_type: FacetType;
-    value: string;
-    confidence: number; // 0.0 to 1.0
-    source_snapshot_id?: string | null;
-    updated_at: string;
-  }
-
-  export interface UserProfile {
-    userId: string;
-    displayName: string;
-    facets: ProfileFacet[];
-    topInterests: string[];
-    topSkills: string[];
-    activeGoals: string[];
-    experienceCount: { total: number; completed: number; active: number; ephemeral: number };
-    preferredDepth: string | null;
-    preferredMode: string | null;
-    memberSince: string;
-  }
-
-  export interface FacetUpdate {
-    facet_type: FacetType;
-    value: string;
-    confidence: number;
-    source_snapshot_id?: string;
-  }
-  ```
-- Done when: types compile and cover profile surface needs
-
-**W2 — Create facet service**
-- Create `lib/services/facet-service.ts`:
-  - `getFacetsForUser(userId: string): Promise<ProfileFacet[]>` — reads from `profile_facets` table
-  - `upsertFacet(userId: string, update: FacetUpdate): Promise<ProfileFacet>` — insert or update (match on `user_id + facet_type + value`)
-  - `removeFacet(facetId: string): Promise<void>` — delete
-  - `getFacetsByType(userId: string, facetType: FacetType): Promise<ProfileFacet[]>` — filtered query
-  - `getTopFacets(userId: string, facetType: FacetType, limit: number): Promise<ProfileFacet[]>` — sorted by confidence desc
-- Done when: service compiles with typed CRUD operations
-
-**W3 — Create facet extraction from interactions**
-- Add to `lib/services/facet-service.ts`:
-  - `extractFacetsFromExperience(userId: string, instanceId: string): Promise<ProfileFacet[]>`:
-    - Reads all `interaction_events` for the instance
-    - For `answer_submitted` events → extract keywords from answers as `interest` facets (simple: split on commas/keywords, confidence = 0.6)
-    - For `step_completed` events → the step's `step_type` maps to a `skill` facet (e.g., completed a "challenge" = skill: "challenge-taking", confidence = 0.5)
-    - For the experience's `resolution.mode` → creates a `preferred_mode` facet (confidence = 0.4 per experience, accumulates)
-    - Returns the created/updated facets
-  - This is deliberately simple — no NLP, no AI. Just structural extraction from typed interaction data.
-- Done when: method creates facets from interaction event data
-
-**W4 — Build UserProfile aggregator**
-- Add to `lib/services/facet-service.ts`:
-  - `buildUserProfile(userId: string): Promise<UserProfile>`:
-    - Queries `profile_facets` for all facets
-    - Queries `experience_instances` for counts (total, completed, active, ephemeral)
-    - Queries `users` table for display name + created_at (memberSince)
-    - Aggregates: `topInterests` = top 5 interest facets by confidence, `topSkills` = top 5 skill facets, `activeGoals` = all goal facets, `preferredDepth/Mode` = highest-confidence preferred_depth/preferred_mode
-  - Returns a complete `UserProfile` object
-- Done when: aggregator compiles and returns full profile
-
-**W5 — Create FacetCard component**
-- Create `components/profile/FacetCard.tsx`:
-  - Props: `{ facet: ProfileFacet }`
-  - Visual: compact chip/badge with facet type icon + value + confidence bar
-  - Color by facet_type: interest = indigo, skill = emerald, goal = amber, effort_area = violet, preferred_depth = sky, preferred_mode = rose
-  - Confidence shown as a thin bar underneath (0% to 100%)
-  - Dark studio theme
-- Done when: component renders facets with type-specific colors and confidence
-
-**W6 — Create DirectionSummary component**
-- Create `components/profile/DirectionSummary.tsx`:
-  - Props: `{ profile: UserProfile }`
-  - Shows: "Member since {date}", experience counts, top interests as tag cloud, top skills as badges, active goals as a list, preferred depth/mode as pills
-  - Read-only — no editing. This is a compiled view of accumulated intelligence.
-  - If no facets exist: show "Your profile builds as you complete experiences." empty state
-- Done when: component renders all profile sections from aggregated data
-
-**W7 — Create Profile page**
-- Create `app/profile/page.tsx` (server component):
-  - Calls `buildUserProfile(DEFAULT_USER_ID)` directly (server component)
-  - Wraps in `AppShell`
-  - Renders `DirectionSummary` at top
-  - Renders facet grid grouped by type below
-  - Uses `COPY` for headings
-  - `export const dynamic = 'force-dynamic'`
-- Create `app/profile/ProfileClient.tsx` (`'use client'`):
-  - Receives profile as prop
-  - Renders facet type tabs (All | Interests | Skills | Goals)
-  - Client-side filtering
-- Add to `lib/studio-copy.ts`:
-  ```ts
-  profilePage: {
-    heading: 'Profile',
-    subheading: 'Your direction, compiled from action.',
-    emptyState: 'Your profile builds as you complete experiences.',
-    sections: {
-      interests: 'Interests',
-      skills: 'Skills',
-      goals: 'Goals',
-      preferences: 'Preferences',
-    }
-  }
-  ```
-- Done when: profile page renders with facets and summary
-
----
-
-### ⬜ Lane 4 — Validation + API Hardening
-
-**Owns: experience validators, step payload validators, API route modifications (inject + create + individual experience routes). NO frontend. NO new pages.**
-
-**W1 — Create step payload validator**
-- Create `lib/validators/step-payload-validator.ts`:
-  - Move and generalize the validator logic from `app/api/dev/test-experience/route.ts` into a reusable module
-  - Export `validateStepPayload(stepType: string, payload: any): { valid: boolean; errors: string[] }`
-  - Support all 6 step types: questionnaire, lesson, reflection, challenge, plan_builder, essay_tasks
-  - Strict validation: every field the renderer reads must be present and correctly typed
-  - Unknown step types pass validation (fall through to FallbackStep renderer)
-- Done when: validator handles all 6 step types with precise contract enforcement
-
-**W2 — Create experience instance validator**
-- Create `lib/validators/experience-validator.ts`:
-  - `validateExperiencePayload(body: any): { valid: boolean; errors: string[]; normalized?: any }`:
-    - Required: `templateId` (must match UUID format), `userId` (UUID), `resolution` (must have depth, mode, timeScope, intensity with valid enum values)
-    - Optional: `title` (string, max 200 chars), `goal` (string, max 1000 chars), `reentry` (trigger + prompt + contextScope), `steps[]`
-    - If `steps[]` present, validate each step via `validateStepPayload()`
-    - `templateId` must be one of the known template IDs from `DEFAULT_TEMPLATE_IDS` or a valid UUID
-    - Normalize: accepts both `step_type` and `type` for step type field (GPT sends `type`, internal uses `step_type`)
-  - `validateResolution(resolution: any): { valid: boolean; errors: string[] }` — checks all 4 fields against known enums
-  - `validateReentry(reentry: any): { valid: boolean; errors: string[] }` — checks trigger/prompt/contextScope
-- Done when: validator compiles and catches all known payload contract violations
-
-**W3 — Harden POST /api/experiences (persistent creation)**
-- Modify `app/api/experiences/route.ts`:
-  - Import and use `validateExperiencePayload()` from the new validator
-  - On validation failure: return 400 with specific field-level errors
-  - On success: use normalized payload for creation
-  - Add `generated_by` field support: accept from body, default to `'api'`
-  - Add `source_conversation_id` field support: accept from body, set if provided
-  - Replace the loose validation with the strict validator
-- Done when: POST returns detailed 400 errors for invalid payloads
-
-**W4 — Harden POST /api/experiences/inject (ephemeral creation)**
-- Modify `app/api/experiences/inject/route.ts`:
-  - Import and use `validateExperiencePayload()` + `validateStepPayload()` from validators
-  - Validate every step payload before insertion (fail fast with 400)
-  - Add `generated_by` field support
-  - Normalize `step_type` vs `type` field name
-  - Return 400 with specific errors on contract violation
-- Done when: inject route validates payloads strictly before creating
-
-**W5 — Create steps CRUD route**
-- Create `app/api/experiences/[id]/steps/route.ts`:
-  - GET: returns all steps for an experience instance, sorted by step_order
-  - POST: adds a new step to an existing instance
-    - Validates step payload via `validateStepPayload()`
-    - Auto-assigns `step_order` (max existing + 1)
-    - Returns created step
-  - This enables GPT to add steps to an existing experience after creation
-- Done when: GET returns sorted steps, POST creates validated steps
-
-**W6 — Enhance GET /api/experiences/[id]**
-- Modify `app/api/experiences/[id]/route.ts`:
-  - Current: returns instance + steps
-  - Add: include `interaction_events` count for the instance
-  - Add: include `graph` context (previous experience title, next suggested count)
-  - Add: include `resumeStepIndex` from `getResumeStepIndex()`
-  - Response shape becomes: `{ ...instance, steps, interactionCount, resumeStepIndex, graph: { previousTitle?, suggestedNextCount } }`
-- Done when: GET returns enriched experience data
-
-**W7 — Add bulk step creation to experience service**
-- Add to `lib/services/experience-service.ts` (at the bottom, not modifying existing functions):
-  - `createExperienceSteps(steps: Omit<ExperienceStep, 'id'>[]): Promise<ExperienceStep[]>` — batch creation, assigns IDs, inserts all
-  - `updateExperienceStep(stepId: string, updates: Partial<ExperienceStep>): Promise<ExperienceStep | null>` — update step payload/title/completion_rule
-  - `deleteExperienceStep(stepId: string): Promise<void>` — remove a step
-  - These enable the GPT and future admin UI to manage steps beyond initial creation
-- Done when: all three methods compile and work with the storage adapter
-
----
-
-### ⬜ Lane 5 — Progression Engine + Renderer Upgrades
-
-**Owns: progression engine, step renderer enhancements. NO backend API routes. NO new pages. Modifies only components/experience/steps/ files and creates new lib/ files.**
-
-**W1 — Create progression engine**
-- Create `lib/experience/progression-engine.ts`:
-  - `computeStepScore(step: ExperienceStep, interactions: InteractionEvent[]): number` — 0 to 100 based on interaction quality:
-    - Questionnaire: % of questions answered (each answer_submitted = +points)
-    - Lesson: viewed = 50, checkpoint acknowledged = 100
-    - Challenge: % of objectives marked complete
-    - Reflection: any response = 80, all prompts answered = 100
-    - Plan Builder: % of sections with items
-    - Essay+Tasks: content read (step_viewed) = 40, % tasks done = remaining 60
-  - `computeExperienceScore(instanceId: string): Promise<{ totalScore: number; stepScores: { stepId: string; score: number }[] }>` — aggregates per-step scores
-  - `shouldProgessToNext(score: number, threshold?: number): boolean` — defaults threshold to 60
-- Done when: engine compiles and produces numeric scores from interaction data
-
-**W2 — Create friction calculator**
-- Add to `lib/experience/progression-engine.ts`:
-  - `computeFrictionLevel(instanceId: string): Promise<'low' | 'medium' | 'high' | null>`:
-    - Reads `interaction_events` for the instance
-    - High skip rate (>50% step_skipped events) → 'high'
-    - Long dwell (step_viewed without completion, >5 min between events) + eventual completion → 'low'
-    - Abandonment mid-step (step_viewed, no completion after 48h) → 'medium'
-    - No interactions at all → null
-  - `updateInstanceFriction(instanceId: string): Promise<void>` — computes and writes friction_level to the instance
-- Done when: friction calculator produces correct levels from interaction patterns
-
-**W3 — Upgrade QuestionnaireStep renderer**
-- Modify `components/experience/steps/QuestionnaireStep.tsx`:
-  - Add progress indicator: "Question {n} of {total}"
-  - Add `scale` type rendering: slider or numbered buttons (1–5 or 1–10, based on `options` array length or default 5)
-  - Add validation feedback: highlight unanswered required questions in red before allowing completion
-  - Add subtle animation on question transition (opacity fade)
-  - Keep existing text/choice logic intact
-- Done when: questionnaire shows progress, renders scale type, validates before completion
-
-**W4 — Upgrade LessonStep renderer**
+**W1 — LessonStep: Add `respond` checkpoint mode** ✅
+- **Done**: Added keyword-based `respond` mode detection for checkpoints with textarea input and word count.
 - Modify `components/experience/steps/LessonStep.tsx`:
-  - Add section type rendering: `callout` sections get a distinct visual (left border accent + background tint), `checkpoint` sections show a "✓ Got it" acknowledgment button
-  - Add reading progress: track which sections have been scrolled into view (IntersectionObserver)
-  - Add a "Mark complete" button that only enables after all checkpoints are acknowledged
-  - Keep existing text section rendering intact
-- Done when: lesson renders callouts distinctly, checkpoints are interactive, progress tracked
+  - Checkpoint sections gain a `mode` interpretation:
+    - If section body contains "write", "describe", "explain", "list", or "draft" (case-insensitive) → render as `respond` mode
+    - Otherwise → render as `confirm` mode (current "I Understand" button)
+  - `respond` mode renders: the prompt text + a textarea (rows=4) + word count + "Submit Response" button
+  - Submitted responses are passed to `onDraft()` with `{ checkpointIndex: idx, response: text }`
+  - After submission, shows the green "✓ Response Recorded" badge (same style as current confirm)
+  - Existing behavior for `text` and `callout` types is UNCHANGED
+  - The completion gate remains: all checkpoints (both confirm and respond) must be done to enable "Continue Journey"
+- Done when: "Write 3 sentences…" checkpoints show a textarea instead of a button
 
-**W5 — Upgrade ChallengeStep renderer**
-- Modify `components/experience/steps/ChallengeStep.tsx`:
-  - Add objective completion percentage display (e.g., "3/5 objectives")
-  - Add "proof" input: each objective can optionally have a text input for proof/notes
-  - Add visual: completed objectives get a strike-through + green check
-  - Enable partial completion: can mark complete with >60% objectives done (shows warning if <100%)
-- Done when: challenge shows completion percentage, accepts proof, allows partial completion
-
-**W6 — Upgrade ReflectionStep and PlanBuilderStep renderers**
-- Modify `components/experience/steps/ReflectionStep.tsx`:
-  - Add word count display per prompt response
-  - Add "Save draft" functionality: responses are auto-saved to `interaction_events` as `draft_saved` event type on blur
-  - Add subtle prompt animation (fade in one at a time as user scrolls or answers)
-- Modify `components/experience/steps/PlanBuilderStep.tsx`:
-  - Add drag-reorder for items within sections (simple: up/down buttons, not full drag-and-drop)
-  - Add "Add item" button per section
-  - Add section completion indicator (section is "done" when it has at least one item)
-- Done when: reflection saves drafts + shows word count; plan builder supports add/reorder
-
-**W7 — Upgrade EssayTasksStep renderer**
+**W2 — EssayTasksStep: Add writing surface** ✅
+- **Done**: Removed accordion for instructions, added per-task writing textareas with word counts and blur-save telemetry.
 - Modify `components/experience/steps/EssayTasksStep.tsx`:
-  - Add reading time estimate (based on word count: ~200 words/min)
-  - Add task completion percentage display
-  - Add "notes" textarea per task for user annotations
-  - Add separator between essay content and tasks section
-  - Visually: essay section scrollable, tasks section sticky at bottom
-- Done when: essay shows reading time, tasks show percentage, notes are capturable
+  - The `content` field becomes permanently visible (not collapsed behind a toggle). Remove the accordion pattern.
+  - Each task gets a writing surface:
+    - Task title as section header
+    - Full textarea (rows=8) below each task description
+    - Word count per task
+    - Auto-call `onDraft()` on blur with `{ taskId: text }`
+  - The boolean checkbox becomes secondary — shown as a small "Mark Complete" toggle after writing
+  - "Submit for Review" button remains but requires: all tasks have either text content OR are checked
+  - The visual hierarchy changes: instructions at top (always shown) → writing sections → submit
+- Done when: each task has its own writing area with word count
+
+**W3 — ChallengeStep: Expandable objective workspaces** ✅
+- **Done**: Objectives are now expandable cards with resizable textareas and proof requirement display.
+- Modify `components/experience/steps/ChallengeStep.tsx`:
+  - Each objective becomes an expandable card:
+    - Collapsed: objective description + status (incomplete / in-progress / done)
+    - Expanded: full description + proof requirement + resizable textarea (rows=6, max 20) + "Record Evidence" label
+  - Click objective card to expand/collapse
+  - Only one objective expanded at a time (or allow multiple, judgment call)
+  - Proof text area auto-saves via `onDraft()` on blur
+  - The 2-row textarea is replaced by the expanded workspace textarea
+  - Progress percentage and partial completion (≥60%) rules UNCHANGED
+- Done when: objectives expand into proper workspaces with resizable text areas
+
+**W4 — PlanBuilderStep: Expandable items with notes** ✅
+- **Done**: Plan items expand on click to show a notes area with auto-saving draft support.
+- Modify `components/experience/steps/PlanBuilderStep.tsx`:
+  - Each item in each section becomes expandable:
+    - Collapsed: checkbox + item text (current behavior)
+    - Expanded: checkbox + item text + notes textarea (rows=4) + "Notes" label
+  - Click item text (not the checkbox) to expand
+  - Notes auto-save via `onDraft()` on blur with `{ sectionIdx-itemIdx: notes }`
+  - "Add item" button preserved
+  - Reorder buttons preserved
+  - New: section description field (optional, if section has a `description` property)
+- Done when: plan items expand to show notes area, notes auto-save
+
+**W5 — QuestionnaireStep: Preserve + add previous-answer display** ✅
+- **Done**: Added `readOnly` mode and `initialAnswers` support for revisited questionnaires.
+- Modify `components/experience/steps/QuestionnaireStep.tsx`:
+  - When revisiting a completed questionnaire (via navigator), show submitted answers read-only
+  - Add `readOnly` prop: if true, renders answers as static text instead of input fields
+  - If `initialAnswers` prop is provided (from draft hydration), pre-populate fields
+  - Current submit/skip behavior UNCHANGED when not readOnly
+- Done when: questionnaire supports read-only revisit mode and pre-population
+
+**W6 — ReflectionStep: Preserve + add previous-response display** ✅
+- **Done**: Added `readOnly` mode and `initialResponses` support for revisited reflections.
+- Modify `components/experience/steps/ReflectionStep.tsx`:
+  - When revisiting a completed reflection (via navigator), show submitted responses read-only
+  - Add `readOnly` prop: if true, renders responses as styled quote blocks
+  - If `initialResponses` prop is provided (from draft hydration), pre-populate textareas
+  - Current submit/skip/word-count behavior UNCHANGED when not readOnly
+- Done when: reflection supports read-only revisit and pre-population
 
 ---
 
-### ⬜ Lane 6 — Integration + Wiring + Browser Testing
+### Lane 4 — Steps API + Multi-Pass Endpoints ✅
 
-**Runs AFTER Lanes 1–5 are completed. Wires up navigation, fixes cross-lane issues, does all visual testing.**
+**Owns: Steps CRUD enhancements, step update route, step reorder route, experience-service append. NO frontend. NO renderer changes.**
+
+**Reading list:** `app/api/experiences/[id]/steps/route.ts`, `lib/services/experience-service.ts`, `lib/validators/step-payload-validator.ts`, `types/experience.ts`
+
+**W1 — Create individual step route (GET/PATCH/DELETE) ✅**
+- Create `app/api/experiences/[id]/steps/[stepId]/route.ts`:
+  - GET: returns single step by ID (verify it belongs to the experience)
+  - PATCH: updates step payload, title, or completion_rule
+    - Validates payload via `validateStepPayload()` if payload is being changed
+    - Returns updated step
+    - This enables the GPT to update a step's content on an existing experience (multi-pass enrichment)
+  - DELETE: removes a step from the experience
+    - Returns 200 with deleted step ID
+    - Automatically re-orders remaining steps (gap fill)
+- **Done**: Implemented GET, PATCH, and DELETE with gap-fill logic and validation.
+
+**W2 — Create step reorder route ✅**
+- Create `app/api/experiences/[id]/steps/reorder/route.ts`:
+  - POST body: `{ orderedStepIds: string[] }` — the new order of all step IDs
+  - Validates: all IDs belong to the experience, no duplicates, no missing
+  - Updates `step_order` on each step to match the array position
+  - Returns the re-ordered steps array
+  - This enables the GPT or future admin UI to restructure an experience
+- **Done**: Created POST endpoint for bulk step reordering.
+
+**W3 — Add step insertion with ordering ✅**
+- Modify `app/api/experiences/[id]/steps/route.ts` (POST endpoint):
+  - Add optional `insertAfterStepId` field to request body
+  - If provided: insert the new step after that step and shift all subsequent step_orders up by 1
+  - If not provided: append at end (current behavior)
+  - Validates step payload via `validateStepPayload()` before insertion
+  - Returns created step with correct `step_order`
+- **Done**: Updated POST /api/experiences/[id]/steps to support insertion at arbitrary positions.
+
+**W4 — Add bulk step update to experience service ✅**
+- Append to `lib/services/experience-service.ts` (bottom of file, do not modify existing functions):
+  - `reorderExperienceSteps(instanceId: string, orderedIds: string[]): Promise<ExperienceStep[]>`
+    - Fetches all steps for instance, validates IDs match, reassigns `step_order` by array index, saves each
+  - `insertStepAfter(instanceId: string, afterStepId: string, stepData: Omit<ExperienceStep, 'id'>): Promise<ExperienceStep>`
+    - Fetches all steps, finds afterStepId's order, shifts subsequent orders up by 1, inserts new step at afterStepId.order + 1
+  - These are the service functions called by the API routes
+- **Done**: Added reorder and insert-after business logic to experience service.
+
+**W5 — Create progress summary endpoint ✅**
+- Create `app/api/experiences/[id]/progress/route.ts`:
+  - GET: returns a progress summary for the experience:
+    ```ts
+    {
+      instanceId: string;
+      totalSteps: number;
+      completedSteps: number;
+      skippedSteps: number;
+      currentStepId: string | null;
+      stepStatuses: Record<string, 'pending' | 'completed' | 'skipped'>;
+      frictionLevel: string | null;
+      totalTimeSpentMs: number;
+      lastActivityAt: string | null;
+    }
+    ```
+  - Computes from interaction events: count `task_completed` and `step_skipped` per step
+  - Uses `getResumeStepIndex()` for current position
+  - Sums `time_on_step` events for total time
+  - Reads `friction_level` from instance
+  - This endpoint powers the overview dashboard (Lane 1) and future GPT progress queries
+- **Done**: Implemented GET /api/experiences/[id]/progress to summarize user journey stats.
+
+---
+
+### Lane 5 — Step Status + Scheduling Schema ✅
+
+**Owns: Type additions, contract updates, and the database schema additions for step status and scheduling. NO frontend. NO existing service logic changes. Adds new fields that other lanes will consume.**
+
+**Reading list:** `types/experience.ts`, `lib/contracts/step-contracts.ts`, `lib/contracts/experience-contract.ts`, `lib/state-machine.ts`
+
+**W1 — Add step status to types ✅**
+- Modify `types/experience.ts`:
+  - Add new type:
+    ```ts
+    export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+    ```
+  - Add optional fields to `ExperienceStep`:
+    ```ts
+    status?: StepStatus;
+    scheduled_date?: string | null;     // ISO 8601 date (no time)
+    due_date?: string | null;           // ISO 8601 date (no time)
+    estimated_minutes?: number | null;  // estimated time to complete
+    completed_at?: string | null;       // ISO 8601 timestamp
+    ```
+  - These are all optional and backwards-compatible — existing steps without them still work
+- Done when: types compile with new optional fields
+- **Done**: Added `StepStatus` type and optional scheduling fields to `ExperienceStep` in `types/experience.ts`.
+
+**W2 — Update step contract ✅**
+- Modify `lib/contracts/step-contracts.ts`:
+  - Add to `StepContractBase`:
+    ```ts
+    status?: 'pending' | 'in_progress' | 'completed' | 'skipped';  // @evolving
+    scheduled_date?: string | null;   // @evolving — ISO date
+    due_date?: string | null;         // @evolving — ISO date
+    estimated_minutes?: number | null; // @evolving
+    completed_at?: string | null;     // @evolving — ISO timestamp
+    ```
+  - Mark all new fields with `@evolving` stability annotation
+  - Add doc comment explaining these are v1.1 additions, backwards-compatible
+- Done when: contract compiles with new fields documented
+- **Done**: Added evolving status and scheduling fields to `StepContractBase`.
+
+**W3 — Create step status transition rules ✅**
+- Create `lib/experience/step-state-machine.ts`:
+  - Define valid step transitions:
+    ```ts
+    const STEP_TRANSITIONS: Record<StepStatus, { action: string; to: StepStatus }[]> = {
+      pending: [
+        { action: 'start', to: 'in_progress' },
+        { action: 'skip', to: 'skipped' },
+      ],
+      in_progress: [
+        { action: 'complete', to: 'completed' },
+        { action: 'skip', to: 'skipped' },
+      ],
+      completed: [
+        { action: 'reopen', to: 'in_progress' },
+      ],
+      skipped: [
+        { action: 'start', to: 'in_progress' },
+      ],
+    };
+    ```
+  - Export `canTransitionStep(current: StepStatus, action: string): boolean`
+  - Export `getNextStepStatus(current: StepStatus, action: string): StepStatus | null`
+  - This parallels the existing state machine pattern in `lib/state-machine.ts`
+- Done when: step state machine compiles with typed transitions
+- **Done**: Created `lib/experience/step-state-machine.ts` with typed transition logic.
+
+**W4 — Create scheduling type utilities ✅**
+- Create `lib/experience/step-scheduling.ts`:
+  - `assignSchedule(steps: ExperienceStep[], startDate: string, pacingMode: 'daily' | 'weekly' | 'custom'): ExperienceStep[]`
+    - `daily` → one step per day starting from startDate
+    - `weekly` → groups steps into week blocks (Mon-Fri = active steps, weekends off)
+    - `custom` → uses `estimated_minutes` to pack steps into sessions of ~60min
+    - Returns steps with `scheduled_date` and `due_date` filled in
+  - `getStepsForDate(steps: ExperienceStep[], date: string): ExperienceStep[]`
+    - Filters steps scheduled for a specific date
+  - `getOverdueSteps(steps: ExperienceStep[]): ExperienceStep[]`
+    - Filters steps past `due_date` that aren't completed/skipped
+  - These are pure utility functions — they don't call the DB
+- Done when: scheduling utilities compile and produce correct dates
+- **Done**: Created `lib/experience/step-scheduling.ts` with pacing and filtering utilities.
+
+**W5 — Create Supabase migration for step columns ✅**
+- Create `lib/supabase/migrations/004_step_status_and_scheduling.sql`:
+    ```sql
+    -- Sprint 6: Add step status and scheduling columns
+    ALTER TABLE experience_steps ADD COLUMN IF NOT EXISTS status text DEFAULT 'pending';
+    ALTER TABLE experience_steps ADD COLUMN IF NOT EXISTS scheduled_date date;
+    ALTER TABLE experience_steps ADD COLUMN IF NOT EXISTS due_date date;
+    ALTER TABLE experience_steps ADD COLUMN IF NOT EXISTS estimated_minutes integer;
+    ALTER TABLE experience_steps ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+    ```
+- **Do NOT run the migration** — Lane 6 will apply it during integration
+- Done when: migration file created and SQL is valid
+- **Done**: Created migration file `004_step_status_and_scheduling.sql`.
+
+---
+
+### Lane 6 — Integration + Wiring + Browser Testing ⬜
+
+**Runs AFTER Lanes 1–5 are completed. Applies migrations, wires draft context into renderers, resolves cross-lane types, and does all visual testing.**
 
 **W1 — TSC + build fix pass**
 - Run `npx tsc --noEmit` — fix all type errors across lanes
 - Run `npm run build` — fix all build errors
-- Common expected: import path mismatches, missing re-exports, interface gaps
+- Fix cross-lane import issues (Lane 1 types consumed by Lane 2, etc.)
 - Done when: both commands pass clean
 
-**W2 — Wire navigation**
-- Add Timeline and Profile links to sidebar navigation (`components/shell/studio-sidebar.tsx`)
-- Verify ROUTES.timeline and ROUTES.profile are navigable
-- Verify Library link still works
-- Done when: all new pages appear in sidebar and are accessible
+**W2 — Apply Supabase migration**
+- Apply `004-step-status-scheduling.sql` migration to the live Supabase project
+- Verify columns exist on `experience_steps` table
+- Done when: migration applied and verified
 
-**W3 — Test timeline page**
-- Open `/timeline` in browser
-- Verify: entries from existing experiences appear
-- Verify: filter tabs work (All / Experiences / Ideas / System)
-- Verify: timeline cards show category-colored dots
-- Done when: timeline renders real data with working filters
+**W3 — Wire draft persistence into renderers**
+- Mount `DraftProvider` (from Lane 2) in ExperienceRenderer (Lane 1)
+- Wire `useDraftPersistence` into each step renderer:
+  - LessonStep checkpoint responses → save/load via draft context
+  - EssayTasksStep writing → save/load via draft context
+  - ChallengeStep proof text → save/load via draft context
+  - PlanBuilderStep notes → save/load via draft context
+  - QuestionnaireStep answers → load from draft context for pre-population
+  - ReflectionStep responses → load from draft context for pre-population
+- Wire `DraftIndicator` into each renderer's footer
+- Done when: drafts round-trip (save → reload page → drafts appear)
 
-**W4 — Test profile page**
-- Open `/profile` in browser
-- Verify: empty state shows if no facets exist
-- Verify: after running facet extraction, facets appear with correct types and confidence bars
-- Done when: profile page renders correctly
+**W4 — Test workspace navigation**
+- Create or use an existing multi-step experience (the AI Operator Brand)
+- Open `/workspace/{id}` in browser
+- Verify: overview page shows all steps with status
+- Verify: clicking a step navigates to it
+- Verify: "Back to Overview" returns to overview
+- Verify: sidebar navigator shows alongside step content (heavy depth)
+- Verify: step completion updates status in navigator
+- Done when: free navigation works across all steps
 
-**W5 — Test experience chaining via API**
-- Create two experiences via API
-- Link them via POST `/api/experiences/{id}/chain`
-- GET chain context — verify previous + suggested next
-- GET suggestions — verify progression rules produce correct next-step recommendations
-- Done when: graph API chain/suggestion endpoints return correct data
+**W5 — Test renderer upgrades**
+- Walk through an experience with all 6 step types:
+  - Lesson: checkpoint with "Write 3 sentences" shows textarea, not just "I Understand"
+  - Essay: each task has a writing textarea with word count
+  - Challenge: objectives expand into workspaces with resizable text areas
+  - Plan Builder: items expand to show notes
+  - Questionnaire: revisiting completed shows read-only answers
+  - Reflection: revisiting completed shows styled response
+- Done when: all upgraded renderers work visually
 
-**W6 — Test validation hardening**
-- POST invalid payloads to `/api/experiences` and `/api/experiences/inject`
-- Verify: specific field-level error messages returned as 400
-- POST valid payloads — verify they still work
-- Test steps CRUD: GET steps, POST new step, verify ordering
-- Done when: validation rejects bad payloads with clear errors, accepts good ones
+**W6 — Test draft persistence end-to-end**
+- Start writing in a lesson checkpoint → navigate away → come back → text is preserved
+- Start writing in an essay task → close browser → reopen → text is preserved
+- Start writing in a challenge proof → navigate to different step → come back → text is preserved
+- Done when: drafts survive navigation, page refresh, and browser close
 
-**W7 — Test renderer upgrades**
-- Create experiences with all 6 step types via test-experience endpoint
-- Walk through each step in the workspace:
-  - Questionnaire: scale questions render, progress shows, validation works
-  - Lesson: callouts are distinct, checkpoints have buttons, reading progress tracks
-  - Challenge: completion percentage shows, proof inputs work
-  - Reflection: word count shows, drafts auto-save
-  - Plan Builder: add/reorder items works
-  - Essay+Tasks: reading time shows, notes work
-- Done when: all 6 step types render with their upgrades
+**W7 — Test Steps API**
+- POST: add a new step to an existing experience via API
+- PATCH: update a step's payload 
+- POST reorder: reorder steps
+- DELETE: remove a step
+- GET progress: verify progress summary returns correct data
+- Done when: all step CRUD operations work via API
 
-**W8 — Test progression engine + friction**
-- Complete an experience fully
-- Verify: `computeExperienceScore()` returns correct score
-- Verify: friction level computed and written to instance
-- Verify: GPT state packet includes graph summary
-- Done when: scoring, friction, and graph summary work end-to-end
+**W8 — Final integration + smoke test**
+- Create a new 5-step experience via GPT or test harness
+- Navigate through entire experience using the new workspace model
+- Verify: telemetry (interaction events) still fires correctly
+- Verify: completion flow (status transition + synthesis) still works
+- Verify: library page shows correct status after partial completion
+- Verify: home page surfaces still work
+- Run `npx tsc --noEmit` and `npm run build` — must pass
+- Done when: full experience lifecycle works with new workspace model
 
 ---
 
@@ -821,7 +488,7 @@ Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
 - [ ] `npx tsc --noEmit` passes
 - [ ] `npm run build` passes
 - [ ] Dev server starts (`npm run dev`)
-- [ ] Supabase is configured and tables exist (from Sprint 3)
+- [ ] Supabase is configured and tables exist
 
 ## Handoff Protocol
 
@@ -835,9 +502,10 @@ Lane 1: [W1–W7]          Lane 2: [W1–W7]    Lane 3: [W1–W7]
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Lane 1 | 🟡 | ⬜ | Blocked by Lane 3 errors in `app/profile/` |
-| Lane 2 | ✅ | ✅ | |
-| Lane 3 | ✅ | ✅ | Resolved profile page compilation issues |
-| Lane 4 | ✅ | ✅ | |
-| Lane 5 | ✅ | ✅ | |
-| Lane 6 | ✅ | ✅ | Integration tests passing. Pre-flight passed. |
+| Lane 1 | ✅ | ✅ | Workspace navigator, overview, and step navigation all rendering. |
+| Lane 2 | ✅ | ✅ | Draft persistence wired — DraftProvider → useDraft → API → artifacts table. |
+| Lane 3 | ✅ | ✅ | All renderers upgraded with workspace-aware features and draft interfaces. |
+| Lane 4 | ✅ | ✅ | Steps CRUD, reorder, progress summary all functional. |
+| Lane 5 | ✅ | ✅ | Migration 004 applied live — status, scheduling, estimated_minutes columns confirmed. |
+| Lane 6 | ✅ | ✅ | Integration complete. Browser QA passed: Overview grid, medium nav bar, heavy sidebar, draft indicator, completion flow, library status. |
+

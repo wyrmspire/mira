@@ -168,5 +168,22 @@ export const COPY = {
       goals: 'Goals',
       preferences: 'Preferences',
     }
+  },
+  workspace: {
+    overview: 'Experience Overview',
+    resume: 'Resume Where You Left Off',
+    backToOverview: '← Overview',
+    backToLibrary: '← Library',
+    stepsCompleted: '{count} of {total} completed',
+    estimatedRemaining: 'Est. {time} remaining',
+    locked: 'Complete previous steps first',
+    stepTypes: { 
+      questionnaire: 'Questionnaire', 
+      lesson: 'Lesson', 
+      challenge: 'Challenge', 
+      reflection: 'Reflection', 
+      plan_builder: 'Plan Builder', 
+      essay_tasks: 'Essay + Tasks' 
+    }
   }
 }

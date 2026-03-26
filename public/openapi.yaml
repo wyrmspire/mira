@@ -488,6 +488,235 @@ paths:
       responses:
         '201':
           description: Created step
+  /api/experiences/{id}/steps/{stepId}:
+    get:
+      operationId: getExperienceStep
+      summary: Get a single step by ID
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Single step record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceStepRecord'
+        '404':
+          description: Step not found
+    patch:
+      operationId: updateExperienceStep
+      summary: Update a step's title, payload, or scheduling fields
+      description: 'Use this for multi-pass enrichment — update step content after
+        initial creation. Can update title, payload, completion_rule, scheduled_date,
+        due_date, and estimated_minutes.
+
+        '
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                payload:
+                  type: object
+                  additionalProperties: true
+                completion_rule:
+                  type: string
+                  nullable: true
+                scheduled_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Suggested date to work on this step
+                due_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Deadline for step completion
+                estimated_minutes:
+                  type: integer
+                  nullable: true
+                  description: Estimated time in minutes
+      responses:
+        '200':
+          description: Updated step
+        '404':
+          description: Step not found
+    delete:
+      operationId: deleteExperienceStep
+      summary: Remove a step from an experience
+      description: Removes a step and re-indexes remaining step_order values.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Step deleted
+        '404':
+          description: Step not found
+  /api/experiences/{id}/steps/reorder:
+    post:
+      operationId: reorderExperienceSteps
+      summary: Reorder steps within an experience
+      description: Provide the full ordered array of step IDs. Steps will be re-indexed
+        to match the new order.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - stepIds
+              properties:
+                stepIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Ordered array of step IDs defining the new sequence
+      responses:
+        '200':
+          description: Steps reordered
+        '400':
+          description: Invalid step IDs
+  /api/experiences/{id}/steps/progress:
+    get:
+      operationId: getExperienceProgress
+      summary: Get progress summary for an experience
+      description: Returns completion percentage, step counts by status, and estimated
+        remaining time.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Progress summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSteps:
+                    type: integer
+                  completedSteps:
+                    type: integer
+                  skippedSteps:
+                    type: integer
+                  completionPercentage:
+                    type: number
+                  estimatedRemainingMinutes:
+                    type: integer
+                    nullable: true
+  /api/drafts:
+    get:
+      operationId: getDraft
+      summary: Get a saved draft for a specific step
+      description: 'Retrieves the most recent draft artifact for a step. Drafts auto-save
+        as the user types and persist across sessions.
+
+        '
+      parameters:
+      - name: instanceId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Draft data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draft:
+                    type: object
+                    nullable: true
+                    description: The saved draft payload, or null if no draft exists
+    post:
+      operationId: saveDraft
+      summary: Save or update a draft for a step
+      description: Upserts a draft artifact. Use for auto-save during user input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - instanceId
+              - stepId
+              - data
+              properties:
+                instanceId:
+                  type: string
+                  format: uuid
+                stepId:
+                  type: string
+                  format: uuid
+                data:
+                  type: object
+                  additionalProperties: true
+                  description: The draft content to save
+      responses:
+        '200':
+          description: Draft saved
   /api/experiences/{id}/suggestions:
     get:
       operationId: getExperienceSuggestions
@@ -628,6 +857,33 @@ components:
         completion_rule:
           type: string
           nullable: true
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - completed
+          - skipped
+          description: Step completion status (default pending)
+        scheduled_date:
+          type: string
+          format: date
+          nullable: true
+          description: Suggested date to work on this step
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Deadline for step completion
+        estimated_minutes:
+          type: integer
+          nullable: true
+          description: Estimated time to complete in minutes
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the step was completed
     InjectEphemeralRequest:
       type: object
       required:

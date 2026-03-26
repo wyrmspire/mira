@@ -45,26 +45,48 @@ Supabase is live (project `bbdhhlungcjqzghwovsx`). 16 Mira-specific tables deplo
 
 Renderer registry (`lib/experience/renderer-registry.tsx`), workspace page (`/workspace/[instanceId]`), library page (`/library`), experience cards, step renderers (Questionnaire, Lesson, Challenge, Plan Builder, Reflection, Essay+Tasks), interaction recording via `useInteractionCapture` hook, resolution-driven chrome levels, re-entry engine, persistent experience lifecycle (proposed → active → completed), and home page surfaces for active/proposed experiences. All verification criteria pass.
 
-### 🔄 Current Phase — GPT Connection + Data-First Experience Testing
+### ✅ Sprint 5B — Experience Workspace Hardening (Complete)
 
-The GPT Custom instructions and OpenAPI schema are defined in `openschema.md`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
+Field-tested the 18-step "AI Operator Brand" experience and exposed 10 hard failures (R1–R10). Built contracts (Gate 0), experience graph, timeline, profile, validators, and progression engine across 6 parallel lanes.
+
+### ✅ Sprint 6 — Experience Workspace: Navigation, Drafts, Renderers, Steps API, Scheduling (Complete)
+
+Transformed experiences from linear form-wizards into navigable workspaces. R1–R10 upgrades shipped:
+- **R1** Non-linear step navigation — sidebar (heavy), top bar (medium), hidden (light)
+- **R2** Checkpoint text input — lessons with writing prompts now render textareas
+- **R3** Essay writing surface — per-task textareas with word counts
+- **R4** Expandable challenge workspaces — objectives expand into mini-workspaces
+- **R5** Plan builder notes — items expand to show detail areas
+- **R6** Multi-pass enrichment — step CRUD, reorder, insert APIs for GPT to update steps after creation
+- **R9** Experience overview dashboard — visual grid of all steps with progress stats
+- **R10** Draft persistence — auto-save to artifacts table, hydration on revisit, "Last saved" indicator
+- **Migration 004** — step status, scheduled_date, due_date, estimated_minutes, completed_at on experience_steps
+- **OpenAPI schema updated** — 5 new endpoints: step CRUD, reorder, progress, drafts
+
+### 🔄 Current Phase — Workspace-Oriented Experiences Live
+
+The GPT Custom instructions and OpenAPI schema are defined in `openschema.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
 - Fetch user state (`getGPTState`)
-- Create ephemeral experiences (`injectEphemeral`)
-- Propose persistent experiences (`createPersistentExperience`)
+- Create ephemeral experiences (`injectEphemeral`) — including 20-question intake pages
+- Propose persistent experiences (`createPersistentExperience`) — including 18-step multi-day curricula
 - Capture raw ideas (`captureIdea`)
 - List existing experiences (`listExperiences`)
-
-**Strategic direction:** Prove the GPT-created experience loop works before expanding the coder. The coder capability exists (GitHub factory from Sprint 2) but is deliberately deferred. The current focus is whether the system can create durable, stateful, action-producing experiences that feel meaningfully better than plain chat.
+- **NEW:** Update individual steps (`updateExperienceStep`) — multi-pass enrichment
+- **NEW:** Add/remove/reorder steps (`addExperienceStep`, `deleteExperienceStep`, `reorderExperienceSteps`)
+- **NEW:** Check progress (`getExperienceProgress`)
+- **NEW:** Read/write drafts (`getDraft`, `saveDraft`)
 
 ### Current Architecture Snapshot
 
 ```
 GPT (Custom GPT "Mira")
-  ↓ OpenAPI actions (7 endpoints)
+  ↓ OpenAPI actions (16 endpoints)
   ↓ via Cloudflare tunnel (mira.mytsapi.us)
 Mira Studio (Next.js 14, App Router)
-  ├── workspace/  ← lived experience surface (renders typed modules)
+  ├── workspace/  ← navigable experience workspace (overview + step grid + sidebar/topbar)
   ├── library/    ← all experiences: active, completed, proposed
+  ├── timeline/   ← chronological event feed
+  ├── profile/    ← compiled user direction
   ├── send/       ← captured ideas
   ├── drill/      ← 6-step clarification
   ├── arena/      ← active projects (max 3)
@@ -77,21 +99,22 @@ Mira Studio (Next.js 14, App Router)
 Supabase (Postgres — canonical runtime store)
   ├── experience_templates (6 seeded)
   ├── experience_instances
-  ├── experience_steps
+  ├── experience_steps (+ status, scheduling, estimated_minutes)
   ├── interaction_events
+  ├── artifacts (+ step_draft type for draft persistence)
   ├── synthesis_snapshots
-  └── 10 more tables...
+  ├── experience_graph_edges
+  ├── profile_facets
+  └── 8 more tables...
         ↕
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
   └── factory services ready but not in active use
 ```
 
-**What works:** GPT → create experience → user lives it in workspace → interactions recorded → GPT can re-enter with awareness. Full lifecycle for both ephemeral and persistent experiences.
+**What works:** GPT → create experience → user navigates freely in workspace → drafts persist across sessions → interactions recorded → GPT can re-enter with awareness and update/enrich steps. Full lifecycle for both ephemeral and persistent experiences. Multi-day, heavy-depth experiences are now usable.
 
-**What's being tested:** Does this create a living experience, or is it just chat wearing a costume? Can the system create structure that persists, change behavior, reconstruct reality on return, and generate forward pressure?
-
-**What's next:** Prove the experience loop, then give the coder enough context to participate when it gets instructions from the GPT or from the experience itself.
+**What's next:** Genkit intelligence layer (Sprint 7) — replace naive string summaries with AI-extracted synthesis, smart facet extraction, and context-aware next-experience suggestions.
 
 ---
 
@@ -484,11 +507,11 @@ Renderer registry. Workspace page. Library page. 6 step renderers. Interaction r
 
 ---
 
-### 🔄 Sprint 5 — Data-First Experience Testing (Current)
+### ✅ Sprint 5 — Data-First Experience Testing (Complete)
 
-> **Goal:** Prove the GPT-created experience loop works. The system must create durable, stateful, action-producing experiences that feel meaningfully better than plain chat. No new infrastructure — just honest testing.
+> **Goal:** Prove the GPT-created experience loop works. The system must create durable, stateful, action-producing experiences that feel meaningfully better than plain chat.
 
-> **Strategic context:** The original roadmap envisioned GPT → Coder → App → User → DB → GPT. The instructions for that loop got too long. We've simplified: GPT creates experiences directly. The coder capability exists but is parked. We test whether GPT-authored experiences are good enough, then decide if/when the coder adds value.
+> **Result:** Structure ✅ State ✅ Behavior ✅ — but field-testing exposed 10 hard renderer failures (Sprint 5B). The GPT authored an excellent 18-step curriculum; the renderers couldn't support it. Led directly to Sprint 6 workspace upgrades.
 
 #### Phase 5A — GPT Connection
 
@@ -547,7 +570,7 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 6 — Genkit Intelligence Layer (Backend Brain)
+### 🔲 Sprint 7 — Genkit Intelligence Layer (Backend Brain)
 
 > **Goal:** Based on AI Coach analysis, embed intelligence *inside* the backend using Genkit to process data mutations into insight, decoupling deep analysis from the conversational GPT.
 
@@ -560,7 +583,7 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 7 — Proposal → Realization → Coder Pipeline (Deferred)
+### 🔲 Sprint 8 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
@@ -690,7 +713,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 8 — Chained Experiences + Spontaneity
+### 🔲 Sprint 9 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -717,7 +740,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 9 — GitHub Hardening + GitHub App
+### 🔲 Sprint 10 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
@@ -732,7 +755,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 10 — Personalization + Coder Knowledge
+### 🔲 Sprint 11 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -748,7 +771,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 11 — Production Deployment
+### 🔲 Sprint 12 — Production Deployment
 
 > **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
 >
@@ -822,7 +845,240 @@ These rules govern how we evolve the existing codebase without breaking it.
 
 ---
 
-## Open Questions
+## Sprint 5B — Experience Robustness (Field Test Findings)
+
+> **Source:** Live user testing of the "AI Operator Brand" persistent experience — 18 steps, `heavy/build/multi_day/high` resolution. This is the first real field test of a GPT-authored multi-day experience and it exposed hard failures in every renderer.
+
+### What Happened
+
+The GPT created an ambitious, well-structured 18-step experience (questionnaire → reflection → lessons → plan builders → challenges → essay). The *content design* is strong — the steps build on each other, the progression makes sense, and the scope is appropriate for a multi-day build-mode experience.
+
+But the *renderer infrastructure* broke down at every interaction point. The user hit wall after wall:
+
+### 5 Hard Failures
+
+| # | Failure | Where | Root Cause |
+|---|---------|-------|------------|
+| 1 | **Lesson checkpoints have no input field** | Steps 2, 6 ("Write 3 sentences…", "Describe in one paragraph…") | `LessonStep` renders `checkpoint` sections as a single "I Understand" button. The GPT wrote a checkpoint that asks the user to *write* something, but the renderer only supports *acknowledging*. There is no text area, no space to put the sentences. The user sees a writing prompt with nowhere to write. |
+| 2 | **EssayTasks step has no essay writing area** | Step 17 ("Write the brand manifesto in one page") | `EssayTasksStep` renders `tasks` as boolean checkboxes and the `content` field as a collapsible read-only block. There is no text area to actually *write* the manifesto. The tasks just toggle true/false. The whole point of the step — deep writing — is impossible. |
+| 3 | **Plan Builder items are trivial checkboxes** | Steps 3, 8, 11, 16 | `PlanBuilderStep` renders each item as a checkbox with hover-to-reorder. Items like "Define funnel stages" and "Define pricing and packaging" are serious multi-hour activities that deserve their own workspace — not a checkbox you click to acknowledge. You can't expand, add notes, or come back. |
+| 4 | **Challenge "Market Scan" is impossibly scoped for a single page** | Step 4 ("Study 30 real small businesses") | `ChallengeStep` gives each objective a 2-row textarea labeled "Record your progress or results…". Studying 30 businesses and capturing patterns is a multi-session research activity. It needs its own workspace, a structured capture surface, and the ability to come back over days. Instead it's a single screen you pass through. |
+| 5 | **The entire experience is a forced linear slide deck** | All 18 steps | `ExperienceRenderer` tracks `currentStepIndex` and only moves forward. No step navigation, no ability to go back, no way to see what's ahead. An 18-step multi-day experience renders as page 1 → page 2 → … → page 18. You can't revisit a reflection you wrote last week. You can't check your plan while doing a challenge. The system loses all the user's context because it behaves like a wizard, not a workspace. |
+
+### What This Means for the Architecture
+
+These aren't renderer polish issues — they reveal a fundamental mismatch between what the GPT can *author* and what the renderers can *support*. The GPT authored a legitimate multi-week learning and building curriculum. The renderers treated it like a form wizard.
+
+The core insight: **experiences aren't linear slides. They're workspaces you inhabit over time.** The current architecture forces every experience through a single narrow pipe (`currentStepIndex++`). Multi-day, heavy, high-intensity experiences need a fundamentally different interaction model.
+
+### 10 Robustness Upgrades
+
+These are ordered by impact on the user experience and structured to reference existing roadmap items and coach.md flows where applicable.
+
+---
+
+#### R1: Non-Linear Step Navigation (Experience as Workspace)
+
+**Problem:** The renderer is a forward-only wizard. Multi-day experiences need free navigation.
+
+**Solution:** Replace the linear `currentStepIndex` model with a step-map navigator. The user should see a persistent side-nav or top-nav showing all steps with completion status. They can jump to any step, revisit completed steps (read-only or re-editable based on type), and see what's ahead.
+
+**Key design rules:**
+- Steps can have `blocked` / `available` / `active` / `completed` states.
+- Some steps can be gated (e.g., "complete questionnaire before challenge"), but most should be freely navigable.
+- The experience becomes a *place you go into*, not a tunnel you pass through.
+- Resolution still controls chrome: `light` = minimal nav, `heavy` = full node map.
+
+**Connects to:** Roadmap Sprint 8 "Experience graph wiring" (internal chaining). R1 is the *intra-experience* version of that problem.
+
+---
+
+#### R2: Checkpoint Sections Must Support Text Input
+
+**Problem:** `LessonStep` checkpoints render as "I Understand" buttons even when the content asks the user to write something.
+
+**Solution:** Add a `checkpoint` sub-type or detect prompts that ask for writing. When a checkpoint body contains a writing prompt (or is explicitly tagged), render a textarea + submit instead of a confirmation button. Capture the response as an interaction event.
+
+**Two modes:**
+- `confirm` checkpoint → "I Understand" button (current behavior, appropriate for knowledge checks)
+- `respond` checkpoint → textarea + word count + submit (for "Write 3 sentences explaining…")
+
+This is a renderer change — the `checkpoint` section type in the lesson payload gets an optional `mode: 'confirm' | 'respond'` field. The GPT can also be instructed to use the right mode.
+
+---
+
+#### R3: EssayTasks Must Have a Writing Surface
+
+**Problem:** The essay step has no writing area. Tasks are boolean checkboxes for work that requires deep composition.
+
+**Solution:** `EssayTasksStep` needs two surfaces:
+1. **Reading pane** — the `content` field (the brief/instructions), always visible (not collapsed).
+2. **Writing pane** — a rich textarea per task where the user actually *writes*. Each task becomes a titled section with a textarea, word count, and auto-save.
+
+The task checkboxes can remain as a secondary signal, but the primary interaction is *writing*, not *checking*.
+
+**Connects to:** coach.md flow #2 (In-App Coaching Chat). A coaching co-pilot embedded alongside the writing pane would make this dramatically more useful — "Am I on the right track with this manifesto section?"
+
+---
+
+#### R4: Challenge Steps Need Expandable Workspaces
+
+**Problem:** Complex challenges like "Study 30 businesses" render as a flat list with tiny textareas.
+
+**Solution:** Each challenge objective should expand into its own mini-workspace when clicked. The collapsed view shows the objective + completion status. The expanded view shows:
+- The full description + proof requirements
+- A resizable textarea (or eventually a structured form)
+- Draft save indicator
+- Ability to attach notes, links, or artifacts
+
+For research-intensive objectives, a further evolution: embed structured capture (rows of data, tags, notes per entry). This is where Genkit flows from coach.md become natural — an AI that helps you *do the research*, not just track whether you did it.
+
+**Connects to:** coach.md flow #3 (Experience Content Generation). The challenge workspace can include AI-assisted research helpers, content scaffolding, or example analysis powered by Genkit — making the challenge step a *tool for doing the work*, not just a checklist of whether you did it.
+
+---
+
+#### R5: Plan Builder Items Must Support Notes and Detail
+
+**Problem:** Plan items like "Define funnel stages" are checkbox-only. No space to add work.
+
+**Solution:** Plan Builder items become expandable cards. Click to expand → shows a notes area, sub-items, and links. The checkbox acknowledges the item; the expanded card is where the real work happens.
+
+**Future state:** Plan items can become their own mini-experiences. "Define funnel stages" could open a sub-experience with its own steps. This is the "fractalization" concept — experiences contain experiences.
+
+**Connects to:** Roadmap Sprint 8 "Experience graph wiring" + "Progression rules" — the plan builder becomes a graph node, not a flat list.
+
+---
+
+#### R6: Multi-Pass GPT Enrichment (Iterative Experience Construction)
+
+**Problem:** The GPT creates the entire experience in one shot. An 18-step curriculum is too much to get right on the first pass — the GPT can't know what depth each section needs until the user starts working.
+
+**Solution:** Allow the GPT to make 3-4 passes over an experience:
+
+**Pass 1 — Outline:** GPT creates the experience with structural steps (titles, types, high-level goals). Payloads are intentionally sparse — "skeleton" content.
+
+**Pass 2 — Enrichment:** After the user starts (or based on questionnaire answers), the GPT re-enters and fills out the step payloads with personalized, detailed content. This uses the re-entry contract + the `suggestNextExperienceFlow` from coach.md.
+
+**Pass 3 — Adaptation:** After the user completes early steps (or expresses friction), the GPT updates remaining steps. Lessons become more specific. Challenges scale to the user's demonstrated level. New steps can be inserted.
+
+**Pass 4+ — Deepening:** Completed steps can be "deepened" — the GPT adds follow-up content, harder challenges, or new sections to a lesson the user engaged with deeply.
+
+**Technical requirements:**
+- An API endpoint to update individual `experience_steps` payloads on an existing instance
+- Step insertion (add new steps between existing ones)
+- Step removal or soft-disable (if later context makes a step irrelevant)
+- Re-entry contract triggers at specific step completions, not just experience completion
+
+**Connects to:** coach.md flow #3 (Experience Content Generation), #7 (Experience Quality Scoring), #8 (Intelligent Re-Entry Prompts). This is the mechanism that makes multi-day experiences *alive* rather than *stale*.
+
+---
+
+#### R7: Research/Skill-Based Step Type (Rich Activity Page)
+
+**Problem:** "Study 30 businesses" is crammed into a ChallengeStep — but it's fundamentally a different kind of activity. It's not a task to complete; it's a *skill to develop* through repeated practice sessions.
+
+**Solution:** A new step type (Tier 2): `research` or `skill_lab`. This renders as its own workspace page with:
+- A structured entry pad (rows/cards for each research subject)
+- AI-assisted research tools (Genkit flow that can scan a URL, summarize a business, extract patterns)
+- Pattern aggregation (the system shows emerging themes across your entries)
+- Multi-session support (you come back and add more entries over days)
+- Progress visualization (30 entries goal → currently at 12)
+
+This is the first step type that truly benefits from Genkit intelligence — the AI doesn't just passively record, it actively participates in the research.
+
+**Connects to:** coach.md flow #3 (Content Generation) + #5 (Profile Facet Extraction). The research data the user generates becomes input for facet extraction and next-experience suggestion.
+
+**Architectural note:** This step type may need its own page route (`/workspace/[instanceId]/research/[stepId]`) rather than rendering inline, because it's too rich for the current single-pane layout.
+
+---
+
+#### R8: Step-Level Re-Entry Instead of Experience-Level Only
+
+**Problem:** Re-entry contracts currently fire at experience completion. But multi-day experiences need re-entry *during* the experience — at specific step boundaries.
+
+**Solution:** Allow `reentry` hooks on individual steps, not just on the experience instance:
+- After completing the questionnaire → GPT enriches upcoming steps based on answers
+- After the market scan → GPT generates a synthesis of patterns found
+- After writing a draft → GPT provides feedback on the writing
+
+This turns the linear experience into a *conversation with the system*. The user does work, the system responds with intelligence, the user continues with more context.
+
+**Connects to:** coach.md flow #2 (In-App Coaching Chat), #6 (Friction Analysis), #8 (Intelligent Re-Entry Prompts). Step-level re-entry is what makes the "coach" concept real — not a separate chat panel, but the system naturally responding to your progress at natural breakpoints.
+
+---
+
+#### R9: Experience Overview / Progress Dashboard
+
+**Problem:** With 18 steps, the user has no map. They don't know where they are, what's ahead, or what they've accomplished.
+
+**Solution:** An experience overview page that shows:
+- All steps in a visual layout (node map, timeline, or structured list)
+- Completion status per step (with time spent, drafts saved, word counts)
+- Blocked/available gates
+- Quick-jump navigation
+- A summary of submitted work (your questionnaire answers, your reflections, your challenge results)
+- Re-entry suggestions ("Mira thinks you should focus on Step 9 next")
+
+This overview is the "home" of the experience. You land here, orient yourself, then dive into a specific step. It replaces the current "start at page 1 and click forward" model.
+
+**Connects to:** Roadmap "Frontend Surface Map" — this is the evolution of `/workspace/[instanceId]` from a single-pane renderer into a proper workspace.
+
+---
+
+#### R10: Draft Persistence and Work Recoverability
+
+**Problem:** The telemetry system captures `draft_saved` events with content, but these are fire-and-forget interaction events — they don't hydrate back into the renderer on return. If you reload the page or come back tomorrow, all your in-progress text is gone.
+
+**Solution:**
+- Step renderers should persist work-in-progress to a durable store (Supabase `artifacts` table or a `step_drafts` column on `experience_steps`)
+- When the user revisits a step, their previous drafts are hydrated back
+- Challenge textareas, reflection responses, essay writing — all auto-saved and recoverable
+- Visual indicator showing "Last saved 3m ago" or "Draft from March 25"
+
+**This is critical for multi-day experiences.** Without it, the system tells you to "study 30 businesses" but forgets everything you wrote if you close the tab.
+
+**Connects to:** The `artifacts` table already exists in the schema. The `useInteractionCapture` hook already fires `draft_saved` events. The missing link is *reading them back* and hydrating the renderer state from saved drafts.
+
+---
+
+### Priority Ordering
+
+| Priority | Upgrade | Why First | Sprint |
+|----------|---------|-----------|--------|
+| 🔴 P0 | R1 (Non-linear navigation) | Without this, multi-day experiences are unusable. Everything depends on being able to navigate freely. | 5B |
+| 🔴 P0 | R10 (Draft persistence) | Without this, any multi-session work is lost. The system is lying about being "multi-day" if it can't remember your work. | 5B |
+| 🔴 P0 | R2 (Checkpoint text input) | Easy fix, huge impact. Lessons become interactive instead of passive. | 5B |
+| 🔴 P0 | R3 (Essay writing surface) | The essay step is broken — its core function (writing) is impossible. | 5B |
+| 🟠 P1 | R4 (Expandable challenge workspaces) | Makes challenges feel like real work surfaces, not flat lists. | 5B/6 |
+| 🟠 P1 | R5 (Plan notes/expansion) | Makes plan builders useful, not trivial. | 5B/6 |
+| 🟠 P1 | R9 (Experience overview dashboard) | The map that makes navigation meaningful. Can be built alongside R1. | 5B/6 |
+| 🟡 P2 | R6 (Multi-pass GPT enrichment) | Requires API changes + GPT instruction updates. Higher complexity, massive payoff. | 6 |
+| 🟡 P2 | R8 (Step-level re-entry) | Natural extension of the re-entry engine. Requires Genkit flows to be useful. | 6/7 |
+| 🟢 P3 | R7 (Research/skill-lab step type) | New step type, highest complexity. Benefits from R4 + R6 being done first. | 7+ |
+
+### How This Changed the Sprint Plan
+
+Sprint 5B became a **renderer hardening sprint** before moving to Genkit (now Sprint 7). Without R1, R2, R3, and R10, the Genkit flows would have been adding intelligence to a system that couldn't even let users *work* inside their experiences. The renderers became workspaces first, then AI can make those workspaces intelligent.
+
+The executed sequence:
+1. **Sprint 5B** ✅ — Contracts + graph + timeline + profile + validators + progression (groundwork)
+2. **Sprint 6** ✅ — R1 + R2 + R3 + R4 + R5 + R6 + R9 + R10 (full workspace model, navigation, drafts, multi-pass API)
+3. **Sprint 7** 🔲 — Genkit flows (synthesis, facets, suggestions) — the workspaces are now ready for intelligence
+4. **Sprint 8+** 🔲 — R7 (research step type) + R8 (step-level re-entry) + coder pipeline
+
+### Lesson for the GPT
+
+The GPT authored a genuinely excellent curriculum. The *content design* beat the *infrastructure*. This is a positive signal — the GPT understands depth, sequencing, and skill-building better than the app could initially render.
+
+**Current GPT capabilities (post-Sprint 6):**
+- ✅ Create 18+ step experiences — workspace navigator handles any number of steps
+- ✅ Use `checkpoint` type with writing prompts — textareas render for `respond` mode
+- ✅ Use `essay_tasks` for long-form writing — per-task textareas with word counts
+- ✅ Use multi-pass enrichment — update/add/remove/reorder steps after initial creation
+- ✅ Drafts persist — users can close the browser and return tomorrow
+- ✅ Schedule steps — set `scheduled_date`, `due_date`, `estimated_minutes` for pacing
+
+---
 
 - [ ] Which Supabase org / project to use? (Edgefire, Threadslayer, or Workmanwise — or create new?)
 - [ ] Auth strategy: Supabase Auth (email/magic link) or stay single-user with service role key?

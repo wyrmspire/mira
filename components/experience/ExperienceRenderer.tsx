@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
-import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
-import type { ExperienceInstance, ExperienceStep, Resolution } from '@/types/experience';
-import Link from 'next/link';
-import { ROUTES } from '@/lib/routes';
+import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
 import { COPY } from '@/lib/studio-copy';
+import type { StepStatus } from './StepNavigator';
+import ExperienceOverview from './ExperienceOverview';
+
+// Import all step renderers
 import QuestionnaireStep from './steps/QuestionnaireStep';
 import LessonStep from './steps/LessonStep';
 import ChallengeStep from './steps/ChallengeStep';
@@ -25,209 +26,108 @@ registerRenderer('essay_tasks', EssayTasksStep as any);
 interface ExperienceRendererProps {
   instance: ExperienceInstance;
   steps: ExperienceStep[];
+  currentStepId: string | null;
+  stepStatuses: Record<string, StepStatus>;
+  showOverview: boolean;
+  isCompleted: boolean;
+  isLoading: boolean;
+  onStepSelect: (id: string) => void;
+  onResume: () => void;
+  onCompleteStep: (payload?: any) => void;
+  onSkipStep: () => void;
+  onDraftStep: (draft: Record<string, any>) => void;
+  readOnly?: boolean;
+  initialDraft?: Record<string, any> | null;
 }
 
-export default function ExperienceRenderer({ instance, steps }: ExperienceRendererProps) {
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [isCompleted, setIsCompleted] = useState(false);
-  const prevStepRef = useRef<string | null>(null);
-
-  const capture = useInteractionCapture(instance.id);
-
-  const currentStep = steps[currentStepIndex];
-  const totalSteps = steps.length;
-  const progressPercent = Math.round(((currentStepIndex + 1) / totalSteps) * 100);
-
-  // Track experience start and transition to 'active' if needed
-  useEffect(() => {
-    capture.trackExperienceStart();
-    
-    // Auto-transition from injected (ephemeral) or published (persistent) to active
-    if (instance.status === 'injected' || instance.status === 'published') {
-      const action = instance.instance_type === 'ephemeral' ? 'start' : 'activate';
-      fetch(`/api/experiences/${instance.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      }).catch((err) => console.warn('[ExperienceRenderer] Failed to auto-activate:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Track step view and time-on-step when step changes
-  useEffect(() => {
-    if (!currentStep) return;
-
-    // End timer for previous step
-    if (prevStepRef.current) {
-      capture.endStepTimer(prevStepRef.current);
-    }
-
-    // Start tracking new step
-    capture.trackStepView(currentStep.id);
-    capture.startStepTimer(currentStep.id);
-    prevStepRef.current = currentStep.id;
-
-    // Cleanup: end timer on unmount
-    return () => {
-      if (prevStepRef.current) {
-        capture.endStepTimer(prevStepRef.current);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStepIndex]);
-
-  const handleCompleteStep = (payload?: unknown) => {
-    // Guard against non-serializable payloads (e.g., React SyntheticEvents leaked from onClick)
-    const safePayload = (payload && typeof payload === 'object' && !('nativeEvent' in (payload as any)))
-      ? payload as Record<string, any>
-      : undefined;
-
-    // Emit the correct telemetry event type based on step type.
-    // Questionnaire and Reflection steps need answer_submitted for downstream scoring/profile.
-    // Other step types use task_completed.
-    const stepType = currentStep.step_type;
-    if (stepType === 'questionnaire' || stepType === 'reflection') {
-      capture.trackAnswer(currentStep.id, safePayload || {});
-    } else {
-      capture.trackComplete(currentStep.id, safePayload);
-    }
-
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    } else {
-      capture.endStepTimer(currentStep.id);
-      capture.trackExperienceComplete();
-      // Transition instance status to 'completed' in DB
-      fetch(`/api/experiences/${instance.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'complete' }),
-      })
-      .then(() => {
-        // Trigger synthesis so the GPT knows what happened
-        return fetch('/api/synthesis', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId: instance.user_id,
-            sourceType: instance.instance_type,
-            sourceId: instance.id
-          }),
-        });
-      })
-      .catch((err) => console.warn('[ExperienceRenderer] Failed to mark completed or synthesize:', err));
-      setIsCompleted(true);
-    }
-  };
-
-  const handleSkipStep = () => {
-    capture.trackSkip(currentStep.id);
-    
-    if (currentStepIndex < totalSteps - 1) {
-      setCurrentStepIndex((prev) => prev + 1);
-    }
-  };
-
-  const handleDraftStep = (draft: Record<string, any>) => {
-    capture.trackDraft(currentStep.id, draft);
-  };
-
-  const StepComponent = getRenderer(currentStep?.step_type);
+export default function ExperienceRenderer({
+  instance,
+  steps,
+  currentStepId,
+  stepStatuses,
+  showOverview,
+  isCompleted,
+  isLoading,
+  onStepSelect,
+  onResume,
+  onCompleteStep,
+  onSkipStep,
+  onDraftStep,
+  readOnly,
+  initialDraft
+}: ExperienceRendererProps) {
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[50vh]">
+        <div className="text-[#4a4a6a] italic animate-pulse">Establishing workspace...</div>
+      </div>
+    );
+  }
 
   if (isCompleted) {
     return (
-      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center">
+      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center px-6">
         <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
           </svg>
         </div>
         <div>
           <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
           <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
         </div>
-        <div className="flex flex-col items-center gap-6">
-          <Link 
-            href={ROUTES.library}
-            className="px-10 py-4 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/10"
-          >
-            {COPY.completion.returnToLibrary}
-          </Link>
-          <p className="text-[#4a4a6a] text-sm font-medium">{COPY.completion.returnToChat}</p>
+        <div className="bg-[#12121a] p-4 rounded-xl border border-[#1e1e2e] text-[#4a4a6a] text-sm font-medium">
+          {COPY.completion.returnToChat}
         </div>
       </div>
     );
   }
 
+  if (showOverview) {
+    return (
+      <ExperienceOverview 
+        instance={instance}
+        steps={steps}
+        stepStatuses={stepStatuses}
+        onStepSelect={onStepSelect}
+        onResume={onResume}
+      />
+    );
+  }
+
+  const currentStep = steps.find(s => s.id === currentStepId);
+  const StepComponent = currentStep ? getRenderer(currentStep.step_type) : null;
   const { depth } = instance.resolution;
 
+  // Build extra props for step renderers that support readOnly/initialData
+  const extraProps: Record<string, any> = {};
+  if (readOnly) extraProps.readOnly = true;
+  if (initialDraft && currentStep) {
+    const stepType = currentStep.step_type;
+    // Map draft data to the correct prop name each renderer expects
+    if (stepType === 'questionnaire') {
+      extraProps.initialAnswers = initialDraft;
+    } else if (stepType === 'reflection') {
+      extraProps.initialResponses = initialDraft;
+    }
+  }
+
   return (
-    <div className="w-full h-full flex flex-col items-center">
-      {/* Full Header (Heavy Depth) */}
-      {depth === 'heavy' && (
-        <div className="w-full bg-[#0a0a0f]/80 backdrop-blur-xl border-b border-[#1e1e2e] sticky top-0 z-10 px-6 py-8">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-sm font-bold uppercase tracking-widest text-indigo-400 mb-1">Active Experience</h1>
-                <h2 className="text-3xl font-bold text-white tracking-tight">{instance.title}</h2>
-              </div>
-              <div className="text-right">
-                <span className="text-xs font-mono text-[#475569] block mb-1">PROGRESS</span>
-                <span className="text-xl font-mono text-indigo-400">{currentStepIndex + 1} / {totalSteps}</span>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-[#475569]">
-                <span>Goal: {instance.goal}</span>
-                <span>{progressPercent}% Complete</span>
-              </div>
-              <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden border border-[#33334d]">
-                <div 
-                  className="h-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.4)] transition-all duration-700 ease-out" 
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Progress Bar + Title (Medium Depth) */}
-      {depth === 'medium' && (
-        <div className="w-full max-w-3xl px-6 py-6 border-b border-[#1e293b]/50">
-          <div className="space-y-4">
-            <div className="flex justify-between items-end border-b border-indigo-500/20 pb-2">
-              <h1 className="text-lg font-bold text-indigo-100">{instance.title}</h1>
-              <span className="text-[10px] font-mono text-[#64748b]">STEP {currentStepIndex + 1} OF {totalSteps}</span>
-            </div>
-            <div className="h-1 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-500" 
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* No Header (Light Depth) — renders nothing */}
-
-      {/* Main Experience Surface */}
-      <main className={`w-full max-w-2xl px-6 py-12 flex-grow ${depth === 'light' ? 'flex items-center justify-center min-h-[60vh]' : ''}`}>
-        {currentStep ? (
+    <div className={`w-full max-w-2xl mx-auto px-6 py-12 ${depth === 'light' ? 'flex items-center justify-center min-h-[80vh]' : ''}`}>
+      {currentStep && StepComponent ? (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
           <StepComponent 
             step={currentStep} 
-            onComplete={handleCompleteStep} 
-            onSkip={handleSkipStep} 
-            onDraft={handleDraftStep}
+            onComplete={onCompleteStep} 
+            onSkip={onSkipStep} 
+            onDraft={onDraftStep}
+            {...extraProps}
           />
-        ) : (
-          <div className="text-[#94a3b8] italic">Initializing experience steps…</div>
-        )}
-      </main>
+        </div>
+      ) : (
+        <div className="text-[#94a3b8] italic text-center animate-pulse">Waking up Step Renderer...</div>
+      )}
     </div>
   );
 }

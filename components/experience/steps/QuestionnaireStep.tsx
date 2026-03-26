@@ -17,10 +17,12 @@ interface QuestionnaireStepProps {
   onComplete: (payload: { answers: Record<string, string> }) => void;
   onSkip: () => void;
   onDraft?: (draft: Record<string, any>) => void;
+  readOnly?: boolean;
+  initialAnswers?: Record<string, string>;
 }
 
-export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft }: QuestionnaireStepProps) {
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft, readOnly, initialAnswers }: QuestionnaireStepProps) {
+  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showError, setShowError] = useState(false);
   
@@ -54,6 +56,30 @@ export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft }:
   };
 
   const progressPercent = totalQuestions > 0 ? ((currentIndex + 1) / totalQuestions) * 100 : 0;
+
+  if (readOnly) {
+    return (
+      <div className="space-y-10 animate-in fade-in duration-500 max-w-2xl mx-auto">
+        <div className="border-b border-indigo-500/20 pb-6">
+          <h2 className="text-3xl font-bold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+          <p className="text-sm text-indigo-400 font-mono uppercase tracking-widest font-bold">Review Mode</p>
+        </div>
+        
+        <div className="space-y-8">
+          {questions.map((q, idx) => (
+            <div key={q.id} className="p-6 rounded-2xl bg-[#12121a] border border-[#1e1e2e]">
+              <label className="block text-sm font-bold text-[#475569] uppercase tracking-widest mb-3">
+                {idx + 1}. {q.label}
+              </label>
+              <p className="text-xl text-[#e2e8f0] font-medium leading-relaxed">
+                {answers[q.id] || <span className="text-[#33334d] italic">No answer provided</span>}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-xl mx-auto">

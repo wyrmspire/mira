@@ -20,6 +20,7 @@ interface LessonStepProps {
 
 export default function LessonStep({ step, onComplete, onSkip, onDraft }: LessonStepProps) {
   const [checkpoints, setCheckpoints] = useState<Record<number, boolean>>({});
+  const [responses, setResponses] = useState<Record<number, string>>({});
   const [readSections, setReadSections] = useState<Record<number, boolean>>({});
   const observerRef = useRef<IntersectionObserver | null>(null);
   
@@ -52,8 +53,21 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
     });
   }, [sections]);
 
+  const isRespondMode = (body: string) => {
+    const keywords = ['write', 'describe', 'explain', 'list', 'draft'];
+    return keywords.some(keyword => body.toLowerCase().includes(keyword));
+  };
+
   const handleCheckpoint = (index: number) => {
     setCheckpoints((prev) => ({ ...prev, [index]: true }));
+  };
+
+  const handleResponseSubmit = (index: number) => {
+    if (!responses[index]?.trim()) return;
+    setCheckpoints((prev) => ({ ...prev, [index]: true }));
+    if (onDraft) {
+      onDraft({ checkpointIndex: index, response: responses[index] });
+    }
   };
 
   const allCheckpointsDone = sections.every(
@@ -107,11 +121,35 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
                 {section.heading && <h3 className="text-xl font-bold text-[#f1f5f9] mb-4">{section.heading}</h3>}
                 <p className="text-lg text-[#94a3b8] mb-8 leading-relaxed">{section.body}</p>
                 
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-6">
                   {checkpoints[idx] ? (
                     <div className="flex items-center gap-3 text-emerald-400 font-bold bg-emerald-500/10 px-6 py-3 rounded-full border border-emerald-500/20">
                       <span className="w-6 h-6 rounded-full bg-emerald-400 text-[#0a0a0f] flex items-center justify-center text-xs">✓</span>
-                      Concept Confirmed
+                      {isRespondMode(section.body) ? 'Response Recorded' : 'Concept Confirmed'}
+                    </div>
+                  ) : isRespondMode(section.body) ? (
+                    <div className="w-full space-y-4">
+                      <div className="relative">
+                        <textarea
+                          value={responses[idx] || ''}
+                          onChange={(e) => setResponses({ ...responses, [idx]: e.target.value })}
+                          placeholder="Type your response here…"
+                          rows={4}
+                          className="w-full bg-[#0d0d12] border border-[#1e1e2e] rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/30 focus:outline-none focus:border-indigo-500/40 transition-all resize-none text-lg"
+                        />
+                        <div className="absolute bottom-4 right-4 text-[10px] font-mono text-[#475569]">
+                          {(responses[idx]?.trim().split(/\s+/).filter(Boolean).length || 0)} WORDS
+                        </div>
+                      </div>
+                      <div className="flex justify-center">
+                        <button
+                          onClick={() => handleResponseSubmit(idx)}
+                          disabled={!responses[idx]?.trim()}
+                          className="px-8 py-3 bg-indigo-500 text-white rounded-full hover:bg-indigo-600 hover:shadow-[0_0_20px_rgba(99,102,241,0.2)] transition-all font-bold disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed"
+                        >
+                          Submit Response
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button

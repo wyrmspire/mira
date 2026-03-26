@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getExperienceSteps, createExperienceStep } from '@/lib/services/experience-service'
+import { getExperienceSteps, createExperienceStep, insertStepAfter } from '@/lib/services/experience-service'
 import { validateStepPayload } from '@/lib/validators/step-payload-validator'
 
 export async function GET(
@@ -25,7 +25,7 @@ export async function POST(
 
   try {
     const body = await request.json()
-    const { title, payload, completion_rule } = body
+    const { title, payload, completion_rule, insertAfterStepId } = body
     const stepType = body.step_type || body.type
 
     if (!stepType) {
@@ -38,21 +38,35 @@ export async function POST(
       return NextResponse.json({ error: 'Contract violation', details: errors }, { status: 400 })
     }
 
-    // 2. Determine step order (max + 1)
-    const existingSteps = await getExperienceSteps(id)
-    const nextOrder = existingSteps.length > 0 
-      ? Math.max(...existingSteps.map(s => s.step_order)) + 1 
-      : 0
+    let step;
 
-    // 3. Create step
-    const step = await createExperienceStep({
-      instance_id: id,
-      step_order: nextOrder,
-      step_type: stepType,
-      title: title || '',
-      payload: payload || {},
-      completion_rule: completion_rule || null
-    })
+    // 2. Handle insertion vs append
+    if (insertAfterStepId) {
+      step = await insertStepAfter(id, insertAfterStepId, {
+        instance_id: id,
+        step_order: 0, // Service handles shifting
+        step_type: stepType,
+        title: title || '',
+        payload: payload || {},
+        completion_rule: completion_rule || null
+      })
+    } else {
+      // Determine step order (max + 1)
+      const existingSteps = await getExperienceSteps(id)
+      const nextOrder = existingSteps.length > 0 
+        ? Math.max(...existingSteps.map(s => s.step_order)) + 1 
+        : 0
+
+      // Create step
+      step = await createExperienceStep({
+        instance_id: id,
+        step_order: nextOrder,
+        step_type: stepType,
+        title: title || '',
+        payload: payload || {},
+        completion_rule: completion_rule || null
+      })
+    }
 
     return NextResponse.json(step, { status: 201 })
   } catch (error: any) {

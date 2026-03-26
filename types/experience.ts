@@ -65,6 +65,8 @@ export interface ExperienceInstance {
   published_at?: string | null;
 }
 
+export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+
 export interface ExperienceStep {
   id: string;
   instance_id: string;
@@ -73,4 +75,9 @@ export interface ExperienceStep {
   title: string;
   payload: any; // JSONB
   completion_rule?: string | null;
+  status?: StepStatus;
+  scheduled_date?: string | null;     // ISO 8601 date (no time)
+  due_date?: string | null;           // ISO 8601 date (no time)
+  estimated_minutes?: number | null;  // estimated time to complete
+  completed_at?: string | null;       // ISO 8601 timestamp
 }

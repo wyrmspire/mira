@@ -165,3 +165,63 @@ export async function deleteExperienceStep(stepId: string): Promise<void> {
   const adapter = getStorageAdapter()
   await adapter.deleteItem('experience_steps', stepId)
 }
+
+/**
+ * Reorder all steps for an experience instance based on a provided array of step IDs.
+ */
+export async function reorderExperienceSteps(instanceId: string, orderedIds: string[]): Promise<ExperienceStep[]> {
+  const steps = await getExperienceSteps(instanceId);
+  const stepMap = new Map(steps.map(s => [s.id, s]));
+
+  // Validate all IDs belong to this experience and no duplicates
+  if (orderedIds.length !== steps.length) {
+    throw new Error(`Invalid reorder request: expected ${steps.length} IDs, got ${orderedIds.length}`);
+  }
+  
+  const updatedSteps: ExperienceStep[] = [];
+  const adapter = getStorageAdapter();
+
+  for (let i = 0; i < orderedIds.length; i++) {
+    const id = orderedIds[i];
+    const step = stepMap.get(id);
+    if (!step) {
+      throw new Error(`Step ID ${id} does not belong to experience ${instanceId}`);
+    }
+    
+    // Update step_order in place and save
+    const updated = await adapter.updateItem<ExperienceStep>('experience_steps', id, { step_order: i });
+    updatedSteps.push(updated);
+  }
+
+  return updatedSteps.sort((a, b) => a.step_order - b.step_order);
+}
+
+/**
+ * Insert a new step after a specific step ID and shift subsequent step orders.
+ */
+export async function insertStepAfter(instanceId: string, afterStepId: string, stepData: Omit<ExperienceStep, 'id'>): Promise<ExperienceStep> {
+  const steps = await getExperienceSteps(instanceId);
+  const afterStepIndex = steps.findIndex(s => s.id === afterStepId);
+  
+  if (afterStepIndex === -1) {
+    throw new Error(`Step ID ${afterStepId} not found in experience ${instanceId}`);
+  }
+
+  const afterOrder = steps[afterStepIndex].step_order;
+  const adapter = getStorageAdapter();
+
+  // Shift all steps with step_order > afterOrder up by 1
+  for (let i = afterStepIndex + 1; i < steps.length; i++) {
+    const step = steps[i];
+    await adapter.updateItem<ExperienceStep>('experience_steps', step.id, { step_order: step.step_order + 1 });
+  }
+
+  // Create new step at afterOrder + 1
+  const newStep: ExperienceStep = {
+    ...stepData,
+    id: generateId(),
+    step_order: afterOrder + 1
+  } as ExperienceStep;
+  
+  return adapter.saveItem<ExperienceStep>('experience_steps', newStep);
+}

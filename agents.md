@@ -81,6 +81,10 @@ app/
     experiences/         ← Experience CRUD + inject
       route.ts           ← GET (list) / POST (create persistent)
       inject/route.ts    ← POST (create ephemeral — GPT direct-create)
+      [id]/route.ts      ← GET single experience (enriched with graph + interactions)
+      [id]/steps/route.ts ← GET/POST steps for an experience
+      [id]/chain/route.ts ← GET/POST experience chaining
+      [id]/suggestions/   ← GET next-experience suggestions
     interactions/        ← Event telemetry
     synthesis/           ← Compressed state for GPT
     gpt/state/           ← GPT re-entry endpoint
@@ -116,11 +120,17 @@ components/
   experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
                            step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
                            Reflection, EssayTasks)
+  timeline/              ← TimelineEventCard, TimelineFilterBar
+  profile/               ← FacetCard, DirectionSummary
   dev/                   ← GPT send form, dev tools
 
 lib/
   config/
     github.ts            ← GitHub env config, validation, repo coordinates
+  contracts/
+    experience-contract.ts ← v1 experience instance contract + module roles
+    step-contracts.ts      ← v1 per-type step payload contracts + unions
+    resolution-contract.ts ← v1 resolution + re-entry contracts + chrome mapping
   github/
     client.ts            ← Octokit wrapper, getGitHubClient()
     signature.ts         ← HMAC-SHA256 webhook signature verification
@@ -133,6 +143,8 @@ lib/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
     reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
     interaction-events.ts← Event type constants + payload builder
+    progression-engine.ts← Step scoring + friction calculator
+    progression-rules.ts ← Canonical experience chain map + suggestion logic
     CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
   hooks/
     useInteractionCapture.ts ← Fire-and-forget telemetry hook
@@ -148,22 +160,23 @@ lib/
   date.ts                ← Date formatting
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
-                           experience, interaction, synthesis services
+                           experience, interaction, synthesis, graph, timeline, facet services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
-  validators/            ← idea, project, drill, webhook validators
+  validators/            ← idea, project, drill, webhook, experience, step-payload validators
   view-models/           ← arena, icebox, inbox, review VMs
 
 types/
   idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
   agent-run.ts, external-ref.ts, github.ts,
-  experience.ts, interaction.ts, synthesis.ts
+  experience.ts, interaction.ts, synthesis.ts,
+  graph.ts, timeline.ts, profile.ts
 
 content/                 ← Product copy markdown
-docs/                    ← Architecture docs
+docs/
+  contracts/             ← v1 experience contract docs
 
 .local-data/             ← JSON file persistence (gitignored, auto-seeded)
-lanes/                   ← Sprint lane files (sprint-specific)
 roadmap.md               ← Product roadmap (experience engine evolution)
 wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
 ```
@@ -394,6 +407,27 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ Always add `export const dynamic = 'force-dynamic'` on pages that read from Supabase.
 - Why: Combined with SOP-14, this ensures both the page and the underlying fetch calls bypass Next.js caching.
 
+### SOP-20: Use v1 contracts for payload validation — not incidental structure
+**Learned from**: Sprint 5 Gate 0 contract canonicalization
+
+- ❌ Validating against whatever the renderer happens to read today (`if (payload.sections?.length)`).
+- ✅ Import from `lib/contracts/step-contracts.ts` and validate against the contracted shape.
+- Why: Renderers evolve. Contracts are explicit and versioned. Validators that check contracted fields survive renderer upgrades.
+
+### SOP-21: Checkpoint sections must distinguish `confirm` vs `respond` mode
+**Learned from**: Sprint 5B field test — "Write 3 sentences" rendered as "I Understand" button
+
+- ❌ All checkpoint sections rendering only a confirmation button.
+- ✅ Detect writing-prompt keywords in body (write, describe, explain, list, draft) or use explicit `mode: 'respond'` field → render a textarea instead of a button.
+- Why: The GPT naturally writes checkpoints that ask the user to *write* something. If the renderer only confirms, the user sees a prompt with nowhere to respond.
+
+### SOP-22: Draft persistence must round-trip — save is not enough
+**Learned from**: Sprint 5B field test — drafts fire as telemetry events but never hydrate back
+
+- ❌ Calling `onDraft()` / `trackDraft()` and assuming the work is saved.
+- ✅ Use `useDraftPersistence` hook which saves to `artifacts` table AND hydrates on next visit.
+- Why: `interaction_events.draft_saved` is telemetry (append-only, for friction analysis). `artifacts` with `artifact_type = 'step_draft'` is the durable draft store (upserted, read back by renderers).
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -406,3 +440,5 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-24**: Split-brain stabilization. Root cause: silent JSON fallback + Next.js fetch caching of Supabase responses. Added SOP-14 (Supabase `cache: no-store`), SOP-15 (fail-fast storage). Quarantined `projects-service` and `prs-service` (realizations/realization_reviews schema mismatch). Added inbox normalization layer. Added `/api/dev/diagnostic` and `/api/dev/test-experience`. Updated pitfalls for fetch caching, quarantined services, inbox normalization, template ID prefix, and gptschema contract.
 - **2026-03-24 (Phase 7)**: Feedback Loop & Robustness. Added SOP-16 (Auto-activation) and SOP-17 (Synthesis Trigger). Fixed synthesis 404 by exposing `POST /api/synthesis`. Aligned `LessonStep` sections schema. Verified closed-loop intelligence awareness in `/api/gpt/state`.
 - **2026-03-24**: Sprint 5 boardinit — Groundwork sprint. Added SOP-18 (harness validates contracts), SOP-19 (force-dynamic on pages). Updated repo map with library page, ExperienceCard, HomeExperienceAction, reentry-engine. 5 heavy coding lanes: Graph+Chaining, Timeline, Profile+Facets, Validation+API Hardening, Progression+Renderer Upgrades. Lane 6 for integration/wiring/browser testing.
+- **2026-03-25**: Sprint 5 completed. All 6 lanes done. Gate 0 contracts canonicalized (3 contract files). Graph service, timeline page, profile+facets, validators, progression engine all built. Updated repo map with contracts/, graph-service, timeline-service, facet-service, step-payload-validator. Added SOPs 20–22 from Sprint 5B field test findings.
+- **2026-03-26**: Sprint 6 boardinit — Experience Workspace sprint. Based on field-test findings documented in `roadmap.md` Sprint 5B section. 5 coding lanes: Workspace Navigator, Draft Persistence, Renderer Upgrades, Steps API + Multi-Pass, Step Status + Scheduling. Lane 6 for integration + browser testing.

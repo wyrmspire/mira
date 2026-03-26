@@ -23,6 +23,8 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
   
   const [sections, setSections] = useState(initialSections);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [expandedIdx, setExpandedIdx] = useState<string | null>(null);
 
   const sectionIcons: Record<string, string> = {
     goals: '🎯',
@@ -36,12 +38,18 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
     resources: 'Resources',
   };
 
+  const handleNotesBlur = (key: string) => {
+    if (onDraft && notes[key]) {
+      onDraft({ itemKey: key, notes: notes[key] });
+    }
+  };
+
   const toggleCheck = (sectionIdx: number, itemIdx: number) => {
     const key = `${sectionIdx}-${itemIdx}`;
     const newState = { ...checked, [key]: !checked[key] };
     setChecked(newState);
     if (onDraft) {
-      onDraft({ checked: newState, sections });
+      onDraft({ checked: newState, sections, notes });
     }
   };
 
@@ -147,50 +155,72 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
                   return (
                     <div
                       key={key}
-                      className={`group/item flex items-center gap-4 p-5 rounded-2xl border transition-all duration-300 ${
+                      className={`group/item flex flex-col p-5 rounded-2xl border transition-all duration-300 cursor-pointer ${
                         checked[key]
                           ? 'bg-emerald-500/5 border-emerald-500/20 translate-x-1'
-                          : 'bg-[#12121a] border-[#1e1e2e] hover:border-cyan-500/30'
+                          : expandedIdx === key
+                            ? 'bg-[#1a1a2e] border-cyan-500/40 shadow-lg'
+                            : 'bg-[#12121a] border-[#1e1e2e] hover:border-cyan-500/30'
                       }`}
+                      onClick={() => setExpandedIdx(expandedIdx === key ? null : key)}
                     >
-                      <button
-                        onClick={() => toggleCheck(sIdx, iIdx)}
-                        className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
-                          checked[key]
-                            ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
-                            : 'bg-transparent border-[#33334d] hover:border-cyan-500/50'
-                        }`}
-                      >
-                        {checked[key] && <span className="text-[14px]">✓</span>}
-                      </button>
-                      
-                      <div className="flex-1">
-                        <p className={`font-semibold transition-all ${
-                          checked[key] ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
-                        }`}>
-                          {label}
-                        </p>
-                        {subtitle && (
-                          <p className="text-sm text-[#475569] mt-0.5">{subtitle}</p>
-                        )}
+                      <div className="flex items-center gap-4">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleCheck(sIdx, iIdx); }}
+                          className={`flex-shrink-0 w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                            checked[key]
+                              ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
+                              : 'bg-transparent border-[#33334d] hover:border-cyan-500/50'
+                          }`}
+                        >
+                          {checked[key] && <span className="text-[14px]">✓</span>}
+                        </button>
+                        
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-semibold transition-all ${
+                            checked[key] ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
+                          }`}>
+                            {label}
+                          </p>
+                          {subtitle && (
+                            <p className="text-sm text-[#475569] mt-0.5">{subtitle}</p>
+                          )}
+                        </div>
+
+                        <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => moveItem(sIdx, iIdx, 'up')}
+                            disabled={iIdx === 0}
+                            className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7"></path></svg>
+                          </button>
+                          <button
+                            onClick={() => moveItem(sIdx, iIdx, 'down')}
+                            disabled={iIdx === section.items.length - 1}
+                            className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => moveItem(sIdx, iIdx, 'up')}
-                          disabled={iIdx === 0}
-                          className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
+                      {expandedIdx === key && (
+                        <div 
+                          className="mt-6 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7"></path></svg>
-                        </button>
-                        <button
-                          onClick={() => moveItem(sIdx, iIdx, 'down')}
-                          disabled={iIdx === section.items.length - 1}
-                          className="p-1.5 text-[#475569] hover:text-cyan-400 disabled:opacity-10 transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7"></path></svg>
-                        </button>
-                      </div>
+                          <label className="text-[10px] font-bold text-[#475569] uppercase tracking-[0.2em] ml-1">Notes</label>
+                          <textarea
+                            value={notes[key] || ''}
+                            onChange={(e) => setNotes({ ...notes, [key]: e.target.value })}
+                            onBlur={() => handleNotesBlur(key)}
+                            placeholder="Add implementation notes, risks, or resources…"
+                            rows={4}
+                            className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-xl px-4 py-3 text-sm text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none focus:border-cyan-500/40 transition-all resize-none"
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}

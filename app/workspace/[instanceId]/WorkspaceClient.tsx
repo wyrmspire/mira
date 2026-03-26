@@ -1,8 +1,15 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ExperienceRenderer from '@/components/experience/ExperienceRenderer';
+import StepNavigator, { type StepStatus } from '@/components/experience/StepNavigator';
 import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
+import { ROUTES } from '@/lib/routes';
+import { COPY } from '@/lib/studio-copy';
+import Link from 'next/link';
+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
+import { DraftProvider, useDraft } from '@/components/experience/DraftProvider';
+import { DraftIndicator } from '@/components/common/DraftIndicator';
 
 interface WorkspaceClientProps {
   instance: ExperienceInstance;
@@ -11,11 +18,323 @@ interface WorkspaceClientProps {
 
 export default function WorkspaceClient({ instance, steps }: WorkspaceClientProps) {
   return (
-    <div className="flex flex-col min-h-screen">
-      <ExperienceRenderer 
-        instance={instance} 
-        steps={steps} 
-      />
+    <DraftProvider instanceId={instance.id}>
+      <WorkspaceClientInner instance={instance} steps={steps} />
+    </DraftProvider>
+  );
+}
+
+function WorkspaceClientInner({ instance, steps }: WorkspaceClientProps) {
+  const [currentStepId, setCurrentStepId] = useState<string | null>(null);
+  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>({});
+  const [showOverview, setShowOverview] = useState(instance.resolution.depth !== 'light');
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const prevStepRef = useRef<string | null>(null);
+
+  const capture = useInteractionCapture(instance.id);
+  const draftCtx = useDraft();
+
+  // Initialize statuses and active step
+  useEffect(() => {
+    capture.trackExperienceStart();
+    
+    // Auto-transition from injected (ephemeral) or published (persistent) to active
+    if (instance.status === 'injected' || instance.status === 'published') {
+      const action = instance.instance_type === 'ephemeral' ? 'start' : 'activate';
+      fetch(`/api/experiences/${instance.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      }).catch((err) => console.warn('[WorkspaceClient] Failed to auto-activate:', err));
+    }
+
+    // Initialize from session storage if exists
+    const storedStepId = sessionStorage.getItem(`mira_active_step_${instance.id}`);
+    
+    // Fetch enriched data to get resume step index
+    fetch(`/api/experiences/${instance.id}`)
+      .then(res => res.json())
+      .then(data => {
+        const resumeIndex = data.resumeStepIndex || 0;
+        const initialStatuses: Record<string, StepStatus> = {};
+        
+        steps.forEach((step, idx) => {
+          if (idx < resumeIndex) {
+            initialStatuses[step.id] = 'completed';
+          } else if (idx === resumeIndex) {
+            initialStatuses[step.id] = 'in_progress';
+          } else {
+            initialStatuses[step.id] = 'available';
+          }
+        });
+        
+        setStepStatuses(initialStatuses);
+        
+        // Decide which step to show
+        if (storedStepId && steps.find(s => s.id === storedStepId)) {
+          setCurrentStepId(storedStepId);
+          if (instance.resolution.depth === 'light') setShowOverview(false);
+        } else if (resumeIndex < steps.length) {
+          setCurrentStepId(steps[resumeIndex].id);
+          if (instance.resolution.depth === 'light') setShowOverview(false);
+        } else {
+          setCurrentStepId(steps[0]?.id || null);
+        }
+        setIsLoading(false);
+      })
+      .catch(err => {
+        console.warn('[WorkspaceClient] Failed to fetch resume index:', err);
+        const initialStatuses: Record<string, StepStatus> = {};
+        steps.forEach((step, idx) => {
+          initialStatuses[step.id] = idx === 0 ? 'in_progress' : 'available';
+        });
+        setStepStatuses(initialStatuses);
+        setCurrentStepId(steps[0]?.id || null);
+        setIsLoading(false);
+      });
+      
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instance.id]);
+
+  // Track step view and time-on-step
+  useEffect(() => {
+    if (!currentStepId || showOverview || isCompleted) return;
+
+    if (prevStepRef.current && prevStepRef.current !== currentStepId) {
+      capture.endStepTimer(prevStepRef.current);
+    }
+
+    capture.trackStepView(currentStepId);
+    capture.startStepTimer(currentStepId);
+    prevStepRef.current = currentStepId;
+
+    sessionStorage.setItem(`mira_active_step_${instance.id}`, currentStepId);
+
+    return () => {
+      if (prevStepRef.current) {
+        capture.endStepTimer(prevStepRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStepId, showOverview, isCompleted]);
+
+  const handleStepSelect = (stepId: string) => {
+    setCurrentStepId(stepId);
+    setShowOverview(false);
+    setIsMobileNavOpen(false);
+  };
+
+  const handleResume = () => {
+    const firstIncomplete = steps.find(s => stepStatuses[s.id] !== 'completed');
+    if (firstIncomplete) {
+      setCurrentStepId(firstIncomplete.id);
+    } else {
+      setCurrentStepId(steps[0]?.id || null);
+    }
+    setShowOverview(false);
+  };
+
+  const handleBackToOverview = () => {
+    setShowOverview(true);
+  };
+
+  const handleCompleteStep = (payload?: unknown) => {
+    if (!currentStepId) return;
+
+    const safePayload = (payload && typeof payload === 'object' && !('nativeEvent' in (payload as any)))
+      ? payload as Record<string, any>
+      : undefined;
+
+    const currentStep = steps.find(s => s.id === currentStepId);
+    if (!currentStep) return;
+
+    const stepType = currentStep.step_type;
+    if (stepType === 'questionnaire' || stepType === 'reflection') {
+      capture.trackAnswer(currentStep.id, safePayload || {});
+    } else {
+      capture.trackComplete(currentStep.id, safePayload);
+    }
+
+    setStepStatuses(prev => ({ ...prev, [currentStepId]: 'completed' }));
+
+    const currentIndex = steps.findIndex(s => s.id === currentStepId);
+    if (currentIndex < steps.length - 1) {
+      const nextStep = steps[currentIndex + 1];
+      setStepStatuses(prev => ({
+        ...prev,
+        [nextStep.id]: prev[nextStep.id] === 'completed' ? 'completed' : 'in_progress'
+      }));
+      setCurrentStepId(nextStep.id);
+    } else {
+      capture.endStepTimer(currentStepId);
+      capture.trackExperienceComplete();
+      fetch(`/api/experiences/${instance.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'complete' }),
+      }).then(() => fetch('/api/synthesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: instance.user_id, sourceType: instance.instance_type, sourceId: instance.id }),
+      })).catch(err => console.warn(err));
+      setIsCompleted(true);
+    }
+  };
+
+  const handleSkipStep = () => {
+    if (!currentStepId) return;
+    capture.trackSkip(currentStepId);
+    setStepStatuses(prev => ({ ...prev, [currentStepId]: 'skipped' }));
+    const currentIndex = steps.findIndex(s => s.id === currentStepId);
+    if (currentIndex < steps.length - 1) {
+      setCurrentStepId(steps[currentIndex + 1].id);
+    } else {
+      setShowOverview(true);
+    }
+  };
+
+  const handleDraftStep = (draft: Record<string, any>) => {
+    if (!currentStepId) return;
+    // Fire telemetry event (append-only, for analytics)
+    capture.trackDraft(currentStepId, draft);
+    // Persist to artifacts table (durable, round-trips on next visit)
+    draftCtx.saveDraft(currentStepId, draft);
+  };
+
+  const { depth } = instance.resolution;
+
+  // Determine if the current step is completed (for readOnly mode on revisit renderers)
+  const isCurrentStepCompleted = currentStepId ? stepStatuses[currentStepId] === 'completed' : false;
+
+  // Get draft for the current step to pass as initial data
+  const currentDraft = currentStepId ? draftCtx.getDraft(currentStepId) : null;
+  const currentLastSaved = currentStepId ? draftCtx.lastSaved[currentStepId] || null : null;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#050508]">
+        <div className="text-[#4a4a6a] italic animate-pulse">Establishing workspace...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#050508] text-[#f1f5f9] overflow-hidden">
+      {/* Sidebar Navigator (Heavy Depth) - Only if in Step Mode and NOT completed */}
+      {!showOverview && !isCompleted && depth === 'heavy' && (
+        <div className="hidden md:block">
+          <StepNavigator 
+            steps={steps}
+            currentStepId={currentStepId || ''}
+            stepStatuses={stepStatuses}
+            onStepSelect={handleStepSelect}
+            depth="heavy"
+          />
+        </div>
+      )}
+
+      <div className="flex-grow flex flex-col min-w-0 h-screen overflow-hidden relative">
+        {/* Workspace Shell Header */}
+        <header className="px-6 py-4 border-b border-[#1e1e2e] flex items-center justify-between bg-[#0a0a12]/80 backdrop-blur-md z-30 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <Link href={ROUTES.library} className="text-xs font-bold text-[#475569] hover:text-indigo-400 transition-colors flex items-center gap-2 uppercase tracking-widest">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+              </svg>
+              {COPY.workspace.backToLibrary}
+            </Link>
+          </div>
+          
+          <div className="flex flex-col items-center">
+            <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-0.5">
+              {instance.title}
+            </div>
+            {!showOverview && !isCompleted && (
+              <div className="flex items-center gap-3">
+                <div className="text-[10px] font-mono text-[#475569] leading-none uppercase tracking-tighter">
+                  Step {steps.findIndex(s => s.id === currentStepId) + 1} of {steps.length}
+                </div>
+                {currentLastSaved && (
+                  <DraftIndicator lastSaved={currentLastSaved} />
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-4">
+            {!isCompleted && (
+              <button 
+                onClick={handleBackToOverview}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${
+                  showOverview 
+                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' 
+                    : 'text-[#475569] hover:text-indigo-400 border border-transparent hover:border-indigo-500/30'
+                }`}
+              >
+                {showOverview ? 'Overview' : COPY.workspace.backToOverview}
+              </button>
+            )}
+            
+            {!showOverview && !isCompleted && depth === 'heavy' && (
+              <button 
+                onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+                className="md:hidden p-2 rounded-lg bg-[#1e1e2e] text-[#94a3b8] hover:text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Medium Depth Top Navigator - Only if in Step Mode and NOT completed */}
+        {!showOverview && !isCompleted && depth === 'medium' && (
+          <div className="flex-shrink-0">
+            <StepNavigator 
+              steps={steps}
+              currentStepId={currentStepId || ''}
+              stepStatuses={stepStatuses}
+              onStepSelect={handleStepSelect}
+              depth="medium"
+            />
+          </div>
+        )}
+
+        {/* Collapsible Mobile Navigator for Heavy Depth */}
+        {isMobileNavOpen && !showOverview && !isCompleted && depth === 'heavy' && (
+          <div className="md:hidden absolute top-[65px] left-0 right-0 bottom-0 z-40 bg-[#050508]/95 backdrop-blur-xl animate-in slide-in-from-top duration-300">
+            <StepNavigator 
+              steps={steps}
+              currentStepId={currentStepId || ''}
+              stepStatuses={stepStatuses}
+              onStepSelect={handleStepSelect}
+              depth="heavy"
+            />
+          </div>
+        )}
+
+        <main className="flex-grow overflow-y-auto no-scrollbar relative">
+          <ExperienceRenderer 
+            instance={instance} 
+            steps={steps}
+            currentStepId={currentStepId}
+            stepStatuses={stepStatuses}
+            showOverview={showOverview}
+            isCompleted={isCompleted}
+            isLoading={isLoading}
+            onStepSelect={handleStepSelect}
+            onResume={handleResume}
+            onCompleteStep={handleCompleteStep}
+            onSkipStep={handleSkipStep}
+            onDraftStep={handleDraftStep}
+            readOnly={isCurrentStepCompleted}
+            initialDraft={currentDraft}
+          />
+        </main>
+      </div>
     </div>
   );
 }
