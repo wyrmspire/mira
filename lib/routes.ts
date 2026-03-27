@@ -27,4 +27,8 @@ export const ROUTES = {
   library: '/library',
   timeline: '/timeline',
   profile: '/profile',
+
+  // --- Sprint 8: Knowledge Tab ---
+  knowledge: '/knowledge',
+  knowledgeUnit: (id: string) => `/knowledge/${id}`,
 } as const

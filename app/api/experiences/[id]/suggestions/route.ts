@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAISuggestionsForCompletion, getSuggestionsForCompletion } from '@/lib/services/graph-service';
+import { getAISuggestionsForCompletion } from '@/lib/services/graph-service';
+import { getKnowledgeDomains } from '@/lib/services/knowledge-service';
 import { DEFAULT_USER_ID } from '@/lib/constants';
 
 /**
@@ -22,6 +23,22 @@ export async function GET(
 
     // Lane 5: Use AI-powered suggestions
     const suggestions = await getAISuggestionsForCompletion(id, userId);
+    
+    // Lane 5: Enrich with knowledge context
+    try {
+      const userDomains = await getKnowledgeDomains(userId);
+      const domainMap = new Map(userDomains.map(d => [d.domain, d]));
+      
+      suggestions.forEach((sig: any) => {
+        const match = domainMap.get(sig.domain || sig.templateClass);
+        if (match && match.readCount > 0) {
+          sig.knowledgeDomain = match.domain;
+          sig.masteryLevel = match.readCount >= match.count ? 'confident' : 'practiced';
+        }
+      });
+    } catch (err) {
+      console.error('Error enriching suggestions with knowledge:', err);
+    }
     
     return NextResponse.json(suggestions);
   } catch (error: any) {

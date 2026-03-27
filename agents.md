@@ -147,7 +147,13 @@ lib/
     schemas.ts           ← Shared Zod schemas for AI flow outputs
     safe-flow.ts         ← Graceful degradation wrapper for AI flows
     flows/               ← Genkit flow definitions (one file per flow)
+      synthesize-experience.ts  ← narratize synthesis on experience completion
+      suggest-next-experience.ts← context-aware next-experience suggestions
+      extract-facets.ts         ← semantic profile facet extraction
+      compress-gpt-state.ts     ← token-efficient GPT state compression
     context/             ← Context assembly helpers for flows
+      suggestion-context.ts  ← Gathers user profile + history for suggestions
+      facet-context.ts       ← Flattens interactions for facet extraction
   experience/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
     reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
@@ -183,7 +189,8 @@ types/
   idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
   agent-run.ts, external-ref.ts, github.ts,
   experience.ts, interaction.ts, synthesis.ts,
-  graph.ts, timeline.ts, profile.ts
+  graph.ts, timeline.ts, profile.ts,
+  knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
 
 content/                 ← Product copy markdown
 docs/
@@ -442,12 +449,19 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - Why: `interaction_events.draft_saved` is telemetry (append-only, for friction analysis). `artifacts` with `artifact_type = 'step_draft'` is the durable draft store (upserted, read back by renderers).
 
 ### SOP-23: Genkit flows are services, not routes — and must degrade gracefully
-**Learned from**: Sprint 7 architecture (coach.md rule #1, #5)
+**Learned from**: Sprint 7 architecture
 
 - ❌ Calling a Genkit flow directly from an API route handler.
 - ❌ Letting a missing `GEMINI_API_KEY` crash the app.
 - ✅ Call flows from service functions via `runFlowSafe()` wrapper. If AI is unavailable, fall back to existing mechanical behavior.
 - Why: AI enhances; it doesn't gate. The system must work identically with or without `GEMINI_API_KEY`. Services own the fallback logic.
+
+### SOP-24: MiraK webhook payloads go through validation — never trust external agents
+**Learned from**: Sprint 8 architecture (Knowledge Tab design)
+
+- ❌ Trusting MiraK's JSON payload shape without validation.
+- ✅ Validate via `knowledge-validator.ts` before writing to DB. Check required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, reject malformed payloads with 400.
+- Why: MiraK is a separate service (Python on Cloud Run). Its output format may drift. The webhook is the trust boundary — validate everything before persistence.
 
 ---
 
@@ -464,3 +478,5 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-25**: Sprint 5 completed. All 6 lanes done. Gate 0 contracts canonicalized (3 contract files). Graph service, timeline page, profile+facets, validators, progression engine all built. Updated repo map with contracts/, graph-service, timeline-service, facet-service, step-payload-validator. Added SOPs 20–22 from Sprint 5B field test findings.
 - **2026-03-26**: Sprint 6 boardinit — Experience Workspace sprint. Based on field-test findings documented in `roadmap.md` Sprint 5B section. 5 coding lanes: Workspace Navigator, Draft Persistence, Renderer Upgrades, Steps API + Multi-Pass, Step Status + Scheduling. Lane 6 for integration + browser testing.
 - **2026-03-26**: Sprint 6 completed. All 6 lanes done. Non-linear workspace model with sidebar/topbar navigators, draft persistence via artifacts table, renderer upgrades (checkpoint textareas, essay writing surfaces, expandable challenges/plans), step CRUD/reorder API, step status/scheduling migration 004. Updated repo map with StepNavigator, ExperienceOverview, DraftProvider, DraftIndicator, draft-service, useDraftPersistence, step-state-machine, step-scheduling. Updated OpenAPI schema (16 endpoints). Updated roadmap. Added SOP-23 (Genkit flow pattern). Added Genkit to tech stack.
+- **2026-03-27**: Sprint 7 completed. All 6 lanes done. 4 Genkit flows (synthesis, suggestions, facets, GPT compression), graceful degradation wrapper, completion wiring, migration 005 (evidence column). Updated repo map with AI flow files and context helpers.
+- **2026-03-27**: Sprint 8 boardinit — Knowledge Tab + MiraK Integration. Added SOP-24 (webhook validation). Added `types/knowledge.ts` to repo map. Added knowledge routes, constants, copy. Gate 0 executed by coordinator.

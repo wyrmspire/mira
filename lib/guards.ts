@@ -6,7 +6,9 @@ import {
   RESOLUTION_MODES,
   RESOLUTION_TIME_SCOPES,
   RESOLUTION_INTENSITIES,
+  MASTERY_STATUSES,
 } from '@/lib/constants'
+import type { KnowledgeUnit, MasteryStatus } from '@/types/knowledge'
 
 export function isIdea(value: unknown): value is Idea {
   return (
@@ -57,4 +59,20 @@ export function isValidResolution(obj: unknown): obj is Resolution {
     RESOLUTION_TIME_SCOPES.includes(res.timeScope as any) &&
     RESOLUTION_INTENSITIES.includes(res.intensity as any)
   )
+}
+
+export function isKnowledgeUnit(val: unknown): val is KnowledgeUnit {
+  return (
+    typeof val === 'object' &&
+    val !== null &&
+    'id' in val &&
+    'topic' in val &&
+    'domain' in val &&
+    'unit_type' in val &&
+    'mastery_status' in val
+  )
+}
+
+export function isValidMasteryStatus(val: unknown): val is MasteryStatus {
+  return typeof val === 'string' && MASTERY_STATUSES.includes(val as any)
 }

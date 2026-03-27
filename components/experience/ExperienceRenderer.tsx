@@ -40,6 +40,8 @@ interface ExperienceRendererProps {
   initialDraft?: Record<string, any> | null;
 }
 
+import { KnowledgeCompanion } from './KnowledgeCompanion';
+
 export default function ExperienceRenderer({
   instance,
   steps,
@@ -124,6 +126,11 @@ export default function ExperienceRenderer({
             onDraft={onDraftStep}
             {...extraProps}
           />
+          
+          {/* Lane 5: Knowledge Companion */}
+          {(currentStep.payload as any)?.knowledge_domain && (
+            <KnowledgeCompanion domain={(currentStep.payload as any).knowledge_domain} />
+          )}
         </div>
       ) : (
         <div className="text-[#94a3b8] italic text-center animate-pulse">Waking up Step Renderer...</div>

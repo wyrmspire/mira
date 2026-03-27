@@ -4,6 +4,7 @@ import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'
 import { getActiveExperiences, getProposedExperiences } from '@/lib/services/experience-service'
+import { getKnowledgeDomains } from '@/lib/services/knowledge-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
@@ -47,6 +48,7 @@ export default async function HomePage() {
 
   const proposedExperiences = await getProposedExperiences(DEFAULT_USER_ID)
   const activeExperiences = await getActiveExperiences(DEFAULT_USER_ID)
+  const knowledgeSummary = await getKnowledgeDomains(DEFAULT_USER_ID)
 
   const needsAttentionProjects = arenaProjects.filter(
     (p) => p.health === 'red' || p.health === 'yellow'
@@ -103,6 +105,39 @@ export default async function HomePage() {
                   </div>
                   <HomeExperienceAction id={exp.id} />
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 1.5: Knowledge Summary ── */}
+        {knowledgeSummary.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                {COPY.knowledge.heading}
+              </h2>
+              <Link href={ROUTES.knowledge} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                {COPY.knowledge.actions.viewAll}
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {knowledgeSummary.slice(0, 2).map((d) => (
+                <Link 
+                  key={d.domain}
+                  href={`${ROUTES.knowledge}?domain=${encodeURIComponent(d.domain)}`}
+                  className="flex flex-col gap-2 p-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-indigo-500/30 transition-colors group"
+                >
+                  <span className="text-xs font-bold text-[#e2e8f0] truncate group-hover:text-indigo-400 transition-colors uppercase tracking-tight">
+                    {d.domain}
+                  </span>
+                  <div className="flex items-center justify-between text-[10px] text-[#4a4a6a]">
+                    <span>{d.count} units</span>
+                    {d.count > 0 && (
+                      <span className="text-indigo-500/70">{Math.round((d.readCount / d.count) * 100)}% read</span>
+                    )}
+                  </div>
+                </Link>
               ))}
             </div>
           </section>

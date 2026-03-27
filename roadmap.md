@@ -115,16 +115,15 @@ Genkit Intelligence Layer (Sprint 7)
   ├── compressGPTStateFlow      (token-efficient state compression)
   └── runFlowSafe()             (graceful degradation wrapper)
         ↕
+MiraK (Python/FastAPI research agent) ← Cloud Run (Sprint 8)
+  ├── /generate_knowledge (research pipeline)
+  └── Callback to /api/webhook/mirak
+        ↕
 Supabase (Postgres — canonical runtime store)
-  ├── experience_templates (6 seeded)
-  ├── experience_instances
-  ├── experience_steps (+ status, scheduling, estimated_minutes)
-  ├── interaction_events
-  ├── artifacts (+ step_draft type for draft persistence)
-  ├── synthesis_snapshots
-  ├── experience_graph_edges
-  ├── profile_facets (+ evidence column)
-  └── 8 more tables...
+  ├── experience_instances, experience_steps, ...
+  ├── knowledge_units       (durable reference content)
+  ├── knowledge_progress    (mastery & practice tracking)
+  └── 10 more tables...
         ↕
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
@@ -602,192 +601,12 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 8 — Knowledge Tab + MiraK Integration (Brainstorming)
+### ✅ Sprint 8 — Knowledge Tab + MiraK Integration (Complete)
 
-> **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run. This is NOT just a content dump. The Knowledge Tab is a learning companion that links back to Experiences and generates tests.
+> **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run.
 >
-> **Key architectural decisions are OPEN and must be resolved before coding begins.**
-
-#### Where MiraK Lives
-
-MiraK is a standalone Python/FastAPI microservice running on **Google Cloud Run**:
-- **Project:** `gen-lang-client-0029382557`
-- **Service URL:** `https://mirak-lqooqdw7lq-uc.a.run.app`
-- **Local repo:** `c:\mirak` (separate from `c:\mira`)
-- **API Key:** Uses the Vertex AI / Gemini Search API key (`GOOGLE_API_KEY`)
-- **Current endpoint:** `POST /generate_knowledge` → returns a structured KB article in markdown
-
-#### Updated Architecture Snapshot (with MiraK)
-
-```
-GPT (Custom GPT "Mira")
-  ↓ OpenAPI actions (16+ endpoints)
-  ↓ via Cloudflare tunnel / Vercel
-Mira Studio (Next.js 14, App Router) ← Vercel
-  ├── workspace/     ← lived experience surface
-  ├── library/       ← all experiences
-  ├── knowledge/     ← NEW: study + practice + mastery tracking
-  ├── timeline/      ← chronological event feed
-  ├── profile/       ← compiled user direction
-  └── api/           ← endpoints for GPT + GitHub + MiraK results
-        ↕
-MiraK (Python/FastAPI) ← Cloud Run
-  ├── root_agent → synth → [child_1, child_2, child_3]
-  ├── GoogleSearch + URLContext tools (Vertex API)
-  ├── Returns: structured KB article (knowledge.md format)
-  └── Future: writes directly to Supabase? or calls Mira API?
-        ↕
-Supabase (Postgres — canonical runtime store)
-  ├── experience_instances, experience_steps, ...
-  ├── knowledge_entries     ← NEW table
-  ├── knowledge_tests       ← NEW table (quizzes, practice problems)
-  ├── knowledge_progress    ← NEW table (user mastery tracking)
-  └── ...existing tables...
-```
-
-#### Open Decision: How Does Data Flow?
-
-This is the biggest architectural question. Two options:
-
-| Option | Flow | Pros | Cons |
-|--------|------|------|------|
-| **A: MiraK → Supabase direct** | MiraK writes knowledge_entries directly to Supabase using the service role key | Simple, testable, no Mira dependency, MiraK is self-contained | MiraK needs Supabase credentials, two writers to the same DB, harder to enforce business logic |
-| **B: MiraK → Mira API** | MiraK calls `POST /api/knowledge` on the deployed Mira app, which validates and writes to Supabase | Single writer (Mira owns the DB), validation in one place, consistent with SOP-5 | Harder to test locally (need both services running), circular dependency risk, slower |
-
-> **Recommendation:** Start with **Option A** (direct DB writes). MiraK already has the Supabase credentials in its `.env`. This makes testing trivial — you POST a topic, MiraK researches it, and the result appears in the DB immediately. Later, if we need validation or business logic before insert, we can add a thin Mira API layer on top.
-
-#### Open Decision: What Does the Knowledge Tab Actually Do?
-
-This is a UX brainstorming space. Core questions:
-
-1. **Is it just articles, or is it a study system?**
-   - Minimum: Browse KB entries by category, read them
-   - Medium: Mark entries as "read" / "studying" / "mastered", spaced repetition prompts
-   - Maximum: Auto-generated quizzes, practice problems, flashcards, linked exercises
-
-2. **How do Experiences and Knowledge link?**
-   - A Lesson step could reference a KB entry ("Read this before proceeding")
-   - Completing a Challenge could auto-generate a KB entry summarizing what was learned
-   - The GPT could say "Before we build your brand strategy, study these 3 KB entries"
-   - KB entries could link back to Experiences ("Practice this concept → [Start Challenge]")
-
-3. **Should MiraK generate tests?**
-   - MiraK's Synth agent already generates "Reflection / retrieval" questions per knowledge.md spec
-   - We could add a dedicated test-generation sub-agent that creates:
-     - Multiple choice questions
-     - Short answer prompts
-     - "Apply this concept" scenarios
-     - Code challenges (if the topic is technical)
-   - Tests could be stored as `knowledge_tests` in Supabase
-   - The Knowledge Tab renders them inline or as a separate "Practice" mode
-
-4. **Does the GPT teach MiraK what to research, or does MiraK decide?**
-   - Option A: GPT calls MiraK with specific topics ("Research Next.js App Router")
-   - Option B: MiraK auto-generates related topics from experience completions
-   - Option C: Both — GPT triggers on-demand, MiraK suggests proactively
-
-5. **Categories and navigation**
-   - Should categories be predefined (e.g., "Business", "Tech", "Personal Growth")?
-   - Or should MiraK auto-categorize based on the content?
-   - Should the Knowledge Tab have a search function?
-   - Tree structure vs. flat list vs. card grid?
-
-#### Open Decision: Agent Instructions
-
-1. **MiraK agent updates:**
-   - Teach the Synth agent to also generate test questions alongside the article
-   - Teach the Synth agent to output structured JSON (not just markdown) so fields can be stored in separate DB columns
-   - Add a `category` field to the output
-   - Add a `difficulty_level` field
-   - Potentially add a "prerequisites" graph — "Read X before Y"
-
-2. **Custom GPT updates:**
-   - New action: `generateKnowledge` → POSTs to MiraK Cloud Run URL
-   - New action: `listKnowledgeEntries` → reads from Supabase via Mira API
-   - Updated instructions: "When the user is about to start an experience that requires background knowledge, check the KB first. If no entry exists, trigger MiraK to create one."
-   - Updated instructions: "After completing a research-heavy experience, generate a KB entry summarizing the key learnings."
-
-3. **MiraK's `knowledge.md`:**
-   - Already lives in `c:\mirak\knowledge.md`
-   - Should it be the canonical copy, or should Mira also have it?
-   - The Synth agent reads it at prompt-time to enforce formatting
-   - If we update the formatting, we update it in MiraK and redeploy
-
-#### Proposed Supabase Schema (Draft — Needs Discussion)
-
-```sql
--- Core knowledge entries
-CREATE TABLE knowledge_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  topic TEXT NOT NULL,
-  category TEXT,
-  difficulty TEXT CHECK (difficulty IN ('beginner', 'intermediate', 'advanced')),
-  content TEXT NOT NULL,              -- The full markdown article
-  metadata JSONB,                     -- Audience, keywords, reading time, etc.
-  source_experience_id UUID,          -- Which experience triggered this (nullable)
-  citations JSONB,                    -- URLs, confidence notes
-  status TEXT DEFAULT 'active',       -- active, archived
-  mastery_status TEXT DEFAULT 'new',  -- new, reading, practicing, mastered
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Auto-generated tests/quizzes per KB entry
-CREATE TABLE knowledge_tests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id UUID REFERENCES knowledge_entries(id),
-  question_type TEXT,                 -- multiple_choice, short_answer, apply, code
-  question TEXT NOT NULL,
-  options JSONB,                      -- For multiple choice
-  correct_answer TEXT,
-  explanation TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- User progress tracking
-CREATE TABLE knowledge_progress (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  entry_id UUID REFERENCES knowledge_entries(id),
-  tests_attempted INT DEFAULT 0,
-  tests_passed INT DEFAULT 0,
-  last_studied_at TIMESTAMPTZ,
-  next_review_at TIMESTAMPTZ,        -- Spaced repetition
-  mastery_score FLOAT DEFAULT 0,     -- 0.0 to 1.0
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### What Needs to Happen (Ordered)
-
-| # | Item | Dependency |
-|---|------|------------|
-| 1 | **Resolve data flow** (Option A vs B above) | Architecture decision |
-| 2 | **Create Supabase tables** (knowledge_entries, knowledge_tests, knowledge_progress) | Decision #1 |
-| 3 | **Update MiraK** to write to Supabase after generation | Tables exist |
-| 4 | **Update MiraK Synth agent** to also output test questions | Can be parallel |
-| 5 | **Build Knowledge Tab UI** in Mira (browse, read, study, practice) | Tables exist |
-| 6 | **Add Custom GPT action** (`generateKnowledge`) pointing to MiraK | MiraK is ready |
-| 7 | **Update GPT instructions** to trigger knowledge generation contextually | Action exists |
-| 8 | **Link Experiences ↔ Knowledge** (reference KB from steps, generate KB on completion) | Both surfaces exist |
-| 9 | **Spaced repetition / mastery tracking** logic | Progress table + tests exist |
-
-#### Open Questions (Must Resolve Before Sprint Starts)
-
-- [ ] Option A (MiraK → Supabase direct) or Option B (MiraK → Mira API)?
-- [ ] Should MiraK return structured JSON or markdown? (JSON is better for DB, markdown is better for reading)
-- [ ] How many test questions per KB entry? Auto-generated or curated?
-- [ ] Should the Knowledge Tab be part of the Mira main nav or a separate section?
-- [ ] Does the user manually trigger "research this topic" or does the system decide?
-- [ ] Should KB entries be public (shared across users) or private (per-user)?
-- [ ] How does mastery tracking affect Experience recommendations? (e.g., "You haven't mastered X yet, so we suggest this Experience")
-- [ ] Should MiraK also be able to update/improve existing KB entries? (re-research with fresh sources)
-- [ ] When deploying to "roland" (production GCP), does the Cloud Run URL change?
-- [ ] Does the Custom GPT need two separate server URLs now? (Mira on Vercel + MiraK on Cloud Run)
-
----
-
+> **Results:** Implemented the "Option B" Webhook Handoff architecture. Built a 3-tab study workspace (Learn/Practice/Links), domain-organized grid, and home page "Continue Learning" dashboard. Integrated knowledge metadata into Genkit synthesis and suggestion flows. All 6 lanes verified.
+>
 ### 🔲 Sprint 9 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.

@@ -27,6 +27,9 @@ export function formatEventType(type: InboxEvent['type']): string {
     github_copilot_assigned: 'Copilot assigned',
     github_sync_failed: 'GitHub sync failed',
     github_connection_error: 'GitHub connection error',
+    // Knowledge lifecycle events
+    knowledge_ready: 'New knowledge ready',
+    knowledge_updated: 'Knowledge updated',
   }
   return labels[type] ?? type
 }

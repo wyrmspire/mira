@@ -7,6 +7,7 @@ import { getInteractionsByInstance } from './interaction-service'
 import { compressGPTStateFlow } from '@/lib/ai/flows/compress-gpt-state'
 import { runFlowSafe } from '@/lib/ai/safe-flow'
 import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
+import { getKnowledgeSummaryForGPT } from './knowledge-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -98,6 +99,13 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
       prioritySignals: compressedResult.prioritySignals,
       suggestedOpeningTopic: compressedResult.suggestedOpeningTopic
     }
+  }
+
+  // Lane 5: Add knowledge summary
+  try {
+    (packet as any).knowledgeSummary = await getKnowledgeSummaryForGPT(userId)
+  } catch (error) {
+    (packet as any).knowledgeSummary = null
   }
 
   return packet

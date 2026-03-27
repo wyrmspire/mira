@@ -185,5 +185,35 @@ export const COPY = {
       plan_builder: 'Plan Builder', 
       essay_tasks: 'Essay + Tasks' 
     }
-  }
+  },
+  knowledge: {
+    heading: 'Knowledge',
+    subheading: 'Your terrain, mapped from action.',
+    emptyState: 'Your knowledge base grows as you explore experiences.',
+    sections: {
+      domains: 'Domains',
+      companion: 'Related Knowledge',
+      recentlyAdded: 'Recently Added',
+    },
+    unitTypes: {
+      foundation: 'Foundation',
+      playbook: 'Playbook',
+      deep_dive: 'Deep Dive',
+      example: 'Example',
+    },
+    mastery: {
+      unseen: 'New',
+      read: 'Read',
+      practiced: 'Practiced',
+      confident: 'Confident',
+    },
+    actions: {
+      markRead: 'Mark as Read',
+      markPracticed: 'Mark as Practiced',
+      markConfident: 'Mark as Confident',
+      startExperience: 'Start Related Experience',
+      learnMore: '📖 Learn about this',
+      viewAll: 'View All →',
+    },
+  },
 }

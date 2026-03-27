@@ -24,6 +24,9 @@ export type InboxEventType =
   | 'github_copilot_assigned'
   | 'github_sync_failed'
   | 'github_connection_error'
+  // Knowledge lifecycle events
+  | 'knowledge_ready'
+  | 'knowledge_updated'
 
 export interface InboxEvent {
   id: string

@@ -8,6 +8,7 @@ import { COPY } from '@/lib/studio-copy'
 
 const NAV_ITEMS = [
   { label: 'Progress', href: ROUTES.arena, icon: '▶' },
+  { label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' },
   { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
   { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
   { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
