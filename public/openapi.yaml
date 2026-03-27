@@ -1053,6 +1053,22 @@ components:
           items:
             $ref: '#/components/schemas/ExperienceInstance'
           description: Experiences in proposed status awaiting user acceptance
+        compressedState:
+          type: object
+          nullable: true
+          properties:
+            narrative:
+              type: string
+              description: A concise narrative summary of the user's current situation and progress.
+            prioritySignals:
+              type: array
+              items:
+                type: string
+              description: The top 3-5 signals the GPT should pay attention to.
+            suggestedOpeningTopic:
+              type: string
+              description: A recommended opening topic or question for the GPT to use when re-entering the conversation.
+          description: AI-generated narrative compression of the user's state.
     SynthesisSnapshot:
       type: object
       properties:

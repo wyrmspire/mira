@@ -36,6 +36,7 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 | Routing | `lib/routes.ts` — centralized route map |
 | GitHub | `@octokit/rest` via `lib/adapters/github-adapter.ts` |
 | Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
+| AI Intelligence | Genkit + `@genkit-ai/google-genai` via `lib/ai/genkit.ts` |
 
 ---
 
@@ -118,8 +119,10 @@ components/
   icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
   archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
   experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
+                           StepNavigator, ExperienceOverview, DraftProvider,
                            step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
                            Reflection, EssayTasks)
+  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator
   timeline/              ← TimelineEventCard, TimelineFilterBar
   profile/               ← FacetCard, DirectionSummary
   dev/                   ← GPT send form, dev tools
@@ -138,16 +141,25 @@ lib/
   supabase/
     client.ts            ← Server-side Supabase client
     browser.ts           ← Browser-side Supabase client
-    migrations/          ← SQL migration files (001, 002, 003)
+    migrations/          ← SQL migration files (001–004)
+  ai/
+    genkit.ts            ← Genkit initialization + Google AI plugin
+    schemas.ts           ← Shared Zod schemas for AI flow outputs
+    safe-flow.ts         ← Graceful degradation wrapper for AI flows
+    flows/               ← Genkit flow definitions (one file per flow)
+    context/             ← Context assembly helpers for flows
   experience/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
     reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
     interaction-events.ts← Event type constants + payload builder
     progression-engine.ts← Step scoring + friction calculator
     progression-rules.ts ← Canonical experience chain map + suggestion logic
+    step-state-machine.ts← Step status transitions (pending → in_progress → completed)
+    step-scheduling.ts   ← Pacing utilities (daily/weekly/custom scheduling)
     CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
   hooks/
     useInteractionCapture.ts ← Fire-and-forget telemetry hook
+    useDraftPersistence.ts   ← Debounced auto-save + hydration hook for step drafts
   storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
   storage-adapter.ts     ← Adapter interface: Supabase primary, JSON fallback
   seed-data.ts           ← Initial seed records (legacy JSON)
@@ -160,7 +172,8 @@ lib/
   date.ts                ← Date formatting
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
-                           experience, interaction, synthesis, graph, timeline, facet services
+                           experience, interaction, synthesis, graph, timeline, facet,
+                           draft services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
   validators/            ← idea, project, drill, webhook, experience, step-payload validators
@@ -428,6 +441,14 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ Use `useDraftPersistence` hook which saves to `artifacts` table AND hydrates on next visit.
 - Why: `interaction_events.draft_saved` is telemetry (append-only, for friction analysis). `artifacts` with `artifact_type = 'step_draft'` is the durable draft store (upserted, read back by renderers).
 
+### SOP-23: Genkit flows are services, not routes — and must degrade gracefully
+**Learned from**: Sprint 7 architecture (coach.md rule #1, #5)
+
+- ❌ Calling a Genkit flow directly from an API route handler.
+- ❌ Letting a missing `GEMINI_API_KEY` crash the app.
+- ✅ Call flows from service functions via `runFlowSafe()` wrapper. If AI is unavailable, fall back to existing mechanical behavior.
+- Why: AI enhances; it doesn't gate. The system must work identically with or without `GEMINI_API_KEY`. Services own the fallback logic.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -442,3 +463,4 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-24**: Sprint 5 boardinit — Groundwork sprint. Added SOP-18 (harness validates contracts), SOP-19 (force-dynamic on pages). Updated repo map with library page, ExperienceCard, HomeExperienceAction, reentry-engine. 5 heavy coding lanes: Graph+Chaining, Timeline, Profile+Facets, Validation+API Hardening, Progression+Renderer Upgrades. Lane 6 for integration/wiring/browser testing.
 - **2026-03-25**: Sprint 5 completed. All 6 lanes done. Gate 0 contracts canonicalized (3 contract files). Graph service, timeline page, profile+facets, validators, progression engine all built. Updated repo map with contracts/, graph-service, timeline-service, facet-service, step-payload-validator. Added SOPs 20–22 from Sprint 5B field test findings.
 - **2026-03-26**: Sprint 6 boardinit — Experience Workspace sprint. Based on field-test findings documented in `roadmap.md` Sprint 5B section. 5 coding lanes: Workspace Navigator, Draft Persistence, Renderer Upgrades, Steps API + Multi-Pass, Step Status + Scheduling. Lane 6 for integration + browser testing.
+- **2026-03-26**: Sprint 6 completed. All 6 lanes done. Non-linear workspace model with sidebar/topbar navigators, draft persistence via artifacts table, renderer upgrades (checkpoint textareas, essay writing surfaces, expandable challenges/plans), step CRUD/reorder API, step status/scheduling migration 004. Updated repo map with StepNavigator, ExperienceOverview, DraftProvider, DraftIndicator, draft-service, useDraftPersistence, step-state-machine, step-scheduling. Updated OpenAPI schema (16 endpoints). Updated roadmap. Added SOP-23 (Genkit flow pattern). Added Genkit to tech stack.

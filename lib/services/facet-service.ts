@@ -3,6 +3,9 @@ import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 import { getExperienceInstances, getExperienceInstanceById, getExperienceSteps } from './experience-service'
 import { getInteractionsByInstance } from './interaction-service'
+import { runFlowSafe } from '@/lib/ai/safe-flow'
+import { extractFacetsFlow } from '@/lib/ai/flows/extract-facets'
+import { buildFacetContext } from '@/lib/ai/context/facet-context'
 
 export async function getFacetsForUser(userId: string): Promise<ProfileFacet[]> {
   const adapter = getStorageAdapter()
@@ -24,6 +27,7 @@ export async function upsertFacet(userId: string, update: FacetUpdate): Promise<
     const updated: ProfileFacet = {
       ...existing,
       confidence: update.confidence,
+      evidence: update.evidence || existing.evidence,
       source_snapshot_id: update.source_snapshot_id || existing.source_snapshot_id,
       updated_at: new Date().toISOString()
     }
@@ -36,6 +40,7 @@ export async function upsertFacet(userId: string, update: FacetUpdate): Promise<
     facet_type: update.facet_type,
     value: update.value,
     confidence: update.confidence,
+    evidence: update.evidence || null,
     source_snapshot_id: update.source_snapshot_id || null,
     updated_at: new Date().toISOString()
   }
@@ -183,3 +188,41 @@ export async function buildUserProfile(userId: string): Promise<UserProfile> {
     memberSince
   }
 }
+
+/**
+ * AI-powered facet extraction.
+ * 1. Build context from interactions and experience metadata.
+ * 2. Run the AI flow (Gemini) to extract semantic facets.
+ * 3. Upsert extracted facets to the user's profile.
+ * 4. Fall back to mechanical extraction if AI is unavailable.
+ */
+export async function extractFacetsWithAI(userId: string, instanceId: string): Promise<ProfileFacet[]> {
+  const context = await buildFacetContext(instanceId, userId);
+  
+  const result = await runFlowSafe(
+    () => extractFacetsFlow(context),
+    { facets: [] }
+  );
+
+  // If AI failed or returned nothing, fall back to historical mechanical behavior
+  // This ensures Sprint 7 doesn't break baseline functionality.
+  if (!result || !result.facets || result.facets.length === 0) {
+    return extractFacetsFromExperience(userId, instanceId);
+  }
+
+  const upsertedFacets: ProfileFacet[] = [];
+  
+  for (const facet of result.facets) {
+    // Map AI facet extraction results to our canonical types
+    const upserted = await upsertFacet(userId, {
+      facet_type: facet.facetType as FacetType,
+      value: facet.value,
+      confidence: facet.confidence,
+      evidence: facet.evidence
+    });
+    upsertedFacets.push(upserted);
+  }
+
+  return upsertedFacets;
+}
+

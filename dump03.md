@@ -1,3 +1,176 @@
+                type: string
+              instanceTitle:
+                type: string
+              prompt:
+                type: string
+              trigger:
+                type: string
+              contextScope:
+                type: string
+          description: Active re-entry prompts from completed or idle experiences
+        frictionSignals:
+          type: array
+          items:
+            type: object
+            properties:
+              instanceId:
+                type: string
+              level:
+                type: string
+                enum:
+                - low
+                - medium
+                - high
+          description: Friction levels observed in recent experiences
+        suggestedNext:
+          type: array
+          items:
+            type: string
+          description: Suggested next experience IDs
+        synthesisSnapshot:
+          $ref: '#/components/schemas/SynthesisSnapshot'
+          nullable: true
+        proposedExperiences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceInstance'
+          description: Experiences in proposed status awaiting user acceptance
+        compressedState:
+          type: object
+          nullable: true
+          properties:
+            narrative:
+              type: string
+              description: A concise narrative summary of the user's current situation and progress.
+            prioritySignals:
+              type: array
+              items:
+                type: string
+              description: The top 3-5 signals the GPT should pay attention to.
+            suggestedOpeningTopic:
+              type: string
+              description: A recommended opening topic or question for the GPT to use when re-entering the conversation.
+          description: AI-generated narrative compression of the user's state.
+    SynthesisSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        source_type:
+          type: string
+        source_id:
+          type: string
+        summary:
+          type: string
+        key_signals:
+          type: object
+        next_candidates:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+    Idea:
+      type: object
+      description: 'An idea captured from conversation. Note: all fields use snake_case.'
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        raw_prompt:
+          type: string
+          description: The raw text from the conversation that triggered this idea
+        gpt_summary:
+          type: string
+          description: GPT's structured summary of the idea
+        vibe:
+          type: string
+          description: The energy or feel of the idea
+        audience:
+          type: string
+          description: Who this idea is for
+        intent:
+          type: string
+          description: What the user wants to achieve
+        status:
+          type: string
+          enum:
+          - captured
+          - drilling
+          - arena
+          - icebox
+          - shipped
+          - killed
+        created_at:
+          type: string
+          format: date-time
+    CaptureIdeaRequest:
+      type: object
+      description: Accepts both camelCase and snake_case field names. The normalizer
+        handles both.
+      required:
+      - title
+      - rawPrompt
+      - gptSummary
+      properties:
+        title:
+          type: string
+          description: Short idea title
+        rawPrompt:
+          type: string
+          description: The raw text from the conversation that triggered this idea.
+            Quote or paraphrase what the user said. (Also accepts raw_prompt)
+        gptSummary:
+          type: string
+          description: "Your structured summary of the idea \u2014 what it is, why\
+            \ it matters, what it could become. (Also accepts gpt_summary)"
+        vibe:
+          type: string
+          description: "The energy or feel \u2014 e.g. 'ambitious', 'playful', 'urgent',\
+            \ 'exploratory'"
+        audience:
+          type: string
+          description: "Who this idea is for \u2014 e.g. 'self', 'team', 'public'"
+        intent:
+          type: string
+          description: "What the user wants from this \u2014 e.g. 'explore', 'build',\
+            \ 'learn', 'solve'"
+    RecordInteractionRequest:
+      type: object
+      required:
+      - instanceId
+      - eventType
+      properties:
+        instanceId:
+          type: string
+          description: Experience instance ID
+        stepId:
+          type: string
+          nullable: true
+          description: Step ID if the event is step-specific
+        eventType:
+          type: string
+          enum:
+          - step_viewed
+          - answer_submitted
+          - task_completed
+          - step_skipped
+          - time_on_step
+          - experience_started
+          - experience_completed
+          - draft_saved
+        eventPayload:
+          type: object
+          description: Event-specific data
+
+```
+
+### roadmap.md
+
+```markdown
 # Mira Studio — Product Roadmap
 
 > Living document. The vision is large; the sprints are small.
@@ -1314,3 +1487,1129 @@ The GPT authored a genuinely excellent curriculum. The *content design* beat the
 8. **The app stays dumb and clean.** Intelligence lives in GPT and the coder. The app renders and records.
 9. **Friction is observed, not acted on.** The app computes friction. GPT interprets it. The app never reacts to its own friction signal.
 10. **Sometimes explain. Sometimes immerse.** The resolution object decides. The system never defaults to one mode.
+
+```
+
+### schfix.md
+
+```markdown
+# Schema Fix Suggestions (schfix.md)
+
+The GPT experienced a failure because the `ExperienceStep` schema defined `payload` simply as a generic `type: object` without `additionalProperties: true`, OR it was confused by the `prompt.html` which showed the step shape directly rather than nested inside `payload`.
+
+**1. The Root Cause:**
+The GPT's Action wrapper (OpenAI's strict OpenAPI validator) strips or blocks payloads that don't match the schema exactly. Since we defined `payload` as:
+```yaml
+        payload:
+          type: object
+          description: "Step-specific content. Format depends on type."
+```
+OpenAI often strips keys out of generic objects if `additionalProperties: true` is missing, or the GPT tries to put the fields (like `questions`) at the top level of the step because `prompt.html` was ambiguous.
+
+**2. The Fix for public/prompt.html:**
+Update the instructional string to explicitly show the required `payload` key wrapping the type-specific data.
+*Example:* 
+`**Questionnaire**: { "type": "questionnaire", "title": "...", "payload": { "questions": [...] } }`
+
+**3. The Fix for public/openapi.yaml:**
+Update the schema for `ExperienceStep.payload` to explicitly allow free-form fields so OpenAI doesn't strip them:
+```yaml
+        payload:
+          type: object
+          additionalProperties: true
+          description: "Step-specific content inside 'payload' key..."
+```
+Alternatively, we could define a discriminator or `oneOf` for the payload, but `additionalProperties: true` is the easiest way to tell the GPT "put whatever JSON you want here".
+
+I am making these fixes now.
+
+```
+
+### start.sh
+
+```bash
+#!/usr/bin/env bash
+# start.sh — Kill old processes, start dev server + Cloudflare tunnel
+# Tunnel: mira.mytsapi.us → localhost:3000
+
+set -e
+cd "$(dirname "$0")"
+
+echo "🧹 Killing old processes..."
+
+# Kill any node process on port 3000
+for pid in $(netstat -ano 2>/dev/null | grep ':3000 ' | grep LISTENING | awk '{print $5}' | sort -u); do
+  echo "  Killing PID $pid (port 3000)"
+  taskkill //F //PID "$pid" 2>/dev/null || true
+done
+
+# Kill any existing cloudflared tunnel
+taskkill //F //IM cloudflared.exe 2>/dev/null && echo "  Killed cloudflared" || echo "  No cloudflared running"
+
+sleep 1
+
+echo ""
+echo "🚀 Starting Next.js dev server..."
+npm run dev &
+DEV_PID=$!
+
+# Wait for the dev server to be ready
+echo "⏳ Waiting for localhost:3000..."
+for i in $(seq 1 30); do
+  if curl -s -o /dev/null http://localhost:3000 2>/dev/null; then
+    echo "✅ Dev server ready on http://localhost:3000"
+    break
+  fi
+  sleep 1
+done
+
+echo ""
+echo "🌐 Starting Cloudflare tunnel → mira.mytsapi.us"
+cloudflared tunnel run &
+TUNNEL_PID=$!
+
+echo ""
+echo "============================================"
+echo "  Mira Studio is running!"
+echo "  Local:  http://localhost:3000"
+echo "  Tunnel: https://mira.mytsapi.us"
+echo "  Webhook: https://mira.mytsapi.us/api/webhook/github"
+echo "============================================"
+echo ""
+echo "Press Ctrl+C to stop everything."
+
+# Trap Ctrl+C to kill both processes
+trap 'echo "Shutting down..."; kill $DEV_PID $TUNNEL_PID 2>/dev/null; exit 0' INT TERM
+
+# Wait for either to exit
+wait
+
+```
+
+### tailwind.config.ts
+
+```typescript
+import type { Config } from 'tailwindcss'
+const config: Config = {
+  content: [
+    './pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    './app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      colors: {
+        studio: {
+          bg: '#0a0a0f',
+          surface: '#12121a',
+          border: '#1e1e2e',
+          muted: '#2a2a3a',
+          accent: '#6366f1',
+          'accent-hover': '#818cf8',
+          text: '#e2e8f0',
+          'text-muted': '#94a3b8',
+          success: '#10b981',
+          warning: '#f59e0b',
+          danger: '#ef4444',
+          ice: '#38bdf8',
+        },
+      },
+    },
+  },
+  plugins: [],
+}
+export default config
+
+```
+
+### tsconfig.json
+
+```json
+{
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{"name": "next"}],
+    "paths": {"@/*": ["./*"]}
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+```
+
+### types/agent-run.ts
+
+```typescript
+/**
+ * types/agent-run.ts
+ * Represents a single AI-agent or GitHub workflow execution triggered by Mira.
+ */
+
+import type { ExecutionMode } from '@/lib/constants'
+
+export type AgentRunKind =
+  | 'prototype'
+  | 'fix_request'
+  | 'spec'
+  | 'research_summary'
+  | 'copilot_issue_assignment'
+
+export type AgentRunStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'blocked'
+
+export interface AgentRun {
+  id: string
+  projectId: string
+  taskId?: string
+  kind: AgentRunKind
+  status: AgentRunStatus
+  executionMode: ExecutionMode
+  triggeredBy: string
+  githubWorkflowRunId?: string
+  githubIssueNumber?: number
+  startedAt: string
+  finishedAt?: string
+  summary?: string
+  error?: string
+}
+
+```
+
+### types/api.ts
+
+```typescript
+export interface ApiResponse<T> {
+  data?: T
+  error?: string
+  message?: string
+}
+
+export interface PaginatedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+```
+
+### types/drill.ts
+
+```typescript
+export type DrillDisposition = 'arena' | 'icebox' | 'killed'
+
+export interface DrillSession {
+  id: string
+  ideaId: string
+  intent: string
+  successMetric: string
+  scope: 'small' | 'medium' | 'large'
+  executionPath: 'solo' | 'assisted' | 'delegated'
+  urgencyDecision: 'now' | 'later' | 'never'
+  finalDisposition: DrillDisposition
+  completedAt?: string
+}
+
+```
+
+### types/experience.ts
+
+```typescript
+// types/experience.ts
+import {
+  ExperienceClass,
+  ExperienceStatus,
+  ResolutionDepth,
+  ResolutionMode,
+  ResolutionTimeScope,
+  ResolutionIntensity,
+} from '@/lib/constants';
+
+export type {
+  ExperienceClass,
+  ExperienceStatus,
+  ResolutionDepth,
+  ResolutionMode,
+  ResolutionTimeScope,
+  ResolutionIntensity,
+};
+
+export type InstanceType = 'persistent' | 'ephemeral';
+
+export interface Resolution {
+  depth: ResolutionDepth;
+  mode: ResolutionMode;
+  timeScope: ResolutionTimeScope;
+  intensity: ResolutionIntensity;
+}
+
+export interface ReentryContract {
+  trigger: 'time' | 'completion' | 'inactivity' | 'manual';
+  prompt: string;
+  contextScope: 'minimal' | 'full' | 'focused';
+}
+
+export interface ExperienceTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  class: ExperienceClass;
+  renderer_type: string;
+  schema_version: number;
+  config_schema: any; // JSONB
+  status: 'active' | 'deprecated';
+  created_at: string;
+}
+
+export interface ExperienceInstance {
+  id: string;
+  user_id: string;
+  idea_id?: string | null;
+  template_id: string;
+  title: string;
+  goal: string;
+  instance_type: InstanceType;
+  status: ExperienceStatus;
+  resolution: Resolution;
+  reentry?: ReentryContract | null;
+  previous_experience_id?: string | null;
+  next_suggested_ids?: string[];
+  friction_level?: 'low' | 'medium' | 'high' | null;
+  source_conversation_id?: string | null;
+  generated_by?: string | null;
+  realization_id?: string | null;
+  created_at: string;
+  published_at?: string | null;
+}
+
+export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+
+export interface ExperienceStep {
+  id: string;
+  instance_id: string;
+  step_order: number;
+  step_type: string;
+  title: string;
+  payload: any; // JSONB
+  completion_rule?: string | null;
+  status?: StepStatus;
+  scheduled_date?: string | null;     // ISO 8601 date (no time)
+  due_date?: string | null;           // ISO 8601 date (no time)
+  estimated_minutes?: number | null;  // estimated time to complete
+  completed_at?: string | null;       // ISO 8601 timestamp
+}
+
+```
+
+### types/external-ref.ts
+
+```typescript
+/**
+ * types/external-ref.ts
+ * Maps a local Mira entity (project, PR, task, agent_run) to an external
+ * provider record (GitHub issue/PR, Vercel deployment, etc.).
+ * Used for reverse-lookup: GitHub event → local entity.
+ */
+
+export type ExternalProvider = 'github' | 'vercel' | 'supabase'
+
+export interface ExternalRef {
+  id: string
+  entityType: 'project' | 'pr' | 'task' | 'agent_run'
+  entityId: string
+  provider: ExternalProvider
+  externalId: string
+  externalNumber?: number
+  url?: string
+  createdAt: string
+}
+
+```
+
+### types/github.ts
+
+```typescript
+/**
+ * types/github.ts
+ * Shared GitHub-specific types used across the webhook pipeline,
+ * adapter, and services.
+ */
+
+export type GitHubEventType =
+  | 'issues'
+  | 'issue_comment'
+  | 'pull_request'
+  | 'pull_request_review'
+  | 'workflow_run'
+  | 'push'
+
+export interface GitHubIssuePayload {
+  action: string
+  issue: {
+    number: number
+    title: string
+    html_url: string
+    state: string
+    assignee?: { login: string }
+  }
+  repository: {
+    full_name: string
+    owner: { login: string }
+    name: string
+  }
+}
+
+export interface GitHubPRPayload {
+  action: string
+  pull_request: {
+    number: number
+    title: string
+    html_url: string
+    state: string
+    head: { sha: string; ref: string }
+    base: { ref: string }
+    draft: boolean
+    mergeable?: boolean
+  }
+  repository: {
+    full_name: string
+    owner: { login: string }
+    name: string
+  }
+}
+
+export interface GitHubWorkflowRunPayload {
+  action: string
+  workflow_run: {
+    id: number
+    name: string
+    status: string
+    conclusion: string | null
+    html_url: string
+    head_sha: string
+  }
+  repository: {
+    full_name: string
+    owner: { login: string }
+    name: string
+  }
+}
+
+```
+
+### types/graph.ts
+
+```typescript
+export interface ExperienceGraphEdge {
+  fromInstanceId: string;
+  toInstanceId: string;
+  edgeType: 'chain' | 'suggestion' | 'loop' | 'branch';
+  metadata?: Record<string, any>;
+}
+
+export interface ExperienceChainContext {
+  previousExperience: { id: string; title: string; status: string; class: string } | null;
+  suggestedNext: { id: string; title: string; reason: string }[];
+  chainDepth: number;
+  resolutionCarryForward: boolean;
+}
+
+export interface ProgressionRule {
+  fromClass: string;
+  toClass: string;
+  condition: 'completion' | 'score_threshold' | 'time_elapsed' | 'always';
+  resolutionEscalation: boolean;
+  reason: string;
+}
+
+```
+
+### types/idea.ts
+
+```typescript
+export type IdeaStatus =
+  | 'captured'
+  | 'drilling'
+  | 'arena'
+  | 'icebox'
+  | 'shipped'
+  | 'killed'
+
+export interface Idea {
+  id: string
+  title: string
+  raw_prompt: string
+  gpt_summary: string
+  vibe: string
+  audience: string
+  intent: string
+  created_at: string
+  status: IdeaStatus
+}
+
+```
+
+### types/inbox.ts
+
+```typescript
+export type InboxEventType =
+  | 'idea_captured'
+  | 'idea_deferred'
+  | 'drill_completed'
+  | 'project_promoted'
+  | 'task_created'
+  | 'pr_opened'
+  | 'preview_ready'
+  | 'build_failed'
+  | 'merge_completed'
+  | 'project_shipped'
+  | 'project_killed'
+  | 'changes_requested'
+  // GitHub lifecycle events
+  | 'github_issue_created'
+  | 'github_issue_closed'
+  | 'github_workflow_dispatched'
+  | 'github_workflow_failed'
+  | 'github_workflow_succeeded'
+  | 'github_pr_opened'
+  | 'github_pr_merged'
+  | 'github_review_requested'
+  | 'github_changes_requested'
+  | 'github_copilot_assigned'
+  | 'github_sync_failed'
+  | 'github_connection_error'
+
+export interface InboxEvent {
+  id: string
+  projectId?: string
+  type: InboxEventType
+  title: string
+  body: string
+  timestamp: string
+  severity: 'info' | 'warning' | 'error' | 'success'
+  actionUrl?: string
+  githubUrl?: string
+  read: boolean
+}
+
+```
+
+### types/interaction.ts
+
+```typescript
+// types/interaction.ts
+
+export type InteractionEventType =
+  | 'step_viewed'
+  | 'answer_submitted'
+  | 'task_completed'
+  | 'step_skipped'
+  | 'time_on_step'
+  | 'experience_started'
+  | 'experience_completed'
+  | 'draft_saved';
+
+export interface InteractionEvent {
+  id: string;
+  instance_id: string;
+  step_id: string | null;
+  event_type: InteractionEventType;
+  event_payload: any; // JSONB
+  created_at: string;
+}
+
+export interface Artifact {
+  id: string;
+  instance_id: string;
+  artifact_type: string;
+  title: string;
+  content: string;
+  metadata: any; // JSONB
+}
+
+```
+
+### types/pr.ts
+
+```typescript
+export type PRStatus = 'open' | 'merged' | 'closed'
+export type BuildState = 'pending' | 'running' | 'success' | 'failed'
+export type ReviewStatus = 'pending' | 'approved' | 'changes_requested' | 'merged'
+
+export interface PullRequest {
+  id: string
+  projectId: string
+  title: string
+  branch: string
+  status: PRStatus
+  previewUrl?: string
+  buildState: BuildState
+  mergeable: boolean
+  requestedChanges?: string
+  reviewStatus?: ReviewStatus
+  /** Local sequential PR number (used before GitHub sync) */
+  number: number
+  author: string
+  createdAt: string
+  // GitHub integration fields (all optional)
+  /** Real GitHub PR number — distinct from the local `number` field */
+  githubPrNumber?: number
+  githubPrUrl?: string
+  githubBranchRef?: string
+  headSha?: string
+  baseBranch?: string
+  checksUrl?: string
+  lastGithubSyncAt?: string
+  workflowRunId?: string
+  source?: 'local' | 'github'
+}
+
+```
+
+### types/profile.ts
+
+```typescript
+// types/profile.ts
+
+export type FacetType = 'interest' | 'skill' | 'goal' | 'effort_area' | 'preferred_depth' | 'preferred_mode' | 'friction_pattern'
+
+export interface ProfileFacet {
+  id: string;
+  user_id: string;
+  facet_type: FacetType;
+  value: string;
+  confidence: number; // 0.0 to 1.0
+  evidence?: string | null;
+  source_snapshot_id?: string | null;
+  updated_at: string;
+}
+
+export interface UserProfile {
+  userId: string;
+  displayName: string;
+  facets: ProfileFacet[];
+  topInterests: string[];
+  topSkills: string[];
+  activeGoals: string[];
+  experienceCount: { total: number; completed: number; active: number; ephemeral: number };
+  preferredDepth: string | null;
+  preferredMode: string | null;
+  memberSince: string;
+}
+
+export interface FacetUpdate {
+  facet_type: FacetType;
+  value: string;
+  confidence: number;
+  evidence?: string;
+  source_snapshot_id?: string;
+}
+
+```
+
+### types/project.ts
+
+```typescript
+import type { ExecutionMode } from '@/lib/constants'
+
+export type ProjectState = 'arena' | 'icebox' | 'shipped' | 'killed'
+export type ProjectHealth = 'green' | 'yellow' | 'red'
+
+export interface Project {
+  id: string
+  ideaId: string
+  name: string
+  summary: string
+  state: ProjectState
+  health: ProjectHealth
+  currentPhase: string
+  nextAction: string
+  activePreviewUrl?: string
+  createdAt: string
+  updatedAt: string
+  shippedAt?: string
+  killedAt?: string
+  killedReason?: string
+  // GitHub integration fields (all optional — local-only projects remain valid)
+  githubOwner?: string
+  githubRepo?: string
+  githubIssueNumber?: number
+  githubIssueUrl?: string
+  executionMode?: ExecutionMode
+  githubWorkflowStatus?: string
+  copilotAssignedAt?: string
+  copilotPrNumber?: number
+  copilotPrUrl?: string
+  lastSyncedAt?: string
+  /** Placeholder for future GitHub App migration */
+  githubInstallationId?: string
+  /** Placeholder for future GitHub App migration */
+  githubRepoFullName?: string
+}
+
+```
+
+### types/synthesis.ts
+
+```typescript
+// types/synthesis.ts
+import { ExperienceInstance } from './experience';
+import { ActiveReentryPrompt } from '@/lib/experience/reentry-engine';
+
+export type FacetType =
+  | 'interest'
+  | 'skill'
+  | 'goal'
+  | 'effort_area'
+  | 'preference'
+  | 'social_direction';
+
+export type FrictionLevel = 'low' | 'medium' | 'high';
+
+export interface SynthesisSnapshot {
+  id: string;
+  user_id: string;
+  source_type: string;
+  source_id: string; // UUID
+  summary: string;
+  key_signals: any; // JSONB
+  next_candidates: string[]; // JSONB
+  created_at: string;
+}
+
+export interface ProfileFacet {
+  id: string;
+  user_id: string;
+  facet_type: FacetType;
+  value: string;
+  confidence: number;
+  source_snapshot_id: string | null;
+  updated_at: string;
+}
+
+export interface GPTStatePacket {
+  latestExperiences: ExperienceInstance[];
+  activeReentryPrompts: ActiveReentryPrompt[];
+  frictionSignals: { instanceId: string; level: FrictionLevel }[];
+  suggestedNext: string[];
+  synthesisSnapshot: SynthesisSnapshot | null;
+  proposedExperiences: ExperienceInstance[];
+  compressedState?: {
+    narrative: string;
+    prioritySignals: string[];
+    suggestedOpeningTopic: string;
+  };
+}
+
+```
+
+### types/task.ts
+
+```typescript
+export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'blocked'
+
+export interface Task {
+  id: string
+  projectId: string
+  title: string
+  status: TaskStatus
+  priority: 'low' | 'medium' | 'high'
+  linkedPrId?: string
+  createdAt: string
+  // GitHub integration fields (all optional)
+  githubIssueNumber?: number
+  githubIssueUrl?: string
+  source?: 'local' | 'github'
+  parentTaskId?: string
+}
+
+```
+
+### types/timeline.ts
+
+```typescript
+export type TimelineCategory = 'experience' | 'idea' | 'system' | 'github'
+
+export interface TimelineEntry {
+  id: string;
+  timestamp: string;
+  category: TimelineCategory;
+  title: string;
+  body?: string;
+  entityId?: string;
+  entityType?: 'experience' | 'idea' | 'project' | 'pr';
+  actionUrl?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface TimelineFilter {
+  category?: TimelineCategory;
+  dateRange?: { from: string; to: string };
+  limit?: number;
+}
+
+export interface TimelineStats {
+  totalEvents: number;
+  experienceEvents: number;
+  ideaEvents: number;
+  thisWeek: number;
+}
+
+```
+
+### types/webhook.ts
+
+```typescript
+export interface WebhookPayload {
+  source: 'gpt' | 'github' | 'vercel'
+  event: string
+  data: Record<string, unknown>
+  signature?: string
+  timestamp: string
+}
+// GitHub-specific webhook context parsed from headers + body
+export interface GitHubWebhookContext {
+  event: string                    // x-github-event header
+  action: string                   // body.action
+  delivery: string                 // x-github-delivery header
+  repositoryFullName: string       // body.repository.full_name
+  sender: string                   // body.sender.login
+  rawPayload: Record<string, unknown>
+}
+
+export type GitHubWebhookHandler = (ctx: GitHubWebhookContext) => Promise<void>
+
+```
+
+### update_openapi.py
+
+```python
+import yaml
+import copy
+
+with open("public/openapi.yaml", "r", encoding="utf-8") as f:
+    schema = yaml.safe_load(f)
+
+# Update servers to relative path / domain-agnostic
+schema["servers"] = [{"url": "https://mira.mytsapi.us", "description": "Update this URL in Custom GPT actions to your current hosted domain"}]
+
+# Or even better, just leave it as is if it expects a full domain, but we can set it to {domain}
+# Let's use `https://your-domain.com` as a placeholder 
+schema["servers"] = [{"url": "/", "description": "Current hosted domain"}]
+
+# Add new endpoints
+paths = schema["paths"]
+
+paths["/api/experiences/{id}/chain"] = {
+    "get": {
+        "operationId": "getExperienceChain",
+        "summary": "Get full chain context for an experience",
+        "description": "Returns upstream and downstream linked experiences in the graph.",
+        "parameters": [
+            {
+                "name": "id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"},
+                "description": "Experience instance ID"
+            }
+        ],
+        "responses": {
+            "200": {"description": "Experience chain context"}
+        }
+    },
+    "post": {
+        "operationId": "linkExperiences",
+        "summary": "Link this experience to another",
+        "description": "Creates an edge (chain, loop, branch, suggestion) defining relationship.",
+        "parameters": [
+            {
+                "name": "id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"}
+            }
+        ],
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["targetId", "edgeType"],
+                        "properties": {
+                            "targetId": {"type": "string", "format": "uuid"},
+                            "edgeType": {"type": "string", "enum": ["chain", "suggestion", "loop", "branch"]}
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "200": {"description": "Updated source experience"}
+        }
+    }
+}
+
+paths["/api/experiences/{id}/steps"] = {
+    "get": {
+        "operationId": "getExperienceSteps",
+        "summary": "Get all steps for an experience",
+        "description": "Returns the ordered sequence of steps for this experience.",
+        "parameters": [
+            {
+                "name": "id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"}
+            }
+        ],
+        "responses": {
+            "200": {"description": "Array of steps"}
+        }
+    },
+    "post": {
+        "operationId": "addExperienceStep",
+        "summary": "Add a new step to an existing experience",
+        "description": "Appends a new step dynamically to the experience instance.",
+        "parameters": [
+            {
+                "name": "id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"}
+            }
+        ],
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["type", "title", "payload"],
+                        "properties": {
+                            "type": {"type": "string"},
+                            "title": {"type": "string"},
+                            "payload": {"type": "object"},
+                            "completion_rule": {"type": "string", "nullable": True}
+                        }
+                    }
+                }
+            }
+        },
+        "responses": {
+            "201": {"description": "Created step"}
+        }
+    }
+}
+
+paths["/api/experiences/{id}/suggestions"] = {
+    "get": {
+        "operationId": "getExperienceSuggestions",
+        "summary": "Get suggested next experiences",
+        "description": "Returns templated suggestions based on graph mappings and completions.",
+        "parameters": [
+            {
+                "name": "id",
+                "in": "path",
+                "required": True,
+                "schema": {"type": "string", "format": "uuid"}
+            }
+        ],
+        "responses": {
+            "200": {"description": "Array of suggestions"}
+        }
+    }
+}
+
+with open("public/openapi.yaml", "w", encoding="utf-8") as f:
+    yaml.dump(schema, f, sort_keys=False, default_flow_style=False)
+
+```
+
+### wiring.md
+
+```markdown
+# Wiring — Manual Steps Required
+
+> Things the user must do outside of code to make the GitHub factory work.
+
+---
+
+## Phase A: Token-Based Setup (Sprint 2)
+
+### 1. Verify your GitHub PAT scopes
+
+Your `.env.local` already has `GITHUB_TOKEN`. Ensure this token has these scopes:
+
+- `repo` (full control of private repos)
+- `workflow` (update GitHub Action workflows)
+- `admin:repo_hook` or `write:repo_hook` (manage webhooks — needed later)
+
+To check: go to [https://github.com/settings/tokens](https://github.com/settings/tokens) and inspect the token's scopes.
+
+If using a **fine-grained token**, you need:
+- Repository access: the target repo
+- Permissions: Contents (R/W), Issues (R/W), Pull Requests (R/W), Actions (R/W), Webhooks (R/W)
+
+### 2. Add required env vars to `.env.local`
+
+After Lane 1 creates the config module, add these to `.env.local`:
+
+```env
+# Already present:
+GITHUB_TOKEN=ghp_...
+
+# Add these:
+GITHUB_OWNER=your-github-username
+GITHUB_REPO=your-target-repo-name
+GITHUB_DEFAULT_BRANCH=main
+GITHUB_WEBHOOK_SECRET=generate-a-random-string-here
+```
+
+To generate a webhook secret:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### 3. Create a target repository on GitHub
+
+The app needs a real repo to create issues and PRs in. Either:
+- Use an existing repo you want Mira to manage
+- Create a new empty repo for experimentation
+
+### 4. Set up webhook forwarding (for webhook testing)
+
+Your local dev server needs to receive GitHub webhooks. Options:
+
+**Option A: ngrok (recommended for testing)**
+```bash
+ngrok http 3000
+```
+Then set the webhook URL on GitHub to: `https://YOUR-NGROK-URL/api/webhook/github`
+
+**Option B: smee.io**
+```bash
+npx smee-client --url https://smee.io/YOUR-CHANNEL --target http://localhost:3000/api/webhook/github
+```
+
+**Set up the webhook on GitHub:**
+1. Go to your target repo → Settings → Webhooks → Add webhook
+2. Payload URL: your forwarding URL + `/api/webhook/github`
+3. Content type: `application/json`
+4. Secret: the value of `GITHUB_WEBHOOK_SECRET` from your `.env.local`
+5. Events: Send me everything (or select: Issues, Pull requests, Workflow runs)
+
+---
+
+## Phase B: GitHub App Migration (Future — Not Sprint 2)
+
+When ready to move beyond PAT:
+
+1. Register a GitHub App at [https://github.com/settings/apps](https://github.com/settings/apps)
+2. Set permissions: Issues (R/W), Pull Requests (R/W), Contents (R/W), Actions (R/W), Workflows (R/W)
+3. Subscribe to events: issues, pull_request, pull_request_review, workflow_run
+4. Add `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_INSTALLATION_ID` to env
+5. Update the auth provider boundary in `lib/config/github.ts` to resolve installation tokens
+
+---
+
+## Phase C: Supabase Setup (Sprint 3)
+
+Canonical runtime storage for experiences, interactions, and user synthesis.
+
+### 1. Create a Supabase project
+
+1. Go to [https://supabase.com/dashboard/](https://supabase.com/dashboard/)
+2. Create a new project in your organization.
+3. Choose a region close to your Vercel deployment if applicable.
+
+### 2. Add required env vars to `.env.local`
+
+From your project settings (Settings → API), add these to `.env.local`:
+
+```env
+# ─── Supabase ───
+# The URL of your Supabase project (from Project Settings → API)
+NEXT_PUBLIC_SUPABASE_URL=
+
+# The anon/public key for your Supabase project (used in browser)
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# The service role key (used for administrative tasks/services, bypasses RLS)
+# From Settings → API → service_role (keep this secret!)
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+### 3. Run database migrations
+
+Lane 1 provides SQL migration files in `lib/supabase/migrations/`. 
+
+1. Go to your Supabase project's **SQL Editor**.
+2. Run the contents of each file in order:
+    - `001_preserved_entities.sql`
+    - `002_evolved_entities.sql`
+    - `003_experience_tables.sql`
+
+## Copilot Coding Agent (SWE) — Verify Access
+
+To use Copilot coding agent as the "spawn coder" path:
+
+1. Ensure your repo has GitHub Copilot enabled
+2. Verify `copilot-swe-agent` can be assigned to issues (requires Copilot Enterprise or organization with Copilot enabled)
+3. If not available, the app falls back to `custom_workflow_dispatch` execution mode
+4. The local path `c:/skill/swe` is used for local agent spawning — same contract but different executor
+ 
+ ---
+ 
+ ## Phase D: Genkit Intelligence Setup (Sprint 7)
+ 
+ AI-powered synthesis, profile facets, and context-aware suggestions.
+ 
+ ### 1. Get a Gemini API Key
+ 
+ 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+ 2. Create a new API key.
+ 3. (Optional) Set up billing if you expect high throughput — the free tier is sufficient for single-user dev.
+ 
+ ### 2. Add required env vars to `.env.local`
+ 
+ Add this to your `.env.local`:
+ 
+ ```env
+ # ─── Genkit + Google AI ───
+ # Get yours at https://aistudio.google.com/app/apikey
+ GEMINI_API_KEY=your-gemini-api-key-here
+ ```
+ 
+ ### 3. (Optional) Start Genkit Dev UI
+ 
+ To visualize traces and debug flows during development:
+ 
+ ```bash
+ npx genkit start -- npm run dev
+ ```
+ 
+ This starts the Genkit UI at `http://localhost:4000`. You can see every AI call's trace, input, and structured output.
+
+```
+

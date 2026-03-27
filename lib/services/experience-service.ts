@@ -2,6 +2,9 @@ import { ExperienceInstance, ExperienceStatus, InstanceType, ExperienceTemplate,
 export type { ExperienceInstance, ExperienceStatus, InstanceType, ExperienceTemplate, ExperienceStep, ReentryContract } from '@/types/experience'
 import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
+import { createSynthesisSnapshot } from './synthesis-service'
+import { extractFacetsWithAI } from './facet-service'
+import { updateInstanceFriction } from '@/lib/experience/progression-engine'
 
 export async function getExperienceTemplates(): Promise<ExperienceTemplate[]> {
   const adapter = getStorageAdapter()
@@ -224,4 +227,23 @@ export async function insertStepAfter(instanceId: string, afterStepId: string, s
   } as ExperienceStep;
   
   return adapter.saveItem<ExperienceStep>('experience_steps', newStep);
+}
+
+import { SynthesisSnapshot } from '@/types/synthesis'
+
+/**
+ * AI-enriched completion service function for Sprint 7 (Lane 5)
+ * Orchestrates post-completion processing: synthesis, facet extraction, and friction update.
+ */
+export async function completeExperienceWithAI(instanceId: string, userId: string): Promise<SynthesisSnapshot> {
+  // 1. Create synthesis snapshot (now AI-powered via Lane 4's changes)
+  const snapshot = await createSynthesisSnapshot(userId, 'experience', instanceId);
+  
+  // 2. Extract facets with AI (Lane 3's function)
+  await extractFacetsWithAI(userId, instanceId);
+  
+  // 3. Update friction level
+  await updateInstanceFriction(instanceId);
+
+  return snapshot;
 }

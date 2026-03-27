@@ -1,6 +1,6 @@
 // types/profile.ts
 
-export type FacetType = 'interest' | 'skill' | 'goal' | 'effort_area' | 'preferred_depth' | 'preferred_mode'
+export type FacetType = 'interest' | 'skill' | 'goal' | 'effort_area' | 'preferred_depth' | 'preferred_mode' | 'friction_pattern'
 
 export interface ProfileFacet {
   id: string;
@@ -8,6 +8,7 @@ export interface ProfileFacet {
   facet_type: FacetType;
   value: string;
   confidence: number; // 0.0 to 1.0
+  evidence?: string | null;
   source_snapshot_id?: string | null;
   updated_at: string;
 }
@@ -29,5 +30,6 @@ export interface FacetUpdate {
   facet_type: FacetType;
   value: string;
   confidence: number;
+  evidence?: string;
   source_snapshot_id?: string;
 }

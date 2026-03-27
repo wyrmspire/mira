@@ -40,4 +40,9 @@ export interface GPTStatePacket {
   suggestedNext: string[];
   synthesisSnapshot: SynthesisSnapshot | null;
   proposedExperiences: ExperienceInstance[];
+  compressedState?: {
+    narrative: string;
+    prioritySignals: string[];
+    suggestedOpeningTopic: string;
+  };
 }

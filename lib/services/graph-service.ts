@@ -1,6 +1,9 @@
 import { ExperienceInstance, getExperienceInstanceById, updateExperienceInstance, getExperienceTemplates, getExperienceInstances } from './experience-service';
 import { ExperienceChainContext } from '@/types/graph';
 import { getProgressionSuggestions, shouldEscalateResolution } from '@/lib/experience/progression-rules';
+import { runFlowSafe } from '../ai/safe-flow';
+import { suggestNextExperienceFlow } from '../ai/flows/suggest-next-experience';
+import { buildSuggestionContext } from '../ai/context/suggestion-context';
 
 /**
  * Walks back via previous_experience_id to find the direct parent.
@@ -173,4 +176,59 @@ export async function getGraphSummaryForGPT(userId: string): Promise<{ activeCha
     loopingTemplates,
     deepestChain
   };
+}
+
+/**
+ * Suggestion result with AI confidence and reasoning.
+ */
+export interface SuggestionResult {
+  templateClass: string;
+  reason: string;
+  resolution: any;
+  confidence: number;
+}
+
+/**
+ * AI-powered suggestion function that falls back to static rules.
+ */
+export async function getAISuggestionsForCompletion(instanceId: string, userId: string): Promise<SuggestionResult[]> {
+  // Assemble context
+  const context = await buildSuggestionContext(userId, instanceId);
+  
+  // Static fallback
+  const staticSuggestions = await getSuggestionsForCompletion(instanceId);
+  const fallback: SuggestionResult[] = staticSuggestions.map(s => ({
+    ...s,
+    confidence: 0.5
+  }));
+
+  // Run AI flow with safe wrapper
+  return await runFlowSafe(
+    async () => {
+      const result = await suggestNextExperienceFlow(context);
+      return result.suggestions.map(s => ({
+        templateClass: s.templateClass,
+        reason: s.reason,
+        resolution: s.suggestedResolution,
+        confidence: s.confidence
+      }));
+    },
+    fallback
+  );
+}
+
+/**
+ * Gets suggestions for the user based on their most recent activity.
+ */
+export async function getSmartSuggestions(userId: string): Promise<SuggestionResult[]> {
+  const allInstances = await getExperienceInstances({ userId });
+  const completed = allInstances
+    .filter(inst => inst.status === 'completed')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  if (completed.length === 0) {
+    return [];
+  }
+
+  return getAISuggestionsForCompletion(completed[0].id, userId);
 }

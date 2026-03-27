@@ -127,3 +127,35 @@ To use Copilot coding agent as the "spawn coder" path:
 2. Verify `copilot-swe-agent` can be assigned to issues (requires Copilot Enterprise or organization with Copilot enabled)
 3. If not available, the app falls back to `custom_workflow_dispatch` execution mode
 4. The local path `c:/skill/swe` is used for local agent spawning — same contract but different executor
+ 
+ ---
+ 
+ ## Phase D: Genkit Intelligence Setup (Sprint 7)
+ 
+ AI-powered synthesis, profile facets, and context-aware suggestions.
+ 
+ ### 1. Get a Gemini API Key
+ 
+ 1. Go to [Google AI Studio](https://aistudio.google.com/app/apikey)
+ 2. Create a new API key.
+ 3. (Optional) Set up billing if you expect high throughput — the free tier is sufficient for single-user dev.
+ 
+ ### 2. Add required env vars to `.env.local`
+ 
+ Add this to your `.env.local`:
+ 
+ ```env
+ # ─── Genkit + Google AI ───
+ # Get yours at https://aistudio.google.com/app/apikey
+ GEMINI_API_KEY=your-gemini-api-key-here
+ ```
+ 
+ ### 3. (Optional) Start Genkit Dev UI
+ 
+ To visualize traces and debug flows during development:
+ 
+ ```bash
+ npx genkit start -- npm run dev
+ ```
+ 
+ This starts the Genkit UI at `http://localhost:4000`. You can see every AI call's trace, input, and structured output.

@@ -10,8 +10,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@genkit-ai/google-genai": "^1.30.1",
     "@octokit/rest": "^22.0.1",
     "@supabase/supabase-js": "^2.100.0",
+    "genkit": "^1.30.1",
     "next": "14.2.29",
     "react": "^18",
     "react-dom": "^18"

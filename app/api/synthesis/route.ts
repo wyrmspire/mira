@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createSynthesisSnapshot, getLatestSnapshot } from '@/lib/services/synthesis-service'
+import { completeExperienceWithAI } from '@/lib/services/experience-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
@@ -24,6 +25,12 @@ export async function POST(request: Request) {
     
     if (!userId || !sourceType || !sourceId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Lane 5: Use AI-enriched flow for experiences
+    if (['experience', 'ephemeral', 'persistent'].includes(sourceType)) {
+      const snapshot = await completeExperienceWithAI(sourceId, userId)
+      return NextResponse.json(snapshot)
     }
 
     const snapshot = await createSynthesisSnapshot(userId, sourceType, sourceId)

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSuggestionsForCompletion } from '@/lib/services/graph-service';
+import { getAISuggestionsForCompletion, getSuggestionsForCompletion } from '@/lib/services/graph-service';
+import { DEFAULT_USER_ID } from '@/lib/constants';
 
 /**
  * GET /api/experiences/[id]/suggestions
- * Returns suggested next experiences for the given instance when complete.
+ * Returns AI-enriched suggestions for the given instance when complete.
  * The GPT calls this to know what to propose next.
  */
 export async function GET(
@@ -12,12 +13,16 @@ export async function GET(
 ) {
   try {
     const { id } = params;
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId') || DEFAULT_USER_ID;
     
     if (!id) {
       return NextResponse.json({ error: 'Missing experience ID' }, { status: 400 });
     }
 
-    const suggestions = await getSuggestionsForCompletion(id);
+    // Lane 5: Use AI-powered suggestions
+    const suggestions = await getAISuggestionsForCompletion(id, userId);
+    
     return NextResponse.json(suggestions);
   } catch (error: any) {
     console.error('Error fetching suggestions:', error);
