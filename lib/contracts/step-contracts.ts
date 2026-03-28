@@ -53,6 +53,7 @@ export const CONTRACTED_STEP_TYPES = [
   'reflection',
   'plan_builder',
   'essay_tasks',
+  'checkpoint',
 ] as const
 
 export type ContractedStepType = (typeof CONTRACTED_STEP_TYPES)[number]
@@ -164,6 +165,26 @@ export interface EssayTasksPayloadV1 {
   tasks: EssayTask[]
 }
 
+// ── Checkpoint ──
+
+export interface CheckpointQuestion {
+  id: string
+  question: string
+  expected_answer: string
+  difficulty: 'easy' | 'medium' | 'hard'
+  format: 'free_text' | 'choice'
+  options?: string[]
+}
+
+/** @stable */
+export interface CheckpointPayloadV1 {
+  v?: number
+  knowledge_unit_id: string
+  questions: CheckpointQuestion[]
+  passing_threshold: number
+  on_fail: 'retry' | 'continue' | 'tutor_redirect'
+}
+
 // ---------------------------------------------------------------------------
 // Discriminated union (for typed dispatch)
 // ---------------------------------------------------------------------------
@@ -179,6 +200,7 @@ export type StepPayloadV1 =
   | ReflectionPayloadV1
   | PlanBuilderPayloadV1
   | EssayTasksPayloadV1
+  | CheckpointPayloadV1
 
 /**
  * Maps contracted step type string to its payload type.
@@ -191,6 +213,7 @@ export interface StepPayloadMap {
   reflection: ReflectionPayloadV1
   plan_builder: PlanBuilderPayloadV1
   essay_tasks: EssayTasksPayloadV1
+  checkpoint: CheckpointPayloadV1
 }
 
 // ---------------------------------------------------------------------------

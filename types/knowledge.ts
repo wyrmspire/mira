@@ -45,6 +45,7 @@ export interface KnowledgeUnit {
   source_experience_id: string | null;
   subtopic_seeds: string[];
   mastery_status: MasteryStatus;
+  curriculum_outline_id?: string | null;
   created_at: string;
   updated_at: string;
 }

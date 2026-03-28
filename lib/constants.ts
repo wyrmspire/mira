@@ -69,6 +69,7 @@ export const EXPERIENCE_CLASSES = [
   'plan_builder',
   'reflection',
   'essay_tasks',
+  'checkpoint',
 ] as const
 
 export type ExperienceClass = (typeof EXPERIENCE_CLASSES)[number]
@@ -91,7 +92,7 @@ export type ExperienceStatus = (typeof EXPERIENCE_STATUSES)[number]
 export const EPHEMERAL_STATUSES = ['injected', 'active', 'completed', 'archived'] as const
 
 export const RESOLUTION_DEPTHS = ['light', 'medium', 'heavy'] as const
-export const RESOLUTION_MODES = ['illuminate', 'practice', 'challenge', 'build', 'reflect'] as const
+export const RESOLUTION_MODES = ['illuminate', 'practice', 'challenge', 'build', 'reflect', 'study'] as const
 export const RESOLUTION_TIME_SCOPES = ['immediate', 'session', 'multi_day', 'ongoing'] as const
 export const RESOLUTION_INTENSITIES = ['low', 'medium', 'high'] as const
 
@@ -112,4 +113,15 @@ export type MasteryStatus = (typeof MASTERY_STATUSES)[number]
 
 export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const
 export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number]
+
+// --- Sprint 10: Curriculum Engine ---
+
+export const CURRICULUM_STATUSES = ['planning', 'active', 'completed', 'archived'] as const
+export type CurriculumStatus = (typeof CURRICULUM_STATUSES)[number]
+
+export const STEP_KNOWLEDGE_LINK_TYPES = ['teaches', 'tests', 'deepens', 'pre_support'] as const
+export type StepKnowledgeLinkType = (typeof STEP_KNOWLEDGE_LINK_TYPES)[number]
+
+export const CHECKPOINT_ON_FAIL = ['retry', 'continue', 'tutor_redirect'] as const
+export type CheckpointOnFail = (typeof CHECKPOINT_ON_FAIL)[number]
 

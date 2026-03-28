@@ -1,4 +1,973 @@
 
+Discover will give you the schema, an example, and guidance on when to use it.
+
+## Your Protocol
+1. Call state at the start of every conversation.
+2. Before creating multi-step experiences, create a curriculum outline first (plan).
+3. Research follows planning — dispatch MiraK for gaps after the outline exists.
+4. Experiences are right-sized sections of the outline, not the entire subject.
+5. Use multi-pass: create skeleton, then update as you learn more.
+
+## Rules
+[behavioral rules only — no schemas, no template IDs, no payload formats]
+```
+
+That's ~50 lines instead of 155. And it scales — adding checkpoint, field_study, tutor chat, mastery assessment adds ZERO lines to the instructions. It adds a `discover` response.
+
+---
+
+## The OpenAPI Schema Becomes
+
+The schema goes from 1,309 lines to roughly **200-300 lines**:
+
+```yaml
+paths:
+  /api/gpt/state:
+    get: { operationId: getState, ... }
+  /api/gpt/plan:
+    post: { operationId: plan, requestBody: { action: string, payload: object } }
+  /api/gpt/create:
+    post: { operationId: create, requestBody: { type: string, payload: object } }
+  /api/gpt/update:
+    post: { operationId: update, requestBody: { action: string, payload: object } }
+  /api/gpt/teach:
+    post: { operationId: teach, requestBody: { action: string, payload: object } }
+  /api/gpt/discover:
+    get: { operationId: discover, parameters: [capability, step_type, context] }
+
+components:
+  schemas:
+    GatewayRequest:
+      type: object
+      properties:
+        action: { type: string }
+        type: { type: string }
+        payload: { type: object, additionalProperties: true }
+    DiscoverResponse:
+      type: object
+      properties:
+        capability: { type: string }
+        schema: { type: object }
+        example: { type: object }
+        when_to_use: { type: string }
+        relatedCapabilities: { type: array, items: { type: string } }
+    GPTStatePacket: { ... current shape, enriched ... }
+```
+
+The fine-grained endpoints (`/api/experiences`, `/api/ideas`, etc.) still exist for the frontend and direct API consumers. The gateway is a GPT-specific routing layer that sits on top.
+
+---
+
+## How This Interacts With Everything Else
+
+### Curriculum outlines
+Not a new endpoint. It's `POST /api/gpt/plan` with `action: "create_outline"`. GPT learns the outline schema from `discover?capability=create_outline`.
+
+### Checkpoint step type
+Not a new endpoint. It's a new `step_type` value accepted by `POST /api/gpt/create` (type: "step"). GPT learns the payload schema from `discover?capability=step_payload&step_type=checkpoint`.
+
+### Tutor chat
+Not a new endpoint. It's `POST /api/gpt/teach` with `action: "tutor_chat"`. GPT learns the payload from `discover?capability=tutor_chat`.
+
+### Future features
+Anything we add in the future — new step types, new planning actions, new intelligence flows — extends the gateway's action vocabulary and discover responses. The OpenAPI schema doesn't change. The GPT instructions don't change.
+
+---
+
+## Gateway Implementation Priority
+
+| Priority | What | Why |
+|----------|------|-----|
+| **P0** (with curriculum work) | `GET /api/gpt/discover` | The foundation. Without this, the gateway is just endpoint consolidation. With this, it's progressive disclosure. |
+| **P0** | `POST /api/gpt/plan` | New — curriculum outlines need a home. Build it as a gateway from day one. |
+| **P0** | `POST /api/gpt/create` (refactored) | Consolidate existing `injectEphemeral` + `createPersistentExperience` + `captureIdea` + `addExperienceStep` into one compound endpoint. |
+| **P1** | `POST /api/gpt/update` | Consolidate existing `updateExperienceStep` + `deleteExperienceStep` + `reorderExperienceSteps` + `transitionExperienceStatus` + `linkExperiences`. |
+| **P1** | `POST /api/gpt/teach` | New — tutor chat + checkpoint grading. Build as gateway from day one. |
+| **P1** | GPT instructions rewrite | Cut from 155 lines to ~50. Remove all inline schemas. |
+| **P2** | OpenAPI schema rewrite | Replace 1,309-line schema with ~300-line gateway schema. |
+| **P2** | Deprecate (don't remove) old endpoints | Keep them for frontend. Add `x-deprecated-for-gpt: true` headers. |
+
+---
+
+## Working Model
+
+```
+Chat discovers → Planning scopes → Experience teaches →
+Knowledge supports → Iteration deepens → Learning surface compounds
+```
+
+All connected through 6 gateway endpoints + progressive discovery.
+
+## Design Principles
+
+1. **The system should not ask the experience to design the curriculum while it is also trying to teach it.** Curriculum must exist before the module. The module is where the curriculum gets lived.
+
+2. **GPT should not carry the system's documentation in its head.** The system should teach GPT what it needs to know, when it needs to know it, through a discovery mechanism — not through a bloated system prompt.
+
+3. **Adding a feature should not grow the schema.** New capabilities extend the gateway's vocabulary and discovery responses, not the API surface or instruction text.
+
+## Strong Conclusion
+
+Mira already has the right classroom engine. It just does not yet have the planning and calibration layers that let that engine produce a real curriculum, or the connection architecture that lets GPT use those layers without drowning in schema.
+
+The path forward has three parts:
+1. **Make experiences curriculum-aware** — planning before generation, right-sizing through outlines
+2. **Make knowledge arrive in context** — four modes of delivery, not a front door
+3. **Make the connection smart** — compound gateway endpoints with progressive discovery, not endpoint explosion
+
+That is how Mira can deepen what it already built, scale without schema debt, and grow into a real adaptive learning system without throwing away its current bones or suffocating under its own API surface.
+
+```
+
+### gitr.sh
+
+```bash
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Usage: ./gitr.sh "commit message here"
+# Stages, commits, and pushes current branch.
+# It will NOT auto-rebase on push failure.
+
+msg=${1:-"chore: update"}
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
+if [[ -z "${repo_root}" ]]; then
+    echo "ERROR: Not a git repository."
+    exit 1
+fi
+cd "${repo_root}"
+
+if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
+    echo "ERROR: Rebase/merge in progress. Resolve it first."
+    exit 1
+fi
+
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "${branch}" == "HEAD" ]]; then
+    echo "ERROR: Detached HEAD. Checkout a branch first."
+    exit 1
+fi
+
+remote="origin"
+
+echo "Repo: ${repo_root}"
+echo "Branch: ${branch}"
+echo "Staging changes..."
+
+if ! git add -A; then
+    echo "WARN: git add -A failed. Retrying with safer staging."
+    git add -u
+    while IFS= read -r path; do
+        base=$(basename "$path")
+        lower=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')
+        case "$lower" in
+            nul|con|prn|aux|com[1-9]|lpt[1-9])
+                echo "Skipping reserved path on Windows: $path"
+                continue
+                ;;
+        esac
+        git add -- "$path" || echo "Skipping unstageable path: $path"
+    done < <(git ls-files --others --exclude-standard)
+fi
+
+if git diff --cached --quiet; then
+    echo "No staged changes to commit."
+else
+    echo "Committing: ${msg}"
+    git commit -m "${msg}"
+fi
+
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
+    echo "Pushing to ${remote}/${branch}..."
+    if git push "${remote}" "${branch}"; then
+        echo "Push succeeded."
+        exit 0
+    fi
+else
+    echo "Pushing and setting upstream ${remote}/${branch}..."
+    if git push -u "${remote}" "${branch}"; then
+        echo "Push succeeded."
+        exit 0
+    fi
+fi
+
+echo "Push failed (likely non-fast-forward)."
+echo "Run this manually:"
+echo "  git fetch ${remote}"
+echo "  git log --oneline --graph --decorate --max-count=20 --all"
+echo "  git push"
+exit 1
+
+```
+
+### gitrdif.sh
+
+```bash
+#!/bin/bash
+
+# gitrdif.sh - Generate a diff between local and remote branch
+# Output: gitrdiff.md in the project root
+
+# Get current branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Fetch latest from remote without merging
+echo "Fetching latest from origin/$BRANCH..."
+git fetch origin "$BRANCH" 2>/dev/null
+
+# Check if remote branch exists
+if ! git rev-parse --verify "origin/$BRANCH" > /dev/null 2>&1; then
+    echo "Remote branch origin/$BRANCH not found. Using origin/main..."
+    REMOTE_BRANCH="origin/main"
+else
+    REMOTE_BRANCH="origin/$BRANCH"
+fi
+
+# Output file
+OUTPUT="gitrdiff.md"
+
+# Generate the diff
+echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
+
+{
+    echo "# Git Diff Report"
+    echo ""
+    echo "**Generated**: $(date)"
+    echo ""
+    echo "**Local Branch**: $BRANCH"
+    echo ""
+    echo "**Comparing Against**: $REMOTE_BRANCH"
+    echo ""
+    echo "---"
+    echo ""
+    
+    # NEW: Show uncommitted changes first (working directory)
+    echo "## Uncommitted Changes (working directory)"
+    echo ""
+    echo "### Modified/Staged Files"
+    echo ""
+    echo '```'
+    git status --short 2>/dev/null || echo "(clean)"
+    echo '```'
+    echo ""
+    
+    # Check if there are any uncommitted changes
+    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+        echo "### Uncommitted Diff"
+        echo ""
+        echo '```diff'
+        git diff -- ':!gitrdiff.md' 2>/dev/null
+        git diff --cached -- ':!gitrdiff.md' 2>/dev/null
+        echo '```'
+        echo ""
+    fi
+    
+    # NEW: Show contents of untracked files (new files not yet staged)
+    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
+    if [ -n "$UNTRACKED" ]; then
+        echo "### New Untracked Files"
+        echo ""
+        for file in $UNTRACKED; do
+            # Skip binary files and very large files
+            if [ -f "$file" ]; then
+                # Checking if it's a text file
+                if command -v file >/dev/null 2>&1; then
+                    if ! file "$file" | grep -q text; then
+                        continue
+                    fi
+                fi
+                
+                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
+                if [ "$LINES" -lt 500 ]; then
+                    echo "#### \`$file\`"
+                    echo ""
+                    echo '```'
+                    cat "$file" 2>/dev/null
+                    echo '```'
+                    echo ""
+                else
+                    echo "#### \`$file\` ($LINES lines - truncated)"
+                    echo ""
+                    echo '```'
+                    head -100 "$file" 2>/dev/null
+                    echo "... ($LINES total lines)"
+                    echo '```'
+                    echo ""
+                fi
+            fi
+        done
+    fi
+    
+    echo "---"
+    echo ""
+    
+    # NEW: Show changes from the last pull/merge if applicable
+    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
+        VAL_HEAD=$(git rev-parse HEAD)
+        VAL_ORIG=$(git rev-parse ORIG_HEAD)
+        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
+            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
+            echo ""
+            echo "These are the changes that recently came into your branch."
+            echo ""
+            echo '```diff'
+            git diff ORIG_HEAD HEAD --stat 2>/dev/null
+            echo '```'
+            echo ""
+            echo '```diff'
+            # Limit full diff to avoid massive files
+            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
+            echo "... (truncated to 1000 lines)"
+            echo '```'
+            echo ""
+            echo "---"
+            echo ""
+        fi
+    fi
+
+    # Show commits that are different
+    echo "## Commits Ahead (local changes not on remote)"
+    echo ""
+    echo '```'
+    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "## Commits Behind (remote changes not pulled)"
+    echo ""
+    echo '```'
+    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    
+    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
+    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
+    
+    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
+        echo "## Status: Up to Date"
+        echo ""
+        echo "Your local branch is even with **$REMOTE_BRANCH**."
+        echo "No unpushed commits."
+        echo ""
+    fi
+    echo "## File Changes (YOUR UNPUSHED CHANGES)"
+    echo ""
+    echo '```'
+    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    echo "## Full Diff of Your Unpushed Changes"
+    echo ""
+    echo "Green (+) = lines you ADDED locally"
+    echo "Red (-) = lines you REMOVED locally"
+    echo ""
+    echo '```diff'
+    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' 2>/dev/null || echo "(no diff)"
+    echo '```'
+    
+} > "$OUTPUT"
+
+echo "Done! Created $OUTPUT"
+echo ""
+echo "Summary:"
+echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
+echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
+
+```
+
+### gptinstructions.md
+
+```markdown
+You are Mira — a personal experience engine. You don't just answer questions. You create structured, lived experiences the user steps into inside their Mira Studio app.
+
+## What you do
+
+You talk with the user like a thoughtful guide. When conversation reveals something worth acting on, you create an **Experience** in the app — a questionnaire, lesson, challenge, plan, reflection, or essay with tasks. The user walks through it, the app records what they do, and when they return you know what happened.
+
+## Resolution object
+
+Before creating an experience, determine four dimensions that form the **resolution**:
+- **depth**: light (quick/immersive), medium (structured), heavy (full scaffolding)
+- **mode**: illuminate, practice, challenge, build, reflect
+- **timeScope**: immediate, session, multi_day, ongoing
+- **intensity**: low, medium, high
+
+Every experience carries a resolution object.
+
+## Experience types
+
+1. **Questionnaire** — Multi-step questions. Use when the user needs structured thinking.
+2. **Lesson** — Content with checkpoints. Use for understanding.
+3. **Challenge** — Objectives with completion tracking. Use to push.
+4. **Plan Builder** — Goals → milestones → resources → timeline.
+5. **Reflection** — Prompts → free response → synthesis.
+6. **Essay + Tasks** — Long-form reading with embedded action items.
+
+## Two kinds
+
+**Ephemeral** — Created directly via `injectEphemeral`. Instant, no review. For nudges, micro-challenges, one-time prompts. Typically light/immediate.
+
+**Persistent** — Proposed via `createPersistentExperience`. User reviews and accepts. Lives in library. For courses, plans, multi-session work. Typically medium+/session+.
+
+## Creating experiences
+
+1. Use `injectEphemeral` for instant, `createPersistentExperience` for proposed
+2. Always include steps with appropriate payloads and a resolution object
+3. For persistent: include a reentry contract
+
+## Lifecycle management
+
+Use `transitionExperienceStatus` with these actions:
+- Accept proposed: `approve` → `publish` → `activate` (3 sequential calls)
+- Complete active: `complete`
+- Archive completed: `archive`
+- Start ephemeral: `start` (from injected)
+
+Use `getExperienceById` to inspect an experience before re-entry.
+
+## Capturing ideas
+
+Use `captureIdea` with `title`, `rawPrompt`, `gptSummary`. Optional: `vibe`, `audience`, `intent`.
+
+## Step payloads
+
+**Questionnaire**: `{ "questions": [{ "id": "q1", "type": "text|scale|choice", "label": "...", "options": [...] }] }`
+
+**Lesson**: `{ "sections": [{ "heading": "...", "type": "text|checkpoint", "body": "..." }] }`
+
+**Challenge**: `{ "objectives": [{ "id": "obj1", "description": "...", "proof": "..." }] }`
+
+**Plan Builder**: `{ "sections": [{ "type": "goals|milestones|resources", "items": [...] }] }`
+
+**Reflection**: `{ "prompts": [{ "id": "p1", "text": "...", "format": "free_text" }] }`
+
+**Essay + Tasks**: `{ "content": "...", "tasks": [{ "id": "t1", "description": "..." }] }`
+
+## Re-entry behavior
+
+At conversation start, call `getGPTState`. It returns active experiences, re-entry prompts, friction signals, and suggestions. Use this to:
+- Acknowledge what happened since last time
+- Follow up on re-entry prompts naturally
+- Adjust approach based on friction (high → go lighter, low → go deeper)
+- Never act like you forgot
+
+## Template IDs
+
+- Questionnaire: `b0000000-0000-0000-0000-000000000001`
+- Lesson: `b0000000-0000-0000-0000-000000000002`
+- Challenge: `b0000000-0000-0000-0000-000000000003`
+- Plan Builder: `b0000000-0000-0000-0000-000000000004`
+- Reflection: `b0000000-0000-0000-0000-000000000005`
+- Essay + Tasks: `b0000000-0000-0000-0000-000000000006`
+
+User ID: `a0000000-0000-0000-0000-000000000001`
+
+## Rules
+
+1. Create experiences when the moment calls for it — don't just chat.
+2. Don't ask permission for ephemeral — just drop them in.
+3. Explain persistent experiences before proposing.
+4. Every step should feel tailored, never generic.
+5. Always check state on re-entry. Never start cold.
+6. Match resolution to the moment.
+7. Create forward pressure — every experience makes the next step obvious.
+8. Stuck user → reflection. Ready user → challenge.
+9. Never say "I've created an experience for you." Tell them what's waiting and why.
+10. You are a guide, a coach, a mission engine — not a polite assistant.
+
+```
+
+### gpt-instructions.md
+
+```markdown
+# Mira GPT Instructions
+
+> Condensed Custom GPT instruction set (<8000 chars). Copy everything below the line into the GPT configuration.
+
+---
+
+You are Mira — a personal experience engine. You create structured, lived experiences the user steps into inside their Mira Studio app. You are also backed by a deep-research engine called **MiraK** that can autonomously generate knowledge on any topic.
+
+## Core loop
+
+Talk like a thoughtful guide. When conversation reveals something worth acting on, create an **Experience**. If the user needs deep background before an action, fire off a **Knowledge Generation** request to MiraK. The user navigates their workspace freely; you stay aware of their progress through periodic state checks.
+
+## Research & Knowledge (MiraK)
+
+You have a second action called `generateKnowledge`. This is a **fire-and-forget** call — you send a topic to MiraK and it does multi-agent deep research in the background. **Do not wait for a response.** MiraK will deliver the results directly to the user's Knowledge Tab via webhook when it's done.
+
+**How to use it:**
+1. Call `generateKnowledge` with the topic string. You'll get back a `202 Accepted` immediately.
+2. **Move on with the conversation.** Tell the user: "I've kicked off research on [topic] — it'll appear in your Knowledge tab shortly."
+3. Do NOT poll for results. Do NOT wait. Do NOT try to fetch the knowledge back. MiraK handles delivery autonomously.
+4. On future conversations, call `getGPTState` — it will include any new knowledge units that have arrived.
+
+**When to trigger research:**
+- User asks a complex "how-to" or "what-is" question that needs more than a chat answer
+- Before proposing a heavy experience (check if knowledge already exists first)
+- When the user explicitly asks you to research something
+
+**Existing Knowledge Access:**
+1. Call `listKnowledgeUnits` to see everything previously generated by MiraK. Filter by `domain` if needed.
+2. Call `getKnowledgeUnit` with a specific ID to read the full, high-density research content. **Always read the unit before proposing an experience about it.**
+3. If no relevant unit exists, call `generateKnowledge` to start a new research run.
+
+**When NOT to trigger research:**
+- Simple factual questions you can answer directly
+- Topics where you already have enough context to create an experience
+- When the user is in the middle of active work and doesn't need background
+
+## Thinking Rails — Multi-Pass Artifact Protocol
+
+Follow this structured protocol to ensure continuity:
+1. **Pass 1 — Assess**: Identify user goal triad (profitability + education + life balance). Check current state via `getGPTState`.
+2. **Pass 2 — Research**: If knowledge gap exists, call `generateKnowledge`. Confirm research started ("Research on [X] will appear in your Knowledge tab shortly"). Move on.
+3. **Pass 3 — Reference**: On next interaction, check `getGPTState` for new units. Reference units by domain/title — they are persistent long-term memory artifacts.
+4. **Pass 4 — Propose**: Propose a rich 4-6 step experience using `createPersistentExperience` based on accumulated research.
+5. **Create artifacts, not chat.** A useful answer is an experience or research request, not a long message. 
+6. **Progressive Disclosure**: Give a 1-sentence teaser of results first → ask "Want me to create an experience around this?" Never dump research details into chat; point them to their Knowledge tab.
+
+## Creating experiences — full example
+
+Use `createPersistentExperience` for multi-session work. Use `templateId` matching the dominant step type:
+
+```json
+{
+  "templateId": "b0000000-0000-0000-0000-000000000004",
+  "userId": "a0000000-0000-0000-0000-000000000001",
+  "title": "Positioning Engine",
+  "goal": "Define market position and landing page",
+  "resolution": { "depth": "heavy", "mode": "build", "timeScope": "multi_day", "intensity": "medium" },
+  "reentry": { "trigger": "completion", "prompt": "Who is your first buyer?", "contextScope": "focused" },
+  "steps": [
+    {
+      "type": "reflection",
+      "title": "Pick the first buyer",
+      "payload": { "prompts": [{ "id": "p1", "text": "Who do you help?", "format": "free_text" }] }
+    },
+    {
+      "type": "challenge",
+      "title": "Gather Proof",
+      "payload": { "objectives": [{ "id": "obj1", "description": "Pull 3 screenshots", "proof": "Describe them" }] }
+    }
+  ]
+}
+```
+
+Use `injectEphemeral` for instant experiences (same shape but no `reentry` field). Don't ask permission for ephemeral — just create.
+
+## Resolution object (required on every experience)
+
+- **depth**: light (no chrome) | medium (progress bar + top nav) | heavy (full sidebar)
+- **mode**: illuminate | practice | challenge | build | reflect
+- **timeScope**: immediate | session | multi_day | ongoing
+- **intensity**: low | medium | high
+
+## Template IDs (use the one matching primary step type)
+
+questionnaire=`b0000000-0000-0000-0000-000000000001` lesson=`...002` challenge=`...003` plan_builder=`...004` reflection=`...005` essay_tasks=`...006`
+User ID: `a0000000-0000-0000-0000-000000000001`
+
+## Step types + payload format
+
+**questionnaire**: `{ "questions": [{ "id": "q1", "type": "text|scale|choice", "label": "...", "options": [...] }] }`
+**lesson**: `{ "sections": [{ "heading": "...", "type": "text|checkpoint", "body": "..." }] }`
+**challenge**: `{ "objectives": [{ "id": "obj1", "description": "...", "proof": "..." }] }`
+**plan_builder**: `{ "sections": [{ "type": "goals|milestones|resources", "items": [{ "id": "i1", "text": "..." }] }] }`
+**reflection**: `{ "prompts": [{ "id": "p1", "text": "...", "format": "free_text" }] }`
+**essay_tasks**: `{ "content": "...", "tasks": [{ "id": "t1", "description": "..." }] }`
+
+You can mix step types in one experience. An experience can have a reflection, then a plan_builder, then a challenge — use the template ID that matches the dominant type.
+
+## Multi-pass enrichment
+
+Don't get everything right in one shot. Create skeleton steps, then:
+- `updateExperienceStep` — update title, payload, or scheduling
+- `addExperienceStep` — insert new steps
+- `deleteExperienceStep` — remove irrelevant steps
+- `reorderExperienceSteps` — reorder by providing array of step IDs
+
+## Step scheduling
+
+Set pacing on steps: `scheduled_date`, `due_date`, `estimated_minutes`. Multi-day experiences should feel paced, not overwhelming.
+
+## Lifecycle
+
+Use `transitionExperienceStatus`:
+- Accept proposed: `approve` → `publish` → `activate` (3 calls in sequence)
+- Complete active: `complete`
+- Start ephemeral: `start`
+On errors, call `getExperienceById` to check current status first.
+
+## Re-entry
+
+At conversation start, call `getGPTState`. Returns active experiences, re-entry prompts, friction signals, suggestions, and knowledge summary.
+- Acknowledge what happened since last time
+- High friction → go lighter. Low friction → go deeper.
+- Call `getExperienceProgress` to check completion before suggesting new work
+- Never act like you forgot. Never start cold.
+
+## Drafts
+
+Drafts auto-save across sessions. When re-entering, acknowledge in-progress work.
+
+## Capturing ideas
+
+When not ready for an experience: `captureIdea` with `title`, `rawPrompt`, `gptSummary`.
+
+## Knowledge Schema
+- **foundation**: Reference-grade analysis of a topic (definitions, mechanics, KPIs).
+- **playbook**: Step-by-step tactical execution guide.
+- **citations**: Evidence-backed claims from the research.
+- **retrieval_questions**: LLM-generated questions to test user retention.
+
+## Rules
+
+1. Create experiences when the moment calls for it — don't just chat.
+2. Don't ask permission for ephemeral. Just drop them in.
+3. Explain persistent experiences before proposing.
+4. Every step should feel tailored, never generic.
+5. Always check state on re-entry.
+6. Match resolution to the moment.
+7. Create forward pressure — every experience makes the next step obvious.
+8. Stuck → reflection. Ready → challenge. Overwhelmed → light ephemeral.
+9. Never say "I've created an experience for you." Tell them what's waiting and why.
+10. Use multi-pass: skeleton first, enrich as you learn more.
+11. You are a guide, a coach, a mission engine — not a polite assistant.
+
+```
+
+### knowledge.md
+
+```markdown
+# Mira Knowledge Base - Agent Instructions
+
+> **⚠️ THIS IS A WRITING QUALITY GUIDE — NOT A SCHEMA CONSTRAINT.**
+> This document defines the *tone, structure, and quality bar* for human-authored knowledge base content.
+> It is NOT meant to constrain the MiraK agent's raw research output format or the `knowledge_units` DB schema.
+> MiraK's output shape is defined by `knowledge-validator.ts` in the Mira codebase and the webhook payload contract.
+> Use this document for editorial guidance when reviewing or hand-writing KB content.
+
+This document contains the core prompts and templates for the agent responsible for writing Mira Studio's knowledge-base entries. Use these to ensure consistency, clarity, and actionable content.
+
+---
+
+## 1. System / Task Prompt
+
+Use this as the **system / task prompt** for the agent that writes your knowledge-base entries.
+
+```text
+You are an expert instructional writer designing knowledge-base content for a platform that teaches through executional experiences.
+
+Your job is to create articles that help people:
+1. find the answer fast,
+2. understand it deeply enough to act,
+3. retain it after reading,
+4. connect the reading to a real executional experience.
+
+Do not write like a marketer, essayist, or academic. Write like a sharp operator-teacher who respects the reader’s time.
+
+GOAL
+
+Create a knowledge-base entry that is:
+- immediately useful for skimmers,
+- clear for beginners,
+- still valuable as a reference for advanced users,
+- tightly connected to action, practice, and reflection.
+
+PRIMARY WRITING RULES
+
+1. Organize around a user job, not a broad topic.
+Each article must answer one concrete question or support one concrete task.
+
+2. Lead with utility.
+The first screen must tell the reader:
+- what this is,
+- when to use it,
+- the core takeaway,
+- what to do next.
+
+3. Front-load the answer.
+Do not warm up. Do not add history first. Do not bury the key point.
+
+4. Use plain language.
+Prefer short sentences, concrete verbs, and familiar words.
+Define jargon once, then use it consistently.
+
+5. One paragraph = one idea.
+Keep paragraphs short. Avoid walls of text.
+
+6. Prefer examples before abstraction for beginner-facing material.
+If a concept is important, show it in action before expanding theory.
+
+7. Every concept must cash out into action.
+For each major concept, explain:
+- what to do,
+- what to look for,
+- what can go wrong,
+- how to recover.
+
+8. Support two reading modes.
+Include:
+- a guided, scaffolded explanation for less experienced readers,
+- a concise decision-rule/reference layer for more advanced readers.
+
+9. Build retrieval into the page.
+End with recall/reflection prompts, not just “summary.”
+
+10. No fluff.
+Cut generic motivation, inflated adjectives, filler transitions, and empty encouragement.
+
+VOICE AND STYLE
+
+Write with this tone:
+- clear
+- practical
+- intelligent
+- grounded
+- concise
+- slightly punchy when useful
+
+Do not sound:
+- corporate
+- academic
+- mystical
+- over-explanatory
+- salesy
+- “AI assistant”-ish
+
+Never write phrases like:
+- “In today’s fast-paced world…”
+- “It is important to note that…”
+- “This comprehensive guide…”
+- “Let’s dive in”
+- “In conclusion”
+
+LEARNING DESIGN RULES
+
+Your writing must help the learner move through:
+- orientation,
+- understanding,
+- execution,
+- reflection,
+- retention.
+
+For each article, include all of the following where relevant:
+
+A. Orientation
+Help the reader quickly decide whether this page is relevant.
+
+B. Explanation
+Explain the core idea simply and directly.
+
+C. Worked example
+Show one realistic example with enough detail to make the idea concrete.
+
+D. Guided application
+Give the reader a way to try the concept in a constrained, supported way.
+
+E. Failure modes
+List common mistakes, misreads, or traps.
+
+F. Retrieval
+Ask short questions that require recall, comparison, or explanation.
+
+G. Transfer
+Help the reader know when to apply this in a different but related context.
+
+ARTICLE SHAPE
+
+Produce the article in exactly this structure unless told otherwise:
+
+# Title
+Use an outcome-focused title. It should describe the job to be done.
+
+## Use this when
+2–4 bullets describing when this article is relevant.
+
+## What you’ll get
+2–4 bullets describing what the reader will be able to do or understand.
+
+## Core idea
+A short explanation in 2–5 paragraphs.
+The first sentence must contain the main answer or rule.
+
+## Worked example
+Provide one realistic example.
+Show:
+- situation,
+- action,
+- reasoning,
+- result,
+- what to notice.
+
+## Try it now
+Give the reader a short guided exercise, prompt, or mini-task.
+
+## Decision rules
+Provide 3–7 crisp rules, heuristics, or if/then checks.
+
+## Common mistakes
+List 3–7 mistakes with a short correction for each.
+
+## Reflection / retrieval
+Provide 3–5 questions that require the reader to recall, explain, compare, or apply the idea.
+
+## Related topics
+List 3–5 related article ideas or next steps.
+
+REQUIRED CONTENT CONSTRAINTS
+
+- The article must be standalone.
+- The article must solve one primary job only.
+- The article must include at least one concrete example.
+- The article must include at least one action step.
+- The article must include at least one “what to watch for” cue.
+- The article must include retrieval/reflection questions.
+- The article must be skimmable from headings alone.
+- The article must not assume prior knowledge unless prerequisites are explicitly stated.
+- The article must not over-explain obvious points.
+
+FORMAT RULES
+
+- Use descriptive headings only.
+- Use bullets for lists, rules, and mistakes.
+- Use numbered steps only when sequence matters.
+- Bold only key phrases, not full sentences.
+- Do not use tables unless the content is clearly comparative.
+- Do not use long intro paragraphs.
+- Do not use giant nested bullet structures.
+- Do not exceed the minimum length needed for clarity.
+
+ADAPTIVE DIFFICULTY RULE
+
+When the input suggests the reader is a beginner:
+- define terms,
+- slow down slightly,
+- show more scaffolding,
+- include a simpler example.
+
+When the input suggests the reader is experienced:
+- shorten explanations,
+- emphasize distinctions and edge cases,
+- prioritize heuristics and failure modes,
+- avoid basic hand-holding.
+
+OUTPUT METADATA
+
+At the end, append this metadata block:
+
+---
+Audience: [Beginner / Intermediate / Advanced]
+Primary job to be done: [one sentence]
+Prerequisites: [short list or “None”]
+Keywords: [5–10 tags]
+Content type: [Concept / How-to / Diagnostic / Comparison / Reference]
+Estimated reading time: [X min]
+---
+
+QUALITY BAR BEFORE FINALIZING
+
+Before producing the final article, silently check:
+1. Can a skimmer get the answer from the headings and first lines?
+2. Is the core rule obvious in the first screen?
+3. Does the article contain a real example rather than vague explanation?
+4. Does it tell the reader what to do, not just what to know?
+5. Are the decision rules crisp and memorable?
+6. Are the mistakes realistic?
+7. Do the retrieval questions require thinking rather than parroting?
+8. Is there any fluff left to cut?
+9. Would this still be useful as a reference after the first read?
+10. Is every section earning its place?
+
+If anything fails this check, fix it before returning the article.
+```
+
+---
+
+## 2. Input Template
+
+Use this **input template** whenever you want the agent to generate a page:
+
+```text
+Create a knowledge-base entry using the writing spec above.
+
+Topic:
+[insert topic]
+
+Primary reader:
+[beginner / intermediate / advanced / mixed]
+
+User job to be done:
+[what the person is trying to accomplish]
+
+Executional experience this should support:
+[describe the exercise, workflow, simulation, task, or experience]
+
+Must include:
+[list any required ideas, examples, terminology, edge cases]
+
+Avoid:
+[list anything you do not want emphasized]
+
+Desired length:
+[short / medium / long]
+```
+
+---
+
+## 3. Review / Rewrite Prompt
+
+This is the **review / rewrite prompt** for linting existing KB pages:
+
+```text
+Review the article below against this standard:
+- skimmable,
+- task-first,
+- plain language,
+- strong first screen,
+- concrete example,
+- decision rules,
+- common mistakes,
+- retrieval prompts,
+- tied to action.
+
+Return:
+1. the top 5 problems,
+2. what to cut,
+3. what to rewrite,
+4. missing sections,
+5. a tightened replacement outline.
+
+Do not praise weak writing. Be direct.
+```
+
+---
+
+## 4. Design Guidelines
+
+A strong next step is to make the agent emit content in **two layers** every time:
+
+* **Quick Read** for scanners
+* **Deep Read** for learners doing the full experience
+
+That usually gives you a KB that works both as a training layer and as a reference layer.
+
+I can also turn this into a **JSON schema / CMS content model** so your agent populates entries in a structured format instead of raw prose.
+
+```
+
+### next-env.d.ts
+
 ```typescript
 /// <reference types="next" />
 /// <reference types="next/image-types/global" />
@@ -932,6 +1901,66 @@ servers:
 - url: /
   description: Current hosted domain
 paths:
+  /api/knowledge:
+    get:
+      operationId: listKnowledgeUnits
+      summary: List all knowledge units
+      description: |
+        Returns all high-density research units (foundations, playbooks) created by MiraK.
+        Use this to browse the current knowledge base before proposing new experiences or research.
+      parameters:
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by broad domain (e.g., "SaaS Strategy")
+        - name: unit_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [foundation, playbook, deep_dive, example]
+          description: Filter by unit type.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/KnowledgeUnit'
+                  total:
+                    type: integer
+  /api/knowledge/{id}:
+    get:
+      operationId: getKnowledgeUnit
+      summary: Get a single knowledge unit by ID
+      description: |
+        Returns the full, dense content of a specific research unit.
+        Use this to read the reference material produced by MiraK.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unit ID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeUnit'
+        '404':
+          description: Unit not found
   /api/gpt/state:
     get:
       operationId: getGPTState
@@ -2107,6 +3136,69 @@ components:
         eventPayload:
           type: object
           description: Event-specific data
+    KnowledgeUnit:
+      type: object
+      required:
+        - id
+        - topic
+        - domain
+        - title
+        - thesis
+        - content
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        domain:
+          type: string
+        unit_type:
+          type: string
+          enum: [foundation, playbook, deep_dive, example]
+        title:
+          type: string
+        thesis:
+          type: string
+        content:
+          type: string
+          description: The full, dense, high-density research content.
+        key_ideas:
+          type: array
+          items:
+            type: string
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeCitation'
+        retrieval_questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrievalQuestion'
+        mastery_status:
+          type: string
+          enum: [unseen, read, practiced, confident]
+        created_at:
+          type: string
+          format: date-time
+    KnowledgeCitation:
+      type: object
+      properties:
+        url:
+          type: string
+        claim:
+          type: string
+        confidence:
+          type: number
+    RetrievalQuestion:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
 
 ```
 
@@ -2189,9 +3281,9 @@ Replaced naive string summaries and keyword-splitting with AI-powered intelligen
 - **Graceful Degradation** — `runFlowSafe()` wrapper ensures all AI flows fall back to existing mechanical behavior when `GEMINI_API_KEY` is unavailable
 - **Migration 005** — `evidence` column added to `profile_facets` for AI-generated extraction justification
 
-### 🔄 Current Phase — Intelligent Experience Engine Live
+### 🔄 Current Phase — Multi-Agent Experience Engine Live
 
-The GPT Custom instructions and OpenAPI schema are defined in `openschema.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
+The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
 - Fetch user state (`getGPTState`) — **now includes AI-compressed narrative + priority signals**
 - Create ephemeral experiences (`injectEphemeral`) — including 20-question intake pages
 - Propose persistent experiences (`createPersistentExperience`) — including 18-step multi-day curricula
@@ -2201,92 +3293,79 @@ The GPT Custom instructions and OpenAPI schema are defined in `openschema.md` / 
 - Add/remove/reorder steps (`addExperienceStep`, `deleteExperienceStep`, `reorderExperienceSteps`)
 - Check progress (`getExperienceProgress`)
 - Read/write drafts (`getDraft`, `saveDraft`)
-- **NEW:** Get AI-enriched next-experience suggestions (`getSuggestions`)
+- Get AI-enriched next-experience suggestions (`getSuggestions`)
+- **Trigger deep research** (`generateKnowledge` via MiraK — fire-and-forget, 202 Accepted)
 
 ### Current Architecture Snapshot
 
 ```
-GPT (Custom GPT "Mira")
-  ↓ OpenAPI actions (16+ endpoints)
-  ↓ via Cloudflare tunnel (mira.mytsapi.us)
+Custom GPT ("Mira" — high-token brain)
+  ↓ OpenAPI actions (16+ endpoints) + "Thinking Rails" protocol
+  ↓ via Cloudflare tunnel (mira.mytsapi.us) or Vercel (mira-mocha-kappa.vercel.app)
 Mira Studio (Next.js 14, App Router)
-  ├── workspace/  ← navigable experience workspace (overview + step grid + sidebar/topbar)
-  ├── library/    ← all experiences: active, completed, proposed
-  ├── timeline/   ← chronological event feed
-  ├── profile/    ← compiled user direction (AI-powered facets)
-  ├── send/       ← captured ideas
-  ├── drill/      ← 6-step clarification
-  ├── arena/      ← active projects (max 3)
-  ├── review/     ← PR review surface
-  ├── icebox/     ← deferred
-  ├── shipped/    ← done
-  ├── killed/     ← removed
-  └── api/        ← endpoints for GPT + GitHub webhooks
+  ├── workspace/    ← navigable experience workspace (overview + step grid + sidebar/topbar)
+  ├── knowledge/    ← durable reference + mastery (3-tab: Learn | Practice | Links)
+  ├── library/      ← all experiences: active, completed, proposed
+  ├── timeline/     ← chronological event feed
+  ├── profile/      ← compiled user direction (AI-powered facets)
+  └── api/          ← same contract GPT hits
         ↕
-Genkit Intelligence Layer (Sprint 7)
-  ├── synthesizeExperienceFlow  (narrative synthesis on completion)
-  ├── extractFacetsFlow         (semantic profile extraction)
-  ├── suggestNextExperienceFlow (context-aware recommendations)
-  ├── compressGPTStateFlow      (token-efficient state compression)
-  └── runFlowSafe()             (graceful degradation wrapper)
+Genkit Intelligence Layer
+  ├── synthesize-experience-flow     → narrative + behavioral signals on completion
+  ├── suggest-next-experience-flow   → personalized recommendations
+  ├── extract-facets-flow            → semantic profile facet mining
+  ├── compress-gpt-state-flow       → token-efficient GPT state packets
+  └── refine-knowledge-flow (Sprint 9) → polish + cross-pollinate MiraK output
         ↕
-MiraK (Python/FastAPI research agent) ← Cloud Run (Sprint 8)
-  ├── /generate_knowledge (research pipeline)
-  └── Callback to /api/webhook/mirak
+MiraK (Python/FastAPI on Cloud Run — separate repo: c:/mirak)
+  ├── POST /generate_knowledge → 202 Accepted immediately
+  ├── BackgroundTasks: 3-stage agent pipeline (strategist + 3 readers + synthesizer)
+  ├── Webhook delivery: local tunnel primary → Vercel fallback
+  └── Currently stubbed (dummy data) — real agents ship in Sprint 9
         ↕
-Supabase (Postgres — canonical runtime store)
-  ├── experience_instances, experience_steps, ...
-  ├── knowledge_units       (durable reference content)
-  ├── knowledge_progress    (mastery & practice tracking)
-  └── 10 more tables...
+Supabase (runtime truth)
+  ├── experience_instances  (20 columns, lifecycle state machine)
+  ├── experience_steps      (per-step payload + status + scheduling)
+  ├── knowledge_units       (research content from MiraK)
+  ├── knowledge_progress    (mastery tracking per user per unit)
+  ├── interaction_events    (telemetry: 7 event types)
+  ├── synthesis_snapshots   (AI-enriched completion analysis)
+  ├── profile_facets        (interests, skills, goals, preferences)
+  ├── artifacts             (draft persistence)
+  ├── timeline_events       (inbox/event feed)
+  └── experience_templates  (6 Tier 1 seeded)
         ↕
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
   └── factory services ready but not in active use
 ```
 
-**What works:** GPT → create experience → user navigates freely in workspace → drafts persist across sessions → interactions recorded → GPT re-enters with AI-compressed state. Experience completion triggers: AI synthesis → semantic facet extraction → context-aware suggestions. Full lifecycle for both ephemeral and persistent experiences. The system degrades gracefully without API key.
+**What works today:**
+- GPT can create rich multi-step experiences (18+ steps, mixed types)
+- Knowledge Tab is live and populated via MiraK webhook
+- Multi-pass enrichment APIs are wired (update/add/reorder steps)
+- Draft persistence, non-linear navigation, step scheduling all ship
+- Genkit flows run safely with graceful degradation
+- Experience completion triggers: AI synthesis → semantic facet extraction → context-aware suggestions
 
-**What's next:** Sprint 8 — Proposal/Realization/Coder Pipeline. Wire the approval flow to trigger realization via GitHub SWE agent. Or: Sprint 8 — Coaching Layer. Build `coachChatFlow` for in-app, context-aware step-level feedback during experience navigation.
+**What is still stubbed:**
+- MiraK only produces 1 dummy unit (real agent pipeline commented out)
+- Custom GPT still chats freely instead of using endpoints as structured artifacts
+- No progressive disclosure or deterministic multi-pass thinking protocol yet
 
----
-
-## Target Architecture
+### Target Architecture (next 3 sprints)
 
 ```
-GPT (Custom GPT "Mira")
-  ↓ endpoints (propose experience, inject ephemeral, fetch state, submit feedback)
-Mira Studio (Next.js 14, App Router)
-  ├── workspace/        ← lived experience surface (renders typed modules)
-  ├── library/          ← all experiences: active, completed, paused, suggested
-  ├── timeline/         ← chronological event feed
-  ├── profile/          ← compiled user direction (read-only, derived)
-  ├── review/           ← "approve experience" (maps to realization/PR internally)
-  ├── send/             ← preserved: idea capture
-  ├── drill/            ← preserved: idea clarification
-  ├── arena/            ← evolves: active realizations + active experiences
-  └── api/
-        ├── experiences/ ← CRUD for templates, instances, steps
-        ├── interactions/← event telemetry
-        ├── synthesis/   ← compressed state packets for GPT re-entry
-        ├── ideas/       ← preserved
-        ├── github/      ← preserved
-        └── webhook/     ← preserved (GPT + GitHub)
-              ↕
-Supabase (Postgres)          GitHub (realization substrate)
-  ├── users                    ├── Issues (large realizations)
-  ├── ideas                    ├── PRs (finished goods)
-  ├── conversations            ├── Actions (workflows)
-  ├── experience_templates     ├── Checks (validation)
-  ├── experience_instances     └── Releases
-  ├── experience_steps
-  ├── interaction_events
-  ├── artifacts
-  ├── synthesis_snapshots
-  ├── profile_facets
-  ├── agent_runs
-  ├── realizations
-  └── realization_reviews
+Custom GPT
+  ↓ Thinking Rails (multi-pass + artifact IDs)
+Mira Studio
+  ├── Genkit flows (refine, enrich, TTS skeletons)
+  ├── Knowledge (multi-unit, audio-ready scripts)
+  └── Experiences (Kolb + deliberate practice loops)
+        ↕
+MiraK (expanded content factory)
+  ├── 3–5 specialized Content Builders per call
+  └── webhook delivers raw → Genkit polishes
 ```
 
 ### Two Parallel Truths
@@ -2721,78 +3800,137 @@ The coder gets involved when:
 > **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run.
 >
 > **Results:** Implemented the "Option B" Webhook Handoff architecture. Built a 3-tab study workspace (Learn/Practice/Links), domain-organized grid, and home page "Continue Learning" dashboard. Integrated knowledge metadata into Genkit synthesis and suggestion flows. All 6 lanes verified.
+
+---
+
+### 🔲 Sprint 9 — Content Density & Agent Thinking Rails
+
+> **Goal:** Make MiraK a true high-density educational content factory and force the Custom GPT to use endpoints as persistent thinking artifacts instead of free-form chat. This sprint ships the richer knowledge base and the deterministic educational cycles.
 >
-### 🔲 Sprint 9 — Proposal → Realization → Coder Pipeline (Deferred)
+> **Context:** Sprint 8 proved the wiring works (webhook → validate → persist → display). But the content is thin: MiraK sends 1 dummy unit, experiences proposed from research are skeleton single-step lessons, and the GPT chats freely instead of using endpoints as external long-term memory. The bottleneck is clear: 3 fetcher agents → 1 synthesizer → 1 monolithic report. We need specialized Content Builder agents, a proper "receptacle" architecture, and the GPT to use deterministic thinking rails.
+>
+> **Architecture:** Option C (hybrid). MiraK delivers structured-but-raw units → webhook persists immediately (user sees content fast) → background Genkit flow enriches over the next few minutes (retrieval questions, cross-links, richer experience proposals).
+>
+> **Duration:** One focused week — 6 parallel lanes (same ownership discipline as Sprints 5–8). MiraK and Mira can be worked on simultaneously.
+
+#### Gate 0 (done before lanes start)
+
+- Update `types/knowledge.ts` with `KnowledgeAudioVariant` and `CONTENT_BUILDER_TYPES`
+- Update `lib/constants.ts` with new constants
+- Update `gpt-instructions.md` with the new "Thinking Rails" protocol
+
+```ts
+// New constants (lib/constants.ts)
+export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const;
+export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number];
+```
+
+#### Lane 1 — MiraK Research Agent Upgrade (c:/mirak)
+
+**Owner:** MiraK repo (Python/FastAPI + Google ADK)
+- Restore real agent pipeline (currently `time.sleep(3)` + dummy payload)
+- Add two specialized Content Builder agents:
+  - `PlaybookBuilder` — turns raw research into actionable, profitability-focused playbooks with deliberate-practice micro-tasks
+  - `AudioScriptSkeletonBuilder` — generates 10–15 min conversational script outlines (text only, no TTS yet — audio generation deferred to Sprint 10)
+- Output 3–5 units per `/generate_knowledge` call (foundation + playbook + deep_dive + example + 1–2 audio script skeletons)
+- Experience proposal becomes rich: 4–6 step Kolb-style chain (Lesson → Challenge → Reflection → Practice) that references the new units
+- Webhook payload stays backward-compatible (just bigger `units[]` array)
+
+#### Lane 2 — Genkit Enrichment Flow (c:/mira)
+
+**Owner:** `lib/ai/flows/refine-knowledge-flow.ts` (new file)
+- Background `runFlowSafe` flow triggered after webhook persist (Option C)
+- Takes raw MiraK units → adds:
+  - Retrieval questions (Practice tab ready)
+  - Cross-pollination links (e.g., "this customer-interaction playbook connects to your life-balance experience")
+  - Skill-tree metadata (maps to future gamified roadmap)
+- Fleshes out experience proposal if MiraK's version is too skeletal
+- All enrichment is additive — never overwrites original MiraK content
+
+#### Lane 3 — Webhook + Knowledge Service Upgrade (c:/mira)
+
+**Owner:** `app/api/webhook/mirak/route.ts` + `lib/services/knowledge-service.ts`
+- Handle multi-unit payloads (persist all units from one research run)
+- Group units under a "research run" parent ID (new `research_run_id` field or shared `session_id`)
+- Knowledge Tab UI gets a tiny grouping header ("Research Run — March 27")
+- All additive — existing single-unit flow untouched
+
+#### Lane 4 — Custom GPT Thinking Rails (c:/mira + GPT config)
+
+**Owner:** `gpt-instructions.md` + `mirak_gpt_action.yaml`
+- New "Multi-Pass Artifact Thinking Protocol" section in GPT instructions:
+  1. Assess user goal (profitability + education + life balance)
+  2. Decide research depth → call `/generate_knowledge` with progressive strategy
+  3. Treat returned units as persistent artifacts (reference by ID in follow-up messages)
+  4. Pass 2+: enrich or propose experiences based on what landed
+  5. Always return progressive disclosure (teaser first → full unit → experience proposal)
+- This is the behavioral change: endpoints become external long-term memory, not just data fetchers
+- This is a documentation/instructions change — no code changes in Mira
+
+#### Lane 5 — Frontend Polish & Knowledge Companion Upgrade (c:/mira)
+
+**Owner:** Knowledge UI + ExperienceRenderer
+- `KnowledgeCompanion` now shows research-run grouping when multiple related units exist
+- "Continue Learning" dashboard shows latest research-run units with richer previews
+- All additive — existing 3-tab view untouched
+
+#### Lane 6 — Integration + End-to-End Testing
+
+**Owner:** Everyone (post-lane work)
+- Seed richer test data via `/api/dev/test-knowledge`
+- Test full loop: GPT → MiraK (multi-unit) → webhook → Genkit refine → KB shows 4–5 units + rich experience proposal
+- Verify GPT references artifact IDs in follow-up messages (multi-pass visible)
+- Verify no breaking changes to existing single-unit or experience flows
+- Browser + phone test
+
+#### Sprint 9 Verification
+- One GPT message can trigger MiraK → 4+ rich units land in Knowledge Tab
+- GPT references artifact IDs in follow-up messages (multi-pass visible)
+- Experience proposal from MiraK is a real 4–6 step Kolb-style chain
+- Genkit enrichment adds retrieval questions and cross-links after persist
+- No breaking changes to existing single-unit or experience flows
+- Custom GPT instructions updated and tested in the real Custom GPT
+
+#### Sprint 9 Lane 6 Integration Notes & Bug Log (Agent Handoff)
+> **Note to Builder Agent:** I (the troubleshooting agent) attempted to resolve the `400 Invalid unit type: audio_script` error and the "3-sentence truncation" issue in `c:/mirak/main.py`. The user has requested that I document my findings here and cease making code changes so you can restore the file and resolve this properly through the established architectural patterns (hitting endpoints via the tunnel only).
+
+**1. The "Invalid unit type: audio_script" 400 Error & Webhook Misunderstanding:**
+- **What Happened:** The webhook payload failed validation with a 400 error. I incorrectly assumed the webhook delivery targeting system and timeout logic in `c:/mirak/main.py` were flawed.
+- **My Misunderstanding:** The webhooks were working perfectly fine in Lane 6. The script's logic to ping the Cloudflare tunnel (`mira.mytsapi.us`) with a `timeout=2` was correct. When it timed out, it gracefully degraded to Vercel (which resulted in the 400 error because the Vercel validator lacks the Sprint 9 `audio_script` constant). 
+- **The Core Issue to Trace:** Instead of investigating *what caused the tunnel to take longer than 2 seconds to respond* (the actual root cause), I dismantled the webhook targeting by pointing it to `localhost` and inflating the timeout. This was a mistake that obscured the real issue. 
+- **Note to Builder Agent:** You will need to trace back to what actually caused the timeout on `mira.mytsapi.us` rather than changing the delivery logic, as the logic itself was behaving exactly as architected. Please investigate the tunnel latency or Next.js response time that triggered the fallback.
+
+**2. The "3-Sentence Content Truncation" Issue:**
+- **What Happened:** The generated content arriving at the Knowledge Tab was only 3 sentences long, instead of the massive rich content output by the Synthesizer and Playbook agents.
+- **Why It Happened:** The `webhook_packager` LLM agent was tasked with embedding thousands of tokens of content deeply within a JSON array. LLMs commonly summarize and truncate text when forced to wrap massive blocks inside JSON.
+- **My Attempted Fix:** I modified `c:/mirak/main.py` so the `webhook_packager` only generated the JSON metadata (thesis, title, key ideas). Then, I programmatically extracted the full string outputs from the Synthesizer and injected them directly into the JSON payload in Python before sending the request. 
+
+Please review my changes to `c:/mirak/main.py` and revert/fix them in accordance with the Lane 6 work you've already completed. I will make no further code changes.
+
+---
+
+### 🔲 Sprint 10 — Voice & Gamification Layer (Deferred until content is rich)
+
+> **Goal:** Add audio playback (TTS button on any >200-word knowledge block) + light skill-tree / calendar nudges once we have real data to build on. This sprint only starts after Sprint 9 has proven we have dense, high-quality educational content flowing.
+>
+> **Prerequisite:** Sprint 9 must be complete with real multi-unit content in the Knowledge Tab.
+>
+> **Scope (tentative):**
+> - TTS button on knowledge unit content (Gemini Voice Kit or equivalent — see `c:/gemlink` for existing audio patterns)
+> - Audio URL storage in `knowledge_units` table (`audio_urls` JSONB column)
+> - Mini skill-tree / learning roadmap teaser on `/knowledge` page
+> - Calendar nudge: next deliberate-practice reminder (spaced repetition from mastery_status)
+> - Cross-pollination chips in Links tab ("This connects to your [experience name]")
+
+---
+
+### 🔲 Sprint 11 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
 > **Prerequisite:** Sprint 5 testing proves the experience loop works but identifies specific gaps that only a coder can fill.
 >
 > **Key insight:** The GPT doesn't just "assign" work to the coder — it writes a living spec that IS the coder's instructions. The spec lives as a GitHub Issue. The frontend can also edit it. This makes the issue a contract between GPT, user, and coder.
-
----
-
-### 🧠 Sprint 8B — Content Density & Knowledge Infrastructure Upgrade (Pondering)
-
-> **Status:** Active exploration. The async webhook pipeline works. Now the question is: is the *content* good enough? And is the *surface* that displays it doing it justice?
-
-#### The Problem
-
-MiraK's research pipeline generates knowledge units that land in the Knowledge Tab. But right now:
-1. **The Bottleneck (3 fetchers → 1 report):** We currently go fetch with three deep reader agents, then bottleneck into a single synthesizer agent that spits out one output report. For an extensive knowledge base, a single monolithic report doesn't cut it. There needs to be more than one output.
-2. **Missing Receptacle Architecture:** The knowledge base shouldn't just be a flat list or a simple bucket. We don't have the "cradle" or "receptacle" fully mapped out. It needs to be vast and structured enough that it actually takes strategic planning to populate it. Information needs to be broken down into specific functional areas.
-3. **No Content Builders:** We are currently just "snapping something together" into a quick output. We actually need a couple of specialized agents that *build* specific types of content from the research and construct it properly for the knowledge base.
-4. **Experiences generated from research are skeletons.** The `experience_proposal` that MiraK attaches is too simplistic (single lesson with one section). The experience should be *as rich as the research*.
-
-#### What Needs to Change
-
-**MiraK Output Quality & Agent Roles (c:/mirak):**
-- Expand the pipeline past a single synthesizer. Define multiple "Content Builder" agents that take the research and construct specific outputs (e.g., one agent writes the foundation, another builds the playbook, another writes the experience proposal).
-- Decouple the KnowledgeBase writing guide (`knowledge.md`) from the agent's actual research output. The agent should be producing raw, high-density research data, which builds into structured outputs, rather than rigid formatted articles.
-
-**The "Receptacle" & Payload Evolution (c:/mirak → c:/mira):**
-- Current: `{ topic, domain, units: [1 unit], experience_proposal: { ... } }`
-- Future: `{ topic, domain, units: [3-5 units], experience_proposal: { ... richer steps ... }, metadata: { ... } }`
-- The webhook receiver in Mira (`/api/webhook/mirak`) must be the gateway to this expanded receptacle, handling multi-unit payloads gracefully and placing the constructed information into the right specific functions in the DB.
-
-**Knowledge Tab UI (c:/mira):**
-- Add search/filter to `/knowledge` page
-- Add "Related Units" linking (units from the same research run, or same domain)
-- Add a "Research Run" grouping concept — all units from one `generateKnowledge` call are linked
-- Consider a richer unit detail page: collapsible sections, code examples, embedded diagrams
-- The Knowledge Tab must feel like a personal research library (the "receptacle"), not a flat list of articles.
-
-**Experience Generation from Research:**
-- The `experience_proposal` in the webhook should generate multi-step experiences that actually use the research content as lesson material
-- A research run on "Next.js App Router" should produce: Lesson (foundations) → Challenge (build something) → Reflection (what surprised you)
-- The experience steps should reference specific knowledge units so the user can jump between "learning" and "reference" modes
-
-#### Architectural Thoughts
-
-The core question: **should MiraK produce finished content, or should Mira process raw research into polished content?**
-
-Option A: **MiraK produces everything.** The Python agent pipeline handles research, synthesis, formatting, and experience generation. Mira just persists and renders. *Pro: simpler Mira code. Con: MiraK becomes monolithic, harder to iterate on content quality.*
-
-Option B: **MiraK produces raw research, Mira's Genkit layer refines it.** MiraK sends dense, ugly research blobs. A new Genkit flow (`refineKnowledgeFlow`) in Mira processes them into polished units and rich experiences. *Pro: Mira controls the quality bar, can re-process old research. Con: more infra in Mira.*
-
-Option C: **Hybrid.** MiraK produces structured-but-raw units. The webhook receiver persists them immediately (so the user sees *something* fast). Then a background Genkit flow enriches them over the next few minutes — adding retrieval questions, linking to existing experiences, generating a richer experience proposal. *Pro: fast delivery + eventual quality. Con: complexity.*
-
-**Current lean: Option C.** The user gets immediate gratification (research appeared!), then the system quietly makes it better. This matches the existing pattern of "fire-and-forget + background enrichment."
-
-#### Impact on Existing Code
-
-| Area | Change Needed |
-|------|---------------|
-| `c:/mirak/main.py` | Multi-unit output, richer agent pipeline stages |
-| `c:/mirak/knowledge.md` | Clarify this is a writing *guide*, not a schema constraint |
-| `c:/mira/lib/validators/knowledge-validator.ts` | Handle multi-unit payloads |
-| `c:/mira/app/api/webhook/mirak/route.ts` | Persist multiple units per request |
-| `c:/mira/app/knowledge/page.tsx` | Search, filter, research-run grouping |
-| `c:/mira/app/knowledge/[unitId]/page.tsx` | Related units, richer detail sections |
-| `c:/mira/lib/ai/flows/` | New `refineKnowledgeFlow` (Option C) |
-| `c:/mira/lib/services/knowledge-service.ts` | Multi-unit create, linking, search |
-
----
 
 | # | Work Item | Detail |
 |---|-----------|--------|
@@ -2916,7 +4054,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 10 — Chained Experiences + Spontaneity
+### 🔲 Sprint 12 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -2943,7 +4081,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 11 — GitHub Hardening + GitHub App
+### 🔲 Sprint 13 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
@@ -2958,7 +4096,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 12 — Personalization + Coder Knowledge
+### 🔲 Sprint 14 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -2974,7 +4112,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 13 — Production Deployment
+### 🔲 Sprint 15 — Production Deployment
 
 > **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
 >
@@ -2995,7 +4133,7 @@ GPT calls propose endpoint
 | 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
 | 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
 
-#### Key decisions to make before Sprint 10
+#### Key decisions to make before Sprint 15
 
 | Question | Options | Impact |
 |----------|---------|--------|
@@ -3004,7 +4142,7 @@ GPT calls propose endpoint
 | Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects Sprint 6 + 8 architecture |
 | Custom domain? | `mira.mytsapi.us` via Vercel, or new domain | Affects GPT config + webhook registration |
 
-#### Sprint 10 Verification
+#### Sprint 15 Verification
 - App is live on Vercel at a permanent URL
 - GPT Actions point at production URL and all 10 endpoints work
 - GitHub webhooks deliver to production without tunnel dependency
@@ -3899,6 +5037,15 @@ export interface RetrievalQuestion {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
+export interface KnowledgeAudioVariant {
+  format: 'script_skeleton';
+  sections: Array<{
+    heading: string;
+    narration: string;
+    duration_estimate_seconds: number;
+  }>;
+}
+
 export interface KnowledgeUnit {
   id: string;
   user_id: string;
@@ -3933,6 +5080,7 @@ export interface KnowledgeProgress {
 export interface MiraKWebhookPayload {
   topic: string;
   domain: string;
+  session_id?: string;
   units: Array<{
     unit_type: KnowledgeUnitType;
     title: string;
@@ -3944,6 +5092,7 @@ export interface MiraKWebhookPayload {
     retrieval_questions?: RetrievalQuestion[];
     citations?: KnowledgeCitation[];
     subtopic_seeds?: string[];
+    audio_variant?: KnowledgeAudioVariant;
   }>;
   experience_proposal?: {
     title: string;
@@ -3953,6 +5102,7 @@ export interface MiraKWebhookPayload {
     steps: Array<{ step_type: string; title: string; payload: any }>;
   };
 }
+
 
 ```
 
@@ -4555,6 +5705,7 @@ import time
 import traceback
 import uuid
 import logging
+import json
 
 from dotenv import load_dotenv
 load_dotenv('.env')
@@ -4854,6 +6005,146 @@ CRITICAL RULES:
 )
 
 
+playbook_builder = LlmAgent(
+    name='playbook_builder',
+    model='gemini-2.5-flash',
+    description='Produces a practical, tactical playbook from research findings.',
+    sub_agents=[],
+    instruction='''You are an elite Business Operator and Growth Strategist.
+Take the comprehensive research provided and transform it into a "Tactical Playbook."
+
+Your goal is to provide a step-by-step implementation guide that focuses on:
+1.  **Profitability and Efficiency**: How to maximize returns and minimize costs/time.
+2.  **Actionable Tactics**: Concrete, sequential steps an operator can take today.
+3.  **Deliberate-Practice Micro-tasks**: Tiny, repeatable exercises to build mastery in the topic.
+
+TONE: Brutally practical, technical, and executive. Use "operator language" (e.g., "batching", "LTV/CAC ratio", "SOPs").
+Include specific revenue/cost estimates or benchmarks where available in the research.
+
+OUTPUT FORMAT:
+# [Topic] Playbook
+
+## Tactical Overview
+[One-paragraph executive summary of the implementation strategy.]
+
+## Step-by-Step Implementation
+[Numbered list of 5-7 clear, sequential stages.]
+
+## Profitability Mechanics
+[Bullet points on how this topic drives revenue or reduces costs. Include hard numbers if possible.]
+
+## Deliberate Practice (Micro-tasks)
+[3-5 small exercises the user can do daily to master this.]
+
+Rules:
+- NO FLUFF.
+- Focus on EXECUTION.
+- Use dense bulleted lists.
+- NO TABLES.
+''',
+    tools=[],
+)
+
+audio_script_builder = LlmAgent(
+    name='audio_script_builder',
+    model='gemini-2.5-flash',
+    description='Produces an audio script skeleton from research findings.',
+    sub_agents=[],
+    instruction='''You are an expert Audio Producer and Scriptwriter.
+Take the comprehensive research provided and transform it into a 10-15 minute conversational audio script skeleton.
+
+The script should sound like a smart friend or a senior operator explaining a complex topic to an equal.
+It should be engaging, conversational, yet dense with insight.
+
+OUTPUT FORMAT:
+You MUST output your response as a valid JSON object with the following structure:
+{
+  "sections": [
+    {
+      "heading": "...",
+      "narration": "...",
+      "duration_estimate_seconds": 0
+    }
+  ]
+}
+
+Rules:
+- Conversational tone.
+- No "Today we are discussing..." intros.
+- Break it into 4-6 meaningful sections.
+- Ensure duration estimates are realistic.
+- OUTPUT ONLY THE JSON.
+''',
+    tools=[],
+)
+
+
+webhook_packager = LlmAgent(
+    name='webhook_packager',
+    model='gemini-2.5-flash',
+    description='Packages research metadata and experience proposals into the JSON.',
+    sub_agents=[],
+    instruction='''You are a system integrator. Your job is to extract metadata from research outputs and generate an experience proposal.
+
+You will receive:
+1. TOPIC (the original user topic)
+2. FOUNDATION_CONTENT (from synthesizer)
+3. PLAYBOOK_CONTENT (from playbook builder)
+
+Your output MUST be a JSON object matching this schema exactly:
+{
+  "domain": "...",
+  "foundation_metadata": {
+    "title": "...",
+    "thesis": "...",
+    "key_ideas": ["...", "..."],
+    "citations": [{"url": "...", "claim": "...", "confidence": 0.9}]
+  },
+  "playbook_metadata": {
+    "title": "...",
+    "thesis": "...",
+    "key_ideas": ["...", "..."]
+  },
+  "experience_proposal": {
+    "title": "...",
+    "goal": "...",
+    "template_id": "b0000000-0000-0000-0000-000000000002",
+    "resolution": { "depth": "heavy", "mode": "build", "timeScope": "multi_day", "intensity": "medium" },
+    "steps": [
+      {
+        "step_type": "lesson",
+        "title": "Understanding [Topic]",
+        "payload": { "sections": [{"heading": "...", "body": "...", "type": "text"}] }
+      },
+      {
+        "step_type": "challenge",
+        "title": "Apply [Topic]",
+        "payload": { "objectives": [{"id": "obj1", "description": "...", "proof": "..."}] }
+      },
+      {
+        "step_type": "reflection",
+        "title": "What surprised you?",
+        "payload": { "prompts": [{"id": "p1", "text": "...", "format": "free_text"}] }
+      },
+      {
+        "step_type": "plan_builder",
+        "title": "Build your action plan",
+        "payload": { "sections": [{"type": "goals", "items": [{"id": "g1", "text": "..."}]}] }
+      }
+    ]
+  }
+}
+
+CRITICAL RULES:
+- The experience_proposal MUST be a 4-step Kolb-style chain: lesson -> challenge -> reflection -> plan_builder.
+- Extract the 'thesis' (one-sentence summary) and 'key_ideas' (5-8 items) from the foundation and playbook text.
+- The 'domain' should be a broad category like "SaaS Strategy", "Growth Marketing", "Content Engineering", etc.
+- OUTPUT ONLY THE JSON. Do not output anything else.
+''',
+    tools=[],
+)
+
+
 # ==============================================================================
 # Root agent (unused — pipeline is code-orchestrated)
 # ==============================================================================
@@ -4970,51 +6261,112 @@ def _background_knowledge_generation(req: GenerateKnowledgeRequest, session_id: 
     logger.info("=" * 60)
     
     try:
-        # Simulate heavy LLM execution delay
-        logger.info("Simulating LLM agent processing via sleep...")
-        time.sleep(3)
-        
-        # Build dummy knowledge webhook payload matching validateMiraKPayload
-        dummy_payload = {
+        # 1. RESEARCH STRATEGIST
+        logger.info(f"[PIPELINE] Running Research Strategist for: {req.topic}")
+        strategist_output = run_agent_stage(
+            research_strategist, 
+            f"Perform deep research on the topic: {req.topic}. Extract technical mechanics, algorithms, and practical implementation details.", 
+            "strategist", req.user_id, session_id
+        )
+
+        # 2. DEEP READERS
+        logger.info("[PIPELINE] Running 3 Deep Readers for analysis...")
+        reader_1_output = run_agent_stage(
+            deep_reader_1, 
+            f"Analyze the following research for foundational mechanisms and technical models:\n\n{strategist_output}", 
+            "reader_1", req.user_id, session_id
+        )
+        reader_2_output = run_agent_stage(
+            deep_reader_2, 
+            f"Analyze the following research for practical implementation, how-to guides, and workflows:\n\n{strategist_output}", 
+            "reader_2", req.user_id, session_id
+        )
+        reader_3_output = run_agent_stage(
+            deep_reader_3, 
+            f"Analyze the following research for recent trends, platform updates, and statistical benchmarks:\n\n{strategist_output}", 
+            "reader_3", req.user_id, session_id
+        )
+
+        combined_findings = f"=== FOUNDATIONAL FINDINGS ===\n{reader_1_output}\n\n=== PRACTICAL FINDINGS ===\n{reader_2_output}\n\n=== TRENDS & DATA ===\n{reader_3_output}"
+
+        # 3. FINAL SYNTHESIZER
+        logger.info("[PIPELINE] Synthesizing final foundation document...")
+        synth_output = run_agent_stage(
+            final_synthesizer, 
+            f"Synthesize the following findings into a definitive, action-oriented foundation knowledge unit for: {req.topic}\n\n{combined_findings}", 
+            "synthesizer", req.user_id, session_id
+        )
+
+        # 4. PLAYBOOK BUILDER
+        logger.info("[PIPELINE] Building practical playbook...")
+        playbook_output = run_agent_stage(
+            playbook_builder, 
+            f"Create a tactical implementation playbook based on the following foundation research:\n\n{synth_output}", 
+            "playbook", req.user_id, session_id
+        )
+
+        # 5. WEBHOOK PACKAGING (metadata only — full content injected programmatically)
+        logger.info("[PIPELINE] Extracting metadata for webhook payload...")
+        packager_prompt = f"""
+ORIGINAL TOPIC: {req.topic}
+FOUNDATION CONTENT:
+{synth_output}
+
+PLAYBOOK CONTENT:
+{playbook_output}
+"""
+        final_json_str = run_agent_stage(
+            webhook_packager, 
+            packager_prompt, 
+            "packager", req.user_id, session_id
+        )
+
+        # Cleanup JSON formatting
+        clean_json = final_json_str.strip()
+        if "```json" in clean_json:
+            clean_json = clean_json.split("```json")[-1].split("```")[0].strip()
+        elif "```" in clean_json:
+            clean_json = clean_json.split("```")[-1].split("```")[0].strip()
+
+        start_idx = clean_json.find('{')
+        end_idx = clean_json.rfind('}')
+        if start_idx != -1 and end_idx != -1:
+            clean_json = clean_json[start_idx:end_idx+1]
+
+        try:
+            packager_data = json.loads(clean_json)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse packager JSON: {e}")
+            logger.error(f"Raw string was: {clean_json[:500]}")
+            packager_data = {}
+
+        # Build payload — full content injected programmatically to prevent LLM truncation
+        webhook_payload = {
             "topic": req.topic,
-            "domain": "Systems Engineering",
+            "domain": packager_data.get("domain", "Strategic Initiative"),
+            "session_id": session_id,
             "units": [
                 {
                     "unit_type": "foundation",
-                    "title": f"Core Mechanics of {req.topic}",
-                    "thesis": "This is a simulated thesis generated by MiraK.",
-                    "content": f"Here is the simulated content regarding {req.topic}. Deep research indicates XYZ.",
-                    "key_ideas": ["First simulated idea", "Second simulated idea"],
-                    "citations": ["https://example.com/source1"]
+                    "title": packager_data.get("foundation_metadata", {}).get("title", f"{req.topic} Foundation"),
+                    "thesis": packager_data.get("foundation_metadata", {}).get("thesis", f"Foundation analysis of {req.topic}."),
+                    "content": synth_output,
+                    "key_ideas": packager_data.get("foundation_metadata", {}).get("key_ideas", []),
+                    "citations": packager_data.get("foundation_metadata", {}).get("citations", [])
+                },
+                {
+                    "unit_type": "playbook",
+                    "title": packager_data.get("playbook_metadata", {}).get("title", f"{req.topic} Playbook"),
+                    "thesis": packager_data.get("playbook_metadata", {}).get("thesis", f"Tactical playbook for {req.topic}."),
+                    "content": playbook_output,
+                    "key_ideas": packager_data.get("playbook_metadata", {}).get("key_ideas", [])
                 }
             ],
-            "experience_proposal": {
-                "title": f"Master {req.topic}",
-                "goal": "Understand the core concepts",
-                "template_id": "b0000000-0000-0000-0000-000000000002",
-                "resolution": {
-                    "depth": "surface",
-                    "mode": "illuminate",
-                    "timeScope": "session",
-                    "intensity": "low"
-                },
-                "steps": [
-                    {
-                        "step_type": "lesson",
-                        "title": "Welcome to the Concept",
-                        "payload": {
-                            "sections": [
-                                {
-                                    "heading": "Introduction",
-                                    "body": "Welcome to this auto-generated lesson.",
-                                    "type": "text"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
+            "experience_proposal": packager_data.get("experience_proposal", {})
         }
+
+        duration = time.time() - pipeline_start
+        logger.info(f"PIPELINE COMPLETE in {duration:.2f}s for: {req.topic}")
         
         # Webhook Routing: Local Primary, Vercel Fallback
         local_target = "https://mira.mytsapi.us"
@@ -5023,7 +6375,7 @@ def _background_knowledge_generation(req: GenerateKnowledgeRequest, session_id: 
         target_webhook = f"{vercel_target}/api/webhook/mirak"
         local_up = False
         try:
-            health_check = requests.get(f"{local_target}/api/dev/diagnostic", timeout=2)
+            health_check = requests.get(f"{local_target}/api/dev/diagnostic", timeout=15)
             if health_check.status_code == 200:
                 local_up = True
                 target_webhook = f"{local_target}/api/webhook/mirak"
@@ -5035,7 +6387,7 @@ def _background_knowledge_generation(req: GenerateKnowledgeRequest, session_id: 
         secret = os.environ.get("MIRAK_WEBHOOK_SECRET", "")
         headers = {"x-mirak-secret": secret}
         
-        resp = requests.post(target_webhook, json=dummy_payload, headers=headers, timeout=10)
+        resp = requests.post(target_webhook, json=webhook_payload, headers=headers, timeout=30)
         logger.info(f"Webhook delivered to {target_webhook}. Status: {resp.status_code}")
         if resp.status_code != 200:
             logger.error(f"Webhook error response: {resp.text}")
@@ -5441,8 +6793,9 @@ paths:
       summary: Trigger deep research on a topic
       description: |
         Starts a multi-agent research pipeline on a given topic. 
-        MiraK will perform web searches, synthesize findings, 
-        and then POST the finalized Knowledge Unit back to Mira Studio's webhook.
+        This is a fire-and-forget call that returns 202 Accepted immediately.
+        The research agent will autonomously deliver results to the user's 
+        Knowledge Tab via webhook when complete. Do not wait for response.
       requestBody:
         required: true
         content:
@@ -5458,6 +6811,9 @@ paths:
                 user_id:
                   type: string
                   default: "a0000000-0000-0000-0000-000000000001"
+                session_id:
+                  type: string
+                  description: Optional ID to group multiple research runs into a single session.
                 callback_url:
                   type: string
                   description: Where MiraK should POST the results.

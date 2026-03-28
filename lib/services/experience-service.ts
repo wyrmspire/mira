@@ -247,3 +247,68 @@ export async function completeExperienceWithAI(instanceId: string, userId: strin
 
   return snapshot;
 }
+
+/**
+ * Gateway-compatible wrapper for ephemeral injection.
+ * Handles validation and step creation in sequence.
+ */
+export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance> {
+  // Use existing route-level logic but inside a service
+  const { createExperienceInstance, createExperienceStep } = await import('./experience-service')
+  
+  const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
+    user_id: data.userId,
+    template_id: data.templateId,
+    idea_id: null,
+    title: data.title || 'Injected Experience',
+    goal: data.goal || '',
+    instance_type: 'ephemeral',
+    status: 'injected',
+    resolution: data.resolution,
+    reentry: null,
+    previous_experience_id: null,
+    next_suggested_ids: [],
+    friction_level: null,
+    source_conversation_id: data.source_conversation_id || null,
+    generated_by: data.generated_by || 'gpt',
+    realization_id: null,
+    published_at: null
+  }
+
+  const instance = await createExperienceInstance(instanceData)
+
+  if (data.steps && Array.isArray(data.steps)) {
+    for (let i = 0; i < data.steps.length; i++) {
+      const step = data.steps[i]
+      await createExperienceStep({
+        instance_id: instance.id,
+        step_order: i,
+        step_type: step.step_type || step.type,
+        title: step.title || '',
+        payload: step.payload || {},
+        completion_rule: step.completion_rule || null
+      })
+    }
+  }
+
+  return instance;
+}
+
+/**
+ * Gateway-compatible wrapper for adding a single step to an existing experience.
+ */
+export async function addStep(experienceId: string, stepData: any): Promise<ExperienceStep> {
+  const steps = await getExperienceSteps(experienceId)
+  const nextOrder = steps.length > 0 
+    ? Math.max(...steps.map(s => s.step_order)) + 1 
+    : 0
+
+  return createExperienceStep({
+    instance_id: experienceId,
+    step_order: nextOrder,
+    step_type: stepData.step_type || stepData.type,
+    title: stepData.title || '',
+    payload: stepData.payload || {},
+    completion_rule: stepData.completion_rule || null
+  })
+}

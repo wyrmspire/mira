@@ -1,3 +1,174 @@
+/** Reverse lookup by provider + external ID. */
+export async function findByExternalId(
+  provider: ExternalProvider,
+  externalId: string
+): Promise<ExternalRef | undefined> {
+  const adapter = getStorageAdapter()
+  const refs = await adapter.getCollection<ExternalRef>('externalRefs')
+  return refs.find((r) => r.provider === provider && r.externalId === externalId)
+}
+
+/** Reverse lookup by external number. */
+export async function findByExternalNumber(
+  provider: ExternalProvider,
+  entityType: ExternalRef['entityType'],
+  externalNumber: number
+): Promise<ExternalRef | undefined> {
+  const adapter = getStorageAdapter()
+  const refs = await adapter.getCollection<ExternalRef>('externalRefs')
+  return refs.find(
+    (r) =>
+      r.provider === provider &&
+      r.entityType === entityType &&
+      r.externalNumber === externalNumber
+  )
+}
+
+/** Delete an ExternalRef by its local ID. */
+export async function deleteExternalRef(id: string): Promise<void> {
+  const adapter = getStorageAdapter()
+  await adapter.deleteItem('externalRefs', id)
+}
+
+```
+
+### lib/services/facet-service.ts
+
+```typescript
+import { ProfileFacet, FacetType, FacetUpdate, UserProfile } from '@/types/profile'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+import { getExperienceInstances, getExperienceInstanceById, getExperienceSteps } from './experience-service'
+import { getInteractionsByInstance } from './interaction-service'
+import { runFlowSafe } from '@/lib/ai/safe-flow'
+import { extractFacetsFlow } from '@/lib/ai/flows/extract-facets'
+import { buildFacetContext } from '@/lib/ai/context/facet-context'
+
+export async function getFacetsForUser(userId: string): Promise<ProfileFacet[]> {
+  const adapter = getStorageAdapter()
+  return adapter.query<ProfileFacet>('profile_facets', { user_id: userId })
+}
+
+export async function upsertFacet(userId: string, update: FacetUpdate): Promise<ProfileFacet> {
+  const adapter = getStorageAdapter()
+  
+  // Try to find existing facet to update
+  const existingFacets = await adapter.query<ProfileFacet>('profile_facets', { 
+    user_id: userId,
+    facet_type: update.facet_type,
+    value: update.value
+  })
+
+  if (existingFacets.length > 0) {
+    const existing = existingFacets[0]
+    const updated: ProfileFacet = {
+      ...existing,
+      confidence: update.confidence,
+      evidence: update.evidence || existing.evidence,
+      source_snapshot_id: update.source_snapshot_id || existing.source_snapshot_id,
+      updated_at: new Date().toISOString()
+    }
+    return adapter.saveItem<ProfileFacet>('profile_facets', updated)
+  }
+
+  const newFacet: ProfileFacet = {
+    id: generateId(),
+    user_id: userId,
+    facet_type: update.facet_type,
+    value: update.value,
+    confidence: update.confidence,
+    evidence: update.evidence || null,
+    source_snapshot_id: update.source_snapshot_id || null,
+    updated_at: new Date().toISOString()
+  }
+
+  return adapter.saveItem<ProfileFacet>('profile_facets', newFacet)
+}
+
+export async function removeFacet(facetId: string): Promise<void> {
+  const adapter = getStorageAdapter()
+  return adapter.deleteItem('profile_facets', facetId)
+}
+
+export async function getFacetsByType(userId: string, facetType: FacetType): Promise<ProfileFacet[]> {
+  const adapter = getStorageAdapter()
+  return adapter.query<ProfileFacet>('profile_facets', { user_id: userId, facet_type: facetType })
+}
+
+export async function getTopFacets(userId: string, facetType: FacetType, limit: number): Promise<ProfileFacet[]> {
+  const facets = await getFacetsByType(userId, facetType)
+  return facets
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, limit)
+}
+
+export async function extractFacetsFromExperience(userId: string, instanceId: string): Promise<ProfileFacet[]> {
+  const interactions = await getInteractionsByInstance(instanceId)
+  const instance = await getExperienceInstanceById(instanceId)
+
+  if (!instance) return []
+
+  const extracted: ProfileFacet[] = []
+
+  // 1. answer_submitted -> interests
+  for (const interaction of interactions) {
+    if (interaction.event_type === 'answer_submitted') {
+      // Questionnaire sends { answers: { id: val } }, Reflection sends { reflections: { id: val } }
+      const answerMap = interaction.event_payload?.answers || interaction.event_payload?.reflections || {};
+      for (const answerVal of Object.values(answerMap)) {
+        const answer = answerVal as string;
+        if (typeof answer === 'string') {
+          const keywords = answer.split(/[,\s]+/).filter(w => w.length > 3);
+          for (const kw of keywords.slice(0, 3)) {
+            extracted.push(await upsertFacet(userId, {
+              facet_type: 'interest',
+              value: kw.toLowerCase(),
+              confidence: 0.6
+            }));
+          }
+        }
+      }
+    }
+  }
+
+  // 2. task_completed -> skills
+  const completedTasks = interactions.filter(i => i.event_type === 'task_completed')
+  // Explicitly fetch steps — don't rely on instance.steps being present
+  const steps = await getExperienceSteps(instanceId)
+  const stepsMap = Object.fromEntries(steps.map(s => [s.id, s]))
+
+  for (const interaction of completedTasks) {
+    if (interaction.step_id && stepsMap[interaction.step_id]) {
+      const stepType = stepsMap[interaction.step_id].step_type
+      extracted.push(await upsertFacet(userId, {
+        facet_type: 'skill',
+        value: `${stepType}-active`,
+        confidence: 0.5
+      }))
+    }
+  }
+
+  // 3. resolution.mode -> preferred_mode
+  if (instance.resolution?.mode) {
+    extracted.push(await upsertFacet(userId, {
+      facet_type: 'preferred_mode',
+      value: instance.resolution.mode,
+      confidence: 0.4
+    }))
+  }
+
+  return extracted
+}
+
+export async function buildUserProfile(userId: string): Promise<UserProfile> {
+  const facets = await getFacetsForUser(userId)
+  const experiences = await getExperienceInstances({ userId })
+  
+  // Get user info (mocking display name if users table is not easily accessible via adapter yet)
+  // But SOP-9 says go through services.
+  // I'll try to query users table directly via adapter as a fallback.
+  const adapter = getStorageAdapter()
+  let displayName = 'Studio User'
   let memberSince = new Date().toISOString()
   
   try {
@@ -1179,6 +1350,8 @@ export async function getArtifactsByInstance(instanceId: string): Promise<Artifa
 import { KnowledgeUnit, KnowledgeProgress, MasteryStatus } from '@/types/knowledge';
 import { getStorageAdapter } from '@/lib/storage-adapter';
 import { generateId } from '@/lib/utils';
+import { runFlowSafe } from '@/lib/ai/safe-flow';
+// Dynamic import used in runKnowledgeEnrichment to avoid circular dependency
 
 /**
  * Normalize a DB row (snake_case from knowledge_units) to the TS KnowledgeUnit shape (camelCase).
@@ -1396,6 +1569,73 @@ export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domai
       totalUnits: 0,
       masteredCount: 0
     };
+  }
+}
+
+/**
+ * enrichKnowledgeUnit - Lane 2
+ * Updates a knowledge unit with enrichment data.
+ */
+export async function enrichKnowledgeUnit(
+  unitId: string, 
+  enrichment: { 
+    retrieval_questions: any[], 
+    cross_links: any[], 
+    skill_tags: string[] 
+  }
+): Promise<void> {
+  const adapter = getStorageAdapter();
+  const unit = await getKnowledgeUnitById(unitId);
+  if (!unit) return;
+
+  const now = new Date().toISOString();
+  
+  // Merge retrieval questions (additive)
+  const existingQuestions = unit.retrieval_questions || [];
+  const mergedQuestions = [...existingQuestions, ...enrichment.retrieval_questions];
+
+  // Merge skill tags into subtopic_seeds (additive + de-duped)
+  const existingSeeds = unit.subtopic_seeds || [];
+  const mergedSeeds = Array.from(new Set([...existingSeeds, ...enrichment.skill_tags]));
+
+  // For cross_links, we'll store them as formatted strings in subtopic_seeds
+  // This maintains type safety with the current string[] schema while still persisting the data
+  const crossLinks = enrichment.cross_links.map(cl => `CrossLink: [${cl.related_domain}] ${cl.reason}`);
+  const finalSeeds = [...mergedSeeds, ...crossLinks];
+
+  await adapter.updateItem<any>('knowledge_units', unitId, {
+    retrieval_questions: mergedQuestions,
+    subtopic_seeds: finalSeeds,
+    updated_at: now
+  });
+}
+
+/**
+ * runKnowledgeEnrichment - Lane 2
+ * Wrapper that runs the enrichment flow and persists the result.
+ * MUST swallow all errors to prevent blocking the caller (webhook).
+ */
+export async function runKnowledgeEnrichment(unitId: string, userId: string): Promise<void> {
+  try {
+    console.log(`[knowledge-service] Starting enrichment for unit: ${unitId}`);
+    
+    // Break circular dependency: refine-knowledge-flow imports this service
+    const { refineKnowledgeFlow } = await import('@/lib/ai/flows/refine-knowledge-flow');
+
+    const result = await runFlowSafe(
+      () => refineKnowledgeFlow({ unitId, userId }),
+      null
+    );
+
+    if (result) {
+      await enrichKnowledgeUnit(unitId, result);
+      console.log(`[knowledge-service] Enrichment completed for unit: ${unitId}`);
+    } else {
+      console.warn(`[knowledge-service] Enrichment skipped or failed (safe-flow returned null) for unit: ${unitId}`);
+    }
+  } catch (error) {
+    console.error(`[knowledge-service] FATAL: runKnowledgeEnrichment failed for unit ${unitId}`, error);
+    // Swallowing error as per W4 requirement: the webhook must NEVER fail because enrichment failed.
   }
 }
 
@@ -2520,6 +2760,7 @@ export const COPY = {
       playbook: 'Playbook',
       deep_dive: 'Deep Dive',
       example: 'Example',
+      audio_script: 'Audio Script',
     },
     mastery: {
       unseen: 'New',
@@ -2891,6 +3132,10 @@ export function validateMiraKPayload(body: any): { valid: boolean; error?: strin
     if (!prop.title || !prop.goal || !prop.template_id || !prop.resolution || !Array.isArray(prop.steps)) {
       return { valid: false, error: 'Incomplete experience proposal' };
     }
+  }
+
+  if (body.session_id && typeof body.session_id !== 'string') {
+    return { valid: false, error: 'Invalid session_id' };
   }
 
   return { valid: true, data: body as MiraKWebhookPayload };
@@ -4373,7 +4618,8 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-26**: Sprint 6 completed. All 6 lanes done. Non-linear workspace model with sidebar/topbar navigators, draft persistence via artifacts table, renderer upgrades (checkpoint textareas, essay writing surfaces, expandable challenges/plans), step CRUD/reorder API, step status/scheduling migration 004. Updated repo map with StepNavigator, ExperienceOverview, DraftProvider, DraftIndicator, draft-service, useDraftPersistence, step-state-machine, step-scheduling. Updated OpenAPI schema (16 endpoints). Updated roadmap. Added SOP-23 (Genkit flow pattern). Added Genkit to tech stack.
 - **2026-03-27**: Sprint 7 completed. All 6 lanes done. 4 Genkit flows (synthesis, suggestions, facets, GPT compression), graceful degradation wrapper, completion wiring, migration 005 (evidence column). Updated repo map with AI flow files and context helpers.
 - **2026-03-27**: Sprint 8 boardinit — Knowledge Tab + MiraK Integration. Added SOP-24 (webhook validation). Added `types/knowledge.ts` to repo map. Added knowledge routes, constants, copy. Gate 0 executed by coordinator.
-- **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code. Added Sprint 8B roadmap section (content density + knowledge infrastructure upgrade).
+- **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code.
+- **2026-03-27**: Major roadmap restructuring. Replaced Sprint 8B pondering with concrete Sprint 9 (Content Density & Agent Thinking Rails — 6 lanes). Added Sprint 10 placeholder (Voice & Gamification). Renumbered downstream sprints (old 9→11, 10→12, 11→13, 12→14, 13→15). Updated architecture snapshot to include MiraK + Knowledge + full Supabase table list. Added "Target Architecture (next 3 sprints)" diagram. Preserved all sprint history and open decisions.
 
 ```
 
@@ -4393,541 +4639,306 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 | Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ Build ✅ | ✅ Complete — Gate 0 contracts, experience graph, timeline, profile, validators, renderer upgrades. All 6 lanes done. |
 | Sprint 6 | Experience Workspace: Navigator, Drafts, Renderer Upgrades, Steps API, Scheduling | TSC ✅ Build ✅ | ✅ Complete — Non-linear workspace model, draft persistence, sidebar/topbar navigators, step status/scheduling migration. All 6 lanes done. |
 | Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
-| Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, Mira Studio dashboard, companion integration. All 6 lanes done. |
+| Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, MiraK webhook, companion integration. All 6 lanes done. |
 
 ---
 
-## Sprint 8A — Gate 0: Knowledge Types & Contracts
+## Sprint 9 — Content Density & Agent Thinking Rails
 
-> **Purpose:** Define the shared types, constants, routes, and copy that Lanes 1–5 all consume. Must be approved before any lane begins.
+> **Goal:** Make MiraK a true high-density educational content factory and force the Custom GPT to use endpoints as persistent thinking artifacts instead of free-form chat.
+>
+> **Context:** Sprint 8 proved the wiring works (webhook → validate → persist → display). But MiraK sends 1 dummy unit, experience proposals are skeleton single-step lessons, and the GPT chats freely instead of using external long-term memory. The bottleneck: 3 fetchers → 1 synthesizer → 1 monolithic report.
+>
+> **Architecture:** Option C (hybrid). MiraK delivers structured-but-raw units → webhook persists immediately → background Genkit flow enriches (retrieval questions, cross-links, richer experience proposals).
+>
+> **Duration:** Focused sprint — 6 lanes. MiraK and Mira can be worked on simultaneously.
 
-### Gate 0 Status
+### Gate 0 — Type & Constant Prep (Coordinator)
 
-| Gate | Focus | Status |
-|------|-------|--------|
-| ✅ Gate 0 | Knowledge Types & Contracts | G1 ✅ G2 ✅ G3 ✅ G4 ✅ |
+Update shared types before lanes start:
 
-**G1 — Create `types/knowledge.ts`** ✅
+**G1 — Update `types/knowledge.ts`** ✅
+- Added `KnowledgeAudioVariant` interface, `audio_variant` to webhook unit, `session_id` to `MiraKWebhookPayload`
 
 **G2 — Update `lib/constants.ts`** ✅
+- Added `audio_script` to `KNOWLEDGE_UNIT_TYPES`, added `CONTENT_BUILDER_TYPES` constant
 
-**G3 — Update `lib/routes.ts`** ✅
-
-**G4 — Update `lib/studio-copy.ts`** ✅
-
-Create the knowledge type definitions:
-```ts
-export type KnowledgeUnitType = 'foundation' | 'playbook' | 'deep_dive' | 'example';
-export type MasteryStatus = 'unseen' | 'read' | 'practiced' | 'confident';
-
-export interface KnowledgeCitation {
-  url: string;
-  claim: string;
-  confidence: number;
-}
-
-export interface RetrievalQuestion {
-  question: string;
-  answer: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-}
-
-export interface KnowledgeUnit {
-  id: string;
-  user_id: string;
-  topic: string;
-  domain: string;
-  unit_type: KnowledgeUnitType;
-  title: string;
-  thesis: string;
-  content: string;
-  key_ideas: string[];
-  common_mistake: string | null;
-  action_prompt: string | null;
-  retrieval_questions: RetrievalQuestion[];
-  citations: KnowledgeCitation[];
-  linked_experience_ids: string[];
-  source_experience_id: string | null;
-  subtopic_seeds: string[];
-  mastery_status: MasteryStatus;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface KnowledgeProgress {
-  id: string;
-  user_id: string;
-  unit_id: string;
-  mastery_status: MasteryStatus;
-  last_studied_at: string | null;
-  created_at: string;
-}
-
-export interface MiraKWebhookPayload {
-  topic: string;
-  domain: string;
-  units: Array<{
-    unit_type: KnowledgeUnitType;
-    title: string;
-    thesis: string;
-    content: string;
-    key_ideas: string[];
-    common_mistake?: string;
-    action_prompt?: string;
-    retrieval_questions?: RetrievalQuestion[];
-    citations?: KnowledgeCitation[];
-    subtopic_seeds?: string[];
-  }>;
-  experience_proposal?: {
-    title: string;
-    goal: string;
-    template_id: string;
-    resolution: { depth: string; mode: string; timeScope: string; intensity: string };
-    steps: Array<{ step_type: string; title: string; payload: any }>;
-  };
-}
-```
-
-**G2 — Update `lib/constants.ts`** ⬜
-
-Add knowledge-related constants:
-```ts
-export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const;
-export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number];
-
-export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const;
-export type MasteryStatus = (typeof MASTERY_STATUSES)[number];
-```
-
-**G3 — Update `lib/routes.ts`** ⬜
-
-Add knowledge route:
-```ts
-knowledge: '/knowledge',
-knowledgeUnit: (id: string) => `/knowledge/${id}`,
-```
-
-**G4 — Update `lib/studio-copy.ts`** ⬜
-
-Add knowledge copy block:
-```ts
-knowledge: {
-  heading: 'Knowledge',
-  subheading: 'Your terrain, mapped from action.',
-  emptyState: 'Your knowledge base grows as you explore experiences.',
-  sections: {
-    domains: 'Domains',
-    companion: 'Related Knowledge',
-    recentlyAdded: 'Recently Added',
-  },
-  unitTypes: {
-    foundation: 'Foundation',
-    playbook: 'Playbook',
-    deep_dive: 'Deep Dive',
-    example: 'Example',
-  },
-  mastery: {
-    unseen: 'New',
-    read: 'Read',
-    practiced: 'Practiced',
-    confident: 'Confident',
-  },
-  actions: {
-    markRead: 'Mark as Read',
-    markPracticed: 'Mark as Practiced',
-    startExperience: 'Start Related Experience',
-    learnMore: '📖 Learn about this',
-  },
-},
-```
+**G3 — Update `lib/validators/knowledge-validator.ts`** ✅
+- Validator imports from constants — automatically picks up `audio_script`. Added `audio_script` label to `studio-copy.ts`. TSC clean.
 
 ---
-
-## Sprint 8B — Coding Lanes (begins after Gate 0 approval)
-
-> **Goal:** Build the Knowledge Tab, MiraK webhook ingestion, knowledge service, and experience-knowledge linking. Knowledge is a companion to experiences — a home base for multi-day learning with permanent reference material.
-
-> **Key Architectural Rule:** Knowledge units are DURABLE reference material — they never "complete" or "archive" like experiences. They persist in the Knowledge Tab forever. MiraK produces them; the GPT proposes experiences from them; the user earns them through engagement.
 
 ### Dependency Graph
 
 ```
-Gate 0: [G1–G4 TYPES+CONTRACTS] ─── must complete first ───→
+Gate 0: [G1–G3 TYPES+CONSTANTS] ── must complete first ──→
 
-Lane 1: [W1–W4]          Lane 2: [W1–W6]          Lane 3: [W1–W6]
-  DB MIGRATION +            API ROUTES +              KNOWLEDGE
-  KNOWLEDGE SERVICE         MIRAK WEBHOOK             TAB UI
-  (lib/services/,           (app/api/,                (app/knowledge/,
-   lib/supabase/,            lib/validators/)          components/knowledge/)
+Lane 1: [W1–W4]          Lane 2: [W1–W4]           Lane 3: [W1–W3]
+  MIRAK AGENT               GENKIT ENRICHMENT         GPT THINKING
+  PIPELINE UPGRADE           FLOW + SERVICE            RAILS
+  (c:/mirak only)            (lib/ai/flows/,           (gpt-instructions.md,
+                              lib/services/)            mirak_gpt_action.yaml)
+
+Lane 4: [W1–W4]          Lane 5: [W1–W3]
+  WEBHOOK + SERVICE          KNOWLEDGE UI
+  UPGRADE                    POLISH
+  (app/api/webhook/mirak/,   (app/knowledge/,
+   lib/services/,             components/knowledge/)
    lib/validators/)
 
-Lane 4: [W1–W3]          Lane 5: [W1–W4]
-  SIDEBAR + NAV +           EXPERIENCE ↔
-  COPY + HOME               KNOWLEDGE LINKING
-  (components/shell/,       (components/experience/,
-   app/page.tsx)             lib/services/)
-
-ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
+ALL 5 ──→ Lane 6: [W1–W6] INTEGRATION + E2E TESTING
 ```
 
-**Lanes 1–5 are fully parallel** — zero file conflicts.
-**Lane 6 runs AFTER** Lanes 1–5. Applies migration, resolves cross-lane issues, does all browser testing.
+**Lanes 1–5 are fully parallel** — zero file conflicts (Lane 1 is a separate repo).
+**Lane 6 runs AFTER** Lanes 1–5. Resolves cross-lane issues, does browser + E2E testing.
 
 ---
 
-### Sprint 8 Ownership Zones
+### Sprint 9 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| DB migration + knowledge service + validator | `lib/supabase/migrations/006_knowledge_units.sql` [NEW], `lib/services/knowledge-service.ts` [NEW], `lib/validators/knowledge-validator.ts` [NEW] | Lane 1 |
-| API routes + webhook + dev harness | `app/api/webhook/mirak/route.ts` [NEW], `app/api/knowledge/route.ts` [NEW], `app/api/knowledge/[id]/route.ts` [NEW], `app/api/knowledge/[id]/progress/route.ts` [NEW], `app/api/dev/test-knowledge/route.ts` [NEW] | Lane 2 |
-| Knowledge Tab pages + components | `app/knowledge/page.tsx` [NEW], `app/knowledge/KnowledgeClient.tsx` [NEW], `app/knowledge/[unitId]/page.tsx` [NEW], `components/knowledge/DomainCard.tsx` [NEW], `components/knowledge/KnowledgeUnitCard.tsx` [NEW], `components/knowledge/KnowledgeUnitView.tsx` [NEW], `components/knowledge/MasteryBadge.tsx` [NEW] | Lane 3 |
-| Sidebar + nav + home integration | `components/shell/studio-sidebar.tsx` [MODIFY], `components/shell/MobileNav.tsx` [MODIFY if exists], `app/page.tsx` [MODIFY] | Lane 4 |
-| Experience ↔ knowledge linking | `components/experience/KnowledgeCompanion.tsx` [NEW], `components/experience/ExperienceRenderer.tsx` [MODIFY — append only], `lib/services/synthesis-service.ts` [MODIFY — append only], `app/api/gpt/state/route.ts` [MODIFY — append only] | Lane 5 |
+| MiraK agent pipeline | `c:/mirak/main.py` (entire file) | Lane 1 |
+| Genkit enrichment flow | `lib/ai/flows/refine-knowledge-flow.ts` [NEW], `lib/ai/schemas.ts` [MODIFY] | Lane 2 |
+| Knowledge service enrichment | `lib/services/knowledge-service.ts` [MODIFY — add enrichment functions] | Lane 2 |
+| GPT instructions | `gpt-instructions.md` [MODIFY], `c:/mirak/mirak_gpt_action.yaml` [MODIFY] | Lane 3 |
+| Webhook route upgrade | `app/api/webhook/mirak/route.ts` [MODIFY] | Lane 4 |
+| Knowledge validator upgrade | `lib/validators/knowledge-validator.ts` [MODIFY — session_id, multi-unit hardening] | Lane 4 |
+| Knowledge Tab UI | `app/knowledge/page.tsx` [MODIFY], `app/knowledge/KnowledgeClient.tsx` [MODIFY], `components/knowledge/KnowledgeUnitCard.tsx` [MODIFY] | Lane 5 |
+| Knowledge companion | `components/experience/KnowledgeCompanion.tsx` [MODIFY] | Lane 5 |
 | Integration + testing | All files (read + targeted fixes) | Lane 6 |
 
 ---
 
-### Lane 1 — Database + Knowledge Service
+### Lane 1 — MiraK Agent Pipeline Upgrade (c:/mirak)
 
-**Owns: Migration, knowledge-service.ts, knowledge-validator.ts. This is the data layer all other lanes depend on.**
+**Owns: `c:/mirak/main.py` — the entire MiraK microservice. This lane works in the SEPARATE `c:/mirak` repo, NOT `c:/mira`.**
 
-**Reading list:** `types/knowledge.ts` (Gate 0 output), `lib/services/experience-service.ts` (service pattern to follow), `lib/services/facet-service.ts` (another service example with normalization), `lib/supabase/client.ts` (Supabase client), `lib/constants.ts` (knowledge constants)
+**Reading list:** `c:/mirak/main.py` (current stubbed pipeline — lines 440–527 are the dummy output, lines 100–440 are the commented-out real agents), `c:/mirak/knowledge.md` (writing guide — this is a GUIDE, not a schema constraint), `c:/mira/types/knowledge.ts` (webhook payload shape that Mira expects), `c:/mira/lib/validators/knowledge-validator.ts` (what Mira validates)
 
-**W1 — Write migration 006** ⬜
-- Create `lib/supabase/migrations/006_knowledge_units.sql`:
-  ```sql
-  CREATE TABLE knowledge_units (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    topic TEXT NOT NULL,
-    domain TEXT NOT NULL,
-    unit_type TEXT NOT NULL CHECK (unit_type IN ('foundation', 'playbook', 'deep_dive', 'example')),
-    title TEXT NOT NULL,
-    thesis TEXT NOT NULL,
-    content TEXT NOT NULL,
-    key_ideas JSONB NOT NULL DEFAULT '[]',
-    common_mistake TEXT,
-    action_prompt TEXT,
-    retrieval_questions JSONB NOT NULL DEFAULT '[]',
-    citations JSONB NOT NULL DEFAULT '[]',
-    linked_experience_ids JSONB NOT NULL DEFAULT '[]',
-    source_experience_id UUID,
-    subtopic_seeds JSONB NOT NULL DEFAULT '[]',
-    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
+**W1 — Restore the real agent pipeline** ⬜
+- Uncomment/restore the real 3-stage pipeline in `_background_knowledge_generation()`:
+  - Stage 1: Research Strategist (searches + scrapes)
+  - Stage 2: 3 Deep Readers (analyze scraped content)
+  - Stage 3: Final Synthesizer
+- Replace the `time.sleep(3)` + dummy payload with real agent execution
+- Keep the webhook delivery logic (local tunnel → Vercel fallback) intact at the end
+- Done when: pipeline runs real agents and produces real research output
 
-  CREATE TABLE knowledge_progress (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    unit_id UUID NOT NULL REFERENCES knowledge_units(id),
-    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
-    last_studied_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, unit_id)
-  );
+**W2 — Add PlaybookBuilder agent** ⬜
+- After the main synthesizer produces the foundation unit, add a `PlaybookBuilder` agent that takes the synthesizer output and produces:
+  - A "playbook" unit with actionable steps, profitability-focused tactics, and deliberate-practice micro-tasks
+  - Unit type: `playbook`
+- The PlaybookBuilder instruction should emphasize: practical operators' language, step-by-step procedures, revenue/cost numbers where available
+- Done when: the pipeline outputs both a `foundation` unit AND a `playbook` unit
 
-  CREATE INDEX idx_knowledge_units_user ON knowledge_units(user_id);
-  CREATE INDEX idx_knowledge_units_domain ON knowledge_units(domain);
-  CREATE INDEX idx_knowledge_progress_user ON knowledge_progress(user_id);
+**W3 — Add AudioScriptSkeletonBuilder agent** ⬜
+- Add an `AudioScriptSkeletonBuilder` agent that takes the synthesizer output and produces:
+  - An "audio_script" unit with a 10–15 minute conversational script skeleton
+  - The script is TEXT ONLY — no TTS generation, no audio files (Sprint 10)
+  - Structure: `{ sections: [{ heading, narration, duration_estimate_seconds }] }`
+  - Tone: conversational, as if explaining to a smart friend
+- Done when: pipeline outputs a `foundation` + `playbook` + `audio_script` unit (3–5 units total)
+
+**W4 — Upgrade experience_proposal to Kolb-style chain** ⬜
+- Expand the `experience_proposal` in the webhook payload from a single lesson step to a 4–6 step Kolb-style chain:
+  - Step 1: `lesson` — "Understanding [topic]" (uses foundation unit content)
+  - Step 2: `challenge` — "Apply [topic] to your business" (uses playbook content)
+  - Step 3: `reflection` — "What surprised you about [topic]?"
+  - Step 4: `plan_builder` — "Build your [topic] action plan"
+- Template ID: `b0000000-0000-0000-0000-000000000002` (lesson base)
+- Resolution: `{ depth: 'heavy', mode: 'build', timeScope: 'multi_day', intensity: 'medium' }`
+- Done when: webhook payload contains a multi-step experience proposal with varied step types
+
+---
+
+### Lane 2 — Genkit Enrichment Flow (c:/mira)
+
+**Owns: `lib/ai/flows/refine-knowledge-flow.ts` [NEW], `lib/ai/schemas.ts` [MODIFY], `lib/services/knowledge-service.ts` [MODIFY — add enrichment helper functions only]**
+
+**Reading list:** `lib/ai/flows/synthesize-experience.ts` (Genkit flow pattern to follow exactly), `lib/ai/safe-flow.ts` (`runFlowSafe()` wrapper), `lib/ai/genkit.ts` (Genkit initialization), `lib/ai/schemas.ts` (existing Zod schemas), `lib/services/knowledge-service.ts` (current service — you'll ADD functions, never modify existing ones), `types/knowledge.ts` (KnowledgeUnit shape)
+
+**W1 — Define Zod schema for enrichment output** ✅
+- Add to `lib/ai/schemas.ts`:
+  ```ts
+  export const KnowledgeEnrichmentOutputSchema = z.object({
+    retrieval_questions: z.array(z.object({
+      question: z.string(),
+      answer: z.string(),
+      difficulty: z.enum(['easy', 'medium', 'hard']),
+    })),
+    cross_links: z.array(z.object({
+      related_domain: z.string(),
+      reason: z.string(),
+    })),
+    skill_tags: z.array(z.string()),
+  });
   ```
-- Done when: SQL file compiles cleanly
+- Done when: schema compiles
+- **Done**: Added KnowledgeEnrichmentOutputSchema to lib/ai/schemas.ts.
 
-**W2 — Create knowledge-service.ts** ⬜
-- Create `lib/services/knowledge-service.ts` following the same adapter/service pattern as `experience-service.ts`
-- Must include `fromDB()`/`toDB()` normalization (snake_case ↔ camelCase) per inbox-service pattern
-- Functions:
-  - `getKnowledgeUnits(userId: string): Promise<KnowledgeUnit[]>`
-  - `getKnowledgeUnitsByDomain(userId: string, domain: string): Promise<KnowledgeUnit[]>`
-  - `getKnowledgeUnitById(id: string): Promise<KnowledgeUnit | null>`
-  - `createKnowledgeUnit(unit: Omit<KnowledgeUnit, 'id' | 'created_at' | 'updated_at'>): Promise<KnowledgeUnit>`
-  - `createKnowledgeUnits(units: ...): Promise<KnowledgeUnit[]>`
-  - `updateMasteryStatus(userId: string, unitId: string, status: MasteryStatus): Promise<void>`
-  - `getKnowledgeProgress(userId: string): Promise<KnowledgeProgress[]>`
-  - `getKnowledgeDomains(userId: string): Promise<{ domain: string; count: number; readCount: number }[]>`
-  - `getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }>`
-- Done when: all functions compile with correct types, no raw Supabase calls in routes
+**W2 — Implement refineKnowledgeFlow** ✅
+- Create `lib/ai/flows/refine-knowledge-flow.ts`
+- Follow the exact pattern of `synthesize-experience.ts`:
+  - `ai.defineFlow()` with input `{ unitId: string, userId: string }` and output `KnowledgeEnrichmentOutputSchema`
+  - Fetch the unit via `getKnowledgeUnitById()`
+  - Build prompt: "Given this knowledge unit on [topic], generate retrieval questions, cross-domain links, and skill tags"
+  - Call `ai.generate()` with `googleai/gemini-2.5-flash`
+  - Return structured output
+- Done when: flow compiles and follows existing pattern
+- **Done**: Created refineKnowledgeFlow in lib/ai/flows/refine-knowledge-flow.ts following the Genkit pattern.
 
-**W3 — Create knowledge-validator.ts** ⬜
-- Create `lib/validators/knowledge-validator.ts`
-- `validateMiraKPayload(body: unknown): { valid: boolean; error?: string; data?: MiraKWebhookPayload }`
-- `validateMasteryUpdate(body: unknown): { valid: boolean; error?: string; data?: { mastery_status: MasteryStatus } }`
-- Check all required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, validate mastery_status against `MASTERY_STATUSES`
-- Done when: validators compile, handle malformed input gracefully
+**W3 — Add enrichment service functions** ✅
+- Add to `lib/services/knowledge-service.ts` (APPEND ONLY — do not modify existing functions):
+  - `enrichKnowledgeUnit(unitId: string, enrichment: { retrieval_questions, cross_links, skill_tags }): Promise<void>` — updates the unit in Supabase with new retrieval questions (merged with existing), adds cross-link metadata
+  - Wrapper: `async function runKnowledgeEnrichment(unitId: string, userId: string): Promise<void>` — calls `runFlowSafe(refineKnowledgeFlow, fallback)` then calls `enrichKnowledgeUnit()` with the result
+- Done when: functions compile, enrichment is additive (never overwrites existing content)
+- **Done**: Added additive enrichment functions to knowledge-service.ts.
 
-**W4 — Add type guard to guards.ts** ⬜
-- Append to `lib/guards.ts`: `isKnowledgeUnit()`, `isValidMasteryStatus()` type guards
-- Done when: guards compile
-
----
-
-### Lane 2 — API Routes + MiraK Webhook
-
-**Owns: All new API routes under `/api/knowledge/`, `/api/webhook/mirak/`, and `/api/dev/test-knowledge/`.**
-
-**Reading list:** `types/knowledge.ts` (Gate 0), `app/api/experiences/route.ts` (API route pattern), `app/api/webhook/github/route.ts` (webhook pattern), `app/api/dev/test-experience/route.ts` (dev harness pattern), `lib/services/knowledge-service.ts` (Lane 1 — read the interface but don't modify), `lib/validators/knowledge-validator.ts` (Lane 1), `lib/services/inbox-service.ts` (for timeline events)
-
-**W1 — Create MiraK webhook receiver** ⬜
-- Create `app/api/webhook/mirak/route.ts`
-- `POST` handler:
-  - Read `x-mirak-secret` header, compare to `process.env.MIRAK_WEBHOOK_SECRET` (skip validation if not set in dev)
-  - Call `validateMiraKPayload()` on body
-  - For each unit in payload: call `createKnowledgeUnit()` with `DEFAULT_USER_ID`
-  - If `experience_proposal` present: call `createPersistentExperience()` from `experience-service.ts`
-  - Create timeline event: `{ event_type: 'knowledge_ready', title: 'New knowledge: [topic]' }`
-  - Return `{ created: N, experience_created: boolean }`
-- Done when: route compiles, handles valid + invalid payloads
-
-**W2 — Create knowledge list route** ⬜
-- Create `app/api/knowledge/route.ts`
-- `GET` handler: calls `getKnowledgeUnits(DEFAULT_USER_ID)`
-- Optional query params: `domain`, `unit_type` for filtering
-- Groups results by domain in response
-- Done when: route compiles, returns grouped units
-
-**W3 — Create knowledge unit detail route** ⬜
-- Create `app/api/knowledge/[id]/route.ts`
-- `GET`: returns single unit via `getKnowledgeUnitById()`
-- `PATCH`: accepts `{ mastery_status }`, validates, calls `updateMasteryStatus()`
-- Done when: both methods compile
-
-**W4 — Create progress route** ⬜
-- Create `app/api/knowledge/[id]/progress/route.ts`
-- `POST`: records that user studied this unit, upserts progress via service
-- Done when: route compiles
-
-**W5 — Create dev test harness** ⬜
-- Create `app/api/dev/test-knowledge/route.ts`
-- `POST` handler: creates 4 sample knowledge units across 2 domains ("positioning" and "business-systems")
-  - 1 foundation unit, 1 playbook unit, 1 deep_dive unit, 1 example unit
-  - Include realistic titles, thesis, key_ideas, retrieval_questions, citations
-  - Use `DEFAULT_USER_ID`
-- Return `{ created: 4, domains: ['positioning', 'business-systems'] }`
-- Done when: harness compiles, follows `/api/dev/test-experience` pattern
-
-**W6 — Update GPT state route** ⬜
-- Modify `app/api/gpt/state/route.ts`:
-  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
-  - Add `knowledgeSummary` field to the response packet
-  - Append to existing response — do NOT rewrite the route
-- Done when: GPT state includes knowledge summary alongside existing fields
+**W4 — Wire enrichment to webhook persistence** ✅
+- This is the Option C "fire-and-forget" enrichment trigger
+- Export `runKnowledgeEnrichment` from knowledge-service
+- Lane 4 (webhook) will call this after persist — but this Lane 2's responsibility is to make `runKnowledgeEnrichment()` callable and safe
+- Ensure `runKnowledgeEnrichment` swallows errors (try/catch + console.error) — webhook must never fail because of enrichment
+- Done when: enrichment function is exported and safe to call fire-and-forget
+- **Done**: runKnowledgeEnrichment exported and made safe (catches all errors + uses dynamic imports to avoid circular deps).
 
 ---
 
-### Lane 3 — Knowledge Tab UI
+### Lane 3 — Custom GPT Thinking Rails (docs only)
 
-**Owns: All new pages under `app/knowledge/` and all new components under `components/knowledge/`.**
+**Owns: `gpt-instructions.md` [MODIFY], `c:/mirak/mirak_gpt_action.yaml` [MODIFY]**
 
-**Reading list:** `types/knowledge.ts` (Gate 0), `lib/studio-copy.ts` (copy constants — use COPY.knowledge.*), `lib/routes.ts` (use ROUTES.knowledge), `app/library/page.tsx` + `app/library/LibraryClient.tsx` (page+client pattern to follow), `components/experience/ExperienceCard.tsx` (card component pattern), `app/globals.css` (existing dark theme tokens)
+**Reading list:** `gpt-instructions.md` (current instructions — understand the existing structure), `c:/mirak/mirak_gpt_action.yaml` (current OpenAPI action for MiraK), `roadmap.md` lines 598–686 (Sprint 9 Lane 4 description), `types/knowledge.ts` (what the GPT can reference via `getGPTState`)
 
-**W1 — Create MasteryBadge component** ⬜
-- Create `components/knowledge/MasteryBadge.tsx`
-- Small status chip: unseen=grey, read=blue, practiced=amber, confident=green
-- Uses `COPY.knowledge.mastery.*` for labels
-- Done when: component compiles, renders all 4 states
+**W1 — Add Thinking Rails protocol to gpt-instructions.md** ✅
+- Added a new section "## Thinking Rails — Multi-Pass Artifact Protocol" after the existing "Research & Knowledge" section
+- Content: 5-pass protocol for assessment, research, referencing, and proposing.
+- **Done**: Thinking Rails section added with multi-pass logic and < 1000 char footprint.
 
-**W2 — Create DomainCard component** ⬜
-- Create `components/knowledge/DomainCard.tsx`
-- Props: `domain: string`, `unitCount: number`, `readCount: number`
-- Dark theme card matching existing app style (bg-[#0f0f17], border-[#1e1e2e])
-- Shows domain name, unit count badge, mastery progress bar (readCount/unitCount)
-- Click handler (onClick prop or Link)
-- Done when: component renders with progress indicator
+**W2 — Add progressive disclosure instruction** ✅
+- Added a sub-rule under Thinking Rails: "Progressive Disclosure"
+  - When referencing knowledge: give a 1-sentence teaser first, then ask "Want me to create an experience around this?"
+  - **Done**: Added rule 6 to Thinking Rails section.
 
-**W3 — Create KnowledgeUnitCard component** ⬜
-- Create `components/knowledge/KnowledgeUnitCard.tsx`
-- Props: `unit: KnowledgeUnit`
-- Compact card: title, thesis (one line), unit_type badge (color-coded), mastery badge
-- Click → navigates to `/knowledge/[unitId]`
-- Done when: component renders all unit types
-
-**W4 — Create KnowledgeUnitView component** ⬜
-- Create `components/knowledge/KnowledgeUnitView.tsx`
-- **Use a 3-tab structure**: Learn | Practice | Links
-- **Learn tab** (default):
-  - Header: title, unit_type badge, mastery badge
-  - **Quick Read section**: `thesis` field rendered as a highlighted callout box — always visible, skimmable
-  - **Deep Read section**: `content` field rendered below — the full article body
-  - Key ideas as bullet list
-  - Common mistake callout (warning-styled box)
-  - Action prompt (highlighted CTA)
-  - Citations list with clickable URLs
-- **Practice tab**:
-  - Retrieval questions rendered as expandable Q&A cards (question visible, answer hidden until clicked)
-  - "Mark as Practiced" button after attempting questions → `PATCH /api/knowledge/[id]`
-- **Links tab**:
-  - "Start Related Experience" links if `linked_experience_ids.length > 0`
-  - `subtopic_seeds` rendered as "Explore Next" chips
-  - Source experience link if `source_experience_id` exists
-- **Mastery buttons** visible on all tabs: "Mark as Read" / "Mark as Practiced" / "Mark as Confident" → `PATCH /api/knowledge/[id]`
-- Back nav link to `/knowledge`
-- Done when: 3 tabs render, mastery buttons call API, Quick Read/Deep Read framing visible
-
-**W5 — Create Knowledge Tab page** ⬜
-- Create `app/knowledge/page.tsx` (server component):
-  - `export const dynamic = 'force-dynamic'` (SOP-19)
-  - Fetch knowledge units via `GET /api/knowledge` (or import service directly since server component)
-  - Group by domain, compute counts, find most recent units
-  - Render `KnowledgeClient`
-- Create `app/knowledge/KnowledgeClient.tsx` (client component):
-  - **"Continue Learning" dashboard section at top** (only when units exist):
-    - "Resume last topic" — most recently updated unit with `mastery_status != 'confident'`
-    - "Recently Added" — last 3 units by `created_at`
-    - This section should feel like a personalized study dashboard, not a blank grid
-  - **Domain cards grid below** as secondary navigation
-    - Each card: domain name, unit count badge, mastery progress bar
-    - Click domain → expand to show unit cards (or filter)
-  - Empty state using `COPY.knowledge.emptyState` when no units exist
-  - Uses heading from `COPY.knowledge.heading`
-- Done when: page renders continue-learning section + domain grid, handles empty state
-
-**W6 — Create Knowledge Unit detail page** ⬜
-- Create `app/knowledge/[unitId]/page.tsx` (server component):
-  - `export const dynamic = 'force-dynamic'`
-  - Fetch single unit via service or API
-  - Render `KnowledgeUnitView`
-  - Back link to Knowledge Tab
-- Done when: detail page renders full unit view with 3 tabs
+**W3 — Update mirak_gpt_action.yaml** ✅
+- Rewrote operation description to emphasize fire-and-forget/202 status.
+- Added optional `session_id` parameter to the schema.
+- **Done**: YAML updated for async MiraK architecture.
 
 ---
 
-### Lane 4 — Sidebar Navigation + Copy + Home Integration
+### Lane 4 — Webhook + Service Upgrade (c:/mira)
 
-**Owns: Sidebar, mobile nav, and home page modifications only.**
+**Owns: `app/api/webhook/mirak/route.ts` [MODIFY], `lib/validators/knowledge-validator.ts` [MODIFY — session_id only]**
 
-**Reading list:** `components/shell/studio-sidebar.tsx`, `components/shell/MobileNav.tsx` (if exists), `app/page.tsx` (home page), `lib/studio-copy.ts` (Gate 0 — knowledge copy), `lib/routes.ts` (Gate 0 — knowledge route)
+**Reading list:** `app/api/webhook/mirak/route.ts` (current webhook — understand the full flow), `lib/validators/knowledge-validator.ts` (current validator), `lib/services/knowledge-service.ts` (Lane 2 adds `runKnowledgeEnrichment` — you'll call it), `types/knowledge.ts` (Gate 0 output — session_id field)
 
-**W1 — Add Knowledge to sidebar** ⬜
-- Modify `components/shell/studio-sidebar.tsx`:
-  - Add `{ label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' }` to NAV_ITEMS
-  - Position between Library and Timeline (after icon `◇`, before icon `◷`)
-- Done when: sidebar shows Knowledge nav item in correct position
+**W1 — Handle multi-unit payloads with session tracking** ✅
+- Generate a `session_id` (from payload or `generateId()`) to group units from the same research run.
+- Logged session_id for unit grouping.
+- **Done**: session_id generated and logged in webhook.
 
-**W2 — Add Knowledge to mobile nav** ⬜
-- Check if `components/shell/MobileNav.tsx` exists
-- If yes: add Knowledge nav item matching sidebar placement
-- If no: note in board.md that mobile nav doesn't exist yet
-- Done when: mobile nav updated (or documented as missing)
+**W2 — Trigger background enrichment after persist** ✅
+- After the `Promise.all` block, added fire-and-forget enrichment calls.
+- **Done**: runKnowledgeEnrichment invoked with .catch() for every created unit.
 
-**W3 — Add Knowledge section to home page** ⬜
-- Modify `app/page.tsx`:
-  - After the existing active experiences section, add a "Knowledge" summary section
-  - Fetch knowledge domains summary (domain count, total units, mastery progress)
-  - Only render section if user has ≥1 knowledge unit
-  - Show 2-3 domain cards with "View All →" link to `/knowledge`
-  - Uses `COPY.knowledge.*` for labels
-- Done when: home page conditionally shows knowledge section, handles empty state gracefully
+**W3 — Improve webhook response with unit details** ✅
+- Updated NextResponse.json to include unit summaries and session_id.
+- **Done**: GPT now receives unit IDs, titles, and session_id in the receipt.
+
+**W4 — Update validator for session_id** ✅
+- Modified `validateMiraKPayload` to allow incoming session_id.
+- **Done**: Allowed optional session_id string.
 
 ---
 
-### Lane 5 — Experience ↔ Knowledge Linking
+### Lane 5 — Knowledge UI Polish (c:/mira)
 
-**Owns: KnowledgeCompanion component, ExperienceRenderer modification, synthesis-service append, GPT state enrichment.**
+**Owns: `app/knowledge/page.tsx` [MODIFY], `app/knowledge/KnowledgeClient.tsx` [MODIFY], `components/knowledge/KnowledgeUnitCard.tsx` [MODIFY], `components/experience/KnowledgeCompanion.tsx` [MODIFY]**
 
-**Reading list:** `types/knowledge.ts` (Gate 0), `components/experience/ExperienceRenderer.tsx` (main renderer — append only), `lib/services/synthesis-service.ts` (current `buildGPTStatePacket`), `lib/services/knowledge-service.ts` (Lane 1 — import functions), `app/api/experiences/[id]/suggestions/route.ts` (current suggestions route)
+**Reading list:** `app/knowledge/page.tsx` (current server component), `app/knowledge/KnowledgeClient.tsx` (current client component — understand the existing layout), `components/knowledge/KnowledgeUnitCard.tsx` (current card — unit_type badge rendering), `components/knowledge/KnowledgeUnitView.tsx` (3-tab detail view), `components/experience/KnowledgeCompanion.tsx` (companion panel — understand current rendering)
 
-**W1 — Create KnowledgeCompanion component** ⬜
-- Create `components/experience/KnowledgeCompanion.tsx`
-- Client component with expandable panel:
-  - Props: `domain: string` OR `knowledgeUnitId: string`
-  - Fetches matching knowledge units via `GET /api/knowledge?domain=X`
-  - Renders: icon + "📖 Learn about this" clickable header
-  - Expanded: shows unit title, thesis, "Read full →" link to `/knowledge/[id]`
-  - Collapsed by default — small, non-intrusive
-  - Uses `COPY.knowledge.actions.learnMore` for label
-- Done when: companion panel renders, expands, links to knowledge
+**W1 — Add research-run grouping to Knowledge Tab** ✅
+  - **Done**: Grouped units in the domain view by 5-minute creation proximity and added a "Research Run" header.
+- Modify `app/knowledge/KnowledgeClient.tsx`:
+  - If multiple units share the same `created_at` date (within 5 min window) AND same domain, group them under a subtle header: "Research Run — [date]"
+  - This is a UI-only change — no new API calls needed
+  - Units without grouping render as before (backward compatible)
+- Done when: units from the same research run show a grouping header
 
-**W2 — Wire KnowledgeCompanion into ExperienceRenderer** ⬜
-- Modify `components/experience/ExperienceRenderer.tsx` (APPEND ONLY — bottom of render):
-  - After rendering the step component, check if the current step's `payload` contains a `knowledge_domain` or `knowledge_link` field
-  - If present: render `<KnowledgeCompanion domain={payload.knowledge_domain} />` below the step
-  - If not present: render nothing (no empty states, no dead space)
-  - This is additive — existing renderer behavior is untouched
-- Done when: companion appears when step has knowledge_domain, doesn't appear otherwise
+**W2 — Add audio_script badge to KnowledgeUnitCard** ✅
+  - **Done**: Added PURPLE badge color and 🎙️ emoji for audio_script unit type.
+- Modify `components/knowledge/KnowledgeUnitCard.tsx`:
+  - Add `audio_script` to the badge color map (use a distinctive color — e.g., purple/violet to distinguish from foundation/playbook/deep_dive/example)
+  - Add `🎙️` emoji or `Audio` label
+- Done when: audio_script units render with the new badge color
 
-**W3 — Add knowledge summary to synthesis service** ⬜
-- Modify `lib/services/synthesis-service.ts` (APPEND to `buildGPTStatePacket()`):
-  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
-  - After building existing packet, add `knowledgeSummary` field
-  - Wrap in try/catch so failure doesn't break existing packet generation
-  - Fallback: `knowledgeSummary: null`
-- Done when: GPT state packet includes knowledge data when available
-
-**W4 — Enrich suggestions with knowledge context** ⬜
-- Modify `app/api/experiences/[id]/suggestions/route.ts` (APPEND ONLY):
-  - Import `getKnowledgeDomains()` from knowledge-service
-  - After generating suggestions, check if any suggestion's domain matches a studied knowledge domain
-  - If match: add `knowledgeDomain` and `masteryLevel` fields to the suggestion
-  - This allows GPT to say "You've studied X — try this experience"
-- Done when: suggestions include knowledge context when available
+**W3 — Upgrade KnowledgeCompanion for multi-unit display** ✅
+  - **Done**: Added a compact, scrollable list with unit type badges for multi-unit display. single-unit display is preserved.
+- Modify `components/experience/KnowledgeCompanion.tsx`:
+  - If fetched knowledge units > 1 for the current domain, show them as a small scrollable list instead of just the first one
+  - Each item: title + unit_type badge + "Read →" link
+  - If only 1 unit: keep current single-item rendering
+- Done when: companion shows multiple related units when available
 
 ---
 
-### Lane 6 — Integration + Browser Testing
+### Lane 6 — Integration + E2E Testing
 
 **Runs AFTER Lanes 1–5 are completed.**
 
-**W1 — Install dependencies + env setup** ⬜
-- Verify no new npm packages needed (all existing deps)
-- Add `MIRAK_WEBHOOK_SECRET` to `.env.local` (optional, any string for dev)
-- Document in `wiring.md`
+**W1 — Gate 0 execution** ✅
+- Apply Gate 0 changes (G1–G3): update types, constants, validator
+- Run `npx tsc --noEmit` after Gate 0 — must pass
 
-**W2 — Apply migration 006** ⬜
-- Apply `006_knowledge_units.sql` to Supabase project `bbdhhlungcjqzghwovsx`
-- Verify tables `knowledge_units` and `knowledge_progress` exist
-- Verify indexes created
-
-**W3 — TSC + build fix pass** ⬜
+**W2 — TSC + build fix pass** ✅
 - Run `npx tsc --noEmit` — fix any cross-lane type errors
 - Run `npm run build` — fix any build errors
-- Common fix areas: missing imports between lanes, type mismatches
+- Common fix areas: missing imports, type mismatches between Lane 2 enrichment types and Lane 4 webhook calls
 
-**W4 — Seed test knowledge** ⬜
-- Call `POST /api/dev/test-knowledge` to seed sample units
-- Verify `GET /api/knowledge` returns seeded units grouped by domain
-- Verify `GET /api/knowledge/[id]` returns full unit
-- Verify `PATCH /api/knowledge/[id]` with `{ mastery_status: 'read' }` updates status
+**W3 — Restart MiraK and test real pipeline** ✅
+- Kill the running MiraK process on port 8001
+- Restart: `cd c:/mirak && uvicorn main:app --host 0.0.0.0 --port 8001 --log-level info`
+- Test via: `curl -X POST http://localhost:8001/generate_knowledge -H "Content-Type: application/json" -d '{"topic": "customer acquisition for SaaS"}'`
+- Verify 202 Accepted returned immediately
+- Check MiraK logs — verify real agent pipeline runs (not dummy sleep)
+- Check Mira webhook logs — verify 3+ units arrive via webhook
 
-**W5 — Test webhook flow** ⬜
-- Call `POST /api/webhook/mirak` with a test payload (4 units, 2 domains)
-- Verify units appear in `GET /api/knowledge`
-- Verify timeline event created ("New knowledge on [topic] is ready")
-- Test invalid payload returns 400 with clear error
+**W4 — Test enrichment pipeline** ✅
+- After webhook delivers units, check Mira server logs for enrichment flow execution
+- Verify: `[webhook/mirak]` logs show enrichment triggered
+- Verify: units in Knowledge Tab gain retrieval questions after a few seconds (Genkit enrichment)
+- If GEMINI_API_KEY not set: verify graceful degradation (no enrichment, but no crash)
 
-**W6 — Test GPT state** ⬜
-- Call `GET /api/gpt/state`
-- Verify response includes `knowledgeSummary` with domain counts and mastery stats
-- Verify backward compatibility — existing fields unchanged
+**W5 — Browser test: Knowledge Tab with rich content** ✅
+- Navigate to `/knowledge`
+- Verify: research-run grouping header appears for multi-unit deliveries
+- Verify: audio_script units show purple/violet badge
+- Click into a unit detail — verify 3-tab view works
+- Click Practice tab — verify retrieval questions (from enrichment) appear
+- Verify: KnowledgeCompanion in workspace shows multiple related units
 
-**W7 — Browser test: Knowledge Tab** ⬜
-- Navigate to `/knowledge` — verify domain cards render with correct counts
-- Click domain card — verify unit list expands/filters
-- Click unit card — verify detail page renders all sections (key ideas, citations, etc.)
-- Click "Mark as Read" — verify mastery badge updates
-- Verify empty state shows correct copy when no units exist
-
-**W8 — Browser test: Navigation + Home** ⬜
-- Verify sidebar shows "📚 Knowledge" nav item between Library and Timeline
-- Click Knowledge nav → navigates to `/knowledge`
-- Navigate to home page — verify knowledge summary section appears (after seeding test data)
-- Verify knowledge section hidden when no units exist
+**W6 — Test GPT instructions** ✅
+- Review `gpt-instructions.md` for coherence and token budget
+- Verify the Thinking Rails section is clear and actionable
+- Verify `mirak_gpt_action.yaml` schema matches the actual MiraK endpoint
 
 ---
 
 ## Pre-Flight Checklist
 
-- [ ] `npm install` succeeds
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run build` passes
-- [ ] Dev server starts (`npm run dev`)
-- [ ] Supabase is configured and tables exist
+- [ ] `npm install` succeeds (c:/mira)
+- [ ] `npx tsc --noEmit` passes (c:/mira)
+- [ ] `npm run build` passes (c:/mira)
+- [ ] Dev server starts (`npm run dev` in c:/mira)
+- [ ] MiraK starts (`uvicorn main:app` in c:/mirak)
+- [ ] Supabase is configured and knowledge tables exist
 
 ## Handoff Protocol
 
 1. Mark W items ⬜→🟡→✅ as you go
-2. Run `npx tsc --noEmit` before marking ✅ on your final W item
+2. Run `npx tsc --noEmit` before marking ✅ on your final W item (Mira lanes only)
 3. **DO NOT open the browser or perform visual checks** in Lanes 1–5. Lane 6 handles all browser QA.
 4. Never touch files owned by other lanes (see Ownership Zones above)
 5. Never push/pull from git
@@ -4936,13 +4947,13 @@ ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Gate 0 | ⬜ | ⬜ | Types, constants, routes, copy |
-| Lane 1 | ⬜ | ⬜ | Migration, service, validator |
-| Lane 2 | ⬜ | ⬜ | API routes, webhook, dev harness |
-| Lane 3 | ⬜ | ⬜ | Knowledge Tab pages + components |
-| Lane 4 | ⬜ | ⬜ | Sidebar, mobile nav, home page |
-| Lane 5 | ⬜ | ⬜ | Experience ↔ knowledge linking |
-| Lane 6 | ⬜ | ⬜ | Integration + browser testing |
+| Gate 0 | ⬜ | ⬜ | Types, constants, validator update |
+| Lane 1 | N/A | N/A | Python/FastAPI — no TSC (test via curl) |
+| Lane 2 | ✅ | ✅ | Genkit flow, schemas, service functions |
+| Lane 3 | N/A | N/A | Documentation only — no code |
+| Lane 4 | ✅ | ⚠️ | TSC passed. Build fails ENOENT (unrelated). |
+| Lane 5 | ✅ | ⚠️ | TSC passed. Build fails ENOENT (unrelated). |
+| Lane 6 | ✅ | ✅ | Integration + browser testing complete |
 
 ```
 
@@ -5789,6 +5800,36 @@ Mira's backend is currently a **dumb pipe** — it stores and retrieves. With Ge
 The system goes from "records what happened" to "understands what happened and knows what should happen next."
 
 > Mira doesn't just track your journey. She *thinks about it*.
+
+```
+
+### content.md
+
+```markdown
+# Sprint Hand-off: The "Reader-Friendly" Knowledge Transformation
+
+## Current State: The Content Density Win
+In this sprint, we successfully restored the MiraK multi-agent research pipeline and fixed the JSON/webhook LLM truncation bug. We completely moved away from 100-character test snippets to full, raw, high-density outputs. 
+
+The pipeline now successfully saves massive, reference-grade outputs (the recent `foundation` unit hit ~12.8k chars, and `playbook` hit 7.5k) directly into Supabase.
+
+## The Next Challenge: The "Encyclopedia" Problem
+While the data density is exactly what we wanted, the current presentation and tone of this knowledge are heavily weighted toward being an **outline or reference document**. 
+
+When looking at it in the Knowledge Area:
+- It looks like a dense encyclopedia page or a technical outline.
+- It doesn't read like an educational **textbook**.
+- It is a "spitfire of knowledge" rather than a teachable narrative format. 
+
+## The Task for the Next Chat (Heavy Planning)
+The primary objective of the incoming session is to bridge the gap between **dense reference data** and an **educational, teachable, reader-friendly layer**.
+
+Options for the next agent to explore/plan:
+1. **Another Processing Pass**: Do we need another agent/Genkit flow that transforms the reference data into a conversational, "textbook" style narrative before the user reads it?
+2. **Knowledge Area UX Overhaul**: Should the UI of the Knowledge Area be fundamentally restructured? Right now it might just be dumping the raw string out. How do we build an interface that actively *teaches* the user rather than just acting as a Wikipedia page?
+3. **Data restructuring**: Does the `content` field just get too large? Do we need to split it up or serialize it differently for better UI consumption?
+
+**Incoming Agent Instructions**: Read this memo, review the current Knowledge Tab UI / `KnowledgeClient.tsx`, and initiate a heavy planning phase with the user to design the mechanism that turns this high-signal, raw data blob into an engaging educational experience.
 
 ```
 
@@ -7127,874 +7168,833 @@ or design a real-time adaptive experience loop
 This was a key step—you just gave your system memory of behavior, not just structure.
 ```
 
-### gitr.sh
-
-```bash
-#!/usr/bin/env bash
-
-set -euo pipefail
-
-# Usage: ./gitr.sh "commit message here"
-# Stages, commits, and pushes current branch.
-# It will NOT auto-rebase on push failure.
-
-msg=${1:-"chore: update"}
-
-repo_root=$(git rev-parse --show-toplevel 2>/dev/null || true)
-if [[ -z "${repo_root}" ]]; then
-    echo "ERROR: Not a git repository."
-    exit 1
-fi
-cd "${repo_root}"
-
-if [[ -d .git/rebase-merge || -d .git/rebase-apply || -f .git/MERGE_HEAD ]]; then
-    echo "ERROR: Rebase/merge in progress. Resolve it first."
-    exit 1
-fi
-
-branch=$(git rev-parse --abbrev-ref HEAD)
-if [[ "${branch}" == "HEAD" ]]; then
-    echo "ERROR: Detached HEAD. Checkout a branch first."
-    exit 1
-fi
-
-remote="origin"
-
-echo "Repo: ${repo_root}"
-echo "Branch: ${branch}"
-echo "Staging changes..."
-
-if ! git add -A; then
-    echo "WARN: git add -A failed. Retrying with safer staging."
-    git add -u
-    while IFS= read -r path; do
-        base=$(basename "$path")
-        lower=$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')
-        case "$lower" in
-            nul|con|prn|aux|com[1-9]|lpt[1-9])
-                echo "Skipping reserved path on Windows: $path"
-                continue
-                ;;
-        esac
-        git add -- "$path" || echo "Skipping unstageable path: $path"
-    done < <(git ls-files --others --exclude-standard)
-fi
-
-if git diff --cached --quiet; then
-    echo "No staged changes to commit."
-else
-    echo "Committing: ${msg}"
-    git commit -m "${msg}"
-fi
-
-if git rev-parse --abbrev-ref --symbolic-full-name @{u} >/dev/null 2>&1; then
-    echo "Pushing to ${remote}/${branch}..."
-    if git push "${remote}" "${branch}"; then
-        echo "Push succeeded."
-        exit 0
-    fi
-else
-    echo "Pushing and setting upstream ${remote}/${branch}..."
-    if git push -u "${remote}" "${branch}"; then
-        echo "Push succeeded."
-        exit 0
-    fi
-fi
-
-echo "Push failed (likely non-fast-forward)."
-echo "Run this manually:"
-echo "  git fetch ${remote}"
-echo "  git log --oneline --graph --decorate --max-count=20 --all"
-echo "  git push"
-exit 1
-
-```
-
-### gitrdif.sh
-
-```bash
-#!/bin/bash
-
-# gitrdif.sh - Generate a diff between local and remote branch
-# Output: gitrdiff.md in the project root
-
-# Get current branch name
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-
-# Fetch latest from remote without merging
-echo "Fetching latest from origin/$BRANCH..."
-git fetch origin "$BRANCH" 2>/dev/null
-
-# Check if remote branch exists
-if ! git rev-parse --verify "origin/$BRANCH" > /dev/null 2>&1; then
-    echo "Remote branch origin/$BRANCH not found. Using origin/main..."
-    REMOTE_BRANCH="origin/main"
-else
-    REMOTE_BRANCH="origin/$BRANCH"
-fi
-
-# Output file
-OUTPUT="gitrdiff.md"
-
-# Generate the diff
-echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
-
-{
-    echo "# Git Diff Report"
-    echo ""
-    echo "**Generated**: $(date)"
-    echo ""
-    echo "**Local Branch**: $BRANCH"
-    echo ""
-    echo "**Comparing Against**: $REMOTE_BRANCH"
-    echo ""
-    echo "---"
-    echo ""
-    
-    # NEW: Show uncommitted changes first (working directory)
-    echo "## Uncommitted Changes (working directory)"
-    echo ""
-    echo "### Modified/Staged Files"
-    echo ""
-    echo '```'
-    git status --short 2>/dev/null || echo "(clean)"
-    echo '```'
-    echo ""
-    
-    # Check if there are any uncommitted changes
-    if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-        echo "### Uncommitted Diff"
-        echo ""
-        echo '```diff'
-        git diff -- ':!gitrdiff.md' 2>/dev/null
-        git diff --cached -- ':!gitrdiff.md' 2>/dev/null
-        echo '```'
-        echo ""
-    fi
-    
-    # NEW: Show contents of untracked files (new files not yet staged)
-    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
-    if [ -n "$UNTRACKED" ]; then
-        echo "### New Untracked Files"
-        echo ""
-        for file in $UNTRACKED; do
-            # Skip binary files and very large files
-            if [ -f "$file" ]; then
-                # Checking if it's a text file
-                if command -v file >/dev/null 2>&1; then
-                    if ! file "$file" | grep -q text; then
-                        continue
-                    fi
-                fi
-                
-                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
-                if [ "$LINES" -lt 500 ]; then
-                    echo "#### \`$file\`"
-                    echo ""
-                    echo '```'
-                    cat "$file" 2>/dev/null
-                    echo '```'
-                    echo ""
-                else
-                    echo "#### \`$file\` ($LINES lines - truncated)"
-                    echo ""
-                    echo '```'
-                    head -100 "$file" 2>/dev/null
-                    echo "... ($LINES total lines)"
-                    echo '```'
-                    echo ""
-                fi
-            fi
-        done
-    fi
-    
-    echo "---"
-    echo ""
-    
-    # NEW: Show changes from the last pull/merge if applicable
-    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
-        VAL_HEAD=$(git rev-parse HEAD)
-        VAL_ORIG=$(git rev-parse ORIG_HEAD)
-        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
-            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
-            echo ""
-            echo "These are the changes that recently came into your branch."
-            echo ""
-            echo '```diff'
-            git diff ORIG_HEAD HEAD --stat 2>/dev/null
-            echo '```'
-            echo ""
-            echo '```diff'
-            # Limit full diff to avoid massive files
-            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
-            echo "... (truncated to 1000 lines)"
-            echo '```'
-            echo ""
-            echo "---"
-            echo ""
-        fi
-    fi
-
-    # Show commits that are different
-    echo "## Commits Ahead (local changes not on remote)"
-    echo ""
-    echo '```'
-    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
-    echo '```'
-    echo ""
-    
-    echo "## Commits Behind (remote changes not pulled)"
-    echo ""
-    echo '```'
-    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
-    echo '```'
-    echo ""
-    
-    echo "---"
-    echo ""
-    
-    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
-    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
-    
-    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
-        echo "## Status: Up to Date"
-        echo ""
-        echo "Your local branch is even with **$REMOTE_BRANCH**."
-        echo "No unpushed commits."
-        echo ""
-    fi
-    echo "## File Changes (YOUR UNPUSHED CHANGES)"
-    echo ""
-    echo '```'
-    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
-    echo '```'
-    echo ""
-    
-    echo "---"
-    echo ""
-    echo "## Full Diff of Your Unpushed Changes"
-    echo ""
-    echo "Green (+) = lines you ADDED locally"
-    echo "Red (-) = lines you REMOVED locally"
-    echo ""
-    echo '```diff'
-    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' 2>/dev/null || echo "(no diff)"
-    echo '```'
-    
-} > "$OUTPUT"
-
-echo "Done! Created $OUTPUT"
-echo ""
-echo "Summary:"
-echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
-echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
-echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
-
-```
-
-### gptinstructions.md
+### enrichment.md
 
 ```markdown
-You are Mira — a personal experience engine. You don't just answer questions. You create structured, lived experiences the user steps into inside their Mira Studio app.
+# Mira Enrichment — Curriculum-Aware Experience Engine
 
-## What you do
-
-You talk with the user like a thoughtful guide. When conversation reveals something worth acting on, you create an **Experience** in the app — a questionnaire, lesson, challenge, plan, reflection, or essay with tasks. The user walks through it, the app records what they do, and when they return you know what happened.
-
-## Resolution object
-
-Before creating an experience, determine four dimensions that form the **resolution**:
-- **depth**: light (quick/immersive), medium (structured), heavy (full scaffolding)
-- **mode**: illuminate, practice, challenge, build, reflect
-- **timeScope**: immediate, session, multi_day, ongoing
-- **intensity**: low, medium, high
-
-Every experience carries a resolution object.
-
-## Experience types
-
-1. **Questionnaire** — Multi-step questions. Use when the user needs structured thinking.
-2. **Lesson** — Content with checkpoints. Use for understanding.
-3. **Challenge** — Objectives with completion tracking. Use to push.
-4. **Plan Builder** — Goals → milestones → resources → timeline.
-5. **Reflection** — Prompts → free response → synthesis.
-6. **Essay + Tasks** — Long-form reading with embedded action items.
-
-## Two kinds
-
-**Ephemeral** — Created directly via `injectEphemeral`. Instant, no review. For nudges, micro-challenges, one-time prompts. Typically light/immediate.
-
-**Persistent** — Proposed via `createPersistentExperience`. User reviews and accepts. Lives in library. For courses, plans, multi-session work. Typically medium+/session+.
-
-## Creating experiences
-
-1. Use `injectEphemeral` for instant, `createPersistentExperience` for proposed
-2. Always include steps with appropriate payloads and a resolution object
-3. For persistent: include a reentry contract
-
-## Lifecycle management
-
-Use `transitionExperienceStatus` with these actions:
-- Accept proposed: `approve` → `publish` → `activate` (3 sequential calls)
-- Complete active: `complete`
-- Archive completed: `archive`
-- Start ephemeral: `start` (from injected)
-
-Use `getExperienceById` to inspect an experience before re-entry.
-
-## Capturing ideas
-
-Use `captureIdea` with `title`, `rawPrompt`, `gptSummary`. Optional: `vibe`, `audience`, `intent`.
-
-## Step payloads
-
-**Questionnaire**: `{ "questions": [{ "id": "q1", "type": "text|scale|choice", "label": "...", "options": [...] }] }`
-
-**Lesson**: `{ "sections": [{ "heading": "...", "type": "text|checkpoint", "body": "..." }] }`
-
-**Challenge**: `{ "objectives": [{ "id": "obj1", "description": "...", "proof": "..." }] }`
-
-**Plan Builder**: `{ "sections": [{ "type": "goals|milestones|resources", "items": [...] }] }`
-
-**Reflection**: `{ "prompts": [{ "id": "p1", "text": "...", "format": "free_text" }] }`
-
-**Essay + Tasks**: `{ "content": "...", "tasks": [{ "id": "t1", "description": "..." }] }`
-
-## Re-entry behavior
-
-At conversation start, call `getGPTState`. It returns active experiences, re-entry prompts, friction signals, and suggestions. Use this to:
-- Acknowledge what happened since last time
-- Follow up on re-entry prompts naturally
-- Adjust approach based on friction (high → go lighter, low → go deeper)
-- Never act like you forgot
-
-## Template IDs
-
-- Questionnaire: `b0000000-0000-0000-0000-000000000001`
-- Lesson: `b0000000-0000-0000-0000-000000000002`
-- Challenge: `b0000000-0000-0000-0000-000000000003`
-- Plan Builder: `b0000000-0000-0000-0000-000000000004`
-- Reflection: `b0000000-0000-0000-0000-000000000005`
-- Essay + Tasks: `b0000000-0000-0000-0000-000000000006`
-
-User ID: `a0000000-0000-0000-0000-000000000001`
-
-## Rules
-
-1. Create experiences when the moment calls for it — don't just chat.
-2. Don't ask permission for ephemeral — just drop them in.
-3. Explain persistent experiences before proposing.
-4. Every step should feel tailored, never generic.
-5. Always check state on re-entry. Never start cold.
-6. Match resolution to the moment.
-7. Create forward pressure — every experience makes the next step obvious.
-8. Stuck user → reflection. Ready user → challenge.
-9. Never say "I've created an experience for you." Tell them what's waiting and why.
-10. You are a guide, a coach, a mission engine — not a polite assistant.
-
-```
-
-### gpt-instructions.md
-
-```markdown
-# Mira GPT Instructions
-
-> Condensed Custom GPT instruction set (<8000 chars). Copy everything below the line into the GPT configuration.
+> Strategic design document. No code. This is the "what and why" for making experiences curriculum-aware, making planning explicit, and making knowledge arrive in context.
 
 ---
 
-You are Mira — a personal experience engine. You create structured, lived experiences the user steps into inside their Mira Studio app. You are also backed by a deep-research engine called **MiraK** that can autonomously generate knowledge on any topic.
+## Core Thesis
 
-## Core loop
+Mira should not replace its experience system with a separate classroom product. The experience engine IS the classroom. The right move is to add a **planning layer before experience generation** and a **contextual knowledge layer alongside it**. This preserves everything already built, fixes the problem of under-scoped or over-broad modules, and turns dense knowledge into timed support instead of an overwhelming dump.
 
-Talk like a thoughtful guide. When conversation reveals something worth acting on, create an **Experience**. If the user needs deep background before an action, fire off a **Knowledge Generation** request to MiraK. The user navigates their workspace freely; you stay aware of their progress through periodic state checks.
+The system is not missing a whole new foundation. It is missing the layer that decides **what the curriculum should be before the experience is authored**, plus the layer that decides **when knowledge should appear inside that curriculum**.
 
-## Research & Knowledge (MiraK)
+---
 
-You have a second action called `generateKnowledge`. This is a **fire-and-forget** call — you send a topic to MiraK and it does multi-agent deep research in the background. **Do not wait for a response.** MiraK will deliver the results directly to the user's Knowledge Tab via webhook when it's done.
+## What We Already Have
 
-**How to use it:**
-1. Call `generateKnowledge` with the topic string. You'll get back a `202 Accepted` immediately.
-2. **Move on with the conversation.** Tell the user: "I've kicked off research on [topic] — it'll appear in your Knowledge tab shortly."
-3. Do NOT poll for results. Do NOT wait. Do NOT try to fetch the knowledge back. MiraK handles delivery autonomously.
-4. On future conversations, call `getGPTState` — it will include any new knowledge units that have arrived.
+These primitives are not obsolete. They are the right bones:
 
-**When to trigger research:**
-- User asks a complex "how-to" or "what-is" question that needs more than a chat answer
-- Before proposing a heavy experience (check if knowledge already exists first)
-- When the user explicitly asks you to research something
+| Primitive | Current State | Role in Curriculum |
+|-----------|--------------|-------------------|
+| Chat (GPT) | Discovery + experience authoring | Discovery / feeler sessions |
+| Experiences | 6 step types, persistent + ephemeral | The classroom shell |
+| Knowledge (MiraK) | Foundation, playbook, audio scripts | Contextual support material |
+| Multi-pass enrichment | Step CRUD, reorder, insert APIs | Curriculum refinement tool |
+| Re-entry contracts | Trigger + prompt + contextScope | Adaptive teaching moments |
+| Drafts | Auto-save to artifacts table | In-progress work persistence |
+| Step scheduling | scheduled_date, due_date, estimated_minutes | Pacing across sessions |
+| Knowledge Companion | Collapsible domain-linked panel | In-step knowledge delivery |
+| Graph + chaining | previous_experience_id + next_suggested_ids | Broad domain handling |
+| Progression rules | Chain map (lesson → challenge → reflection) | Learning sequence logic |
 
-**When NOT to trigger research:**
-- Simple factual questions you can answer directly
-- Topics where you already have enough context to create an experience
-- When the user is in the middle of active work and doesn't need background
+The problem is not the primitives. The problem is that broad subjects are being compressed into experience objects before the system has properly scoped them. A topic like "understanding business" turns into a few giant steps instead of a real curriculum because **no planning happened first**.
 
-## Creating experiences — full example
+---
 
-Use `createPersistentExperience` for multi-session work. Use `templateId` matching the dominant step type:
+## The Main Correction: Generation Order
 
+The system should stop generating experiences directly from raw conversational momentum.
+
+### Current Flow (broken)
+```
+GPT chat → vibes → experience (too big, too vague, no scope)
+```
+
+### Correct Flow
+```
+1. DISCOVER    — Chat finds the real problem, level, friction, direction
+2. PLAN        — System creates a structured outline of the learning problem
+3. GENERATE    — Experience is authored from the outline, not from the chat
+4. SUPPORT     — Knowledge arrives contextually alongside the active step
+5. DEEPEN      — Later passes inspect user work for gaps and resize the curriculum
+```
+
+This is a **generation order** change, not a system replacement.
+
+---
+
+## Phase 1: Discovery / Feeler Session
+
+The user talks naturally in chat. GPT listens for:
+- The real problem (not the stated problem)
+- Current level (beginner? has context? false confidence?)
+- Friction signals (overwhelmed? bored? stuck?)
+- Desired direction (learn? build? explore? fix?)
+
+GPT does NOT create an experience yet. It stays in discovery mode until it has enough signal to scope.
+
+**What changes in GPT instructions:** A new behavioral rule — before creating any multi-step experience, GPT must complete at least one assessment pass. For ephemeral micro-nudges, the current instant-fire behavior stays unchanged.
+
+---
+
+## Phase 2: The Planning Layer
+
+### What It Is
+
+Before any serious experience is generated, the system creates a **curriculum outline** — a structured artifact that sizes and sequences the learning problem.
+
+This outline is where the system decides:
+- What the actual topic is
+- What subtopics exist inside it
+- What is too broad for a single experience
+- What is too narrow to stand alone
+- What needs evidence from the user before it becomes curriculum
+- What order makes sense
+- What knowledge already exists (existing units) vs. what needs research
+
+### What It Is NOT
+
+- Not a full LMS course object
+- Not a user-facing "Course Page" they enroll in
+- Not a rigid syllabus that can't adapt
+- Not a replacement for GPT's judgment
+
+It's a **scoping artifact** — the system's working document that prevents the "giant vague experience" failure mode.
+
+### The Planning Endpoint
+
+```
+POST /api/curriculum-outlines
+{
+  "userId": "...",
+  "topic": "understanding how businesses actually make money",
+  "discoverySignals": {
+    "level": "beginner",
+    "friction": "overwhelmed by jargon",
+    "direction": "wants to understand, not build yet"
+  },
+  "subtopics": [
+    { "name": "revenue models", "scope": "right-sized", "order": 1 },
+    { "name": "unit economics", "scope": "needs-splitting", "order": 2 },
+    { "name": "cash flow vs profit", "scope": "right-sized", "order": 3 },
+    { "name": "competitive moats", "scope": "too-broad", "order": 4 }
+  ],
+  "existingKnowledgeUnitIds": ["unit-1", "unit-3"],
+  "researchNeeded": ["unit economics breakdown", "competitive moat taxonomy"],
+  "estimatedExperienceCount": 3,
+  "pedagogicalIntent": "build_understanding"   // vs. "drill_retention" vs. "challenge_application"
+}
+```
+
+### The Planner's Real Job
+
+The planner is not there to produce a perfect course. Its job is to size and sequence the learning problem well enough to create the **first good experience**.
+
+The planner should judge topics by questions like:
+- Is this too broad for one module?
+- Is this too small to stand alone?
+- Is this actually multiple subtopics hiding inside one phrase?
+- Does the user need a feeler step before we formalize this?
+- Does this require real-world evidence before teaching can deepen?
+
+This is the missing judgment layer.
+
+### Research Follows Planning
+
+Research (MiraK) fires **after** planning identifies gaps — not before, not randomly.
+
+```
+Planning identifies gaps → GPT dispatches generateKnowledge for uncovered subtopics
+  → "Research running on [X]. It'll land in your Knowledge tab."
+  → GPT moves on, doesn't wait
+  → When research lands, it's linked to the outline's subtopics
+```
+
+This makes research a consequence of planning, not a random side-trigger.
+
+---
+
+## Phase 3: Experience Generation — From Outline, Not From Chat
+
+The first experience generated after planning should feel more like a **workbook** than a static lesson sequence.
+
+### Key Principle: An Experience Is Not the Entire Subject
+
+In the curriculum-aware model:
+- An experience is **one right-sized section** of the curriculum
+- Broad domains require **multiple linked experiences** (use graph/chaining)
+- The first experience should ask the user to **observe, collect evidence, describe what they found, compare expectation vs. reality**
+- That is how the product stops being chat-shaped and starts becoming real learning
+
+### What "Right-Sized" Means
+
+A right-sized experience:
+- Covers one subtopic from the outline (not the whole topic)
+- Has 3-6 steps (not 18)
+- Can be completed in 1-2 sessions
+- Creates evidence the system can use to deepen the curriculum later
+- Chains to the next experience in the outline's sequence
+
+### What GPT Creates Differently
+
+Instead of:
 ```json
 {
-  "templateId": "b0000000-0000-0000-0000-000000000004",
-  "userId": "a0000000-0000-0000-0000-000000000001",
-  "title": "Positioning Engine: Who You Help, What You Sell",
-  "goal": "Define your market position, first offer, and landing page",
-  "resolution": {
-    "depth": "heavy",
-    "mode": "build",
-    "timeScope": "multi_day",
-    "intensity": "medium"
-  },
-  "reentry": {
-    "trigger": "completion",
-    "prompt": "Name the first buyer you want to win and the strongest proof you have",
-    "contextScope": "focused"
-  },
+  "title": "Understanding Business",
   "steps": [
-    {
-      "type": "reflection",
-      "title": "Pick the first buyer",
-      "payload": {
-        "prompts": [
-          { "id": "p1", "text": "Which lane do you want to own first: restaurants, agencies, political operators, or local service businesses? Why that one?", "format": "free_text" }
-        ]
-      }
-    },
-    {
-      "type": "plan_builder",
-      "title": "Define your offer ladder",
-      "payload": {
-        "sections": [
-          { "type": "goals", "items": [
-            { "id": "g1", "text": "Free value piece that shows your thinking" },
-            { "id": "g2", "text": "Low-ticket implementation package" },
-            { "id": "g3", "text": "Custom consulting or build engagement" }
-          ]}
-        ]
-      }
-    },
-    {
-      "type": "challenge",
-      "title": "Turn messy builds into proof",
-      "payload": {
-        "objectives": [
-          { "id": "obj1", "description": "Pull 3 demos or screenshots from the last year", "proof": "Links or descriptions of each" },
-          { "id": "obj2", "description": "Write one before/after story", "proof": "The story, written out" }
-        ]
-      }
-    },
-    {
-      "type": "essay_tasks",
-      "title": "Write the message and draft the landing page",
-      "payload": {
-        "content": "Your positioning statement follows this pattern: I help [who] use AI to [specific outcome] without [main fear/cost].",
-        "tasks": [
-          { "id": "t1", "description": "Write your positioning statement" },
-          { "id": "t2", "description": "Draft landing page: headline, who it's for, pain points, proof, CTA" }
-        ]
-      }
-    }
+    { "type": "lesson", "title": "Revenue Models (giant)" },
+    { "type": "lesson", "title": "Unit Economics (giant)" },
+    { "type": "lesson", "title": "Cash Flow (giant)" },
+    { "type": "reflection", "title": "What did you learn?" }
   ]
 }
 ```
 
-Use `injectEphemeral` for instant experiences (same shape but no `reentry` field). Don't ask permission for ephemeral — just create.
-
-## Resolution object (required on every experience)
-
-- **depth**: light (no chrome) | medium (progress bar + top nav) | heavy (full sidebar)
-- **mode**: illuminate | practice | challenge | build | reflect
-- **timeScope**: immediate | session | multi_day | ongoing
-- **intensity**: low | medium | high
-
-## Template IDs (use the one matching primary step type)
-
-questionnaire=`b0000000-0000-0000-0000-000000000001` lesson=`...002` challenge=`...003` plan_builder=`...004` reflection=`...005` essay_tasks=`...006`
-User ID: `a0000000-0000-0000-0000-000000000001`
-
-## Step types + payload format
-
-**questionnaire**: `{ "questions": [{ "id": "q1", "type": "text|scale|choice", "label": "...", "options": [...] }] }`
-**lesson**: `{ "sections": [{ "heading": "...", "type": "text|checkpoint", "body": "..." }] }`
-**challenge**: `{ "objectives": [{ "id": "obj1", "description": "...", "proof": "..." }] }`
-**plan_builder**: `{ "sections": [{ "type": "goals|milestones|resources", "items": [{ "id": "i1", "text": "..." }] }] }`
-**reflection**: `{ "prompts": [{ "id": "p1", "text": "...", "format": "free_text" }] }`
-**essay_tasks**: `{ "content": "...", "tasks": [{ "id": "t1", "description": "..." }] }`
-
-You can mix step types in one experience. An experience can have a reflection, then a plan_builder, then a challenge — use the template ID that matches the dominant type.
-
-## Multi-pass enrichment
-
-Don't get everything right in one shot. Create skeleton steps, then:
-- `updateExperienceStep` — update title, payload, or scheduling
-- `addExperienceStep` — insert new steps
-- `deleteExperienceStep` — remove irrelevant steps
-- `reorderExperienceSteps` — reorder by providing array of step IDs
-
-## Step scheduling
-
-Set pacing on steps: `scheduled_date`, `due_date`, `estimated_minutes`. Multi-day experiences should feel paced, not overwhelming.
-
-## Lifecycle
-
-Use `transitionExperienceStatus`:
-- Accept proposed: `approve` → `publish` → `activate` (3 calls in sequence)
-- Complete active: `complete`
-- Start ephemeral: `start`
-On errors, call `getExperienceById` to check current status first.
-
-## Re-entry
-
-At conversation start, call `getGPTState`. Returns active experiences, re-entry prompts, friction signals, suggestions, and knowledge summary.
-- Acknowledge what happened since last time
-- High friction → go lighter. Low friction → go deeper.
-- Call `getExperienceProgress` to check completion before suggesting new work
-- Never act like you forgot. Never start cold.
-
-## Drafts
-
-Drafts auto-save across sessions. When re-entering, acknowledge in-progress work.
-
-## Capturing ideas
-
-When not ready for an experience: `captureIdea` with `title`, `rawPrompt`, `gptSummary`.
-
-## Rules
-
-1. Create experiences when the moment calls for it — don't just chat.
-2. Don't ask permission for ephemeral. Just drop them in.
-3. Explain persistent experiences before proposing.
-4. Every step should feel tailored, never generic.
-5. Always check state on re-entry.
-6. Match resolution to the moment.
-7. Create forward pressure — every experience makes the next step obvious.
-8. Stuck → reflection. Ready → challenge. Overwhelmed → light ephemeral.
-9. Never say "I've created an experience for you." Tell them what's waiting and why.
-10. Use multi-pass: skeleton first, enrich as you learn more.
-11. You are a guide, a coach, a mission engine — not a polite assistant.
-12. MiraK is fire-and-forget. Trigger it and move on. Don't wait.
-13. Remind the user about the Knowledge tab when research lands.
-
+GPT creates:
+```json
+{
+  "title": "Revenue Models: How Money Actually Enters a Business",
+  "curriculum_outline_id": "outline-xyz",
+  "steps": [
+    { "type": "lesson", "title": "The 5 Revenue Archetypes", "knowledge_unit_id": "unit-1" },
+    { "type": "challenge", "title": "Find 3 Real Examples", "objectives": [...] },
+    { "type": "reflection", "title": "Which Model Fits Your World?" },
+    { "type": "checkpoint", "title": "Test Your Understanding", "knowledge_unit_id": "unit-1" }
+  ],
+  "reentry": {
+    "trigger": "completion",
+    "prompt": "You mapped revenue models. Ready for unit economics?",
+    "contextScope": "focused"
+  }
+}
 ```
 
-### knowledge.md
+The second experience in the curriculum is a separate linked experience — not more steps crammed into the first one.
+
+---
+
+## Phase 4: Contextual Knowledge Delivery
+
+Dense knowledge should NOT be the front door. Knowledge becomes powerful when it's linked to what the user is actually doing.
+
+### Four Modes of Knowledge Delivery
+
+#### 1. Pre-Support
+A small amount of knowledge appears **before** a task when the user needs just enough context to act.
+
+Implementation: The experience step's `knowledge_unit_id` link triggers the existing `KnowledgeCompanion` to show a thesis + "Read more →" before the step content renders. Not a dump — a teaser.
+
+#### 2. In-Step Support (Genkit Tutoring)
+A relevant knowledge unit is available **beside** the current step as a conversational companion.
+
+This is where Genkit comes in. Not as a full chatbot, but as a **scoped, contextual Q&A surface**:
+- It knows which step the user is on
+- It knows the step's payload content
+- It knows the linked knowledge unit
+- It can answer questions about *this specific content*
+- It can pose checkpoint questions ("Before you move on — can you explain X in your own words?")
+
+This is an evolution of the existing `KnowledgeCompanion` — from a read-only expandable panel to a conversational one, powered by Genkit.
+
+#### 3. Post-Action Deepening
+After the user has completed a step, deeper knowledge appears because the user now has context to absorb it.
+
+Implementation: On step completion, if the step has a `knowledge_unit_id`, the system surfaces the full knowledge unit content (not just thesis) and any linked playbook or deep-dive units. The user has done the work — now the reference material means something.
+
+#### 4. Curriculum Memory
+As experiences accumulate, linked knowledge becomes part of the broader learning surface and supports compounding.
+
+Implementation: The Knowledge Tab already groups by domain. Adding `curriculum_outline_id` to knowledge units lets the system group them by curriculum track as well. "These 4 units support your Business Fundamentals track."
+
+---
+
+## Phase 5: Iteration / Deepening — Multi-Pass as Curriculum Refinement
+
+Multi-pass is not optional polish. It is the core curriculum tool.
+
+### Pass 1: Initial Generation
+Creates the outline-backed experience. Right-sized. First workbook.
+
+### Pass 2: Adaptive Inspection
+Checks whether user responses are:
+- **Too broad** → splits steps into smaller units
+- **Too shallow** → adds depth (new lesson sections, deeper challenges)
+- **Too vague** → adds scaffolding (pre-support knowledge, guided prompts)
+- **False confidence** → adds checkpoints that test real understanding
+- **Too narrow** → merges steps or links to broader context
+
+### Pass 3+: Evidence-Based Deepening
+Continues shaping the curriculum based on evidence from actual use:
+- Tutor conversation signals (confusion on specific concepts)
+- Checkpoint results (which questions were missed)
+- Challenge completion quality (proof text analysis)
+- Reflection depth (did the user just phone it in?)
+- Re-entry signals (did they come back? how quickly?)
+
+### Re-Entry as Adaptive Teaching
+
+Re-entry should not just remind the user what to do next. It becomes the moment where the system asks:
+- What is still unclear?
+- Where is the friction?
+- What concept needs to be broken apart?
+- What should now become its own sub-experience?
+
+This means the re-entry contract gets richer. Instead of just `{ trigger, prompt, contextScope }`, GPT reads the accumulated evidence (tutor exchanges, checkpoint results, completion signals) and decides whether to continue the sequence, split a subtopic into its own experience, or adjust the intensity.
+
+---
+
+## Richer Step Types Within the Experience Frame
+
+Experiences should remain the main vehicle, but not every learning action has to look like a standard lesson, reflection, or challenge. Some domains need richer modes of work.
+
+### `checkpoint` — A New Step Type
+
+The existing `lesson` delivers content but can't test it. The existing `questionnaire` collects answers but isn't tied to knowledge verification.
+
+`checkpoint` is purpose-built for curriculum-aware experiences:
+
+```ts
+// Checkpoint tests understanding of a linked knowledge unit
+interface CheckpointPayloadV1 {
+  v?: number;
+  knowledge_unit_id: string;            // which unit this tests
+  questions: CheckpointQuestion[];       // from retrieval_questions or GPT-generated
+  passing_threshold: number;             // e.g., 0.7 = 70%
+  on_fail: 'retry' | 'continue' | 'tutor_redirect';
+}
+
+interface CheckpointQuestion {
+  id: string;
+  question: string;
+  expected_answer: string;              // for AI grading (semantic, not exact match)
+  difficulty: 'easy' | 'medium' | 'hard';
+  format: 'free_text' | 'choice';
+  options?: string[];
+}
+```
+
+Why it's different from `questionnaire`:
+- It's **graded** (questionnaire is freeform capture)
+- It's **linked to a knowledge unit** (questionnaire is standalone)
+- It has **consequences** (fail → retry or tutor, not just "submitted")
+- Completion signals feed **back to knowledge mastery**
+
+### Future Step Types (Not Now, But Within Frame)
+
+When domains demand them, these could become new step types — not new systems:
+
+| Mode | What It Is | When Needed |
+|------|-----------|-------------|
+| `field_study` | Observe real systems, collect evidence, report back | When the user needs to ground theory in reality |
+| `practice_ladder` | Graduated difficulty exercises within one domain | When a skill needs repetition, not more reading |
+| `comparison_map` | Side-by-side analysis of options/approaches | When the user needs to evaluate, not just learn |
+| `case_breakdown` | Analyze a real example in depth | When theory needs a specific anchor |
+| `evidence_collection` | Gather proof from the user's own world | When the curriculum needs real-world input to continue |
+
+These are step types, not experience types. They live inside the experience frame. The experience system doesn't need to know about classrooms — it needs richer step vocabulary.
+
+---
+
+## Genkit's Role: Conversational Intelligence Inside Steps
+
+### The TutorChat Pattern
+
+Not a full chatbot. A scoped conversational surface available on steps that have linked knowledge units.
+
+```
+StepRenderer (any type)
+  ├── [existing step UI]
+  └── TutorChat (collapsible panel — evolution of KnowledgeCompanion)
+        ├── Context: step payload + linked knowledge unit content
+        ├── Genkit flow: tutorChatFlow
+        ├── Conversation persists to interaction_events (type: 'tutor_exchange')
+        └── Signals feed back to mastery assessment
+```
+
+#### When Available
+- The step has a `knowledge_unit_id` link (there's content to tutor on)
+- The resolution mode is `illuminate`, `practice`, or `study`
+- The user explicitly opens it (not forced — opt-in via the companion toggle)
+
+When unavailable, the existing read-only `KnowledgeCompanion` stays as-is.
+
+#### Genkit Flow: `tutorChatFlow`
+
+```
+Input:
+  - stepContext: { title, payload summary, knowledge unit thesis + key ideas }
+  - conversationHistory: last 10 exchanges
+  - userMessage: the question or response
+  - masteryContext: current mastery level for linked unit
+
+Output:
+  - response: string
+  - suggestedCheckpoint: string | null (follow-up to verify understanding)
+  - masterySignal: 'no_change' | 'improving' | 'struggling' | 'confident'
+
+Model: gemini-2.5-flash
+```
+
+#### What This Solves
+- **"I don't understand this"** → User asks in context, stays in the experience
+- **"Did I actually learn this?"** → Tutor poses checkpoints, mastery signals update
+- **"This feels dead"** → Conversational surface makes the step feel alive
+
+### Genkit Flow: `assessMasteryFlow`
+
+On experience completion, this flow reads the evidence from interactions and decides whether mastery should change:
+
+```
+Input:
+  - knowledgeUnitIds: string[] (all units linked to steps in this experience)
+  - interactions: tutor_exchanges + checkpoint_attempts + reflection_responses + challenge_proofs
+  - currentMastery: per-unit mastery map
+
+Output:
+  - masteryUpdates: [{ unitId, newMastery, evidence, confidence }]
+  - recommendedNextUnits: string[]
+```
+
+This closes the loop: **research → knowledge → experience → interaction → mastery → next research**.
+
+### Genkit Flow: `gradeCheckpointFlow`
+
+Grades free-text checkpoint answers against expected answers using semantic similarity:
+
+```
+Input:
+  - question: string
+  - expectedAnswer: string
+  - userAnswer: string
+  - unitContext: thesis + key ideas
+
+Output:
+  - correct: boolean
+  - confidence: number
+  - feedback: string (why right/wrong)
+  - misconception: string | null (what the user might be confused about)
+```
+
+---
+
+## What Changes In Existing Systems
+
+### New Entities
+
+#### `curriculum_outlines` table
+The planning artifact. GPT creates this before authoring experiences.
+
+```sql
+CREATE TABLE curriculum_outlines (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  topic TEXT NOT NULL,
+  domain TEXT,
+  discovery_signals JSONB DEFAULT '{}',
+  subtopics JSONB DEFAULT '[]',
+  existing_unit_ids JSONB DEFAULT '[]',
+  research_needed JSONB DEFAULT '[]',
+  pedagogical_intent TEXT NOT NULL DEFAULT 'build_understanding',
+  estimated_experience_count INTEGER,
+  status TEXT NOT NULL DEFAULT 'planning',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### `step_knowledge_links` table
+Links experience steps to knowledge units (many-to-many):
+
+```sql
+CREATE TABLE step_knowledge_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  step_id UUID NOT NULL REFERENCES experience_steps(id),
+  knowledge_unit_id UUID NOT NULL REFERENCES knowledge_units(id),
+  link_type TEXT NOT NULL DEFAULT 'teaches',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+#### New fields on existing tables
+
+- `experience_instances.curriculum_outline_id` — optional FK to `curriculum_outlines`
+- `knowledge_units.curriculum_outline_id` — optional FK (links research to the outline that triggered it)
+
+### New Step Type: `checkpoint`
+
+- Added to `CONTRACTED_STEP_TYPES`
+- New `ModuleRole`: `'test'`
+- New renderer: `CheckpointStep`
+
+### New Interaction Event Types
+
+```ts
+'tutor_exchange'       // user ↔ Genkit conversation within a step
+'checkpoint_attempt'   // user answered a checkpoint question
+'checkpoint_graded'    // Genkit graded the answer
+'mastery_assessed'     // assessMasteryFlow produced a verdict
+```
+
+### New Genkit Flows
+
+| Flow | Purpose |
+|------|---------|
+| `tutorChatFlow` | Contextual Q&A within a step (scoped to step + linked knowledge) |
+| `gradeCheckpointFlow` | Semantic grading of free-text checkpoint answers |
+| `assessMasteryFlow` | Evidence-based mastery verdict on experience completion |
+
+### New API Routes
+
+| Route | Method | Purpose |
+|-------|--------|---------|
+| `/api/curriculum-outlines` | POST | Create outline (GPT planning) |
+| `/api/curriculum-outlines` | GET | List outlines for user |
+| `/api/curriculum-outlines/[id]` | GET | Get outline with linked experiences + units |
+| `/api/tutor/chat` | POST | Tutor exchange (Genkit-powered) |
+| `/api/checkpoint/grade` | POST | Grade a checkpoint answer |
+
+### GPT Instructions Changes
+
+- Add the 5-phase protocol (Discover → Plan → Generate → Support → Deepen)
+- Add `createCurriculumOutline` endpoint
+- Add behavioral rule: "Before creating any multi-step experience, complete an assessment pass and create an outline"
+- Add `checkpoint` step type documentation
+- Add guidance: "An experience is one right-sized section of a curriculum, not the entire subject"
+- Add `'study'` resolution mode documentation
+
+### Constants Changes
+
+- Add `'checkpoint'` to step-related types
+- Add `'study'` to `RESOLUTION_MODES`
+- Add new interaction event types
+- Add curriculum outline status enum
+
+### KnowledgeCompanion Evolution
+
+The existing `KnowledgeCompanion` component evolves in two directions:
+1. **Read-only mode** (current): Shows linked knowledge unit thesis + "Read more →"
+2. **Tutor mode** (new): When Genkit is available + step has knowledge link, adds a chat input at the bottom of the companion panel. Same component, richer behavior.
+
+---
+
+## Visual Treatment: Workbook Feel
+
+The user's instinct about "a different color" is right, but it should not be a separate experience class. It should be a **visual mode** driven by the resolution object and the presence of a `curriculum_outline_id`.
+
+When an experience is curriculum-linked:
+- **Header accent**: Warm amber/gold instead of default indigo — signals "this is a study space"
+- **Step transitions**: Softer, page-turn feel
+- **Overview**: Shows curriculum track position ("Module 2 of 4: Unit Economics")
+- **Completion**: Shows mastery delta ("You moved from *unseen* to *practiced* on 3 concepts")
+
+This is a CSS-level treatment driven by a single boolean (`isCurriculumLinked`), not a new experience class. The experience engine doesn't need to know about classrooms — it just renders differently when curriculum metadata is present.
+
+---
+
+## How Graph/Chaining Handles Broad Domains
+
+If a subject is too broad for one experience, do not overstuff the original object. Instead:
+
+```
+Curriculum Outline: "Business Fundamentals"
+  ├── Experience 1: "Revenue Models" (right-sized, 4 steps)
+  │     └── chains to →
+  ├── Experience 2: "Unit Economics" (right-sized, 5 steps)
+  │     └── chains to →
+  ├── Experience 3: "Cash Flow vs Profit" (right-sized, 4 steps)
+  │     └── chains to →
+  └── Experience 4: "Competitive Moats" (right-sized, 5 steps)
+```
+
+Each experience uses `previous_experience_id` and `next_suggested_ids` — fields that already exist. The curriculum outline is the parent that ties them together. The user feels a track without forcing an LMS-like course structure.
+
+---
+
+## Implementation Priority
+
+| Priority | What | Why |
+|----------|------|-----|
+| **P0** | Curriculum outline entity + API | GPT needs this before it can plan properly. Without it, everything else is ad-hoc. |
+| **P0** | GPT instruction rewrite for 5-phase protocol | The behavioral change is more important than any new feature. If GPT keeps creating giant vague experiences, nothing else matters. |
+| **P0** | `step_knowledge_links` table | Steps and knowledge units need to be connected. The tutor, checkpoints, and mastery assessment all need this link. |
+| **P1** | `checkpoint` step type + renderer | The first step type that tests instead of captures. Makes curriculum experiences meaningful. |
+| **P1** | TutorChat evolution of KnowledgeCompanion | The conversational element that makes steps feel alive. Genkit-powered, scoped, opt-in. |
+| **P1** | Curriculum-linked visual treatment (amber) | Signals "study space" to the user. CSS-level change, not a system change. |
+| **P2** | `assessMasteryFlow` | Closes the learning loop. Can ship after P1 since mastery can be manually tracked initially. |
+| **P2** | `gradeCheckpointFlow` | Semantic grading makes checkpoints meaningful. Can start with choice-only checkpoints first. |
+| **P2** | Multi-pass deepening logic in GPT instructions | Behavioral — tell GPT how to inspect user responses and resize curriculum. |
+| **P3** | Future step types (field_study, practice_ladder, etc.) | Only when specific domains demand them. Not needed for v1. |
+
+---
+
+## Open Questions
+
+1. **Should curriculum outlines be visible to the user?** Lean yes — "Mira planned a 3-module curriculum for business fundamentals" builds trust and transparency. But the rendering can be minimal (a progress track in the sidebar, not a full course page).
+
+2. **Should MiraK accept a curriculum outline ID** so it can target research to fill specific gaps? Eventually yes, but not for v1. GPT can pass the topic strings from `research_needed[]`.
+
+3. **Should checkpoints block step progression?** If `on_fail: 'retry'`, can the user skip ahead anyway? Lean yes with a warning — we don't want frustration loops.
+
+4. **Should TutorChat conversations persist across sessions?** If the user leaves mid-lesson and comes back, should the tutor remember? Lean yes — store in `artifacts` table as `artifact_type: 'tutor_transcript'`.
+
+5. **How does this interact with existing progression rules?** The curriculum outline becomes the authority for sequencing within a track. The existing chain map (`lesson → challenge → reflection`) still works for experiences that are NOT curriculum-linked. For curriculum experiences, the outline's subtopic ordering takes precedence.
+
+6. **When should GPT skip the planning phase?** Ephemeral micro-nudges, single-step challenges, and "try this one thing" experiences don't need outlines. Planning fires when GPT detects a multi-step learning domain, not for every interaction.
+
+---
+
+## Design Principle
+
+The system should not ask the experience to design the curriculum while it is also trying to teach it.
+
+**Curriculum must exist before the module. The module is where the curriculum gets lived.**
+
+---
+
+## The Connection Problem: Schema Explosion
+
+### The Current Situation
+
+The OpenAPI schema (`public/openapi.yaml`) is **1,309 lines** with **20+ endpoints**. The GPT instructions are **155 lines** dense with payload schemas, template IDs, lifecycle rules, step format definitions, and behavioral guidance. And we're about to add:
+- Curriculum outline CRUD
+- Tutor chat
+- Checkpoint grading
+- Mastery assessment
+- Learning plan updates
+
+That's 5+ more endpoints, more payload schemas, more instruction text. Custom GPTs have practical limits on instruction size and schema complexity. The current approach — "expose every operation as its own endpoint with full schema" — does not scale.
+
+### Why It's Broken
+
+The real issue isn't the number of endpoints. It's that **GPT has to know everything upfront**.
+
+Right now, to create an experience, GPT needs to know:
+- 6 template IDs (hardcoded in instructions)
+- 6 step type payload schemas (hardcoded in instructions)
+- Resolution enum values (hardcoded in instructions)
+- Re-entry contract shape (hardcoded in instructions)
+- Lifecycle transition rules (hardcoded in instructions)
+- Multi-pass CRUD endpoints (hardcoded in instructions)
+
+And it needs all of this in its system prompt before it even starts talking. Most of it will never be used in a given conversation. A conversation about "I want to learn about business" doesn't need to know the `plan_builder` payload schema or the `reorderExperienceSteps` endpoint.
+
+### The Principle: Progressive Disclosure for AI
+
+The same principle that makes UIs good — **show only what's needed when it's needed** — should apply to how GPT connects to the system.
+
+Instead of:
+```
+GPT system prompt contains ALL schemas for ALL endpoints
+  → GPT guesses which one to use
+  → OpenAPI schema grows forever
+```
+
+The model should be:
+```
+GPT system prompt contains a FEW high-level actions + a discovery mechanism
+  → GPT calls discover to learn HOW to do something specific
+  → The system teaches GPT the schema at runtime
+  → OpenAPI schema stays small
+```
+
+---
+
+## The Smart Gateway Architecture
+
+### Core Idea: Compound Endpoints + Runtime Discovery
+
+Reduce the OpenAPI schema from 20+ fine-grained endpoints to **~6 compound endpoints** that each handle a category of operations. Add one **discovery endpoint** that teaches GPT how to use any capability on demand.
+
+### The 6 Gateway Endpoints
+
+```
+GET  /api/gpt/state         → Everything GPT needs on entry (already exists, gets richer)
+POST /api/gpt/plan          → All planning operations (outlines, research dispatch, gap analysis)
+POST /api/gpt/create        → All creation operations (experiences, ideas, steps — discriminated by type)
+POST /api/gpt/update        → All mutation operations (step edits, reorder, status transitions, enrichment)
+POST /api/gpt/teach         → All in-experience intelligence (tutor chat, checkpoint grading)
+GET  /api/gpt/discover      → "How do I do X?" — returns schema + examples for any capability
+```
+
+### How `discover` Works
+
+Instead of encoding every payload schema in the instructions, the instructions say:
+
+> "You have 6 endpoints. When you need to create something, use `POST /api/gpt/create`. If you're not sure of the exact payload shape, call `GET /api/gpt/discover?capability=create_experience` first — it will show you the schema and an example."
+
+The discover endpoint returns contextual guidance:
+
+```
+GET /api/gpt/discover?capability=create_experience
+
+{
+  "capability": "create_experience",
+  "endpoint": "POST /api/gpt/create",
+  "type": "experience",
+  "description": "Create a persistent or ephemeral experience with steps",
+  "schema": {
+    "type": { "enum": ["persistent", "ephemeral"] },
+    "templateId": "string (call discover?capability=templates for IDs)",
+    "title": "string",
+    "goal": "string",
+    "resolution": { "depth": "light|medium|heavy", "mode": "...", ... },
+    "steps": [{ "type": "string", "title": "string", "payload": "object" }]
+  },
+  "example": { ... full working example ... },
+  "relatedCapabilities": ["create_outline", "add_step", "link_knowledge"]
+}
+```
+
+```
+GET /api/gpt/discover?capability=step_payload&step_type=checkpoint
+
+{
+  "capability": "step_payload",
+  "step_type": "checkpoint",
+  "description": "Tests understanding of a linked knowledge unit",
+  "schema": {
+    "knowledge_unit_id": "string (required)",
+    "questions": [{ "id": "string", "question": "string", "expected_answer": "string", ... }],
+    "passing_threshold": "number (0-1)",
+    "on_fail": "retry | continue | tutor_redirect"
+  },
+  "example": { ... },
+  "when_to_use": "After a lesson step to verify comprehension"
+}
+```
+
+```
+GET /api/gpt/discover?capability=templates
+
+{
+  "capability": "templates",
+  "templates": [
+    { "id": "b0000000-...-000001", "class": "questionnaire", "use_for": "Surveys, intake, data collection" },
+    { "id": "b0000000-...-000002", "class": "lesson", "use_for": "Content delivery, teaching" },
+    ...
+  ],
+  "rule": "Use the template matching the dominant step type in your experience"
+}
+```
+
+### What This Solves
+
+1. **Instructions shrink dramatically.** Remove all payload schemas, template IDs, and per-step format docs from the system prompt. Replace with: "Call `discover` to learn any schema."
+
+2. **Schema stops growing.** Adding a new step type (checkpoint, field_study, etc.) doesn't add a new endpoint or expand the OpenAPI. It adds a new `discover` response.
+
+3. **GPT learns at runtime.** If GPT needs to create a checkpoint, it calls `discover?capability=step_payload&step_type=checkpoint` and gets the schema + example. No upfront memorization.
+
+4. **Compound endpoints are stable.** `POST /api/gpt/create` never changes shape. What changes is what `type` values it accepts and what discover returns for each.
+
+5. **Backward compatible.** The old fine-grained endpoints still work for the frontend and direct API consumers. The gateway routes are a GPT-specific orchestration layer.
+
+### How Each Gateway Works Internally
+
+#### `POST /api/gpt/plan`
+
+Discriminated by `action`:
+
+```json
+{ "action": "create_outline",    "payload": { "topic": "...", "subtopics": [...] } }
+{ "action": "dispatch_research", "payload": { "topic": "...", "outlineId": "..." } }
+{ "action": "assess_gaps",       "payload": { "outlineId": "..." } }
+```
+
+Internally routes to:
+- `curriculum-outline-service.create()`
+- `generateKnowledge()` on MiraK
+- Knowledge gap analysis logic
+
+#### `POST /api/gpt/create`
+
+Discriminated by `type`:
+
+```json
+{ "type": "experience",  "payload": { "templateId": "...", "title": "...", "steps": [...] } }
+{ "type": "ephemeral",   "payload": { "title": "...", "resolution": {...}, "steps": [...] } }
+{ "type": "idea",        "payload": { "title": "...", "rawPrompt": "...", "gptSummary": "..." } }
+{ "type": "step",        "payload": { "experienceId": "...", "type": "lesson", "title": "...", "payload": {...} } }
+```
+
+Internally routes to:
+- `experience-service.create()`
+- `experience-service.inject()`
+- `idea-service.create()`
+- `step-service.add()`
+
+#### `POST /api/gpt/update`
+
+Discriminated by `action`:
+
+```json
+{ "action": "update_step",     "payload": { "experienceId": "...", "stepId": "...", "title": "...", "payload": {...} } }
+{ "action": "reorder_steps",   "payload": { "experienceId": "...", "stepIds": [...] } }
+{ "action": "delete_step",     "payload": { "experienceId": "...", "stepId": "..." } }
+{ "action": "transition",      "payload": { "experienceId": "...", "action": "activate" } }
+{ "action": "link_knowledge",  "payload": { "stepId": "...", "knowledgeUnitId": "...", "linkType": "teaches" } }
+{ "action": "update_outline",  "payload": { "outlineId": "...", "subtopics": [...] } }
+```
+
+Internally routes to the respective services. One endpoint, many operations. The gateway validates, dispatches, and returns a consistent response envelope.
+
+#### `POST /api/gpt/teach`
+
+Discriminated by `action`:
+
+```json
+{ "action": "tutor_chat",        "payload": { "stepId": "...", "message": "What does theta decay mean?" } }
+{ "action": "grade_checkpoint",  "payload": { "stepId": "...", "questionId": "...", "answer": "..." } }
+{ "action": "assess_mastery",    "payload": { "experienceId": "..." } }
+```
+
+Internally routes to the Genkit flows. GPT doesn't need to know about `/api/tutor/chat` vs `/api/checkpoint/grade` — it just calls `teach` with the right action.
+
+#### `GET /api/gpt/state` (enhanced)
+
+Already exists. Gets richer with:
+- Mastery summary per knowledge domain
+- Active curriculum outline context
+- Curriculum progress ("Module 2 of 4 in Business Fundamentals")
+- Available capabilities list (so GPT knows what `discover` options exist)
+
+#### `GET /api/gpt/discover`
+
+Query parameters:
+- `capability` — what does GPT want to learn? (`create_experience`, `step_payload`, `templates`, `transitions`, `plan_actions`, `teach_actions`, etc.)
+- `step_type` — optional, for step-specific schemas
+- `context` — optional, for context-specific guidance (e.g., "checkpoint after lesson" might suggest specific patterns)
+
+Returns: schema + example + when_to_use + related capabilities.
+
+This endpoint is essentially the system's **self-documentation surface**. It replaces the need for GPT to carry all schemas in memory.
+
+---
+
+## What The GPT Instructions Become
+
+The current instructions are 155 lines of dense schema documentation. After the gateway pattern, they become something like:
 
 ```markdown
-# Mira Knowledge Base - Agent Instructions
-
-> **⚠️ THIS IS A WRITING QUALITY GUIDE — NOT A SCHEMA CONSTRAINT.**
-> This document defines the *tone, structure, and quality bar* for human-authored knowledge base content.
-> It is NOT meant to constrain the MiraK agent's raw research output format or the `knowledge_units` DB schema.
-> MiraK's output shape is defined by `knowledge-validator.ts` in the Mira codebase and the webhook payload contract.
-> Use this document for editorial guidance when reviewing or hand-writing KB content.
-
-This document contains the core prompts and templates for the agent responsible for writing Mira Studio's knowledge-base entries. Use these to ensure consistency, clarity, and actionable content.
-
----
-
-## 1. System / Task Prompt
-
-Use this as the **system / task prompt** for the agent that writes your knowledge-base entries.
-
-```text
-You are an expert instructional writer designing knowledge-base content for a platform that teaches through executional experiences.
-
-Your job is to create articles that help people:
-1. find the answer fast,
-2. understand it deeply enough to act,
-3. retain it after reading,
-4. connect the reading to a real executional experience.
-
-Do not write like a marketer, essayist, or academic. Write like a sharp operator-teacher who respects the reader’s time.
-
-GOAL
-
-Create a knowledge-base entry that is:
-- immediately useful for skimmers,
-- clear for beginners,
-- still valuable as a reference for advanced users,
-- tightly connected to action, practice, and reflection.
-
-PRIMARY WRITING RULES
-
-1. Organize around a user job, not a broad topic.
-Each article must answer one concrete question or support one concrete task.
-
-2. Lead with utility.
-The first screen must tell the reader:
-- what this is,
-- when to use it,
-- the core takeaway,
-- what to do next.
-
-3. Front-load the answer.
-Do not warm up. Do not add history first. Do not bury the key point.
-
-4. Use plain language.
-Prefer short sentences, concrete verbs, and familiar words.
-Define jargon once, then use it consistently.
-
-5. One paragraph = one idea.
-Keep paragraphs short. Avoid walls of text.
-
-6. Prefer examples before abstraction for beginner-facing material.
-If a concept is important, show it in action before expanding theory.
-
-7. Every concept must cash out into action.
-For each major concept, explain:
-- what to do,
-- what to look for,
-- what can go wrong,
-- how to recover.
-
-8. Support two reading modes.
-Include:
-- a guided, scaffolded explanation for less experienced readers,
-- a concise decision-rule/reference layer for more advanced readers.
-
-9. Build retrieval into the page.
-End with recall/reflection prompts, not just “summary.”
-
-10. No fluff.
-Cut generic motivation, inflated adjectives, filler transitions, and empty encouragement.
-
-VOICE AND STYLE
-
-Write with this tone:
-- clear
-- practical
-- intelligent
-- grounded
-- concise
-- slightly punchy when useful
-
-Do not sound:
-- corporate
-- academic
-- mystical
-- over-explanatory
-- salesy
-- “AI assistant”-ish
-
-Never write phrases like:
-- “In today’s fast-paced world…”
-- “It is important to note that…”
-- “This comprehensive guide…”
-- “Let’s dive in”
-- “In conclusion”
-
-LEARNING DESIGN RULES
-
-Your writing must help the learner move through:
-- orientation,
-- understanding,
-- execution,
-- reflection,
-- retention.
-
-For each article, include all of the following where relevant:
-
-A. Orientation
-Help the reader quickly decide whether this page is relevant.
-
-B. Explanation
-Explain the core idea simply and directly.
-
-C. Worked example
-Show one realistic example with enough detail to make the idea concrete.
-
-D. Guided application
-Give the reader a way to try the concept in a constrained, supported way.
-
-E. Failure modes
-List common mistakes, misreads, or traps.
-
-F. Retrieval
-Ask short questions that require recall, comparison, or explanation.
-
-G. Transfer
-Help the reader know when to apply this in a different but related context.
-
-ARTICLE SHAPE
-
-Produce the article in exactly this structure unless told otherwise:
-
-# Title
-Use an outcome-focused title. It should describe the job to be done.
-
-## Use this when
-2–4 bullets describing when this article is relevant.
-
-## What you’ll get
-2–4 bullets describing what the reader will be able to do or understand.
-
-## Core idea
-A short explanation in 2–5 paragraphs.
-The first sentence must contain the main answer or rule.
-
-## Worked example
-Provide one realistic example.
-Show:
-- situation,
-- action,
-- reasoning,
-- result,
-- what to notice.
-
-## Try it now
-Give the reader a short guided exercise, prompt, or mini-task.
-
-## Decision rules
-Provide 3–7 crisp rules, heuristics, or if/then checks.
-
-## Common mistakes
-List 3–7 mistakes with a short correction for each.
-
-## Reflection / retrieval
-Provide 3–5 questions that require the reader to recall, explain, compare, or apply the idea.
-
-## Related topics
-List 3–5 related article ideas or next steps.
-
-REQUIRED CONTENT CONSTRAINTS
-
-- The article must be standalone.
-- The article must solve one primary job only.
-- The article must include at least one concrete example.
-- The article must include at least one action step.
-- The article must include at least one “what to watch for” cue.
-- The article must include retrieval/reflection questions.
-- The article must be skimmable from headings alone.
-- The article must not assume prior knowledge unless prerequisites are explicitly stated.
-- The article must not over-explain obvious points.
-
-FORMAT RULES
-
-- Use descriptive headings only.
-- Use bullets for lists, rules, and mistakes.
-- Use numbered steps only when sequence matters.
-- Bold only key phrases, not full sentences.
-- Do not use tables unless the content is clearly comparative.
-- Do not use long intro paragraphs.
-- Do not use giant nested bullet structures.
-- Do not exceed the minimum length needed for clarity.
-
-ADAPTIVE DIFFICULTY RULE
-
-When the input suggests the reader is a beginner:
-- define terms,
-- slow down slightly,
-- show more scaffolding,
-- include a simpler example.
-
-When the input suggests the reader is experienced:
-- shorten explanations,
-- emphasize distinctions and edge cases,
-- prioritize heuristics and failure modes,
-- avoid basic hand-holding.
-
-OUTPUT METADATA
-
-At the end, append this metadata block:
-
----
-Audience: [Beginner / Intermediate / Advanced]
-Primary job to be done: [one sentence]
-Prerequisites: [short list or “None”]
-Keywords: [5–10 tags]
-Content type: [Concept / How-to / Diagnostic / Comparison / Reference]
-Estimated reading time: [X min]
----
-
-QUALITY BAR BEFORE FINALIZING
-
-Before producing the final article, silently check:
-1. Can a skimmer get the answer from the headings and first lines?
-2. Is the core rule obvious in the first screen?
-3. Does the article contain a real example rather than vague explanation?
-4. Does it tell the reader what to do, not just what to know?
-5. Are the decision rules crisp and memorable?
-6. Are the mistakes realistic?
-7. Do the retrieval questions require thinking rather than parroting?
-8. Is there any fluff left to cut?
-9. Would this still be useful as a reference after the first read?
-10. Is every section earning its place?
-
-If anything fails this check, fix it before returning the article.
-```
-
----
-
-## 2. Input Template
-
-Use this **input template** whenever you want the agent to generate a page:
-
-```text
-Create a knowledge-base entry using the writing spec above.
-
-Topic:
-[insert topic]
-
-Primary reader:
-[beginner / intermediate / advanced / mixed]
-
-User job to be done:
-[what the person is trying to accomplish]
-
-Executional experience this should support:
-[describe the exercise, workflow, simulation, task, or experience]
-
-Must include:
-[list any required ideas, examples, terminology, edge cases]
-
-Avoid:
-[list anything you do not want emphasized]
-
-Desired length:
-[short / medium / long]
-```
-
----
-
-## 3. Review / Rewrite Prompt
-
-This is the **review / rewrite prompt** for linting existing KB pages:
-
-```text
-Review the article below against this standard:
-- skimmable,
-- task-first,
-- plain language,
-- strong first screen,
-- concrete example,
-- decision rules,
-- common mistakes,
-- retrieval prompts,
-- tied to action.
-
-Return:
-1. the top 5 problems,
-2. what to cut,
-3. what to rewrite,
-4. missing sections,
-5. a tightened replacement outline.
-
-Do not praise weak writing. Be direct.
-```
-
----
-
-## 4. Design Guidelines
-
-A strong next step is to make the agent emit content in **two layers** every time:
-
-* **Quick Read** for scanners
-* **Deep Read** for learners doing the full experience
-
-That usually gives you a KB that works both as a training layer and as a reference layer.
-
-I can also turn this into a **JSON schema / CMS content model** so your agent populates entries in a structured format instead of raw prose.
-
-```
-
-### next-env.d.ts
+You are Mira — a personal experience engine.
+
+## Your Endpoints
+You have 6 endpoints. That's it.
+
+- `GET /api/gpt/state` — Call first. Shows everything about the user.
+- `POST /api/gpt/plan` — Create curriculum outlines, dispatch research, find gaps.
+- `POST /api/gpt/create` — Create experiences, ideas, and steps.
+- `POST /api/gpt/update` — Edit steps, reorder, transition status, link knowledge.
+- `POST /api/gpt/teach` — Tutor chat, grade checkpoints, assess mastery.
+- `GET /api/gpt/discover` — Ask "how do I do X?" and get the exact schema + example.
+
+## How To Use Discover
+When you need to create something and aren't sure of the shape:
+  GET /api/gpt/discover?capability=create_experience
+  GET /api/gpt/discover?capability=step_payload&step_type=lesson
+  GET /api/gpt/discover?capability=templates

@@ -48,3 +48,37 @@ export const KnowledgeEnrichmentOutputSchema = z.object({
   })),
   skill_tags: z.array(z.string()),
 });
+
+// --- Lane 5: Tutor Chat + Checkpoint Grading Schemas ---
+
+export const TutorChatInputSchema = z.object({
+  stepId: z.string(),
+  knowledgeUnitContent: z.string().describe('Full content of the linked knowledge unit'),
+  conversationHistory: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).describe('Prior turns in this tutoring session'),
+  userMessage: z.string().describe('The learner\'s latest question or message'),
+});
+
+export const TutorChatOutputSchema = z.object({
+  response: z.string().describe('The tutor\'s concise, contextual answer'),
+  masterySignal: z.enum(['struggling', 'progressing', 'confident']).optional()
+    .describe('Signal inferred from learner\'s message about their comprehension level'),
+  suggestedFollowup: z.string().optional()
+    .describe('A follow-up question the tutor could pose to deepen understanding'),
+});
+
+export const GradeCheckpointInputSchema = z.object({
+  question: z.string().describe('The checkpoint question that was asked'),
+  expectedAnswer: z.string().describe('The canonical correct answer'),
+  userAnswer: z.string().describe('What the learner wrote'),
+  unitContext: z.string().optional().describe('Relevant knowledge unit content for grading context'),
+});
+
+export const GradeCheckpointOutputSchema = z.object({
+  correct: z.boolean().describe('Whether the answer is substantially correct'),
+  feedback: z.string().describe('Brief, encouraging feedback explaining the grade'),
+  misconception: z.string().optional().describe('The specific misconception if the answer is wrong'),
+  confidence: z.number().min(0).max(1).describe('Grader\'s confidence in this verdict (0–1)'),
+});

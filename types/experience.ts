@@ -7,6 +7,7 @@ import {
   ResolutionTimeScope,
   ResolutionIntensity,
 } from '@/lib/constants';
+import { StepKnowledgeLink } from './curriculum';
 
 export type {
   ExperienceClass,
@@ -61,6 +62,7 @@ export interface ExperienceInstance {
   source_conversation_id?: string | null;
   generated_by?: string | null;
   realization_id?: string | null;
+  curriculum_outline_id?: string | null;
   created_at: string;
   published_at?: string | null;
 }
@@ -80,4 +82,5 @@ export interface ExperienceStep {
   due_date?: string | null;           // ISO 8601 date (no time)
   estimated_minutes?: number | null;  // estimated time to complete
   completed_at?: string | null;       // ISO 8601 timestamp
+  knowledge_links?: StepKnowledgeLink[];
 }

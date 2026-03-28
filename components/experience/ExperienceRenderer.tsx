@@ -14,6 +14,7 @@ import ChallengeStep from './steps/ChallengeStep';
 import PlanBuilderStep from './steps/PlanBuilderStep';
 import ReflectionStep from './steps/ReflectionStep';
 import EssayTasksStep from './steps/EssayTasksStep';
+import CheckpointStep from './steps/CheckpointStep';
 
 // Register all built-in renderers
 registerRenderer('questionnaire', QuestionnaireStep as any);
@@ -22,6 +23,7 @@ registerRenderer('challenge', ChallengeStep as any);
 registerRenderer('plan_builder', PlanBuilderStep as any);
 registerRenderer('reflection', ReflectionStep as any);
 registerRenderer('essay_tasks', EssayTasksStep as any);
+registerRenderer('checkpoint', CheckpointStep as any);
 
 interface ExperienceRendererProps {
   instance: ExperienceInstance;
@@ -112,6 +114,8 @@ export default function ExperienceRenderer({
       extraProps.initialAnswers = initialDraft;
     } else if (stepType === 'reflection') {
       extraProps.initialResponses = initialDraft;
+    } else if (stepType === 'checkpoint') {
+      extraProps.initialAnswers = initialDraft;
     }
   }
 

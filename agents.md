@@ -117,6 +117,16 @@ app/
     dev/
       diagnostic/       ← GET dev-only: adapter, env, row counts, quarantined surfaces
       test-experience/  ← POST dev-only: creates ephemeral + persistent for DEFAULT_USER_ID
+    gpt/                 ← GPT Gateway (compound endpoints — Sprint 10)
+      state/route.ts     ← GET: compressed user state for re-entry
+      plan/route.ts      ← POST: curriculum outlines, research dispatch, gap analysis
+      create/route.ts    ← POST: experiences, ideas, steps (discriminated by type)
+      update/route.ts    ← POST: step edits, reorder, transitions (discriminated by action)
+      discover/route.ts  ← GET: progressive disclosure — returns schemas + examples by capability
+    coach/               ← Coach API (frontend-facing inline tutor — Sprint 10)
+      chat/route.ts      ← POST: contextual tutor Q&A within active step (Genkit tutorChatFlow)
+      grade/route.ts     ← POST: semantic checkpoint grading (Genkit gradeCheckpointFlow)
+      mastery/route.ts   ← POST: evidence-based mastery assessment
     ideas/route.ts       ← GET/POST ideas
     ideas/materialize/   ← POST convert idea→project
     drill/route.ts       ← POST save drill session
@@ -124,7 +134,7 @@ app/
     tasks/route.ts       ← GET tasks by project
     prs/route.ts         ← GET/PATCH PRs by project
     inbox/route.ts       ← GET/PATCH inbox events
-    experiences/         ← Experience CRUD + inject
+    experiences/         ← Experience CRUD + inject (frontend-facing, still active)
       route.ts           ← GET (list) / POST (create persistent)
       inject/route.ts    ← POST (create ephemeral — GPT direct-create)
       [id]/route.ts      ← GET single experience (enriched with graph + interactions)
@@ -133,7 +143,6 @@ app/
       [id]/suggestions/   ← GET next-experience suggestions
     interactions/        ← Event telemetry
     synthesis/           ← Compressed state for GPT
-    gpt/state/           ← GPT re-entry endpoint
     actions/
       promote-to-arena/  ← POST
       move-to-icebox/    ← POST
@@ -152,6 +161,7 @@ app/
       gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
       github/route.ts    ← GitHub webhook receiver (real: signature-verified)
       vercel/route.ts    ← Vercel webhook receiver (stub)
+      mirak/route.ts     ← MiraK research webhook receiver
 
 components/
   shell/                 ← AppShell, StudioSidebar, StudioHeader, MobileNav, CommandBar
@@ -166,7 +176,9 @@ components/
   experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
                            StepNavigator, ExperienceOverview, DraftProvider,
                            step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
-                           Reflection, EssayTasks)
+                           Reflection, EssayTasks, CheckpointStep [NEW])
+                           KnowledgeCompanion (evolves → TutorChat mode)
+  knowledge/             ← KnowledgeUnitCard, KnowledgeUnitView, MasteryBadge, DomainCard
   common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator
   timeline/              ← TimelineEventCard, TimelineFilterBar
   profile/               ← FacetCard, DirectionSummary
@@ -179,6 +191,10 @@ lib/
     experience-contract.ts ← v1 experience instance contract + module roles
     step-contracts.ts      ← v1 per-type step payload contracts + unions
     resolution-contract.ts ← v1 resolution + re-entry contracts + chrome mapping
+  gateway/               ← GPT Gateway layer (Sprint 10)
+    discover-registry.ts   ← Capability → schema + example map for /api/gpt/discover
+    gateway-router.ts      ← Action/type discriminator + dispatch logic
+    gateway-types.ts       ← GatewayRequest, DiscoverResponse types
   github/
     client.ts            ← Octokit wrapper, getGitHubClient()
     signature.ts         ← HMAC-SHA256 webhook signature verification
@@ -186,7 +202,7 @@ lib/
   supabase/
     client.ts            ← Server-side Supabase client
     browser.ts           ← Browser-side Supabase client
-    migrations/          ← SQL migration files (001–004)
+    migrations/          ← SQL migration files (001–006+)
   ai/
     genkit.ts            ← Genkit initialization + Google AI plugin
     schemas.ts           ← Shared Zod schemas for AI flow outputs
@@ -196,6 +212,9 @@ lib/
       suggest-next-experience.ts← context-aware next-experience suggestions
       extract-facets.ts         ← semantic profile facet extraction
       compress-gpt-state.ts     ← token-efficient GPT state compression
+      refine-knowledge-flow.ts  ← knowledge enrichment (retrieval Qs, cross-links)
+      tutor-chat-flow.ts        ← contextual Q&A within a step [NEW]
+      grade-checkpoint-flow.ts  ← semantic grading of checkpoint answers [NEW]
     context/             ← Context assembly helpers for flows
       suggestion-context.ts  ← Gathers user profile + history for suggestions
       facet-context.ts       ← Flattens interactions for facet extraction
@@ -224,10 +243,10 @@ lib/
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
                            experience, interaction, synthesis, graph, timeline, facet,
-                           draft services
+                           draft, knowledge, curriculum-outline [NEW] services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
-  validators/            ← idea, project, drill, webhook, experience, step-payload validators
+  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge validators
   view-models/           ← arena, icebox, inbox, review VMs
 
 types/
@@ -236,10 +255,12 @@ types/
   experience.ts, interaction.ts, synthesis.ts,
   graph.ts, timeline.ts, profile.ts,
   knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
+  curriculum.ts          ← CurriculumOutline, StepKnowledgeLink [NEW]
 
 content/                 ← Product copy markdown
 docs/
   contracts/             ← v1 experience contract docs
+enrichment.md            ← Master thesis: 3-pillar enrichment strategy
 
 .local-data/             ← JSON file persistence (gitignored, auto-seeded)
 roadmap.md               ← Product roadmap (experience engine evolution)
@@ -508,6 +529,22 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ Validate via `knowledge-validator.ts` before writing to DB. Check required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, reject malformed payloads with 400.
 - Why: MiraK is a separate service (Python on Cloud Run). Its output format may drift. The webhook is the trust boundary — validate everything before persistence.
 
+### SOP-25: GPT-facing endpoints go through the gateway — not fine-grained routes
+**Learned from**: Sprint 10 architecture (enrichment.md Pillar 3)
+
+- ❌ Adding a new `/api/tutor/chat` endpoint for every new GPT capability.
+- ❌ Expanding GPT instructions with inline payload schemas for every new step type.
+- ✅ Route all GPT actions through compound gateway endpoints (`/api/gpt/create`, `/api/gpt/update`, `/api/gpt/teach`, `/api/gpt/plan`).
+- ✅ GPT learns schemas at runtime via `GET /api/gpt/discover?capability=X`.
+- Why: Custom GPT instructions have practical size limits. Every new endpoint adds prompt debt. The gateway + discover pattern lets the system scale without growing the schema or instructions. "Adding a feature should not grow the schema."
+
+### SOP-26: Curriculum outline must exist before multi-step experience generation
+**Learned from**: Sprint 10 architecture (enrichment.md Pillar 1)
+
+- ❌ GPT creating a 6-step "Understanding Business" experience directly from chat vibes.
+- ✅ GPT creates a curriculum outline first (via `POST /api/gpt/plan`), then generates right-sized experiences from the outline.
+- Why: Without planning, broad subjects collapse into giant vague experiences. The outline is the scoping artifact that prevents this failure mode. Ephemeral micro-nudges skip planning; serious learning domains require it.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -527,3 +564,4 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-27**: Sprint 8 boardinit — Knowledge Tab + MiraK Integration. Added SOP-24 (webhook validation). Added `types/knowledge.ts` to repo map. Added knowledge routes, constants, copy. Gate 0 executed by coordinator.
 - **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code.
 - **2026-03-27**: Major roadmap restructuring. Replaced Sprint 8B pondering with concrete Sprint 9 (Content Density & Agent Thinking Rails — 6 lanes). Added Sprint 10 placeholder (Voice & Gamification). Renumbered downstream sprints (old 9→11, 10→12, 11→13, 12→14, 13→15). Updated architecture snapshot to include MiraK + Knowledge + full Supabase table list. Added "Target Architecture (next 3 sprints)" diagram. Preserved all sprint history and open decisions.
+- **2026-03-27**: Sprint 10 boardinit — Curriculum-Aware Experience Engine. Added SOP-25 (gateway pattern), SOP-26 (outline before experience). Updated repo map with gateway routes, gateway types, checkpoint renderer, tutor flows, curriculum types. 7 lanes: DB+Types, Gateway, Curriculum Service, Checkpoint+Knowledge Link, Tutor+Genkit, GPT Rewrite+OpenAPI, Integration+Browser.

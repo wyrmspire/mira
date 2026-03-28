@@ -1,3 +1,56 @@
+              <span className="text-[#475569] mb-1">tasks done</span>
+            </div>
+          </div>
+          <div className="p-6 rounded-2xl bg-[#0d0d14] border border-[#1e1e2e] space-y-1 hover:border-[#33334d] transition-all">
+            <span className="text-[10px] font-bold text-[#475569] uppercase tracking-widest">Estimate</span>
+            <div className="flex items-end gap-2">
+              <span className="text-3xl font-mono text-emerald-400">~2h</span>
+              <span className="text-[#475569] mb-1">remaining</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <h3 className="text-xl font-bold text-[#f1f5f9] flex items-center gap-3">
+          {COPY.workspace.overview}
+          <div className="flex-grow h-px bg-[#1e1e2e]" />
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {steps.map((step, idx) => {
+            const status = stepStatuses[step.id] || 'available';
+            const isLocked = status === 'locked';
+            const isCompleted = status === 'completed';
+
+            return (
+              <button
+                key={step.id}
+                onClick={() => !isLocked && onStepSelect(step.id)}
+                disabled={isLocked}
+                className={`flex items-center gap-4 p-5 rounded-2xl border transition-all text-left group ${
+                  isLocked 
+                    ? 'bg-[#0a0a0f] border-[#1e1e2e] opacity-50 cursor-not-allowed'
+                    : 'bg-[#12121a] border-[#1e1e2e] hover:border-indigo-500/50 hover:bg-[#161621] shadow-sm hover:shadow-indigo-500/5'
+                }`}
+              >
+                <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-mono text-base font-bold ${
+                  isCompleted 
+                    ? 'bg-emerald-500/10 text-emerald-400' 
+                    : isLocked
+                    ? 'bg-slate-500/5 text-slate-500'
+                    : 'bg-indigo-500/10 text-indigo-400'
+                }`}>
+                  {isCompleted ? (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    (idx + 1).toString().padStart(2, '0')
+                  )}
+                </div>
+                
+                <div className="flex-grow">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-[#475569] opacity-80">
                       {(COPY.workspace.stepTypes as any)[step.step_type] || step.step_type}
@@ -351,23 +404,44 @@ export function KnowledgeCompanion({ domain, knowledgeUnitId }: KnowledgeCompani
               {COPY.common.loading}
             </div>
           ) : units.length > 0 ? (
-            <div className="space-y-4">
-              {units.map((unit) => (
-                <div key={unit.id} className="group">
+            <div className={`space-y-3 ${units.length > 2 ? 'max-h-[320px] overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
+              {units.length === 1 ? (
+                // Single unit: keep current rendering
+                <div className="group">
                   <h4 className="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors">
-                    {unit.title}
+                    {units[0].title}
                   </h4>
                   <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                    {unit.thesis}
+                    {units[0].thesis}
                   </p>
                   <Link
-                    href={`/knowledge/${unit.id}`}
+                    href={`/knowledge/${units[0].id}`}
                     className="text-xs text-blue-400/80 hover:text-blue-400 mt-2 inline-block font-medium"
                   >
                     Read full →
                   </Link>
                 </div>
-              ))}
+              ) : (
+                // Multiple units: compact list
+                units.map((unit) => (
+                  <div key={unit.id} className="p-3 border border-[#1e1e2e] rounded-lg bg-[#0d0d18] hover:border-blue-500/30 transition-all group shadow-sm">
+                    <div className="flex justify-between items-start gap-4 mb-3">
+                      <h4 className="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-2">
+                        {unit.title}
+                      </h4>
+                      <div className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)} flex-shrink-0`}>
+                        {COPY.knowledge.unitTypes[unit.unit_type as keyof typeof COPY.knowledge.unitTypes]}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/knowledge/${unit.id}`}
+                      className="text-[10px] font-bold uppercase tracking-widest text-blue-400/80 hover:text-blue-400 transition-colors"
+                    >
+                      Read &rarr;
+                    </Link>
+                  </div>
+                ))
+              )}
             </div>
           ) : (
             <div className="py-4 text-center text-sm text-slate-500">
@@ -379,6 +453,23 @@ export function KnowledgeCompanion({ domain, knowledgeUnitId }: KnowledgeCompani
     </div>
   );
 }
+
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case 'foundation':
+      return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+    case 'playbook':
+      return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
+    case 'deep_dive':
+      return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+    case 'example':
+      return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    case 'audio_script':
+      return 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20';
+    default:
+      return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
+  }
+};
 
 ```
 
@@ -2139,6 +2230,8 @@ export default function KnowledgeUnitCard({ unit }: KnowledgeUnitCardProps) {
         return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
       case 'example':
         return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      case 'audio_script':
+        return 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20';
       default:
         return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
     }
@@ -2151,7 +2244,7 @@ export default function KnowledgeUnitCard({ unit }: KnowledgeUnitCardProps) {
     >
       <div className="flex justify-between items-start mb-3">
         <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)}`}>
-          {COPY.knowledge.unitTypes[unit.unit_type]}
+          {unit.unit_type === 'audio_script' ? '🎙️ ' : ''}{COPY.knowledge.unitTypes[unit.unit_type as keyof typeof COPY.knowledge.unitTypes]}
         </div>
         <MasteryBadge status={unit.mastery_status} />
       </div>
@@ -4618,6 +4711,66 @@ export const extractFacetsFlow = ai.defineFlow(
 
 ```
 
+### lib/ai/flows/refine-knowledge-flow.ts
+
+```typescript
+import { ai } from '../genkit';
+import { z } from 'zod';
+import { KnowledgeEnrichmentOutputSchema } from '../schemas';
+import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+
+/**
+ * refineKnowledgeFlow - Lane 2
+ * Implements intelligent enrichment for knowledge units.
+ */
+export const refineKnowledgeFlow = ai.defineFlow(
+  {
+    name: 'refineKnowledgeFlow',
+    inputSchema: z.object({ unitId: z.string(), userId: z.string() }),
+    outputSchema: KnowledgeEnrichmentOutputSchema,
+  },
+  async (input) => {
+    const { unitId } = input;
+    
+    // 1. Fetch the unit
+    const unit = await getKnowledgeUnitById(unitId);
+    if (!unit) throw new Error(`Knowledge unit ${unitId} not found`);
+    
+    // 2. Build prompt context
+    const prompt = `
+      System: You are an educational content engineer for Mira Studio.
+      Task: Given a knowledge unit with a thesis and content, generate high-density enrichment artifacts.
+      
+      KNOWLEDGE UNIT:
+      Title: "${unit.title}"
+      Topic: "${unit.topic}"
+      Domain: "${unit.domain}"
+      Thesis: "${unit.thesis}"
+      Content: "${unit.content}"
+      Key Ideas: ${unit.key_ideas.join(', ')}
+      
+      Requirements:
+      1. Retrieval Questions: Generate 3-5 questions that test deep understanding of the thesis and content. Assign a difficulty level (easy, medium, hard).
+      2. Cross-domain Links: Identify 2-3 related professional or educational domains where this knowledge is applicable. Explain why.
+      3. Skill Tags: Suggest 5-7 specific skill tags (e.g., "SaaS Dynamics", "Unit Economics", "Product Market Fit") related to this content.
+    `;
+    
+    // 3. Generate output
+    const { output } = await ai.generate({
+      // Use gemini-2.5-flash as the standard model for enrichment
+      model: 'googleai/gemini-2.5-flash',
+      prompt,
+      output: { schema: KnowledgeEnrichmentOutputSchema }
+    });
+    
+    if (!output) throw new Error('AI failed to generate knowledge enrichment');
+    
+    return output;
+  }
+);
+
+```
+
 ### lib/ai/flows/suggest-next-experience.ts
 
 ```typescript
@@ -4836,6 +4989,19 @@ export const CompressedStateOutputSchema = z.object({
   suggestedOpeningTopic: z.string().describe('What the GPT should bring up first')
 });
 
+export const KnowledgeEnrichmentOutputSchema = z.object({
+  retrieval_questions: z.array(z.object({
+    question: z.string(),
+    answer: z.string(),
+    difficulty: z.enum(['easy', 'medium', 'hard']),
+  })),
+  cross_links: z.array(z.object({
+    related_domain: z.string(),
+    reason: z.string(),
+  })),
+  skill_tags: z.array(z.string()),
+});
+
 ```
 
 ### lib/config/github.ts
@@ -5039,11 +5205,16 @@ export type ResolutionIntensity = (typeof RESOLUTION_INTENSITIES)[number]
 
 // --- Sprint 8: Knowledge Tab ---
 
-export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const
+export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const
 export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number]
 
 export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const
 export type MasteryStatus = (typeof MASTERY_STATUSES)[number]
+
+// --- Sprint 9: Content Density ---
+
+export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const
+export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number]
 
 
 ```
@@ -7827,174 +7998,3 @@ export async function getExternalRefsForEntity(
   return refs.filter((r) => r.entityType === entityType && r.entityId === entityId)
 }
 
-/** Reverse lookup by provider + external ID. */
-export async function findByExternalId(
-  provider: ExternalProvider,
-  externalId: string
-): Promise<ExternalRef | undefined> {
-  const adapter = getStorageAdapter()
-  const refs = await adapter.getCollection<ExternalRef>('externalRefs')
-  return refs.find((r) => r.provider === provider && r.externalId === externalId)
-}
-
-/** Reverse lookup by external number. */
-export async function findByExternalNumber(
-  provider: ExternalProvider,
-  entityType: ExternalRef['entityType'],
-  externalNumber: number
-): Promise<ExternalRef | undefined> {
-  const adapter = getStorageAdapter()
-  const refs = await adapter.getCollection<ExternalRef>('externalRefs')
-  return refs.find(
-    (r) =>
-      r.provider === provider &&
-      r.entityType === entityType &&
-      r.externalNumber === externalNumber
-  )
-}
-
-/** Delete an ExternalRef by its local ID. */
-export async function deleteExternalRef(id: string): Promise<void> {
-  const adapter = getStorageAdapter()
-  await adapter.deleteItem('externalRefs', id)
-}
-
-```
-
-### lib/services/facet-service.ts
-
-```typescript
-import { ProfileFacet, FacetType, FacetUpdate, UserProfile } from '@/types/profile'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-import { getExperienceInstances, getExperienceInstanceById, getExperienceSteps } from './experience-service'
-import { getInteractionsByInstance } from './interaction-service'
-import { runFlowSafe } from '@/lib/ai/safe-flow'
-import { extractFacetsFlow } from '@/lib/ai/flows/extract-facets'
-import { buildFacetContext } from '@/lib/ai/context/facet-context'
-
-export async function getFacetsForUser(userId: string): Promise<ProfileFacet[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<ProfileFacet>('profile_facets', { user_id: userId })
-}
-
-export async function upsertFacet(userId: string, update: FacetUpdate): Promise<ProfileFacet> {
-  const adapter = getStorageAdapter()
-  
-  // Try to find existing facet to update
-  const existingFacets = await adapter.query<ProfileFacet>('profile_facets', { 
-    user_id: userId,
-    facet_type: update.facet_type,
-    value: update.value
-  })
-
-  if (existingFacets.length > 0) {
-    const existing = existingFacets[0]
-    const updated: ProfileFacet = {
-      ...existing,
-      confidence: update.confidence,
-      evidence: update.evidence || existing.evidence,
-      source_snapshot_id: update.source_snapshot_id || existing.source_snapshot_id,
-      updated_at: new Date().toISOString()
-    }
-    return adapter.saveItem<ProfileFacet>('profile_facets', updated)
-  }
-
-  const newFacet: ProfileFacet = {
-    id: generateId(),
-    user_id: userId,
-    facet_type: update.facet_type,
-    value: update.value,
-    confidence: update.confidence,
-    evidence: update.evidence || null,
-    source_snapshot_id: update.source_snapshot_id || null,
-    updated_at: new Date().toISOString()
-  }
-
-  return adapter.saveItem<ProfileFacet>('profile_facets', newFacet)
-}
-
-export async function removeFacet(facetId: string): Promise<void> {
-  const adapter = getStorageAdapter()
-  return adapter.deleteItem('profile_facets', facetId)
-}
-
-export async function getFacetsByType(userId: string, facetType: FacetType): Promise<ProfileFacet[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<ProfileFacet>('profile_facets', { user_id: userId, facet_type: facetType })
-}
-
-export async function getTopFacets(userId: string, facetType: FacetType, limit: number): Promise<ProfileFacet[]> {
-  const facets = await getFacetsByType(userId, facetType)
-  return facets
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, limit)
-}
-
-export async function extractFacetsFromExperience(userId: string, instanceId: string): Promise<ProfileFacet[]> {
-  const interactions = await getInteractionsByInstance(instanceId)
-  const instance = await getExperienceInstanceById(instanceId)
-
-  if (!instance) return []
-
-  const extracted: ProfileFacet[] = []
-
-  // 1. answer_submitted -> interests
-  for (const interaction of interactions) {
-    if (interaction.event_type === 'answer_submitted') {
-      // Questionnaire sends { answers: { id: val } }, Reflection sends { reflections: { id: val } }
-      const answerMap = interaction.event_payload?.answers || interaction.event_payload?.reflections || {};
-      for (const answerVal of Object.values(answerMap)) {
-        const answer = answerVal as string;
-        if (typeof answer === 'string') {
-          const keywords = answer.split(/[,\s]+/).filter(w => w.length > 3);
-          for (const kw of keywords.slice(0, 3)) {
-            extracted.push(await upsertFacet(userId, {
-              facet_type: 'interest',
-              value: kw.toLowerCase(),
-              confidence: 0.6
-            }));
-          }
-        }
-      }
-    }
-  }
-
-  // 2. task_completed -> skills
-  const completedTasks = interactions.filter(i => i.event_type === 'task_completed')
-  // Explicitly fetch steps — don't rely on instance.steps being present
-  const steps = await getExperienceSteps(instanceId)
-  const stepsMap = Object.fromEntries(steps.map(s => [s.id, s]))
-
-  for (const interaction of completedTasks) {
-    if (interaction.step_id && stepsMap[interaction.step_id]) {
-      const stepType = stepsMap[interaction.step_id].step_type
-      extracted.push(await upsertFacet(userId, {
-        facet_type: 'skill',
-        value: `${stepType}-active`,
-        confidence: 0.5
-      }))
-    }
-  }
-
-  // 3. resolution.mode -> preferred_mode
-  if (instance.resolution?.mode) {
-    extracted.push(await upsertFacet(userId, {
-      facet_type: 'preferred_mode',
-      value: instance.resolution.mode,
-      confidence: 0.4
-    }))
-  }
-
-  return extracted
-}
-
-export async function buildUserProfile(userId: string): Promise<UserProfile> {
-  const facets = await getFacetsForUser(userId)
-  const experiences = await getExperienceInstances({ userId })
-  
-  // Get user info (mocking display name if users table is not easily accessible via adapter yet)
-  // But SOP-9 says go through services.
-  // I'll try to query users table directly via adapter as a fallback.
-  const adapter = getStorageAdapter()
-  let displayName = 'Studio User'

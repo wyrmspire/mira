@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getExperienceSteps, createExperienceStep, insertStepAfter } from '@/lib/services/experience-service'
 import { validateStepPayload } from '@/lib/validators/step-payload-validator'
+import { linkStepToKnowledge, getLinksForStep } from '@/lib/services/step-knowledge-link-service'
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,14 @@ export async function GET(
 
   try {
     const steps = await getExperienceSteps(id)
-    return NextResponse.json(steps)
+    
+    // Enrich with knowledge links
+    const enrichedSteps = await Promise.all(steps.map(async (step) => {
+      const links = await getLinksForStep(step.id);
+      return { ...step, knowledge_links: links };
+    }));
+
+    return NextResponse.json(enrichedSteps)
   } catch (error: any) {
     console.error(`Failed to fetch steps for experience ${id}:`, error)
     return NextResponse.json({ error: error.message || 'Failed to fetch steps' }, { status: 500 })
@@ -25,7 +33,7 @@ export async function POST(
 
   try {
     const body = await request.json()
-    const { title, payload, completion_rule, insertAfterStepId } = body
+    const { title, payload, completion_rule, insertAfterStepId, knowledge_unit_id } = body
     const stepType = body.step_type || body.type
 
     if (!stepType) {
@@ -66,6 +74,13 @@ export async function POST(
         payload: payload || {},
         completion_rule: completion_rule || null
       })
+    }
+
+    // 3. Handle knowledge linking if requested
+    if (knowledge_unit_id) {
+      await linkStepToKnowledge(step.id, knowledge_unit_id);
+      // Return with links attached
+      step = { ...step, knowledge_links: await getLinksForStep(step.id) };
     }
 
     return NextResponse.json(step, { status: 201 })

@@ -1,12 +1,12 @@
 # LearnIO Project Code Dump
-Generated: Fri, Mar 27, 2026  5:10:25 PM
+Generated: Fri, Mar 27, 2026 10:31:38 PM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 276
+- **Files selected:** 279
 
 ## Project Overview
 
@@ -185,6 +185,7 @@ components/shell/studio-header.tsx
 components/shell/studio-sidebar.tsx
 components/timeline/TimelineEventCard.tsx
 components/timeline/TimelineFilterBar.tsx
+content.md
 content/drill-principles.md
 content/no-limbo.md
 content/onboarding.md
@@ -196,6 +197,7 @@ docs/product-overview.md
 docs/state-model.md
 docs/ui-principles.md
 end.md
+enrichment.md
 gitr.sh
 gitrdif.sh
 gptinstructions.md
@@ -209,6 +211,7 @@ lib/ai/context/facet-context.ts
 lib/ai/context/suggestion-context.ts
 lib/ai/flows/compress-gpt-state.ts
 lib/ai/flows/extract-facets.ts
+lib/ai/flows/refine-knowledge-flow.ts
 lib/ai/flows/suggest-next-experience.ts
 lib/ai/flows/synthesize-experience.ts
 lib/ai/genkit.ts
@@ -3602,10 +3605,11 @@ export async function POST(request: NextRequest) {
 ```typescript
 import { NextRequest, NextResponse } from 'next/server'
 import { DEFAULT_USER_ID } from '@/lib/constants'
-import { createKnowledgeUnit } from '@/lib/services/knowledge-service'
+import { createKnowledgeUnit, runKnowledgeEnrichment } from '@/lib/services/knowledge-service'
 import { validateMiraKPayload } from '@/lib/validators/knowledge-validator'
 import { createExperienceInstance, createExperienceSteps } from '@/lib/services/experience-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
+import { generateId } from '@/lib/utils'
 
 /**
  * POST /api/webhook/mirak
@@ -3629,6 +3633,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = DEFAULT_USER_ID
+    const sessionId = data.session_id || generateId()
 
     // 1. Create Knowledge Units
     const createdUnits = await Promise.all(
@@ -3650,7 +3655,16 @@ export async function POST(request: NextRequest) {
       )
     )
 
-    // 2. Handle Experience Proposal if present
+    console.log(`[webhook/mirak] Created ${createdUnits.length} units for session: ${sessionId}`)
+
+    // 2. Trigger background enrichment after persist (Option C — never blocks webhook response)
+    for (const unit of createdUnits) {
+      runKnowledgeEnrichment(unit.id, userId).catch((err: any) =>
+        console.error('[webhook/mirak] Enrichment failed for unit', unit.id, err)
+      );
+    }
+
+    // 3. Handle Experience Proposal if present
     let experienceCreated = false
     if (data.experience_proposal) {
       const { steps, resolution, ...instanceData } = data.experience_proposal
@@ -3690,7 +3704,7 @@ export async function POST(request: NextRequest) {
       experienceCreated = true
     }
 
-    // 3. Create Timeline Event
+    // 4. Create Timeline Event
     await createInboxEvent({
       type: 'knowledge_ready',
       title: `New knowledge: ${data.topic}`,
@@ -3700,6 +3714,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       created: createdUnits.length,
+      units: createdUnits.map(u => ({ id: u.id, title: u.title, unit_type: u.unit_type })),
+      session_id: sessionId,
       experience_created: experienceCreated,
       topic: data.topic,
       domain: data.domain,
@@ -5245,9 +5261,33 @@ export default function KnowledgeClient({
 }: KnowledgeClientProps) {
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
 
-  const filteredUnits = useMemo(() => {
+  const unitGroups = useMemo(() => {
     if (!selectedDomain) return [];
-    return units.filter(u => u.domain === selectedDomain);
+    
+    const domainUnits = units
+      .filter(u => u.domain === selectedDomain)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    const groups: { date: string; units: KnowledgeUnit[]; isRun: boolean }[] = [];
+    
+    domainUnits.forEach(unit => {
+      const unitTime = new Date(unit.created_at).getTime();
+      const lastGroup = groups[groups.length - 1];
+      
+      // If within 5 min window
+      if (lastGroup && Math.abs(new Date(lastGroup.date).getTime() - unitTime) < 5 * 60 * 1000) {
+        lastGroup.units.push(unit);
+        lastGroup.isRun = true;
+      } else {
+        groups.push({
+          date: unit.created_at,
+          units: [unit],
+          isRun: false
+        });
+      }
+    });
+    
+    return groups;
   }, [units, selectedDomain]);
 
   if (units.length === 0) {
@@ -5331,17 +5371,30 @@ export default function KnowledgeClient({
           
           <header className="mb-12">
             <h2 className="text-3xl font-bold text-[#f1f5f9] capitalize mb-2">{selectedDomain.replace(/-/g, ' ')}</h2>
-            <p className="text-[#4a4a6a]">{filteredUnits.length} Units of knowledge in this domain.</p>
+            <p className="text-[#4a4a6a]">{units.filter(u => u.domain === selectedDomain).length} Units of knowledge in this domain.</p>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredUnits.map(unit => (
-              <KnowledgeUnitCard key={unit.id} unit={unit} />
+          <div className="space-y-12">
+            {unitGroups.map((group, idx) => (
+              <div key={idx} className="space-y-6">
+                {group.isRun && (
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#4a4a6a] flex items-center">
+                    <span className="w-8 h-px bg-[#1e1e2e] mr-4"></span>
+                    Research Run &mdash; {new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </h3>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {group.units.map(unit => (
+                    <KnowledgeUnitCard key={unit.id} unit={unit} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
     </div>
+
   );
 }
 
@@ -7945,56 +7998,3 @@ export default function ExperienceOverview({
             <span className="text-[10px] font-bold text-[#475569] uppercase tracking-widest">Steps</span>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-mono text-white">{completedCount}/{totalSteps}</span>
-              <span className="text-[#475569] mb-1">tasks done</span>
-            </div>
-          </div>
-          <div className="p-6 rounded-2xl bg-[#0d0d14] border border-[#1e1e2e] space-y-1 hover:border-[#33334d] transition-all">
-            <span className="text-[10px] font-bold text-[#475569] uppercase tracking-widest">Estimate</span>
-            <div className="flex items-end gap-2">
-              <span className="text-3xl font-mono text-emerald-400">~2h</span>
-              <span className="text-[#475569] mb-1">remaining</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        <h3 className="text-xl font-bold text-[#f1f5f9] flex items-center gap-3">
-          {COPY.workspace.overview}
-          <div className="flex-grow h-px bg-[#1e1e2e]" />
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {steps.map((step, idx) => {
-            const status = stepStatuses[step.id] || 'available';
-            const isLocked = status === 'locked';
-            const isCompleted = status === 'completed';
-
-            return (
-              <button
-                key={step.id}
-                onClick={() => !isLocked && onStepSelect(step.id)}
-                disabled={isLocked}
-                className={`flex items-center gap-4 p-5 rounded-2xl border transition-all text-left group ${
-                  isLocked 
-                    ? 'bg-[#0a0a0f] border-[#1e1e2e] opacity-50 cursor-not-allowed'
-                    : 'bg-[#12121a] border-[#1e1e2e] hover:border-indigo-500/50 hover:bg-[#161621] shadow-sm hover:shadow-indigo-500/5'
-                }`}
-              >
-                <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-mono text-base font-bold ${
-                  isCompleted 
-                    ? 'bg-emerald-500/10 text-emerald-400' 
-                    : isLocked
-                    ? 'bg-slate-500/5 text-slate-500'
-                    : 'bg-indigo-500/10 text-indigo-400'
-                }`}>
-                  {isCompleted ? (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    (idx + 1).toString().padStart(2, '0')
-                  )}
-                </div>
-                
-                <div className="flex-grow">
