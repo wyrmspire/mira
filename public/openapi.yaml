@@ -4,7 +4,7 @@ info:
   description: Gateway for the Mira experience engine. All GPT operations go through 5 endpoints.
   version: 2.0.0
 servers:
-  - url: /
+  - url: https://mira-maddyup.vercel.app/  
     description: Mira Studio Backend
 
 paths:
@@ -13,6 +13,14 @@ paths:
       operationId: getGPTState
       summary: Get user state on re-entry
       description: Returns compressed state with active experiences, re-entry prompts, friction signals, knowledge summary, and curriculum progress. Call this first on every conversation.
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "a0000000-0000-0000-0000-000000000001"
+          description: User ID. Defaults to the dev user.
       responses:
         '200':
           description: Success
@@ -20,6 +28,48 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  latestExperiences:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  activeReentryPrompts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  frictionSignals:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  suggestedNext:
+                    type: array
+                    items:
+                      type: string
+                  proposedExperiences:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  knowledgeSummary:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  curriculum:
+                    type: object
+                    properties:
+                      active_outlines:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      recent_completions:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
 
   /api/gpt/plan:
     post:
@@ -39,6 +89,7 @@ paths:
                   enum: [create_outline, dispatch_research, assess_gaps]
                 payload:
                   type: object
+                  additionalProperties: true
       responses:
         '200':
           description: Success
@@ -65,6 +116,7 @@ paths:
                   enum: [experience, ephemeral, idea, step]
                 payload:
                   type: object
+                  additionalProperties: true
       responses:
         '201':
           description: Created
@@ -89,6 +141,7 @@ paths:
                   enum: [update_step, reorder_steps, delete_step, transition, link_knowledge]
                 payload:
                   type: object
+                  additionalProperties: true
       responses:
         '200':
           description: Updated
@@ -118,5 +171,22 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  capability:
+                    type: string
+                  endpoint:
+                    type: string
+                  description:
+                    type: string
+                  schema:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  example:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  when_to_use:
+                    type: string
         '400':
           description: Unknown capability (returns list of valid capabilities)

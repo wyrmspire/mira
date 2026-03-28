@@ -1,0 +1,1308 @@
+openapi: 3.1.0
+info:
+  title: Mira Studio API
+  description: API for the Mira experience engine. Create experiences, fetch user
+    state, record ideas.
+  version: 1.0.0
+servers:
+- url: https://mira-maddyup.vercel.app/ 
+  description: Current hosted domain
+paths:
+  /api/knowledge:
+    get:
+      operationId: listKnowledgeUnits
+      summary: List all knowledge units
+      description: |
+        Returns all high-density research units (foundations, playbooks) created by MiraK.
+        Use this to browse the current knowledge base before proposing new experiences or research.
+      parameters:
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by broad domain (e.g., "SaaS Strategy")
+        - name: unit_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [foundation, playbook, deep_dive, example]
+          description: Filter by unit type.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/KnowledgeUnit'
+                  total:
+                    type: integer
+  /api/knowledge/{id}:
+    get:
+      operationId: getKnowledgeUnit
+      summary: Get a single knowledge unit by ID
+      description: |
+        Returns the full, dense content of a specific research unit.
+        Use this to read the reference material produced by MiraK.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unit ID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeUnit'
+        '404':
+          description: Unit not found
+  /api/gpt/state:
+    get:
+      operationId: getGPTState
+      summary: Get the user's current experience state for re-entry
+      description: 'Returns a compressed state packet with active experiences, re-entry
+        prompts, friction signals, and suggested next steps. Call this at the start
+        of every conversation to understand what the user has been doing.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        description: User ID. Defaults to the dev user.
+      responses:
+        '200':
+          description: GPT state packet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GPTStatePacket'
+        '500':
+          description: Server error
+  /api/experiences/inject:
+    post:
+      operationId: injectEphemeral
+      summary: Create an ephemeral experience (instant, no review)
+      description: 'Creates an ephemeral experience that renders instantly in the
+        user''s app. Skips the proposal/review pipeline. Use for micro-challenges,
+        quick prompts, trend reactions, or any experience that should appear immediately.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InjectEphemeralRequest'
+      responses:
+        '201':
+          description: Experience created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/experiences:
+    get:
+      operationId: listExperiences
+      summary: List experience instances
+      description: 'Returns all experience instances, optionally filtered by status
+        or type. Use this to check what experiences exist before creating new ones.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - proposed
+          - drafted
+          - ready_for_review
+          - approved
+          - published
+          - active
+          - completed
+          - archived
+          - superseded
+          - injected
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - persistent
+          - ephemeral
+      responses:
+        '200':
+          description: Array of experience instances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExperienceInstance'
+        '500':
+          description: Server error
+    post:
+      operationId: createPersistentExperience
+      summary: Create a persistent experience (goes through proposal pipeline)
+      description: 'Creates a persistent experience in ''proposed'' status. The user
+        will see it in their library and can accept/start it. Use for substantial
+        experiences that are worth returning to. Always include steps and a reentry
+        contract.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersistentRequest'
+      responses:
+        '201':
+          description: Experience created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/ideas:
+    get:
+      operationId: listIdeas
+      summary: List captured ideas
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Array of ideas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Idea'
+    post:
+      operationId: captureIdea
+      summary: Capture a new idea from conversation
+      description: 'Saves a raw idea from the conversation. Ideas can later be evolved
+        into full experiences through the drill pipeline or direct proposal.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureIdeaRequest'
+      responses:
+        '201':
+          description: Idea captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Idea'
+  /api/synthesis:
+    get:
+      operationId: getLatestSynthesis
+      summary: Get the latest synthesis snapshot
+      description: 'Returns the most recent synthesis snapshot for the user. This
+        is a compressed summary of recent experience outcomes, signals, and next candidates.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+      responses:
+        '200':
+          description: Synthesis snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesisSnapshot'
+        '404':
+          description: No snapshot found
+        '500':
+          description: Server error
+  /api/interactions:
+    post:
+      operationId: recordInteraction
+      summary: Record a user interaction event
+      description: "Records telemetry about what the user did within an experience.\
+        \ Use sparingly \u2014 the frontend handles most interaction recording. This\
+        \ is available if you need to record a GPT-side event.\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordInteractionRequest'
+      responses:
+        '201':
+          description: Interaction recorded
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/experiences/{id}:
+    get:
+      operationId: getExperienceById
+      summary: Get a single experience instance with its steps
+      description: 'Returns a specific experience instance by ID, including all of
+        its steps. Use this to inspect step content, check completion state, or load
+        context before re-entry.
+
+        '
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      responses:
+        '200':
+          description: Experience instance with steps
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ExperienceInstance'
+                - type: object
+                  properties:
+                    steps:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ExperienceStepRecord'
+        '404':
+          description: Experience not found
+        '500':
+          description: Server error
+  /api/experiences/{id}/status:
+    patch:
+      operationId: transitionExperienceStatus
+      summary: Transition an experience to a new lifecycle state
+      description: "Moves an experience through its lifecycle state machine. Valid\
+        \ transitions: - proposed \u2192 approve \u2192 publish \u2192 activate (or\
+        \ use approve+publish+activate shortcut) - active \u2192 complete - completed\
+        \ \u2192 archive - injected \u2192 start (ephemeral) The action must be a\
+        \ valid transition from the current status.\n"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - action
+              properties:
+                action:
+                  type: string
+                  enum:
+                  - draft
+                  - submit_for_review
+                  - request_changes
+                  - approve
+                  - publish
+                  - activate
+                  - complete
+                  - archive
+                  - supersede
+                  - start
+                  description: The transition action to apply
+      responses:
+        '200':
+          description: Updated experience instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Action is required
+        '422':
+          description: Invalid transition or instance not found
+        '500':
+          description: Server error
+  /api/webhook/gpt:
+    post:
+      operationId: sendIdea
+      summary: Send an idea via the GPT webhook (legacy envelope format)
+      description: "Captures a new idea using the webhook envelope format with source/event/data\
+        \ fields. The idea will appear in the Send page. This is an alternative to\
+        \ the direct POST /api/ideas endpoint \u2014 use whichever format is more\
+        \ convenient.\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - source
+              - event
+              - data
+              properties:
+                source:
+                  type: string
+                  enum:
+                  - gpt
+                  description: Always "gpt"
+                event:
+                  type: string
+                  enum:
+                  - idea_captured
+                  description: Always "idea_captured"
+                data:
+                  type: object
+                  required:
+                  - title
+                  - rawPrompt
+                  - gptSummary
+                  properties:
+                    title:
+                      type: string
+                      description: Short idea title (3-8 words)
+                    rawPrompt:
+                      type: string
+                      description: The user's original words
+                    gptSummary:
+                      type: string
+                      description: Your structured 2-4 sentence summary
+                    vibe:
+                      type: string
+                      description: "Energy/aesthetic \u2014 e.g. 'playful', 'ambitious',\
+                        \ 'urgent'"
+                    audience:
+                      type: string
+                      description: Who this is for
+                    intent:
+                      type: string
+                      description: What the user wants to achieve
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp
+      responses:
+        '201':
+          description: Idea captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Idea'
+                  message:
+                    type: string
+        '400':
+          description: Invalid payload
+  /api/experiences/{id}/chain:
+    get:
+      operationId: getExperienceChain
+      summary: Get full chain context for an experience
+      description: Returns upstream and downstream linked experiences in the graph.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      responses:
+        '200':
+          description: Experience chain context
+    post:
+      operationId: linkExperiences
+      summary: Link this experience to another
+      description: Creates an edge (chain, loop, branch, suggestion) defining relationship.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - targetId
+              - edgeType
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+                edgeType:
+                  type: string
+                  enum:
+                  - chain
+                  - suggestion
+                  - loop
+                  - branch
+      responses:
+        '200':
+          description: Updated source experience
+  /api/experiences/{id}/steps:
+    get:
+      operationId: getExperienceSteps
+      summary: Get all steps for an experience
+      description: Returns the ordered sequence of steps for this experience.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Array of steps
+    post:
+      operationId: addExperienceStep
+      summary: Add a new step to an existing experience
+      description: Appends a new step dynamically to the experience instance.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - type
+              - title
+              - payload
+              properties:
+                type:
+                  type: string
+                title:
+                  type: string
+                payload:
+                  type: object
+                  additionalProperties: true
+                completion_rule:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Created step
+  /api/experiences/{id}/steps/{stepId}:
+    get:
+      operationId: getExperienceStep
+      summary: Get a single step by ID
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Single step record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceStepRecord'
+        '404':
+          description: Step not found
+    patch:
+      operationId: updateExperienceStep
+      summary: Update a step's title, payload, or scheduling fields
+      description: 'Use this for multi-pass enrichment — update step content after
+        initial creation. Can update title, payload, completion_rule, scheduled_date,
+        due_date, and estimated_minutes.
+
+        '
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                payload:
+                  type: object
+                  additionalProperties: true
+                completion_rule:
+                  type: string
+                  nullable: true
+                scheduled_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Suggested date to work on this step
+                due_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Deadline for step completion
+                estimated_minutes:
+                  type: integer
+                  nullable: true
+                  description: Estimated time in minutes
+      responses:
+        '200':
+          description: Updated step
+        '404':
+          description: Step not found
+    delete:
+      operationId: deleteExperienceStep
+      summary: Remove a step from an experience
+      description: Removes a step and re-indexes remaining step_order values.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Step deleted
+        '404':
+          description: Step not found
+  /api/experiences/{id}/steps/reorder:
+    post:
+      operationId: reorderExperienceSteps
+      summary: Reorder steps within an experience
+      description: Provide the full ordered array of step IDs. Steps will be re-indexed
+        to match the new order.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - stepIds
+              properties:
+                stepIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Ordered array of step IDs defining the new sequence
+      responses:
+        '200':
+          description: Steps reordered
+        '400':
+          description: Invalid step IDs
+  /api/experiences/{id}/steps/progress:
+    get:
+      operationId: getExperienceProgress
+      summary: Get progress summary for an experience
+      description: Returns completion percentage, step counts by status, and estimated
+        remaining time.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Progress summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSteps:
+                    type: integer
+                  completedSteps:
+                    type: integer
+                  skippedSteps:
+                    type: integer
+                  completionPercentage:
+                    type: number
+                  estimatedRemainingMinutes:
+                    type: integer
+                    nullable: true
+  /api/drafts:
+    get:
+      operationId: getDraft
+      summary: Get a saved draft for a specific step
+      description: 'Retrieves the most recent draft artifact for a step. Drafts auto-save
+        as the user types and persist across sessions.
+
+        '
+      parameters:
+      - name: instanceId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Draft data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draft:
+                    type: object
+                    nullable: true
+                    description: The saved draft payload, or null if no draft exists
+    post:
+      operationId: saveDraft
+      summary: Save or update a draft for a step
+      description: Upserts a draft artifact. Use for auto-save during user input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - instanceId
+              - stepId
+              - data
+              properties:
+                instanceId:
+                  type: string
+                  format: uuid
+                stepId:
+                  type: string
+                  format: uuid
+                data:
+                  type: object
+                  additionalProperties: true
+                  description: The draft content to save
+      responses:
+        '200':
+          description: Draft saved
+  /api/experiences/{id}/suggestions:
+    get:
+      operationId: getExperienceSuggestions
+      summary: Get suggested next experiences
+      description: Returns templated suggestions based on graph mappings and completions.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Array of suggestions
+components:
+  schemas:
+    Resolution:
+      type: object
+      required:
+      - depth
+      - mode
+      - timeScope
+      - intensity
+      properties:
+        depth:
+          type: string
+          enum:
+          - light
+          - medium
+          - heavy
+          description: light = minimal chrome, medium = progress bar + title, heavy
+            = full header with goal
+        mode:
+          type: string
+          enum:
+          - illuminate
+          - practice
+          - challenge
+          - build
+          - reflect
+          description: illuminate = learn, practice = do, challenge = push, build
+            = create, reflect = think
+        timeScope:
+          type: string
+          enum:
+          - immediate
+          - session
+          - multi_day
+          - ongoing
+          description: How long this experience is expected to take
+        intensity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          description: How demanding the experience is
+    ReentryContract:
+      type: object
+      required:
+      - trigger
+      - prompt
+      - contextScope
+      properties:
+        trigger:
+          type: string
+          enum:
+          - time
+          - completion
+          - inactivity
+          - manual
+          description: When the re-entry should fire
+        prompt:
+          type: string
+          description: What you (GPT) should say or propose when re-entering
+        contextScope:
+          type: string
+          enum:
+          - minimal
+          - full
+          - focused
+          description: How much context to load for re-entry
+    ExperienceStep:
+      type: object
+      required:
+      - type
+      - title
+      - payload
+      properties:
+        type:
+          type: string
+          enum:
+          - questionnaire
+          - lesson
+          - challenge
+          - plan_builder
+          - reflection
+          - essay_tasks
+          description: The renderer type for this step
+        title:
+          type: string
+          description: Step title shown to the user
+        payload:
+          type: object
+          additionalProperties: true
+          description: Step-specific content. Format depends on type.
+        completion_rule:
+          type: string
+          nullable: true
+          description: Optional rule for when this step counts as complete
+    ExperienceStepRecord:
+      type: object
+      description: A saved experience step as stored in the database
+      properties:
+        id:
+          type: string
+          format: uuid
+        instance_id:
+          type: string
+          format: uuid
+        step_order:
+          type: integer
+          description: 0-indexed position of this step in the experience
+        step_type:
+          type: string
+          enum:
+          - questionnaire
+          - lesson
+          - challenge
+          - plan_builder
+          - reflection
+          - essay_tasks
+        title:
+          type: string
+        payload:
+          type: object
+        completion_rule:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - completed
+          - skipped
+          description: Step completion status (default pending)
+        scheduled_date:
+          type: string
+          format: date
+          nullable: true
+          description: Suggested date to work on this step
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Deadline for step completion
+        estimated_minutes:
+          type: integer
+          nullable: true
+          description: Estimated time to complete in minutes
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the step was completed
+    InjectEphemeralRequest:
+      type: object
+      required:
+      - templateId
+      - userId
+      - resolution
+      - steps
+      properties:
+        templateId:
+          type: string
+          description: Template ID (see template list in instructions)
+        userId:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        title:
+          type: string
+          description: Experience title
+        goal:
+          type: string
+          description: What this experience achieves
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceStep'
+          minItems: 1
+    CreatePersistentRequest:
+      type: object
+      required:
+      - templateId
+      - userId
+      - resolution
+      - steps
+      properties:
+        templateId:
+          type: string
+          description: Template ID (see template list in instructions)
+        userId:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        title:
+          type: string
+          description: Experience title
+        goal:
+          type: string
+          description: What this experience achieves
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        reentry:
+          $ref: '#/components/schemas/ReentryContract'
+        previousExperienceId:
+          type: string
+          nullable: true
+          description: ID of the experience this follows in a chain
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceStep'
+          minItems: 1
+    ExperienceInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        template_id:
+          type: string
+        title:
+          type: string
+        goal:
+          type: string
+        instance_type:
+          type: string
+          enum:
+          - persistent
+          - ephemeral
+        status:
+          type: string
+          enum:
+          - proposed
+          - drafted
+          - ready_for_review
+          - approved
+          - published
+          - active
+          - completed
+          - archived
+          - superseded
+          - injected
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        reentry:
+          $ref: '#/components/schemas/ReentryContract'
+          nullable: true
+        previous_experience_id:
+          type: string
+          nullable: true
+        next_suggested_ids:
+          type: array
+          items:
+            type: string
+        friction_level:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+    GPTStatePacket:
+      type: object
+      properties:
+        latestExperiences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceInstance'
+          description: Recent experience instances
+        activeReentryPrompts:
+          type: array
+          items:
+            type: object
+            properties:
+              instanceId:
+                type: string
+              instanceTitle:
+                type: string
+              prompt:
+                type: string
+              trigger:
+                type: string
+              contextScope:
+                type: string
+          description: Active re-entry prompts from completed or idle experiences
+        frictionSignals:
+          type: array
+          items:
+            type: object
+            properties:
+              instanceId:
+                type: string
+              level:
+                type: string
+                enum:
+                - low
+                - medium
+                - high
+          description: Friction levels observed in recent experiences
+        suggestedNext:
+          type: array
+          items:
+            type: string
+          description: Suggested next experience IDs
+        synthesisSnapshot:
+          $ref: '#/components/schemas/SynthesisSnapshot'
+          nullable: true
+        proposedExperiences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceInstance'
+          description: Experiences in proposed status awaiting user acceptance
+        compressedState:
+          type: object
+          nullable: true
+          properties:
+            narrative:
+              type: string
+              description: A concise narrative summary of the user's current situation and progress.
+            prioritySignals:
+              type: array
+              items:
+                type: string
+              description: The top 3-5 signals the GPT should pay attention to.
+            suggestedOpeningTopic:
+              type: string
+              description: A recommended opening topic or question for the GPT to use when re-entering the conversation.
+          description: AI-generated narrative compression of the user's state.
+    SynthesisSnapshot:
+      type: object
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        source_type:
+          type: string
+        source_id:
+          type: string
+        summary:
+          type: string
+        key_signals:
+          type: object
+        next_candidates:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+    Idea:
+      type: object
+      description: 'An idea captured from conversation. Note: all fields use snake_case.'
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        raw_prompt:
+          type: string
+          description: The raw text from the conversation that triggered this idea
+        gpt_summary:
+          type: string
+          description: GPT's structured summary of the idea
+        vibe:
+          type: string
+          description: The energy or feel of the idea
+        audience:
+          type: string
+          description: Who this idea is for
+        intent:
+          type: string
+          description: What the user wants to achieve
+        status:
+          type: string
+          enum:
+          - captured
+          - drilling
+          - arena
+          - icebox
+          - shipped
+          - killed
+        created_at:
+          type: string
+          format: date-time
+    CaptureIdeaRequest:
+      type: object
+      description: Accepts both camelCase and snake_case field names. The normalizer
+        handles both.
+      required:
+      - title
+      - rawPrompt
+      - gptSummary
+      properties:
+        title:
+          type: string
+          description: Short idea title
+        rawPrompt:
+          type: string
+          description: The raw text from the conversation that triggered this idea.
+            Quote or paraphrase what the user said. (Also accepts raw_prompt)
+        gptSummary:
+          type: string
+          description: "Your structured summary of the idea \u2014 what it is, why\
+            \ it matters, what it could become. (Also accepts gpt_summary)"
+        vibe:
+          type: string
+          description: "The energy or feel \u2014 e.g. 'ambitious', 'playful', 'urgent',\
+            \ 'exploratory'"
+        audience:
+          type: string
+          description: "Who this idea is for \u2014 e.g. 'self', 'team', 'public'"
+        intent:
+          type: string
+          description: "What the user wants from this \u2014 e.g. 'explore', 'build',\
+            \ 'learn', 'solve'"
+    RecordInteractionRequest:
+      type: object
+      required:
+      - instanceId
+      - eventType
+      properties:
+        instanceId:
+          type: string
+          description: Experience instance ID
+        stepId:
+          type: string
+          nullable: true
+          description: Step ID if the event is step-specific
+        eventType:
+          type: string
+          enum:
+          - step_viewed
+          - answer_submitted
+          - task_completed
+          - step_skipped
+          - time_on_step
+          - experience_started
+          - experience_completed
+          - draft_saved
+        eventPayload:
+          type: object
+          description: Event-specific data
+    KnowledgeUnit:
+      type: object
+      required:
+        - id
+        - topic
+        - domain
+        - title
+        - thesis
+        - content
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        domain:
+          type: string
+        unit_type:
+          type: string
+          enum: [foundation, playbook, deep_dive, example]
+        title:
+          type: string
+        thesis:
+          type: string
+        content:
+          type: string
+          description: The full, dense, high-density research content.
+        key_ideas:
+          type: array
+          items:
+            type: string
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeCitation'
+        retrieval_questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrievalQuestion'
+        mastery_status:
+          type: string
+          enum: [unseen, read, practiced, confident]
+        created_at:
+          type: string
+          format: date-time
+    KnowledgeCitation:
+      type: object
+      properties:
+        url:
+          type: string
+        claim:
+          type: string
+        confidence:
+          type: number
+    RetrievalQuestion:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
