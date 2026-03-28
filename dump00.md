@@ -1,12 +1,12 @@
 # LearnIO Project Code Dump
-Generated: Thu, Mar 26, 2026 11:59:40 PM
+Generated: Fri, Mar 27, 2026  5:10:25 PM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 260
+- **Files selected:** 276
 
 ## Project Overview
 
@@ -46,6 +46,7 @@ app/api/actions/move-to-icebox/route.ts
 app/api/actions/promote-to-arena/route.ts
 app/api/dev/diagnostic/route.ts
 app/api/dev/test-experience/route.ts
+app/api/dev/test-knowledge/route.ts
 app/api/drafts/[stepId]/route.ts
 app/api/drafts/route.ts
 app/api/drill/route.ts
@@ -71,12 +72,16 @@ app/api/ideas/materialize/route.ts
 app/api/ideas/route.ts
 app/api/inbox/route.ts
 app/api/interactions/route.ts
+app/api/knowledge/[id]/progress/route.ts
+app/api/knowledge/[id]/route.ts
+app/api/knowledge/route.ts
 app/api/projects/route.ts
 app/api/prs/route.ts
 app/api/synthesis/route.ts
 app/api/tasks/route.ts
 app/api/webhook/github/route.ts
 app/api/webhook/gpt/route.ts
+app/api/webhook/mirak/route.ts
 app/api/webhook/vercel/route.ts
 app/arena/[projectId]/page.tsx
 app/arena/page.tsx
@@ -90,6 +95,9 @@ app/globals.css
 app/icebox/page.tsx
 app/inbox/page.tsx
 app/killed/page.tsx
+app/knowledge/[unitId]/page.tsx
+app/knowledge/KnowledgeClient.tsx
+app/knowledge/page.tsx
 app/layout.tsx
 app/library/LibraryClient.tsx
 app/library/page.tsx
@@ -139,6 +147,7 @@ components/experience/ExperienceCard.tsx
 components/experience/ExperienceOverview.tsx
 components/experience/ExperienceRenderer.tsx
 components/experience/HomeExperienceAction.tsx
+components/experience/KnowledgeCompanion.tsx
 components/experience/StepNavigator.tsx
 components/experience/steps/ChallengeStep.tsx
 components/experience/steps/EssayTasksStep.tsx
@@ -152,6 +161,10 @@ components/icebox/triage-actions.tsx
 components/inbox/inbox-event-card.tsx
 components/inbox/inbox-feed.tsx
 components/inbox/inbox-filter-tabs.tsx
+components/knowledge/DomainCard.tsx
+components/knowledge/KnowledgeUnitCard.tsx
+components/knowledge/KnowledgeUnitView.tsx
+components/knowledge/MasteryBadge.tsx
 components/profile/DirectionSummary.tsx
 components/profile/FacetCard.tsx
 components/review/build-status-chip.tsx
@@ -243,6 +256,7 @@ lib/services/graph-service.ts
 lib/services/ideas-service.ts
 lib/services/inbox-service.ts
 lib/services/interaction-service.ts
+lib/services/knowledge-service.ts
 lib/services/materialization-service.ts
 lib/services/projects-service.ts
 lib/services/prs-service.ts
@@ -260,10 +274,12 @@ lib/supabase/migrations/002_evolved_entities.sql
 lib/supabase/migrations/003_experience_tables.sql
 lib/supabase/migrations/004_step_status_and_scheduling.sql
 lib/supabase/migrations/005_facet_evidence.sql
+lib/supabase/migrations/006_knowledge_units.sql
 lib/utils.ts
 lib/validators/drill-validator.ts
 lib/validators/experience-validator.ts
 lib/validators/idea-validator.ts
+lib/validators/knowledge-validator.ts
 lib/validators/project-validator.ts
 lib/validators/step-payload-validator.ts
 lib/validators/webhook-validator.ts
@@ -284,7 +300,11 @@ roadmap.md
 schfix.md
 start.sh
 tailwind.config.ts
+tsc_final_output.txt
 tsc_output.txt
+tsc_output_2.txt
+tsc_output_3.txt
+tsc_output_4.txt
 tsconfig.json
 tsconfig.tsbuildinfo
 types/agent-run.ts
@@ -297,6 +317,7 @@ types/graph.ts
 types/idea.ts
 types/inbox.ts
 types/interaction.ts
+types/knowledge.ts
 types/pr.ts
 types/profile.ts
 types/project.ts
@@ -348,6 +369,7 @@ import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'
 import { getActiveExperiences, getProposedExperiences } from '@/lib/services/experience-service'
+import { getKnowledgeDomains } from '@/lib/services/knowledge-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
@@ -391,6 +413,7 @@ export default async function HomePage() {
 
   const proposedExperiences = await getProposedExperiences(DEFAULT_USER_ID)
   const activeExperiences = await getActiveExperiences(DEFAULT_USER_ID)
+  const knowledgeSummary = await getKnowledgeDomains(DEFAULT_USER_ID)
 
   const needsAttentionProjects = arenaProjects.filter(
     (p) => p.health === 'red' || p.health === 'yellow'
@@ -447,6 +470,39 @@ export default async function HomePage() {
                   </div>
                   <HomeExperienceAction id={exp.id} />
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section 1.5: Knowledge Summary ── */}
+        {knowledgeSummary.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                {COPY.knowledge.heading}
+              </h2>
+              <Link href={ROUTES.knowledge} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+                {COPY.knowledge.actions.viewAll}
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {knowledgeSummary.slice(0, 2).map((d) => (
+                <Link 
+                  key={d.domain}
+                  href={`${ROUTES.knowledge}?domain=${encodeURIComponent(d.domain)}`}
+                  className="flex flex-col gap-2 p-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-indigo-500/30 transition-colors group"
+                >
+                  <span className="text-xs font-bold text-[#e2e8f0] truncate group-hover:text-indigo-400 transition-colors uppercase tracking-tight">
+                    {d.domain}
+                  </span>
+                  <div className="flex items-center justify-between text-[10px] text-[#4a4a6a]">
+                    <span>{d.count} units</span>
+                    {d.count > 0 && (
+                      <span className="text-indigo-500/70">{Math.round((d.readCount / d.count) * 100)}% read</span>
+                    )}
+                  </div>
+                </Link>
               ))}
             </div>
           </section>
@@ -1451,6 +1507,120 @@ export async function POST() {
 
 ```
 
+### app/api/dev/test-knowledge/route.ts
+
+```typescript
+import { NextResponse } from 'next/server'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { createKnowledgeUnit } from '@/lib/services/knowledge-service'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * POST /api/dev/test-knowledge
+ * Dev-only: Creates sample knowledge units for testing.
+ */
+export async function POST() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available in production' }, { status: 404 })
+  }
+
+  const userId = DEFAULT_USER_ID
+
+  try {
+    const unitsData = [
+      {
+        topic: 'Differentiation Strategy',
+        domain: 'positioning',
+        unit_type: 'foundation',
+        title: 'The Core of Differentiation',
+        thesis: 'Positioning is the act of designing the company\u2019s offering and image to occupy a distinctive place in the mind of the target market.',
+        content: 'Long form content explaining differentiation strategy...',
+        key_ideas: ['Identify unique value', 'Understand competitor positions', 'Stake a claim early'],
+        common_mistake: 'Trying to be everything for everyone.',
+        action_prompt: 'Define your product in exactly one sentence.',
+        retrieval_questions: [
+          { question: 'What is positioning?', answer: 'Designing company image for a distinctive place in target mind.', difficulty: 'easy' }
+        ],
+        citations: [{ url: 'https://example.com', claim: 'Positioning defined', confidence: 0.95 }],
+        subtopic_seeds: ['Value Proposition', 'Market Segmentation']
+      },
+      {
+        topic: 'Customer Interviews',
+        domain: 'positioning',
+        unit_type: 'playbook',
+        title: 'Running High-Signal Interviews',
+        thesis: 'The quality of your positioning is limited by the quality of your customer data.',
+        content: 'Detailed guide on running interviews...',
+        key_ideas: ['Focus on behavior, not opinion', 'Ask "how" and "why"', 'Record everything'],
+        common_mistake: 'Leading the customer to your desired answer.',
+        action_prompt: 'Review your last 3 interview transcripts for leading questions.',
+        retrieval_questions: [
+          { question: 'Why focus on behavior?', answer: 'People are bad at predicting future opinions but good at remembering past behavior.', difficulty: 'medium' }
+        ],
+        citations: [],
+        subtopic_seeds: ['Interview Frameworks']
+      },
+      {
+        topic: 'Operational Excellence',
+        domain: 'business-systems',
+        unit_type: 'deep_dive',
+        title: 'The Kaizen Approach to Ops',
+        thesis: 'Small, incremental changes lead to massive long-term efficiency gains.',
+        content: 'Deep dive into Kaizen principles...',
+        key_ideas: ['Standardize then improve', 'Eliminate 7 types of waste', 'Empower everyone to improve'],
+        common_mistake: 'Assuming only managers can fix systems.',
+        action_prompt: 'Automate one recurring manual task this week.',
+        retrieval_questions: [
+          { question: 'What is the first step of Kaizen?', answer: 'Standardization.', difficulty: 'hard' }
+        ],
+        citations: [],
+        subtopic_seeds: ['Lean Manufacturing', 'Process Mapping']
+      },
+      {
+        topic: 'Sales Automations',
+        domain: 'business-systems',
+        unit_type: 'example',
+        title: 'CRM to Slack Sync Example',
+        thesis: 'Real-time visibility into deal changes increases close rates.',
+        content: 'Step-by-step example of CRM-Slack integration...',
+        key_ideas: ['Trigger on deal status change', 'Format for scannability', 'Include direct CRM link'],
+        common_mistake: 'Spamming Slack with too many notifications.',
+        action_prompt: 'Set up a notification for deals above $10k.',
+        retrieval_questions: [],
+        citations: [],
+        subtopic_seeds: ['API Integrations']
+      }
+    ]
+
+    const created = await Promise.all(
+      unitsData.map((data) =>
+        createKnowledgeUnit({
+          ...data,
+          user_id: userId,
+          mastery_status: 'unseen',
+          linked_experience_ids: [],
+          source_experience_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+      )
+    )
+
+    return NextResponse.json({
+      message: 'Test knowledge units created successfully',
+      created: created.length,
+      domains: Array.from(new Set(unitsData.map((u) => u.domain))),
+      userId
+    }, { status: 201 })
+  } catch (error: any) {
+    console.error('[api/dev/test-knowledge] Error:', error)
+    return NextResponse.json({ error: error.message || 'Failed to create test units' }, { status: 500 })
+  }
+}
+
+```
+
 ### app/api/drafts/[stepId]/route.ts
 
 ```typescript
@@ -2033,7 +2203,8 @@ export async function POST(
 
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
-import { getAISuggestionsForCompletion, getSuggestionsForCompletion } from '@/lib/services/graph-service';
+import { getAISuggestionsForCompletion } from '@/lib/services/graph-service';
+import { getKnowledgeDomains } from '@/lib/services/knowledge-service';
 import { DEFAULT_USER_ID } from '@/lib/constants';
 
 /**
@@ -2056,6 +2227,22 @@ export async function GET(
 
     // Lane 5: Use AI-powered suggestions
     const suggestions = await getAISuggestionsForCompletion(id, userId);
+    
+    // Lane 5: Enrich with knowledge context
+    try {
+      const userDomains = await getKnowledgeDomains(userId);
+      const domainMap = new Map(userDomains.map(d => [d.domain, d]));
+      
+      suggestions.forEach((sig: any) => {
+        const match = domainMap.get(sig.domain || sig.templateClass);
+        if (match && match.readCount > 0) {
+          sig.knowledgeDomain = match.domain;
+          sig.masteryLevel = match.readCount >= match.count ? 'confident' : 'practiced';
+        }
+      });
+    } catch (err) {
+      console.error('Error enriching suggestions with knowledge:', err);
+    }
     
     return NextResponse.json(suggestions);
   } catch (error: any) {
@@ -2882,6 +3069,7 @@ export async function POST(request: Request) {
 ```typescript
 import { NextResponse } from 'next/server'
 import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
+import { getKnowledgeSummaryForGPT } from '@/lib/services/knowledge-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
@@ -2890,7 +3078,8 @@ export async function GET(request: Request) {
 
   try {
     const packet = await buildGPTStatePacket(userId)
-    return NextResponse.json(packet)
+    const knowledgeSummary = await getKnowledgeSummaryForGPT(userId)
+    return NextResponse.json({ ...packet, knowledgeSummary })
   } catch (error) {
     console.error('Failed to build GPT state packet:', error)
     return NextResponse.json({ error: 'Failed to build GPT state packet' }, { status: 500 })
@@ -3036,6 +3225,139 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error('Failed to record interaction:', error)
     return NextResponse.json({ error: error.message || 'Failed to record interaction' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/knowledge/[id]/progress/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { recordKnowledgeStudy } from '@/lib/services/knowledge-service'
+
+/**
+ * POST /api/knowledge/[id]/progress
+ * Records that the user studied this knowledge unit.
+ */
+export async function POST(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Record study session via service
+    await recordKnowledgeStudy(DEFAULT_USER_ID, params.id)
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error(`[api/knowledge/${params.id}/progress] Error recording study:`, error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/knowledge/[id]/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { getKnowledgeUnitById, updateMasteryStatus } from '@/lib/services/knowledge-service'
+import { validateMasteryUpdate } from '@/lib/validators/knowledge-validator'
+
+/**
+ * GET /api/knowledge/[id]
+ * Fetches a single knowledge unit.
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const unit = await getKnowledgeUnitById(params.id)
+    if (!unit) {
+      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+    return NextResponse.json(unit)
+  } catch (error) {
+    console.error(`[api/knowledge/${params.id}] Error fetching unit:`, error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+/**
+ * PATCH /api/knowledge/[id]
+ * Updates mastery status for a unit.
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    const { valid, error, data } = validateMasteryUpdate(body)
+
+    if (!valid || !data) {
+      return NextResponse.json({ error: error || 'Invalid payload' }, { status: 400 })
+    }
+
+    await updateMasteryStatus(DEFAULT_USER_ID, params.id, data.mastery_status)
+    return NextResponse.json({ success: true, mastery_status: data.mastery_status })
+  } catch (error) {
+    console.error(`[api/knowledge/${params.id}] Error updating mastery:`, error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/knowledge/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { getKnowledgeUnits } from '@/lib/services/knowledge-service'
+import { KnowledgeUnit } from '@/types/knowledge'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * GET /api/knowledge
+ * Lists all knowledge units for the current user.
+ * Optional query params: ?domain=X&unit_type=Y
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const domain = searchParams.get('domain')
+  const unitType = searchParams.get('unit_type')
+
+  try {
+    let units = await getKnowledgeUnits(DEFAULT_USER_ID)
+
+    // Filtering
+    if (domain) {
+      units = units.filter((u) => u.domain === domain)
+    }
+    if (unitType) {
+      units = units.filter((u) => u.unit_type === unitType)
+    }
+
+    // Grouping by domain
+    const grouped = units.reduce((acc, unit) => {
+      if (!acc[unit.domain]) {
+        acc[unit.domain] = []
+      }
+      acc[unit.domain].push(unit)
+      return acc
+    }, {} as Record<string, KnowledgeUnit[]>)
+
+    return NextResponse.json({
+      units: grouped,
+      total: units.length,
+    })
+  } catch (error) {
+    console.error('[api/knowledge] Error fetching units:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
@@ -3271,6 +3593,121 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json<ApiResponse<unknown>>({ message: 'Event received' })
+}
+
+```
+
+### app/api/webhook/mirak/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { createKnowledgeUnit } from '@/lib/services/knowledge-service'
+import { validateMiraKPayload } from '@/lib/validators/knowledge-validator'
+import { createExperienceInstance, createExperienceSteps } from '@/lib/services/experience-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+
+/**
+ * POST /api/webhook/mirak
+ * MiraK research microservice webhook receiver.
+ */
+export async function POST(request: NextRequest) {
+  const secret = request.headers.get('x-mirak-secret')
+  const expectedSecret = process.env.MIRAK_WEBHOOK_SECRET
+
+  // Basic authentication check
+  if (expectedSecret && secret !== expectedSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  try {
+    const body = await request.json()
+    const { valid, error, data } = validateMiraKPayload(body)
+
+    if (!valid || !data) {
+      return NextResponse.json({ error: error || 'Invalid payload' }, { status: 400 })
+    }
+
+    const userId = DEFAULT_USER_ID
+
+    // 1. Create Knowledge Units
+    const createdUnits = await Promise.all(
+      data.units.map((unit) =>
+        createKnowledgeUnit({
+          ...unit,
+          user_id: userId,
+          topic: data.topic,
+          domain: data.domain,
+          mastery_status: 'unseen',
+          linked_experience_ids: [],
+          source_experience_id: null,
+          common_mistake: unit.common_mistake || null,
+          action_prompt: unit.action_prompt || null,
+          retrieval_questions: unit.retrieval_questions || [],
+          citations: unit.citations || [],
+          subtopic_seeds: unit.subtopic_seeds || [],
+        })
+      )
+    )
+
+    // 2. Handle Experience Proposal if present
+    let experienceCreated = false
+    if (data.experience_proposal) {
+      const { steps, resolution, ...instanceData } = data.experience_proposal
+      
+      const instance = await createExperienceInstance({
+        ...instanceData,
+        user_id: userId,
+        instance_type: 'persistent',
+        status: 'proposed',
+        resolution: {
+          depth: resolution.depth as any,
+          mode: resolution.mode as any,
+          timeScope: resolution.timeScope as any,
+          intensity: resolution.intensity as any,
+        },
+        idea_id: null,
+        reentry: null,
+        previous_experience_id: null,
+        next_suggested_ids: [],
+        friction_level: null,
+        source_conversation_id: null,
+        generated_by: 'mirak',
+        realization_id: null,
+        published_at: null,
+      })
+
+      if (steps && steps.length > 0) {
+        await createExperienceSteps(
+          steps.map((step, index) => ({
+            ...step,
+            instance_id: instance.id,
+            step_order: index,
+            completion_rule: null,
+          }))
+        )
+      }
+      experienceCreated = true
+    }
+
+    // 3. Create Timeline Event
+    await createInboxEvent({
+      type: 'knowledge_ready',
+      title: `New knowledge: ${data.topic}`,
+      body: `MiraK has processed research on ${data.topic}. ${createdUnits.length} new units added to your Knowledge Tab.`,
+      severity: 'info',
+    })
+
+    return NextResponse.json({
+      created: createdUnits.length,
+      experience_created: experienceCreated,
+      topic: data.topic,
+      domain: data.domain,
+    })
+  } catch (error: any) {
+    console.error('[webhook/mirak] Error processing webhook:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
 }
 
 ```
@@ -4744,6 +5181,219 @@ export default async function KilledPage() {
       </div>
     </AppShell>
   )
+}
+
+```
+
+### app/knowledge/[unitId]/page.tsx
+
+```tsx
+import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+import { AppShell } from '@/components/shell/app-shell';
+import KnowledgeUnitView from '@/components/knowledge/KnowledgeUnitView';
+import { notFound } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
+
+interface KnowledgeUnitPageProps {
+  params: {
+    unitId: string;
+  };
+}
+
+export default async function KnowledgeUnitPage({ params }: KnowledgeUnitPageProps) {
+  const unit = await getKnowledgeUnitById(params.unitId);
+
+  if (!unit) {
+    notFound();
+  }
+
+  return (
+    <AppShell>
+      <div className="max-w-6xl mx-auto py-12">
+        <KnowledgeUnitView unit={unit} />
+      </div>
+    </AppShell>
+  );
+}
+
+```
+
+### app/knowledge/KnowledgeClient.tsx
+
+```tsx
+'use client';
+
+import React, { useState, useMemo } from 'react';
+import { KnowledgeUnit, MasteryStatus } from '@/types/knowledge';
+import { COPY } from '@/lib/studio-copy';
+import DomainCard from '@/components/knowledge/DomainCard';
+import KnowledgeUnitCard from '@/components/knowledge/KnowledgeUnitCard';
+
+interface KnowledgeClientProps {
+  units: KnowledgeUnit[];
+  domains: { domain: string; count: number; readCount: number }[];
+  recentlyAdded: KnowledgeUnit[];
+  resumeUnit: KnowledgeUnit | null;
+}
+
+export default function KnowledgeClient({ 
+  units, 
+  domains, 
+  recentlyAdded, 
+  resumeUnit 
+}: KnowledgeClientProps) {
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+
+  const filteredUnits = useMemo(() => {
+    if (!selectedDomain) return [];
+    return units.filter(u => u.domain === selectedDomain);
+  }, [units, selectedDomain]);
+
+  if (units.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 text-center animate-in fade-in duration-700">
+        <div className="w-20 h-20 bg-indigo-500/5 rounded-full flex items-center justify-center mb-6 border border-indigo-500/10">
+          <span className="text-4xl">📚</span>
+        </div>
+        <h3 className="text-xl font-bold text-[#f1f5f9] mb-2">
+          {COPY.knowledge.emptyState}
+        </h3>
+        <p className="text-[#4a4a6a] max-w-sm">
+          Mira synthesizes knowledge from your experiences to build a persistent library of your territory.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Dashboard Section */}
+      {!selectedDomain && (
+        <>
+          <section className="mb-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Resume last topic */}
+            <div className="lg:col-span-2 flex flex-col p-8 bg-indigo-500/5 border border-indigo-500/10 rounded-3xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <span className="text-8xl">✍️</span>
+              </div>
+              <h2 className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-6">Resume your terrain</h2>
+              {resumeUnit ? (
+                <div className="relative z-10 w-full">
+                  <KnowledgeUnitCard unit={resumeUnit} />
+                </div>
+              ) : (
+                <p className="text-[#4a4a6a] italic">You've mastered everything currently in progress. Start a new experience to expand your knowledge.</p>
+              )}
+            </div>
+
+            {/* Recently Added */}
+            <div className="flex flex-col space-y-4">
+              <h2 className="text-[10px] font-bold uppercase tracking-widest text-[#4a4a6a] px-2">
+                {COPY.knowledge.sections.recentlyAdded}
+              </h2>
+              {recentlyAdded.map(unit => (
+                <KnowledgeUnitCard key={unit.id} unit={unit} />
+              ))}
+            </div>
+          </section>
+
+          {/* Domain Navigation */}
+          <section>
+            <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest mb-8 px-1">
+              {COPY.knowledge.sections.domains}
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {domains.map(d => (
+                <DomainCard 
+                  key={d.domain}
+                  domain={d.domain}
+                  unitCount={d.count}
+                  readCount={d.readCount}
+                  onClick={() => setSelectedDomain(d.domain)}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* Domain View */}
+      {selectedDomain && (
+        <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <button 
+            onClick={() => setSelectedDomain(null)}
+            className="group flex items-center text-xs font-bold uppercase tracking-widest text-[#4a4a6a] hover:text-indigo-400 mb-8 transition-colors"
+          >
+            <span className="mr-2 group-hover:-translate-x-1 transition-transform">←</span>
+            Back to Dashboard
+          </button>
+          
+          <header className="mb-12">
+            <h2 className="text-3xl font-bold text-[#f1f5f9] capitalize mb-2">{selectedDomain.replace(/-/g, ' ')}</h2>
+            <p className="text-[#4a4a6a]">{filteredUnits.length} Units of knowledge in this domain.</p>
+          </header>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredUnits.map(unit => (
+              <KnowledgeUnitCard key={unit.id} unit={unit} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+```
+
+### app/knowledge/page.tsx
+
+```tsx
+import { AppShell } from '@/components/shell/app-shell';
+import { getKnowledgeUnits, getKnowledgeDomains } from '@/lib/services/knowledge-service';
+import { DEFAULT_USER_ID } from '@/lib/constants';
+import { COPY } from '@/lib/studio-copy';
+import KnowledgeClient from './KnowledgeClient';
+
+export const dynamic = 'force-dynamic';
+
+export default async function KnowledgePage() {
+  const userId = DEFAULT_USER_ID;
+
+  // Parallel fetch for units and domain mapping
+  const [units, domains] = await Promise.all([
+    getKnowledgeUnits(userId),
+    getKnowledgeDomains(userId),
+  ]);
+
+  // Sort units by created_at desc for "Recently Added"
+  const recentlyAdded = [...units]
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 3);
+
+  // Find "Resume last topic" — most recently updated unit with mastery_status != 'confident'
+  const resumeUnit = [...units]
+    .filter(u => u.mastery_status !== 'confident')
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())[0] || null;
+
+  return (
+    <AppShell>
+      <div className="max-w-6xl mx-auto pb-20 px-4 md:px-8">
+        <header className="mb-12">
+          <h1 className="text-4xl font-bold text-[#f1f5f9] mb-2">{COPY.knowledge.heading}</h1>
+          <p className="text-[#94a3b8] tracking-tight">{COPY.knowledge.subheading}</p>
+        </header>
+
+        <KnowledgeClient 
+          units={units}
+          domains={domains}
+          recentlyAdded={recentlyAdded}
+          resumeUnit={resumeUnit}
+        />
+      </div>
+    </AppShell>
+  );
 }
 
 ```
@@ -7348,653 +7998,3 @@ export default function ExperienceOverview({
                 </div>
                 
                 <div className="flex-grow">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#475569] opacity-80">
-                      {(COPY.workspace.stepTypes as any)[step.step_type] || step.step_type}
-                    </span>
-                    {status === 'skipped' && (
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500/70 border border-amber-500/20 px-1 rounded">Skipped</span>
-                    )}
-                  </div>
-                  <h4 className={`font-bold leading-snug ${isLocked ? 'text-[#475569]' : 'text-[#f1f5f9]'}`}>
-                    {step.title}
-                  </h4>
-                </div>
-                
-                {!isLocked && (
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
-                    <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </div>
-                )}
-                
-                {isLocked && (
-                  <svg className="w-4 h-4 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-```
-
-### components/experience/ExperienceRenderer.tsx
-
-```tsx
-'use client';
-
-import React from 'react';
-import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
-import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
-import { COPY } from '@/lib/studio-copy';
-import type { StepStatus } from './StepNavigator';
-import ExperienceOverview from './ExperienceOverview';
-
-// Import all step renderers
-import QuestionnaireStep from './steps/QuestionnaireStep';
-import LessonStep from './steps/LessonStep';
-import ChallengeStep from './steps/ChallengeStep';
-import PlanBuilderStep from './steps/PlanBuilderStep';
-import ReflectionStep from './steps/ReflectionStep';
-import EssayTasksStep from './steps/EssayTasksStep';
-
-// Register all built-in renderers
-registerRenderer('questionnaire', QuestionnaireStep as any);
-registerRenderer('lesson', LessonStep as any);
-registerRenderer('challenge', ChallengeStep as any);
-registerRenderer('plan_builder', PlanBuilderStep as any);
-registerRenderer('reflection', ReflectionStep as any);
-registerRenderer('essay_tasks', EssayTasksStep as any);
-
-interface ExperienceRendererProps {
-  instance: ExperienceInstance;
-  steps: ExperienceStep[];
-  currentStepId: string | null;
-  stepStatuses: Record<string, StepStatus>;
-  showOverview: boolean;
-  isCompleted: boolean;
-  isLoading: boolean;
-  onStepSelect: (id: string) => void;
-  onResume: () => void;
-  onCompleteStep: (payload?: any) => void;
-  onSkipStep: () => void;
-  onDraftStep: (draft: Record<string, any>) => void;
-  readOnly?: boolean;
-  initialDraft?: Record<string, any> | null;
-}
-
-export default function ExperienceRenderer({
-  instance,
-  steps,
-  currentStepId,
-  stepStatuses,
-  showOverview,
-  isCompleted,
-  isLoading,
-  onStepSelect,
-  onResume,
-  onCompleteStep,
-  onSkipStep,
-  onDraftStep,
-  readOnly,
-  initialDraft
-}: ExperienceRendererProps) {
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full min-h-[50vh]">
-        <div className="text-[#4a4a6a] italic animate-pulse">Establishing workspace...</div>
-      </div>
-    );
-  }
-
-  if (isCompleted) {
-    return (
-      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center px-6">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
-          <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
-        </div>
-        <div className="bg-[#12121a] p-4 rounded-xl border border-[#1e1e2e] text-[#4a4a6a] text-sm font-medium">
-          {COPY.completion.returnToChat}
-        </div>
-      </div>
-    );
-  }
-
-  if (showOverview) {
-    return (
-      <ExperienceOverview 
-        instance={instance}
-        steps={steps}
-        stepStatuses={stepStatuses}
-        onStepSelect={onStepSelect}
-        onResume={onResume}
-      />
-    );
-  }
-
-  const currentStep = steps.find(s => s.id === currentStepId);
-  const StepComponent = currentStep ? getRenderer(currentStep.step_type) : null;
-  const { depth } = instance.resolution;
-
-  // Build extra props for step renderers that support readOnly/initialData
-  const extraProps: Record<string, any> = {};
-  if (readOnly) extraProps.readOnly = true;
-  if (initialDraft && currentStep) {
-    const stepType = currentStep.step_type;
-    // Map draft data to the correct prop name each renderer expects
-    if (stepType === 'questionnaire') {
-      extraProps.initialAnswers = initialDraft;
-    } else if (stepType === 'reflection') {
-      extraProps.initialResponses = initialDraft;
-    }
-  }
-
-  return (
-    <div className={`w-full max-w-2xl mx-auto px-6 py-12 ${depth === 'light' ? 'flex items-center justify-center min-h-[80vh]' : ''}`}>
-      {currentStep && StepComponent ? (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <StepComponent 
-            step={currentStep} 
-            onComplete={onCompleteStep} 
-            onSkip={onSkipStep} 
-            onDraft={onDraftStep}
-            {...extraProps}
-          />
-        </div>
-      ) : (
-        <div className="text-[#94a3b8] italic text-center animate-pulse">Waking up Step Renderer...</div>
-      )}
-    </div>
-  );
-}
-
-```
-
-### components/experience/HomeExperienceAction.tsx
-
-```tsx
-'use client';
-
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ROUTES } from '@/lib/routes';
-import { COPY } from '@/lib/studio-copy';
-
-interface HomeExperienceActionProps {
-  id: string;
-  isProposed?: boolean;
-}
-
-export default function HomeExperienceAction({ id, isProposed }: HomeExperienceActionProps) {
-  const router = useRouter();
-  const [loading, setLoading] = useState(false);
-
-  const handleAcceptAndStart = async () => {
-    setLoading(true);
-    try {
-      // Chain: approve → publish → activate
-      // 422 means already past this state — skip to next
-      const steps = ['approve', 'publish', 'activate'];
-      
-      for (const action of steps) {
-        const res = await fetch(`/api/experiences/${id}/status`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
-        });
-        
-        if (res.status === 422) {
-          console.log(`Skipping ${action} — already past this state`);
-          continue;
-        }
-        
-        if (!res.ok) {
-          throw new Error(`Failed to ${action}`);
-        }
-      }
-
-      router.push(ROUTES.workspace(id));
-      router.refresh();
-    } catch (error) {
-      console.error('Workflow failed:', error);
-      // Navigate anyway — experience might already be active
-      router.push(ROUTES.workspace(id));
-      router.refresh();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (isProposed) {
-    return (
-      <button 
-        onClick={handleAcceptAndStart}
-        disabled={loading}
-        className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
-      >
-        {loading ? 'Starting...' : COPY.library.acceptAndStart + ' →'}
-      </button>
-    );
-  }
-
-  return (
-    <button 
-      onClick={() => router.push(ROUTES.workspace(id))}
-      className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
-    >
-      {COPY.library.enter} →
-    </button>
-  );
-}
-
-```
-
-### components/experience/StepNavigator.tsx
-
-```tsx
-'use client';
-
-import React from 'react';
-import type { ExperienceStep } from '@/types/experience';
-import { COPY } from '@/lib/studio-copy';
-
-export type StepStatus = 'locked' | 'available' | 'in_progress' | 'completed' | 'skipped';
-
-interface StepNavigatorProps {
-  steps: ExperienceStep[];
-  currentStepId: string;
-  stepStatuses: Record<string, StepStatus>;
-  onStepSelect: (stepId: string) => void;
-  depth: 'light' | 'medium' | 'heavy';
-}
-
-export default function StepNavigator({
-  steps,
-  currentStepId,
-  stepStatuses,
-  onStepSelect,
-  depth,
-}: StepNavigatorProps) {
-  if (depth === 'light') return null;
-
-  const completedCount = steps.filter((s) => stepStatuses[s.id] === 'completed').length;
-  const totalSteps = steps.length;
-
-  // Medium depth: compact top bar (handled within ExperienceRenderer usually, but we provide it here)
-  if (depth === 'medium') {
-    return (
-      <div className="w-full bg-[#0a0a0f] border-b border-[#1e1e2e] px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar">
-        {steps.map((step, idx) => {
-          const status = stepStatuses[step.id] || 'available';
-          const isActive = currentStepId === step.id;
-          const isLocked = status === 'locked';
-
-          return (
-            <button
-              key={step.id}
-              onClick={() => !isLocked && onStepSelect(step.id)}
-              disabled={isLocked}
-              className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
-                isActive 
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
-                  : isLocked
-                  ? 'text-[#475569] cursor-not-allowed opacity-50'
-                  : 'text-[#94a3b8] hover:bg-[#1e1e2e]'
-              }`}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status)}`} />
-              <span className="text-xs font-medium whitespace-nowrap">{idx + 1}. {step.title}</span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // Heavy depth: Full sidebar
-  return (
-    <div className="w-64 h-full bg-[#0a0a0f] border-r border-[#1e1e2e] flex flex-col flex-shrink-0">
-      <div className="flex-grow overflow-y-auto py-6 px-4 space-y-1 no-scrollbar">
-        {steps.map((step, idx) => {
-          const status = stepStatuses[step.id] || 'available';
-          const isActive = currentStepId === step.id;
-          const isLocked = status === 'locked';
-
-          return (
-            <button
-              key={step.id}
-              onClick={() => !isLocked && onStepSelect(step.id)}
-              disabled={isLocked}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${
-                isActive 
-                  ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' 
-                  : isLocked
-                  ? 'text-[#475569] cursor-not-allowed'
-                  : 'text-[#94a3b8] hover:bg-[#1e1e2e] hover:text-[#f1f5f9]'
-              }`}
-            >
-              <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
-                {status === 'completed' ? (
-                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                ) : status === 'locked' ? (
-                  <svg className="w-4 h-4 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                ) : (
-                  <div className={`w-2 h-2 rounded-full ${getStatusColor(status)} ${isActive ? 'ring-4 ring-indigo-500/20' : ''}`} />
-                )}
-              </div>
-              <div className="flex flex-col items-start overflow-hidden">
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-indigo-400' : 'text-[#475569] group-hover:text-[#64748b]'}`}>
-                  {(COPY.workspace.stepTypes as any)[step.step_type] || step.step_type}
-                </span>
-                <span className="text-sm font-medium truncate w-full">{step.title}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="p-4 border-t border-[#1e1e2e] bg-[#0d0d14]">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-[10px] font-bold text-[#475569] uppercase tracking-widest">Progress</span>
-          <span className="text-xs font-mono text-indigo-400">
-            {COPY.workspace.stepsCompleted.replace('{count}', completedCount.toString()).replace('{total}', totalSteps.toString())}
-          </span>
-        </div>
-        <div className="h-1 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-indigo-500 transition-all duration-500" 
-            style={{ width: `${(completedCount / totalSteps) * 100}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function getStatusColor(status: StepStatus) {
-  switch (status) {
-    case 'completed': return 'bg-emerald-500';
-    case 'in_progress': return 'bg-indigo-500';
-    case 'available': return 'bg-slate-500';
-    case 'skipped': return 'bg-amber-500';
-    case 'locked': return 'bg-slate-700';
-    default: return 'bg-slate-500';
-  }
-}
-
-```
-
-### components/experience/steps/ChallengeStep.tsx
-
-```tsx
-'use client';
-
-import React, { useState } from 'react';
-import type { ExperienceStep } from '@/types/experience';
-
-interface ChallengePayload {
-  objectives: Array<{
-    id: string;
-    description: string;
-    proof?: string;
-  }>;
-}
-
-interface ChallengeStepProps {
-  step: ExperienceStep;
-  onComplete: (payload: { completedObjectives: Record<string, string> }) => void;
-  onSkip: () => void;
-  onDraft?: (draft: Record<string, any>) => void;
-}
-
-export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: ChallengeStepProps) {
-  const [completed, setCompleted] = useState<Record<string, string>>({});
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const payload = step.payload as ChallengePayload | null;
-  const objectives = payload?.objectives ?? [];
-
-  const handleBlur = (objectiveId: string) => {
-    if (onDraft && completed[objectiveId]) {
-      onDraft({ objectiveId, proof: completed[objectiveId] });
-    }
-  };
-
-  const completedCount = Object.values(completed).filter(v => !!v.trim()).length;
-  const totalCount = objectives.length;
-  const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onComplete({ completedObjectives: completed });
-  };
-
-  const canComplete = totalCount === 0 || percent >= 60;
-  const isPerfect = percent === 100;
-
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500 max-w-2xl mx-auto">
-      <div className="flex justify-between items-end mb-6">
-        <div>
-          <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{step.title}</h2>
-          <p className="text-xs text-amber-400 p-1 px-3 bg-amber-400/10 rounded-full border border-amber-400/20 inline-block uppercase tracking-widest font-bold">
-            Active Challenge
-          </p>
-        </div>
-        <div className="text-right">
-          <span className="text-3xl font-bold text-amber-400">{percent}%</span>
-          <span className="block text-[10px] text-[#475569] font-mono">COMPLETE</span>
-        </div>
-      </div>
-
-      <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden mb-12 border border-[#33334d]">
-        <div 
-          className="h-full bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-700 ease-out"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {objectives.length === 0 && (
-          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
-            <p className="text-[#64748b] text-lg">Challenge objectives are being prepared.</p>
-          </div>
-        )}
-        {objectives.map((obj, idx) => {
-          const isDone = !!completed[obj.id]?.trim();
-          const isExpanded = expandedId === obj.id;
-          return (
-            <div
-              key={obj.id}
-              className={`p-6 rounded-2xl border transition-all duration-500 group cursor-pointer ${
-                isDone
-                  ? 'bg-emerald-500/5 border-emerald-500/30'
-                  : isExpanded
-                    ? 'bg-[#1a1a2e] border-amber-500/40 shadow-lg'
-                    : 'bg-[#12121a] border-[#1e1e2e] hover:border-amber-500/20'
-              }`}
-              onClick={() => setExpandedId(isExpanded ? null : obj.id)}
-            >
-              <div className="flex items-start gap-4">
-                <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all flex-shrink-0 ${
-                  isDone
-                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 rotate-[360deg]'
-                    : 'bg-[#1a1a2e] border-[#33334d] text-[#475569] group-hover:border-amber-500/30'
-                }`}>
-                  {isDone ? '✓' : idx + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-medium transition-all ${
-                    isDone ? 'text-emerald-400/70 line-through' : 'text-[#e2e8f0]'
-                  }`}>
-                    {obj.description}
-                  </p>
-                  
-                  {isExpanded && (
-                    <div 
-                      className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {obj.proof && (
-                        <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
-                          <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Requirement</p>
-                          <p className="text-sm text-[#94a3b8] italic">{obj.proof}</p>
-                        </div>
-                      )}
-                      
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-bold text-[#475569] uppercase tracking-[0.2em] ml-1">Record Evidence</label>
-                        <textarea
-                          value={completed[obj.id] || ''}
-                          onChange={(e) => setCompleted((prev) => ({ ...prev, [obj.id]: e.target.value }))}
-                          onBlur={() => handleBlur(obj.id)}
-                          placeholder="What did you achieve? Paste results or describe your progress…"
-                          rows={6}
-                          className={`w-full bg-[#0a0a0f] border rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none transition-all ${
-                            isDone ? 'border-emerald-500/20 focus:border-emerald-500/40' : 'border-[#1e1e2e] focus:border-amber-500/40'
-                          }`}
-                          style={{ minHeight: '150px', maxHeight: '500px' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-                {!isExpanded && (
-                  <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                    <svg className="w-5 h-5 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        <div className="flex items-center justify-between pt-8 border-t border-[#1e1e2e]">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
-          >
-            Skip for now
-          </button>
-          
-          <div className="flex flex-col items-end gap-3">
-            {canComplete && !isPerfect && (
-              <p className="text-[10px] text-amber-500/70 font-mono tracking-tighter">
-                PARTIAL COMPLETION ENABLED (≥60%)
-              </p>
-            )}
-            {!canComplete && (
-              <p className="text-[10px] text-rose-500/70 font-mono tracking-tighter uppercase font-bold">
-                Complete {Math.ceil(totalCount * 0.6) - completedCount} more to finish
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={!canComplete}
-              className={`px-10 py-4 rounded-xl text-sm font-bold transition-all shadow-xl active:scale-95 border ${
-                canComplete 
-                  ? 'bg-amber-500 text-[#0a0a0f] border-amber-400 shadow-amber-500/20 hover:bg-amber-400' 
-                  : 'bg-amber-500/10 text-amber-500/30 border-amber-500/10 cursor-not-allowed opacity-50'
-              }`}
-            >
-              {isPerfect ? 'Challenge Complete →' : 'Finish Challenge Anyway →'}
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-```
-
-### components/experience/steps/EssayTasksStep.tsx
-
-```tsx
-'use client';
-
-import React, { useState } from 'react';
-import type { ExperienceStep } from '@/types/experience';
-
-interface EssayTasksPayload {
-  content: string;
-  tasks: Array<{
-    id: string;
-    description: string;
-  }>;
-}
-
-interface EssayTasksStepProps {
-  step: ExperienceStep;
-  onComplete: (payload: { completedTasks: Record<string, boolean> }) => void;
-  onSkip: () => void;
-  onDraft?: (draft: Record<string, any>) => void;
-}
-
-export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: EssayTasksStepProps) {
-  const [completed, setCompleted] = useState<Record<string, boolean>>({});
-  const [taskResponses, setTaskResponses] = useState<Record<string, string>>({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
-  
-  const payload = step.payload as EssayTasksPayload | null;
-  const tasks = payload?.tasks ?? [];
-  const content = payload?.content ?? '';
-
-  const toggleTask = (taskId: string) => {
-    const newState = { ...completed, [taskId]: !completed[taskId] };
-    setCompleted(newState);
-    if (onDraft) {
-      onDraft({ completed: newState });
-    }
-  };
-
-  const handleBlur = (taskId: string) => {
-    if (onDraft && taskResponses[taskId]) {
-      onDraft({ taskId, response: taskResponses[taskId] });
-    }
-  };
-
-  const allDone = tasks.length === 0 || tasks.every((t) => !!completed[t.id] || !!taskResponses[t.id]?.trim());
-
-  const handleSubmit = () => {
-    setIsSubmitted(true);
-  };
-
-  const handleFinish = () => {
-    onComplete({ completedTasks: completed });
-  };
-
-  return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 max-w-3xl mx-auto">
-      <div className="flex justify-between items-end border-b border-rose-500/20 pb-6">
-        <div>
-          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
-          <p className="text-sm text-rose-400 uppercase tracking-[0.2em] font-bold">Deep Work Component</p>
-        </div>
-        {isSubmitted && (
-          <div className="bg-rose-500/10 border border-rose-400/30 px-4 py-1.5 rounded-full flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
-            <span className="text-[10px] font-bold text-rose-400 tracking-widest uppercase">Under Review</span>
-          </div>
-        )}
-      </div>

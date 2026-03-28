@@ -86,23 +86,44 @@ export function KnowledgeCompanion({ domain, knowledgeUnitId }: KnowledgeCompani
               {COPY.common.loading}
             </div>
           ) : units.length > 0 ? (
-            <div className="space-y-4">
-              {units.map((unit) => (
-                <div key={unit.id} className="group">
+            <div className={`space-y-3 ${units.length > 2 ? 'max-h-[320px] overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
+              {units.length === 1 ? (
+                // Single unit: keep current rendering
+                <div className="group">
                   <h4 className="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors">
-                    {unit.title}
+                    {units[0].title}
                   </h4>
                   <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                    {unit.thesis}
+                    {units[0].thesis}
                   </p>
                   <Link
-                    href={`/knowledge/${unit.id}`}
+                    href={`/knowledge/${units[0].id}`}
                     className="text-xs text-blue-400/80 hover:text-blue-400 mt-2 inline-block font-medium"
                   >
                     Read full →
                   </Link>
                 </div>
-              ))}
+              ) : (
+                // Multiple units: compact list
+                units.map((unit) => (
+                  <div key={unit.id} className="p-3 border border-[#1e1e2e] rounded-lg bg-[#0d0d18] hover:border-blue-500/30 transition-all group shadow-sm">
+                    <div className="flex justify-between items-start gap-4 mb-3">
+                      <h4 className="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors line-clamp-2">
+                        {unit.title}
+                      </h4>
+                      <div className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)} flex-shrink-0`}>
+                        {COPY.knowledge.unitTypes[unit.unit_type as keyof typeof COPY.knowledge.unitTypes]}
+                      </div>
+                    </div>
+                    <Link
+                      href={`/knowledge/${unit.id}`}
+                      className="text-[10px] font-bold uppercase tracking-widest text-blue-400/80 hover:text-blue-400 transition-colors"
+                    >
+                      Read &rarr;
+                    </Link>
+                  </div>
+                ))
+              )}
             </div>
           ) : (
             <div className="py-4 text-center text-sm text-slate-500">
@@ -114,3 +135,20 @@ export function KnowledgeCompanion({ domain, knowledgeUnitId }: KnowledgeCompani
     </div>
   );
 }
+
+const getTypeColor = (type: string) => {
+  switch (type) {
+    case 'foundation':
+      return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+    case 'playbook':
+      return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
+    case 'deep_dive':
+      return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+    case 'example':
+      return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+    case 'audio_script':
+      return 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20';
+    default:
+      return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
+  }
+};

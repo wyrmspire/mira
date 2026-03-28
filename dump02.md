@@ -1,3 +1,1545 @@
+  let memberSince = new Date().toISOString()
+  
+  try {
+    const users = await adapter.query<any>('users', { id: userId })
+    if (users.length > 0) {
+      displayName = users[0].display_name || users[0].email || displayName
+      memberSince = users[0].created_at || memberSince
+    }
+  } catch (e) {
+    console.warn('Failed to fetch user details, using defaults')
+  }
+
+  const experienceCount = {
+    total: experiences.length,
+    completed: experiences.filter(e => e.status === 'completed').length,
+    active: experiences.filter(e => e.status === 'active').length,
+    ephemeral: experiences.filter(e => e.instance_type === 'ephemeral').length
+  }
+
+  const topInterests = facets
+    .filter(f => f.facet_type === 'interest')
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 5)
+    .map(f => f.value)
+
+  const topSkills = facets
+    .filter(f => f.facet_type === 'skill')
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 5)
+    .map(f => f.value)
+
+  const activeGoals = facets
+    .filter(f => f.facet_type === 'goal')
+    .map(f => f.value)
+
+  const preferredDepthFacet = facets
+    .filter(f => f.facet_type === 'preferred_depth')
+    .sort((a, b) => b.confidence - a.confidence)[0]
+
+  const preferredModeFacet = facets
+    .filter(f => f.facet_type === 'preferred_mode')
+    .sort((a, b) => b.confidence - a.confidence)[0]
+
+  return {
+    userId,
+    displayName,
+    facets,
+    topInterests,
+    topSkills,
+    activeGoals,
+    experienceCount,
+    preferredDepth: preferredDepthFacet?.value || null,
+    preferredMode: preferredModeFacet?.value || null,
+    memberSince
+  }
+}
+
+/**
+ * AI-powered facet extraction.
+ * 1. Build context from interactions and experience metadata.
+ * 2. Run the AI flow (Gemini) to extract semantic facets.
+ * 3. Upsert extracted facets to the user's profile.
+ * 4. Fall back to mechanical extraction if AI is unavailable.
+ */
+export async function extractFacetsWithAI(userId: string, instanceId: string): Promise<ProfileFacet[]> {
+  const context = await buildFacetContext(instanceId, userId);
+  
+  const result = await runFlowSafe(
+    () => extractFacetsFlow(context),
+    { facets: [] }
+  );
+
+  // If AI failed or returned nothing, fall back to historical mechanical behavior
+  // This ensures Sprint 7 doesn't break baseline functionality.
+  if (!result || !result.facets || result.facets.length === 0) {
+    return extractFacetsFromExperience(userId, instanceId);
+  }
+
+  const upsertedFacets: ProfileFacet[] = [];
+  
+  for (const facet of result.facets) {
+    // Map AI facet extraction results to our canonical types
+    const upserted = await upsertFacet(userId, {
+      facet_type: facet.facetType as FacetType,
+      value: facet.value,
+      confidence: facet.confidence,
+      evidence: facet.evidence
+    });
+    upsertedFacets.push(upserted);
+  }
+
+  return upsertedFacets;
+}
+
+
+```
+
+### lib/services/github-factory-service.ts
+
+```typescript
+/**
+ * lib/services/github-factory-service.ts
+ *
+ * Orchestration layer for GitHub write operations.
+ * Routes call THIS service — never the adapter directly (SOP-8).
+ * All persistence goes through the storage adapter (SOP-9).
+ */
+
+import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
+import { getGitHubClient } from '@/lib/github/client'
+import { getProjectById, updateProjectState } from '@/lib/services/projects-service'
+import { createPR, getPRsForProject, updatePR } from '@/lib/services/prs-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+import { createExternalRef } from '@/lib/services/external-refs-service'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+import type { Project } from '@/types/project'
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function requireGitHub(): void {
+  if (!isGitHubConfigured()) {
+    throw new Error(
+      '[github-factory] GitHub is not configured. ' +
+        'Add GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, and GITHUB_WEBHOOK_SECRET to .env.local.'
+    )
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a GitHub issue from a local project.
+ */
+export async function createIssueFromProject(
+  projectId: string,
+  options?: { assignAgent?: boolean }
+): Promise<{ issueNumber: number; issueUrl: string }> {
+  requireGitHub()
+
+  const project = await getProjectById(projectId)
+  if (!project) throw new Error(`Project not found: ${projectId}`)
+
+  const config = getGitHubConfig()
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const body =
+    `> Created by Mira Studio\n\n` +
+    `**Summary:** ${project.summary}\n\n` +
+    `**Next action:** ${project.nextAction}`
+
+  const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
+  const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
+
+  const { data: issue } = await octokit.issues.create({
+    owner,
+    repo,
+    title: project.name,
+    body,
+    labels,
+    assignees,
+  })
+
+  // Update project with GitHub issue linkage
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    githubIssueNumber: issue.number,
+    githubIssueUrl: issue.html_url,
+    githubOwner: owner,
+    githubRepo: repo,
+    lastSyncedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
+
+  // Track external ref
+  await createExternalRef({
+    entityType: 'project',
+    entityId: projectId,
+    provider: 'github',
+    externalId: String(issue.number),
+    externalNumber: issue.number,
+    url: issue.html_url,
+  })
+
+  await createInboxEvent({
+    type: 'task_created',
+    title: `GitHub issue created: #${issue.number}`,
+    body: `Issue "${project.name}" created at ${issue.html_url}`,
+    severity: 'info',
+    projectId,
+    actionUrl: issue.html_url,
+  })
+
+  return { issueNumber: issue.number, issueUrl: issue.html_url }
+}
+
+/**
+ * Assign Copilot coding agent to the GitHub issue linked to a project.
+ */
+export async function assignCopilotToProject(projectId: string): Promise<void> {
+  requireGitHub()
+
+  const project = await getProjectById(projectId)
+  if (!project) throw new Error(`Project not found: ${projectId}`)
+  if (!project.githubIssueNumber) {
+    throw new Error(
+      `Project ${projectId} has no linked GitHub issue. Run createIssueFromProject first.`
+    )
+  }
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  await octokit.issues.addAssignees({
+    owner,
+    repo,
+    issue_number: project.githubIssueNumber,
+    assignees: ['copilot'],
+  })
+
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    copilotAssignedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
+
+  await createInboxEvent({
+    type: 'task_created',
+    title: `Copilot assigned to issue #${project.githubIssueNumber}`,
+    body: `GitHub Copilot has been assigned to work on "${project.name}".`,
+    severity: 'info',
+    projectId,
+  })
+}
+
+/**
+ * Dispatch a prototype GitHub Actions workflow for a project.
+ */
+export async function dispatchPrototypeWorkflow(
+  projectId: string,
+  inputs?: Record<string, string>
+): Promise<void> {
+  requireGitHub()
+
+  const project = await getProjectById(projectId)
+  if (!project) throw new Error(`Project not found: ${projectId}`)
+
+  const config = getGitHubConfig()
+  const workflowId = config.workflowPrototype
+  if (!workflowId) {
+    throw new Error(
+      'GITHUB_WORKFLOW_PROTOTYPE is not set. Add the workflow filename to .env.local.'
+    )
+  }
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  await octokit.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: workflowId,
+    ref: config.defaultBranch,
+    inputs: {
+      project_id: projectId,
+      project_name: project.name,
+      ...inputs,
+    },
+  })
+
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    githubWorkflowStatus: 'queued',
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
+
+  await createInboxEvent({
+    type: 'task_created',
+    title: `Workflow dispatched: ${workflowId}`,
+    body: `Prototype workflow triggered for "${project.name}".`,
+    severity: 'info',
+    projectId,
+  })
+}
+
+/**
+ * Create a GitHub PR from a project (manual path, not Copilot).
+ */
+export async function createPRFromProject(
+  projectId: string,
+  params: {
+    title: string
+    body: string
+    head: string
+    draft?: boolean
+  }
+): Promise<{ prNumber: number; prUrl: string }> {
+  requireGitHub()
+
+  const project = await getProjectById(projectId)
+  if (!project) throw new Error(`Project not found: ${projectId}`)
+
+  const config = getGitHubConfig()
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const { data: ghPR } = await octokit.pulls.create({
+    owner,
+    repo,
+    title: params.title,
+    body: params.body,
+    head: params.head,
+    base: config.defaultBranch,
+    draft: params.draft ?? false,
+  })
+
+  const localPR = await createPR({
+    projectId,
+    title: params.title,
+    branch: params.head,
+    status: 'open',
+    previewUrl: undefined,
+    buildState: 'pending',
+    mergeable: false,
+    reviewStatus: 'pending',
+    author: 'local',
+  })
+
+  await updatePR(localPR.id, { number: ghPR.number })
+
+  await createExternalRef({
+    entityType: 'pr',
+    entityId: localPR.id,
+    provider: 'github',
+    externalId: String(ghPR.number),
+    externalNumber: ghPR.number,
+    url: ghPR.html_url,
+  })
+
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', projectId, {
+    copilotPrNumber: ghPR.number,
+    copilotPrUrl: ghPR.html_url,
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
+
+  await createInboxEvent({
+    type: 'pr_opened',
+    title: `PR #${ghPR.number} opened`,
+    body: `"${params.title}" is open and awaiting review.`,
+    severity: 'info',
+    projectId,
+    actionUrl: ghPR.html_url,
+  })
+
+  return { prNumber: ghPR.number, prUrl: ghPR.html_url }
+}
+
+/**
+ * Request revisions on a PR by adding a review comment.
+ */
+export async function requestRevision(
+  projectId: string,
+  prNumber: number,
+  message: string
+): Promise<void> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  await octokit.issues.createComment({
+    owner,
+    repo,
+    issue_number: prNumber,
+    body: `> ✏️ **Revision request from Mira Studio**\n\n${message}`,
+  })
+
+  const prs = await getPRsForProject(projectId)
+  const pr = prs.find((p) => p.number === prNumber)
+  if (pr) {
+    await updatePR(pr.id, {
+      reviewStatus: 'changes_requested',
+      requestedChanges: message,
+    })
+  }
+
+  await createInboxEvent({
+    type: 'changes_requested',
+    title: `Changes requested on PR #${prNumber}`,
+    body: message.length > 120 ? `${message.slice(0, 120)}…` : message,
+    severity: 'warning',
+    projectId,
+  })
+}
+
+/**
+ * Merge a GitHub PR for a project.
+ */
+export async function mergeProjectPR(
+  projectId: string,
+  prNumber: number,
+  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
+): Promise<{ sha: string; merged: boolean }> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const { data: ghPR } = await octokit.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  })
+
+  if (ghPR.state !== 'open') {
+    throw new Error(`PR #${prNumber} is not open (state: ${ghPR.state})`)
+  }
+  if (ghPR.mergeable === false) {
+    throw new Error(`PR #${prNumber} is not mergeable (conflicts may exist)`)
+  }
+
+  const { data: mergeResult } = await octokit.pulls.merge({
+    owner,
+    repo,
+    pull_number: prNumber,
+    merge_method: mergeMethod,
+  })
+
+  const prs = await getPRsForProject(projectId)
+  const pr = prs.find((p) => p.number === prNumber)
+  if (pr) {
+    await updatePR(pr.id, { status: 'merged', reviewStatus: 'merged' })
+  }
+
+  await createInboxEvent({
+    type: 'merge_completed',
+    title: `PR #${prNumber} merged`,
+    body: `"${ghPR.title}" was merged successfully.`,
+    severity: 'success',
+    projectId,
+  })
+
+  return {
+    sha: mergeResult.sha ?? '',
+    merged: mergeResult.merged ?? false,
+  }
+}
+
+```
+
+### lib/services/github-sync-service.ts
+
+```typescript
+/**
+ * lib/services/github-sync-service.ts
+ *
+ * Pull GitHub state INTO local records.
+ * All persistence goes through the storage adapter (SOP-9).
+ */
+
+import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
+import { getGitHubClient } from '@/lib/github/client'
+import { getProjects } from '@/lib/services/projects-service'
+import { getPRsForProject, updatePR, createPR } from '@/lib/services/prs-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+import { createAgentRun, getAgentRun } from '@/lib/services/agent-runs-service'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+
+import type { PullRequest } from '@/types/pr'
+import type { AgentRun } from '@/types/agent-run'
+import type { Project } from '@/types/project'
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function requireGitHub(): void {
+  if (!isGitHubConfigured()) {
+    throw new Error(
+      '[github-sync] GitHub is not configured. Check .env.local and wiring.md.'
+    )
+  }
+}
+
+/** Find local PR by PR number across all projects. */
+async function findLocalPRByNumber(
+  prNumber: number
+): Promise<{ pr: PullRequest; projectId: string } | null> {
+  const projects = await getProjects()
+  for (const project of projects) {
+    const prs = await getPRsForProject(project.id)
+    const match = prs.find((pr) => pr.number === prNumber)
+    if (match) return { pr: match, projectId: project.id }
+  }
+  return null
+}
+
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+/**
+ * Sync a single GitHub PR into the local PR record.
+ */
+export async function syncPullRequest(prNumber: number): Promise<PullRequest | null> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let ghPR: Awaited<ReturnType<typeof octokit.pulls.get>>['data']
+  try {
+    const res = await octokit.pulls.get({ owner, repo, pull_number: prNumber })
+    ghPR = res.data
+  } catch (err) {
+    console.error(`[github-sync] Pull request #${prNumber} not found on GitHub:`, err)
+    return null
+  }
+
+  const existing = await findLocalPRByNumber(prNumber)
+
+  const status: PullRequest['status'] =
+    ghPR.merged ? 'merged' : ghPR.state === 'closed' ? 'closed' : 'open'
+  const reviewStatus: PullRequest['reviewStatus'] =
+    ghPR.merged ? 'merged' : 'pending'
+
+  if (existing) {
+    const updated = await updatePR(existing.pr.id, {
+      title: ghPR.title,
+      branch: ghPR.head.ref,
+      status,
+      mergeable: ghPR.mergeable ?? false,
+      reviewStatus,
+    })
+    console.log(`[github-sync] Updated local PR ${existing.pr.id} from GitHub #${prNumber}`)
+    return updated
+  }
+
+  const projects = await getProjects()
+  const linkedProject = projects.find((p) => p.copilotPrNumber === prNumber)
+  const projectId = linkedProject?.id ?? `unknown-${generateId()}`
+
+  const newPR = await createPR({
+    projectId,
+    title: ghPR.title,
+    branch: ghPR.head.ref,
+    status,
+    previewUrl: undefined,
+    buildState: 'pending',
+    mergeable: ghPR.mergeable ?? false,
+    reviewStatus,
+    author: ghPR.user?.login ?? 'unknown',
+  })
+
+  console.log(`[github-sync] Created local PR ${newPR.id} for GitHub #${prNumber}`)
+  return newPR
+}
+
+/**
+ * Sync a GitHub workflow run into the local agentRuns store.
+ */
+export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let run: Awaited<ReturnType<typeof octokit.actions.getWorkflowRun>>['data']
+  try {
+    const res = await octokit.actions.getWorkflowRun({ owner, repo, run_id: runId })
+    run = res.data
+  } catch (err) {
+    console.error(`[github-sync] Workflow run #${runId} not found:`, err)
+    return null
+  }
+
+  const status: AgentRun['status'] =
+    run.status === 'completed'
+      ? run.conclusion === 'success'
+        ? 'succeeded'
+        : 'failed'
+      : run.status === 'in_progress'
+      ? 'running'
+      : 'queued'
+
+  const now = new Date().toISOString()
+
+  // Check for existing agent run via adapter
+  const adapter = getStorageAdapter()
+  const agentRuns = await adapter.getCollection<AgentRun>('agentRuns')
+  const existing = agentRuns.find(
+    (ar) => ar.githubWorkflowRunId === String(runId)
+  )
+
+  if (existing) {
+    const updated = await adapter.updateItem<AgentRun>('agentRuns', existing.id, {
+      status,
+      finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
+      summary: run.conclusion ?? undefined,
+    } as Partial<AgentRun>)
+    console.log(`[github-sync] Updated AgentRun for workflow run #${runId}`)
+    return updated
+  }
+
+  const newRun = await createAgentRun({
+    projectId: '',
+    kind: 'prototype',
+    executionMode: 'delegated' as AgentRun['executionMode'],
+    triggeredBy: 'github',
+    githubWorkflowRunId: String(runId),
+  })
+
+  console.log(`[github-sync] Created AgentRun for workflow run #${runId}`)
+  return newRun
+}
+
+/**
+ * Sync a GitHub issue's state into the local project record.
+ */
+export async function syncIssue(issueNumber: number): Promise<void> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  let issue: Awaited<ReturnType<typeof octokit.issues.get>>['data']
+  try {
+    const res = await octokit.issues.get({ owner, repo, issue_number: issueNumber })
+    issue = res.data
+  } catch (err) {
+    console.error(`[github-sync] Issue #${issueNumber} not found:`, err)
+    return
+  }
+
+  const projects = await getProjects()
+  const project = projects.find((p) => p.githubIssueNumber === issueNumber)
+
+  if (!project) {
+    console.log(`[github-sync] No local project linked to issue #${issueNumber}`)
+    return
+  }
+
+  const before = project.githubWorkflowStatus
+  const issueState = issue.state
+
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Project>('projects', project.id, {
+    githubWorkflowStatus: issueState,
+    lastSyncedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  } as Partial<Project>)
+
+  console.log(
+    `[github-sync] Issue #${issueNumber} synced. State: ${before} → ${issueState}`
+  )
+}
+
+/**
+ * Batch sync: pull all open PRs from GitHub for the configured repo.
+ */
+export async function syncAllOpenPRs(): Promise<{ synced: number; created: number }> {
+  requireGitHub()
+
+  const { owner, repo } = getRepoCoordinates()
+  const octokit = getGitHubClient()
+
+  const { data: openPRs } = await octokit.pulls.list({
+    owner,
+    repo,
+    state: 'open',
+    per_page: 100,
+  })
+
+  let synced = 0
+  let created = 0
+
+  for (const ghPR of openPRs) {
+    const existing = await findLocalPRByNumber(ghPR.number)
+    if (existing) {
+      await updatePR(existing.pr.id, {
+        title: ghPR.title,
+        branch: ghPR.head.ref,
+        status: 'open',
+      })
+      synced++
+    } else {
+      const projects = await getProjects()
+      const linked = projects.find((p) => p.copilotPrNumber === ghPR.number)
+      await createPR({
+        projectId: linked?.id ?? `unknown-${generateId()}`,
+        title: ghPR.title,
+        branch: ghPR.head.ref,
+        status: 'open',
+        previewUrl: undefined,
+        buildState: 'pending',
+        mergeable: false,
+        reviewStatus: 'pending',
+        author: ghPR.user?.login ?? 'unknown',
+      })
+      created++
+    }
+  }
+
+  console.log(`[github-sync] Batch sync complete: ${synced} updated, ${created} created`)
+  await createInboxEvent({
+    type: 'pr_opened',
+    title: `PR sync complete`,
+    body: `${synced} PRs updated, ${created} new PRs imported from GitHub.`,
+    severity: 'info',
+  })
+
+  return { synced, created }
+}
+
+```
+
+### lib/services/graph-service.ts
+
+```typescript
+import { ExperienceInstance, getExperienceInstanceById, updateExperienceInstance, getExperienceTemplates, getExperienceInstances } from './experience-service';
+import { ExperienceChainContext } from '@/types/graph';
+import { getProgressionSuggestions, shouldEscalateResolution } from '@/lib/experience/progression-rules';
+import { runFlowSafe } from '../ai/safe-flow';
+import { suggestNextExperienceFlow } from '../ai/flows/suggest-next-experience';
+import { buildSuggestionContext } from '../ai/context/suggestion-context';
+
+/**
+ * Walks back via previous_experience_id to find the direct parent.
+ * It does NOT walk the entire chain; it just gets the immediate upstream.
+ */
+export async function getExperienceChain(instanceId: string): Promise<ExperienceChainContext> {
+  const instance = await getExperienceInstanceById(instanceId);
+  if (!instance) {
+    throw new Error(`Experience instance not found: ${instanceId}`);
+  }
+
+  let previousExperience = null;
+  if (instance.previous_experience_id) {
+    const prev = await getExperienceInstanceById(instance.previous_experience_id);
+    if (prev) {
+      // Need to find the template class for the previous experience
+      const templates = await getExperienceTemplates();
+      const template = templates.find(t => t.id === prev.template_id);
+      
+      previousExperience = {
+        id: prev.id,
+        title: prev.title,
+        status: prev.status,
+        class: template?.class || 'unknown'
+      };
+    }
+  }
+
+  // Get suggested next titles
+  const suggestedNext = [];
+  if (instance.next_suggested_ids && instance.next_suggested_ids.length > 0) {
+    for (const nextId of instance.next_suggested_ids) {
+      const nextExp = await getExperienceInstanceById(nextId);
+      if (nextExp) {
+        suggestedNext.push({
+          id: nextExp.id,
+          title: nextExp.title,
+          reason: 'Suggested next step' // Default reason
+        });
+      }
+    }
+  }
+
+  const depth = await getChainDepth(instanceId);
+
+  return {
+    previousExperience,
+    suggestedNext,
+    chainDepth: depth,
+    resolutionCarryForward: true // Default
+  };
+}
+
+/**
+ * Links two experiences together.
+ * Sets previous_experience_id on the target and adds the target id to next_suggested_ids on the source.
+ */
+export async function linkExperiences(fromId: string, toId: string, edgeType: string): Promise<void> {
+  // Edge type is currently stored implicitly by these two fields
+  
+  // Set upstream link on target
+  await updateExperienceInstance(toId, { previous_experience_id: fromId });
+  
+  // Set downstream link on source
+  const source = await getExperienceInstanceById(fromId);
+  if (source) {
+    const nextSuggestedIds = source.next_suggested_ids || [];
+    if (!nextSuggestedIds.includes(toId)) {
+      await updateExperienceInstance(fromId, { 
+        next_suggested_ids: [...nextSuggestedIds, toId] 
+      });
+    }
+  }
+}
+
+/**
+ * Walks backwards counting the number of steps in the chain.
+ */
+export async function getChainDepth(instanceId: string): Promise<number> {
+  let depth = 0;
+  let currentId: string | null = instanceId;
+  
+  // Use a map to prevent infinite loops if data is corrupted
+  const visited = new Set<string>();
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId);
+    const instance = await getExperienceInstanceById(currentId);
+    if (!instance || !instance.previous_experience_id) {
+      break;
+    }
+    depth++;
+    currentId = instance.previous_experience_id;
+  }
+  
+  return depth;
+}
+
+/**
+ * Suggests next experiences based on the current instance's class and progression rules.
+ */
+export async function getSuggestionsForCompletion(instanceId: string): Promise<{ templateClass: string; reason: string; resolution: any }[]> {
+  const instance = await getExperienceInstanceById(instanceId);
+  if (!instance) return [];
+
+  const templates = await getExperienceTemplates();
+  const currentTemplate = templates.find(t => t.id === instance.template_id);
+  if (!currentTemplate) return [];
+
+  const rules = getProgressionSuggestions(currentTemplate.class);
+  
+  return rules.map(rule => {
+    const nextDepth = shouldEscalateResolution(rule, instance.resolution.depth);
+    return {
+      templateClass: rule.toClass,
+      reason: rule.reason,
+      resolution: {
+        ...instance.resolution,
+        depth: nextDepth
+      }
+    };
+  });
+}
+
+/**
+ * Finds all instances of the same template for a user, sorted by created_at.
+ */
+export async function getLoopInstances(userId: string, templateId: string): Promise<ExperienceInstance[]> {
+  const instances = await getExperienceInstances({ userId });
+  return instances
+    .filter(inst => inst.template_id === templateId)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+}
+
+/**
+ * Returns the count of same-template instances for a user.
+ */
+export async function getLoopCount(userId: string, templateId: string): Promise<number> {
+  const instances = await getLoopInstances(userId, templateId);
+  return instances.length;
+}
+
+/**
+ * Aggregates graph stats for the GPT state packet.
+ */
+export async function getGraphSummaryForGPT(userId: string): Promise<{ activeChains: number; totalCompleted: number; loopingTemplates: string[]; deepestChain: number }> {
+  const allInstances = await getExperienceInstances({ userId });
+  
+  const completed = allInstances.filter(inst => inst.status === 'completed');
+  
+  // Active chains: count of instances that have no next_suggested_ids and are active/completed
+  // Simple heuristic: leaf nodes in the chain
+  const leafNodes = completed.filter(inst => !inst.next_suggested_ids || inst.next_suggested_ids.length === 0);
+  
+  // Find depth for each leaf node
+  const depths = await Promise.all(leafNodes.map(inst => getChainDepth(inst.id)));
+  const deepestChain = depths.length > 0 ? Math.max(...depths) : 0;
+
+  // Find looping templates (templates with more than 1 instance)
+  const templateCounts: Record<string, number> = {};
+  allInstances.forEach(inst => {
+    templateCounts[inst.template_id] = (templateCounts[inst.template_id] || 0) + 1;
+  });
+  
+  const loopingTemplates = Object.keys(templateCounts).filter(tid => templateCounts[tid] > 1);
+
+  return {
+    activeChains: leafNodes.length,
+    totalCompleted: completed.length,
+    loopingTemplates,
+    deepestChain
+  };
+}
+
+/**
+ * Suggestion result with AI confidence and reasoning.
+ */
+export interface SuggestionResult {
+  templateClass: string;
+  reason: string;
+  resolution: any;
+  confidence: number;
+}
+
+/**
+ * AI-powered suggestion function that falls back to static rules.
+ */
+export async function getAISuggestionsForCompletion(instanceId: string, userId: string): Promise<SuggestionResult[]> {
+  // Assemble context
+  const context = await buildSuggestionContext(userId, instanceId);
+  
+  // Static fallback
+  const staticSuggestions = await getSuggestionsForCompletion(instanceId);
+  const fallback: SuggestionResult[] = staticSuggestions.map(s => ({
+    ...s,
+    confidence: 0.5
+  }));
+
+  // Run AI flow with safe wrapper
+  return await runFlowSafe(
+    async () => {
+      const result = await suggestNextExperienceFlow(context);
+      return result.suggestions.map(s => ({
+        templateClass: s.templateClass,
+        reason: s.reason,
+        resolution: s.suggestedResolution,
+        confidence: s.confidence
+      }));
+    },
+    fallback
+  );
+}
+
+/**
+ * Gets suggestions for the user based on their most recent activity.
+ */
+export async function getSmartSuggestions(userId: string): Promise<SuggestionResult[]> {
+  const allInstances = await getExperienceInstances({ userId });
+  const completed = allInstances
+    .filter(inst => inst.status === 'completed')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  if (completed.length === 0) {
+    return [];
+  }
+
+  return getAISuggestionsForCompletion(completed[0].id, userId);
+}
+
+```
+
+### lib/services/ideas-service.ts
+
+```typescript
+import type { Idea, IdeaStatus } from '@/types/idea'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+
+export async function getIdeas(): Promise<Idea[]> {
+  const adapter = getStorageAdapter()
+  return adapter.getCollection<Idea>('ideas')
+}
+
+export async function getIdeaById(id: string): Promise<Idea | undefined> {
+  const ideas = await getIdeas()
+  return ideas.find((i) => i.id === id)
+}
+
+export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
+  const ideas = await getIdeas()
+  return ideas.filter((i) => i.status === status)
+}
+
+export async function createIdea(data: Omit<Idea, 'id' | 'created_at' | 'status'>): Promise<Idea> {
+  const adapter = getStorageAdapter()
+  const idea: Idea = {
+    ...data,
+    id: generateId(),
+    created_at: new Date().toISOString(),
+    status: 'captured',
+  }
+  return adapter.saveItem<Idea>('ideas', idea)
+}
+
+export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
+  const adapter = getStorageAdapter()
+  try {
+    return await adapter.updateItem<Idea>('ideas', id, { status } as Partial<Idea>)
+  } catch {
+    return null
+  }
+}
+
+```
+
+### lib/services/inbox-service.ts
+
+```typescript
+import type { InboxEvent, InboxEventType } from '@/types/inbox'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+
+/**
+ * Normalize a DB row (snake_case from timeline_events) to the TS InboxEvent shape (camelCase).
+ */
+function fromDB(row: Record<string, any>): InboxEvent {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    timestamp: row.timestamp,
+    severity: row.severity,
+    read: row.read ?? false,
+    // snake_case DB → camelCase TS
+    projectId: row.project_id ?? row.projectId,
+    actionUrl: row.action_url ?? row.actionUrl,
+    githubUrl: row.github_url ?? row.githubUrl,
+  }
+}
+
+/**
+ * Normalize a TS InboxEvent (camelCase) to DB row shape (snake_case for timeline_events).
+ */
+function toDB(event: InboxEvent): Record<string, any> {
+  return {
+    id: event.id,
+    type: event.type,
+    title: event.title,
+    body: event.body,
+    timestamp: event.timestamp,
+    severity: event.severity,
+    read: event.read,
+    // camelCase TS → snake_case DB
+    project_id: event.projectId ?? null,
+    action_url: event.actionUrl ?? null,
+    github_url: event.githubUrl ?? null,
+  }
+}
+
+export async function getInboxEvents(): Promise<InboxEvent[]> {
+  const adapter = getStorageAdapter()
+  const raw = await adapter.getCollection<Record<string, any>>('inbox')
+  return raw.map(fromDB)
+}
+
+export async function createInboxEvent(data: {
+  type: InboxEventType
+  title: string
+  body: string
+  severity: InboxEvent['severity']
+  projectId?: string
+  actionUrl?: string
+  githubUrl?: string
+  timestamp?: string
+  read?: boolean
+}): Promise<InboxEvent> {
+  const adapter = getStorageAdapter()
+  const event: InboxEvent = {
+    ...data,
+    id: generateId(),
+    timestamp: data.timestamp ?? new Date().toISOString(),
+    read: data.read ?? false,
+  }
+  // Write as snake_case to timeline_events
+  const dbRow = toDB(event)
+  await adapter.saveItem<Record<string, any>>('inbox', dbRow)
+  return event
+}
+
+export async function markRead(eventId: string): Promise<void> {
+  const adapter = getStorageAdapter()
+  await adapter.updateItem<Record<string, any>>('inbox', eventId, { read: true })
+}
+
+export async function getUnreadCount(): Promise<number> {
+  const inbox = await getInboxEvents()
+  return inbox.filter((e) => !e.read).length
+}
+
+export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Promise<InboxEvent[]> {
+  const inbox = await getInboxEvents()
+  switch (filter) {
+    case 'unread':
+      return inbox.filter((e) => !e.read)
+    case 'errors':
+      return inbox.filter((e) => e.severity === 'error')
+    case 'all':
+    default:
+      return inbox
+  }
+}
+
+/**
+ * Convenience wrapper for creating GitHub lifecycle inbox events.
+ */
+export async function createGitHubInboxEvent(params: {
+  type: InboxEventType
+  projectId: string
+  title: string
+  body: string
+  githubUrl?: string
+  severity?: InboxEvent['severity']
+}): Promise<InboxEvent> {
+  return createInboxEvent({
+    type: params.type,
+    projectId: params.projectId,
+    title: params.title,
+    body: params.body,
+    severity: params.severity ?? 'info',
+    githubUrl: params.githubUrl,
+  })
+}
+
+
+```
+
+### lib/services/interaction-service.ts
+
+```typescript
+import { InteractionEvent, InteractionEventType, Artifact } from '@/types/interaction'
+import { getStorageAdapter } from '@/lib/storage-adapter'
+import { generateId } from '@/lib/utils'
+
+export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
+  const adapter = getStorageAdapter()
+  const event: InteractionEvent = {
+    id: generateId(),
+    instance_id: data.instanceId,
+    step_id: data.stepId || null,
+    event_type: data.eventType,
+    event_payload: data.eventPayload,
+    created_at: new Date().toISOString()
+  }
+  return adapter.saveItem<InteractionEvent>('interaction_events', event)
+}
+
+export async function getInteractionsByInstance(instanceId: string): Promise<InteractionEvent[]> {
+  const adapter = getStorageAdapter()
+  return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
+}
+
+export async function createArtifact(data: { instanceId: string; artifactType: string; title: string; content: string; metadata: any }): Promise<Artifact> {
+  const adapter = getStorageAdapter()
+  const artifact: Artifact = {
+    id: generateId(),
+    instance_id: data.instanceId,
+    artifact_type: data.artifactType,
+    title: data.title,
+    content: data.content,
+    metadata: data.metadata || {},
+  }
+  return adapter.saveItem<Artifact>('artifacts', artifact)
+}
+
+export async function getArtifactsByInstance(instanceId: string): Promise<Artifact[]> {
+  const adapter = getStorageAdapter()
+  return adapter.query<Artifact>('artifacts', { instance_id: instanceId })
+}
+
+```
+
+### lib/services/knowledge-service.ts
+
+```typescript
+import { KnowledgeUnit, KnowledgeProgress, MasteryStatus } from '@/types/knowledge';
+import { getStorageAdapter } from '@/lib/storage-adapter';
+import { generateId } from '@/lib/utils';
+
+/**
+ * Normalize a DB row (snake_case from knowledge_units) to the TS KnowledgeUnit shape (camelCase).
+ */
+function fromDB(row: any): KnowledgeUnit {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    topic: row.topic,
+    domain: row.domain,
+    unit_type: row.unit_type,
+    title: row.title,
+    thesis: row.thesis,
+    content: row.content,
+    key_ideas: row.key_ideas || [],
+    common_mistake: row.common_mistake,
+    action_prompt: row.action_prompt,
+    retrieval_questions: row.retrieval_questions || [],
+    citations: row.citations || [],
+    linked_experience_ids: row.linked_experience_ids || [],
+    source_experience_id: row.source_experience_id,
+    subtopic_seeds: row.subtopic_seeds || [],
+    mastery_status: row.mastery_status,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+/**
+ * Normalize a TS KnowledgeUnit (camelCase) to DB row shape (snake_case).
+ */
+function toDB(unit: Partial<KnowledgeUnit>): Record<string, any> {
+  const row: Record<string, any> = {};
+  if (unit.id) row.id = unit.id;
+  if (unit.user_id) row.user_id = unit.user_id;
+  if (unit.topic) row.topic = unit.topic;
+  if (unit.domain) row.domain = unit.domain;
+  if (unit.unit_type) row.unit_type = unit.unit_type;
+  if (unit.title) row.title = unit.title;
+  if (unit.thesis) row.thesis = unit.thesis;
+  if (unit.content) row.content = unit.content;
+  if (unit.key_ideas) row.key_ideas = unit.key_ideas;
+  if (unit.common_mistake !== undefined) row.common_mistake = unit.common_mistake;
+  if (unit.action_prompt !== undefined) row.action_prompt = unit.action_prompt;
+  if (unit.retrieval_questions) row.retrieval_questions = unit.retrieval_questions;
+  if (unit.citations) row.citations = unit.citations;
+  if (unit.linked_experience_ids) row.linked_experience_ids = unit.linked_experience_ids;
+  if (unit.source_experience_id !== undefined) row.source_experience_id = unit.source_experience_id;
+  if (unit.subtopic_seeds) row.subtopic_seeds = unit.subtopic_seeds;
+  if (unit.mastery_status) row.mastery_status = unit.mastery_status;
+  if (unit.created_at) row.created_at = unit.created_at;
+  if (unit.updated_at) row.updated_at = unit.updated_at;
+  return row;
+}
+
+function progressFromDB(row: any): KnowledgeProgress {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    unit_id: row.unit_id,
+    mastery_status: row.mastery_status,
+    last_studied_at: row.last_studied_at,
+    created_at: row.created_at,
+  };
+}
+
+export async function getKnowledgeUnits(userId: string): Promise<KnowledgeUnit[]> {
+  const adapter = getStorageAdapter();
+  const raw = await adapter.query<any>('knowledge_units', { user_id: userId });
+  return raw.map(fromDB);
+}
+
+export async function getKnowledgeUnitsByDomain(userId: string, domain: string): Promise<KnowledgeUnit[]> {
+  const adapter = getStorageAdapter();
+  const raw = await adapter.query<any>('knowledge_units', { user_id: userId, domain });
+  return raw.map(fromDB);
+}
+
+export async function getKnowledgeUnitById(id: string): Promise<KnowledgeUnit | null> {
+  const adapter = getStorageAdapter();
+  const raw = await adapter.query<any>('knowledge_units', { id });
+  return raw.length > 0 ? fromDB(raw[0]) : null;
+}
+
+export async function createKnowledgeUnit(unit: any): Promise<KnowledgeUnit> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  const data = {
+    ...unit,
+    id: unit.id || generateId(),
+    created_at: unit.created_at || now,
+    updated_at: unit.updated_at || now,
+  };
+  const row = toDB(data);
+  const saved = await adapter.saveItem<any>('knowledge_units', row);
+  return fromDB(saved);
+}
+
+export async function createKnowledgeUnits(units: any[]): Promise<KnowledgeUnit[]> {
+  const created: KnowledgeUnit[] = [];
+  for (const unit of units) {
+    created.push(await createKnowledgeUnit(unit));
+  }
+  return created;
+}
+
+export async function recordKnowledgeStudy(userId: string, unitId: string): Promise<void> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  
+  // 1. Check existing progress
+  const existingProgress = await adapter.query<any>('knowledge_progress', { 
+    user_id: userId, 
+    unit_id: unitId 
+  });
+
+  if (existingProgress.length > 0) {
+    // Already has progress, just update last_studied_at
+    await adapter.updateItem<any>('knowledge_progress', existingProgress[0].id, {
+      last_studied_at: now
+    });
+  } else {
+    // New study session - mark as 'read' by default
+    await adapter.saveItem<any>('knowledge_progress', {
+      id: generateId(),
+      user_id: userId,
+      unit_id: unitId,
+      mastery_status: 'read',
+      last_studied_at: now,
+      created_at: now
+    });
+    
+    // Also update the unit's mastery status to 'read'
+    await adapter.updateItem<any>('knowledge_units', unitId, {
+      mastery_status: 'read',
+      updated_at: now
+    });
+  }
+}
+
+export async function updateMasteryStatus(userId: string, unitId: string, status: MasteryStatus): Promise<void> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  
+  // 1. Update the unit itself
+  await adapter.updateItem<any>('knowledge_units', unitId, { 
+    mastery_status: status,
+    updated_at: now
+  });
+
+  // 2. Upsert progress record
+  const existingProgress = await adapter.query<any>('knowledge_progress', { 
+    user_id: userId, 
+    unit_id: unitId 
+  });
+
+  if (existingProgress.length > 0) {
+    await adapter.updateItem<any>('knowledge_progress', existingProgress[0].id, {
+      mastery_status: status,
+      last_studied_at: now
+    });
+  } else {
+    await adapter.saveItem<any>('knowledge_progress', {
+      id: generateId(),
+      user_id: userId,
+      unit_id: unitId,
+      mastery_status: status,
+      last_studied_at: now,
+      created_at: now
+    });
+  }
+}
+
+export async function getKnowledgeProgress(userId: string): Promise<KnowledgeProgress[]> {
+  const adapter = getStorageAdapter();
+  const raw = await adapter.query<any>('knowledge_progress', { user_id: userId });
+  return raw.map(progressFromDB);
+}
+
+export async function getKnowledgeDomains(userId: string): Promise<{ domain: string; count: number; readCount: number }[]> {
+  const units = await getKnowledgeUnits(userId);
+  const domainMap = new Map<string, { count: number; readCount: number }>();
+
+  for (const unit of units) {
+    const stats = domainMap.get(unit.domain) || { count: 0, readCount: 0 };
+    stats.count++;
+    if (unit.mastery_status !== 'unseen') {
+      stats.readCount++;
+    }
+    domainMap.set(unit.domain, stats);
+  }
+
+  return Array.from(domainMap.entries()).map(([domain, stats]) => ({
+    domain,
+    ...stats
+  }));
+}
+
+export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }> {
+  try {
+    const units = await getKnowledgeUnits(userId);
+    const domains = Array.from(new Set(units.map(u => u.domain)));
+    const totalUnits = units.length;
+    const masteredCount = units.filter(u => u.mastery_status === 'practiced' || u.mastery_status === 'confident').length;
+
+    return {
+      domains,
+      totalUnits,
+      masteredCount
+    };
+  } catch (error) {
+    console.error('Error fetching knowledge summary for GPT:', error);
+    return {
+      domains: [],
+      totalUnits: 0,
+      masteredCount: 0
+    };
+  }
+}
+
+```
+
+### lib/services/materialization-service.ts
+
+```typescript
+import type { DrillSession } from '@/types/drill'
+import type { Project } from '@/types/project'
+import type { Idea } from '@/types/idea'
+import { createProject } from '@/lib/services/projects-service'
+import { updateIdeaStatus } from '@/lib/services/ideas-service'
+import { createInboxEvent } from '@/lib/services/inbox-service'
+
+export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<Project> {
+  const project = await createProject({
+    ideaId: idea.id,
+    name: idea.title,
+    summary: idea.gpt_summary,
+    state: 'arena',
+    health: 'green',
+    currentPhase: 'Getting started',
+    nextAction: 'Define first task',
+    activePreviewUrl: undefined,
+  })
+
+  await updateIdeaStatus(idea.id, 'arena')
+
+  // W4: Create inbox event to notify about project promotion
+  await createInboxEvent({
+    type: 'project_promoted',
+    title: 'Project created',
+    body: `"${idea.title}" is now in progress (scope: ${drill.scope}).`,
+    severity: 'info',
+    projectId: project.id,
+    actionUrl: `/arena/${project.id}`,
+  })
+
+  return project
+}
+
+```
+
+### lib/services/projects-service.ts
+
+```typescript
+import type { Project, ProjectState } from '@/types/project'
+import { MAX_ARENA_PROJECTS } from '@/lib/constants'
+
+/**
+ * QUARANTINED: projects-service
+ *
+ * The TABLE_MAP previously routed 'projects' → 'realizations', but the
+ * Supabase `realizations` table uses snake_case columns (idea_id, current_phase,
+ * active_preview_url, created_at) while the TypeScript `Project` interface uses
+ * camelCase (ideaId, currentPhase, activePreviewUrl, createdAt).
+ *
+ * Until a proper migration adds field mapping or aligns the schema,
+ * this service returns empty arrays to prevent runtime crashes.
+ *
+ * Legacy surfaces affected: Arena, Icebox, Shipped, Killed pages.
+ */
+
+const QUARANTINE_MSG = '[projects-service] ⚠️  QUARANTINED: realizations table schema does not match Project TS type. Returning empty.'
+
+export async function getProjects(): Promise<Project[]> {
+  console.warn(QUARANTINE_MSG)
+  return []
+}
+
+export async function getProjectById(id: string): Promise<Project | undefined> {
+  console.warn(QUARANTINE_MSG)
+  return undefined
+}
+
+export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
+  console.warn(QUARANTINE_MSG)
+  return []
+}
+
+export async function getArenaProjects(): Promise<Project[]> {
+  return getProjectsByState('arena')
+}
+
+export async function isArenaAtCapacity(): Promise<boolean> {
+  const arena = await getArenaProjects()
+  return arena.length >= MAX_ARENA_PROJECTS
+}
+
+export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
+  throw new Error('[projects-service] QUARANTINED: Cannot create projects until realizations schema is aligned.')
+}
+
+export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
+  console.warn(QUARANTINE_MSG)
+  return null
+}
+
+
+```
+
+### lib/services/prs-service.ts
+
+```typescript
+import type { PullRequest } from '@/types/pr'
+
+/**
+ * QUARANTINED: prs-service
+ *
+ * The TABLE_MAP previously routed 'prs' → 'realization_reviews', but the
+ * Supabase table uses snake_case columns (project_id, preview_url, build_state,
+ * review_status, local_number, created_at) while the TypeScript `PullRequest`
+ * interface uses camelCase (projectId, previewUrl, buildState, reviewStatus,
+ * number, createdAt).
+ *
+ * Until a proper migration adds field mapping or aligns the schema,
+ * this service returns empty arrays to prevent runtime crashes.
+ *
+ * Legacy surfaces affected: Review page, PR cards.
+ */
+
+const QUARANTINE_MSG = '[prs-service] ⚠️  QUARANTINED: realization_reviews table schema does not match PullRequest TS type. Returning empty.'
+
+export async function getPRsForProject(projectId: string): Promise<PullRequest[]> {
+  console.warn(QUARANTINE_MSG)
+  return []
+}
+
+export async function getPRById(id: string): Promise<PullRequest | undefined> {
+  console.warn(QUARANTINE_MSG)
+  return undefined
+}
+
+export async function createPR(data: Omit<PullRequest, 'id' | 'createdAt' | 'number'>): Promise<PullRequest> {
+  throw new Error('[prs-service] QUARANTINED: Cannot create PRs until realization_reviews schema is aligned.')
+}
+
+export async function updatePR(id: string, updates: Partial<PullRequest>): Promise<PullRequest | null> {
+  console.warn(QUARANTINE_MSG)
+  return null
+}
+
+
 ```
 
 ### lib/services/synthesis-service.ts
@@ -12,6 +1554,7 @@ import { getInteractionsByInstance } from './interaction-service'
 import { compressGPTStateFlow } from '@/lib/ai/flows/compress-gpt-state'
 import { runFlowSafe } from '@/lib/ai/safe-flow'
 import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
+import { getKnowledgeSummaryForGPT } from './knowledge-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -103,6 +1646,13 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
       prioritySignals: compressedResult.prioritySignals,
       suggestedOpeningTopic: compressedResult.suggestedOpeningTopic
     }
+  }
+
+  // Lane 5: Add knowledge summary
+  try {
+    (packet as any).knowledgeSummary = await getKnowledgeSummaryForGPT(userId)
+  } catch (error) {
+    (packet as any).knowledgeSummary = null
   }
 
   return packet
@@ -955,7 +2505,37 @@ export const COPY = {
       plan_builder: 'Plan Builder', 
       essay_tasks: 'Essay + Tasks' 
     }
-  }
+  },
+  knowledge: {
+    heading: 'Knowledge',
+    subheading: 'Your terrain, mapped from action.',
+    emptyState: 'Your knowledge base grows as you explore experiences.',
+    sections: {
+      domains: 'Domains',
+      companion: 'Related Knowledge',
+      recentlyAdded: 'Recently Added',
+    },
+    unitTypes: {
+      foundation: 'Foundation',
+      playbook: 'Playbook',
+      deep_dive: 'Deep Dive',
+      example: 'Example',
+    },
+    mastery: {
+      unseen: 'New',
+      read: 'Read',
+      practiced: 'Practiced',
+      confident: 'Confident',
+    },
+    actions: {
+      markRead: 'Mark as Read',
+      markPracticed: 'Mark as Practiced',
+      markConfident: 'Mark as Confident',
+      startExperience: 'Start Related Experience',
+      learnMore: '📖 Learn about this',
+      viewAll: 'View All →',
+    },
+  },
 }
 
 ```
@@ -1261,6 +2841,72 @@ export function normalizeIdeaPayload(data: Record<string, unknown>): Omit<Idea, 
     audience: (data.audience || 'unknown') as string,
     intent: (data.intent || '') as string,
   }
+}
+
+```
+
+### lib/validators/knowledge-validator.ts
+
+```typescript
+import { MiraKWebhookPayload, MasteryStatus } from '@/types/knowledge';
+import { KNOWLEDGE_UNIT_TYPES, MASTERY_STATUSES } from '@/lib/constants';
+
+export function validateMiraKPayload(body: any): { valid: boolean; error?: string; data?: MiraKWebhookPayload } {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: 'Payload must be an object' };
+  }
+
+  if (!body.topic || typeof body.topic !== 'string') {
+    return { valid: false, error: 'Missing or invalid topic' };
+  }
+
+  if (!body.domain || typeof body.domain !== 'string') {
+    return { valid: false, error: 'Missing or invalid domain' };
+  }
+
+  if (!Array.isArray(body.units) || body.units.length === 0) {
+    return { valid: false, error: 'Payload must contain a non-empty units array' };
+  }
+
+  for (const unit of body.units) {
+    if (!KNOWLEDGE_UNIT_TYPES.includes(unit.unit_type)) {
+      return { valid: false, error: `Invalid unit type: ${unit.unit_type}` };
+    }
+    if (!unit.title || typeof unit.title !== 'string') {
+      return { valid: false, error: 'Unit missing title' };
+    }
+    if (!unit.thesis || typeof unit.thesis !== 'string') {
+      return { valid: false, error: 'Unit missing thesis' };
+    }
+    if (!unit.content || typeof unit.content !== 'string') {
+      return { valid: false, error: 'Unit missing content' };
+    }
+    if (!Array.isArray(unit.key_ideas)) {
+      return { valid: false, error: 'Unit key_ideas must be an array' };
+    }
+  }
+
+  if (body.experience_proposal) {
+    const prop = body.experience_proposal;
+    if (!prop.title || !prop.goal || !prop.template_id || !prop.resolution || !Array.isArray(prop.steps)) {
+      return { valid: false, error: 'Incomplete experience proposal' };
+    }
+  }
+
+  return { valid: true, data: body as MiraKWebhookPayload };
+}
+
+export function validateMasteryUpdate(body: any): { valid: boolean; error?: string; data?: { mastery_status: MasteryStatus } } {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: 'Payload must be an object' };
+  }
+
+  const { mastery_status } = body;
+  if (!MASTERY_STATUSES.includes(mastery_status)) {
+    return { valid: false, error: `Invalid mastery status: ${mastery_status}` };
+  }
+
+  return { valid: true, data: { mastery_status } };
 }
 
 ```
@@ -2239,6 +3885,51 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 | GitHub | `@octokit/rest` via `lib/adapters/github-adapter.ts` |
 | Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
 | AI Intelligence | Genkit + `@genkit-ai/google-genai` via `lib/ai/genkit.ts` |
+| Research Engine | **MiraK** — Python/FastAPI microservice on Cloud Run (`c:/mirak` repo) |
+
+### MiraK Microservice (Separate Repo: `c:/mirak`)
+
+MiraK is a Python/FastAPI research agent that runs as a Cloud Run microservice. It is a **separate project** from Mira Studio but deeply integrated via webhooks.
+
+| Layer | Tech |
+|-------|------|
+| Framework | FastAPI (Python 3.11+) |
+| AI Agents | Google ADK (Agent Development Kit) |
+| Deployment | Google Cloud Run |
+| Endpoint | `POST /generate_knowledge` |
+| Cloud URL | `https://mirak-lqooqdw7lq-uc.a.run.app` |
+| GPT Action | `mirak_gpt_action.yaml` (OpenAPI schema in `c:/mirak/`) |
+
+**Architecture:**
+```
+Custom GPT → POST /generate_knowledge (Cloud Run)
+  ↓ 202 Accepted (immediate)
+  ↓ BackgroundTasks: agent pipeline runs
+  ↓ On completion: webhook delivery
+  ↓
+  ├── Primary: https://mira.mytsapi.us/api/webhook/mirak (local tunnel)
+  └── Fallback: https://mira-mocha-kappa.vercel.app/api/webhook/mirak (production)
+  ↓
+Mira Studio webhook receiver validates + persists to Supabase:
+  ├── knowledge_units table (the research content)
+  └── experience_instances table (auto-proposed experience from research)
+```
+
+**Key files in `c:/mirak`:**
+- `main.py` — FastAPI app, `/generate_knowledge` endpoint, agent pipeline, webhook delivery
+- `knowledge.md` — Writing guide for content quality (NOT a schema constraint)
+- `mirak_gpt_action.yaml` — OpenAPI schema for the Custom GPT Action
+- `Dockerfile` — Cloud Run container definition
+- `requirements.txt` — Python dependencies
+
+**Webhook routing logic (in `main.py`):**
+1. Tries local tunnel diagnostic check (`GET /api/dev/diagnostic`)
+2. If local is up → delivers to local tunnel
+3. If local is down → delivers to Vercel production URL
+4. Authentication via `MIRAK_WEBHOOK_SECRET` header (`x-mirak-secret`)
+
+**Environment variables (both repos must share):**
+- `MIRAK_WEBHOOK_SECRET` in `c:/mira/.env.local` AND `c:/mirak/.env`
 
 ---
 
@@ -2349,7 +4040,13 @@ lib/
     schemas.ts           ← Shared Zod schemas for AI flow outputs
     safe-flow.ts         ← Graceful degradation wrapper for AI flows
     flows/               ← Genkit flow definitions (one file per flow)
+      synthesize-experience.ts  ← narratize synthesis on experience completion
+      suggest-next-experience.ts← context-aware next-experience suggestions
+      extract-facets.ts         ← semantic profile facet extraction
+      compress-gpt-state.ts     ← token-efficient GPT state compression
     context/             ← Context assembly helpers for flows
+      suggestion-context.ts  ← Gathers user profile + history for suggestions
+      facet-context.ts       ← Flattens interactions for facet extraction
   experience/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
     reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
@@ -2385,7 +4082,8 @@ types/
   idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
   agent-run.ts, external-ref.ts, github.ts,
   experience.ts, interaction.ts, synthesis.ts,
-  graph.ts, timeline.ts, profile.ts
+  graph.ts, timeline.ts, profile.ts,
+  knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
 
 content/                 ← Product copy markdown
 docs/
@@ -2644,12 +4342,19 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - Why: `interaction_events.draft_saved` is telemetry (append-only, for friction analysis). `artifacts` with `artifact_type = 'step_draft'` is the durable draft store (upserted, read back by renderers).
 
 ### SOP-23: Genkit flows are services, not routes — and must degrade gracefully
-**Learned from**: Sprint 7 architecture (coach.md rule #1, #5)
+**Learned from**: Sprint 7 architecture
 
 - ❌ Calling a Genkit flow directly from an API route handler.
 - ❌ Letting a missing `GEMINI_API_KEY` crash the app.
 - ✅ Call flows from service functions via `runFlowSafe()` wrapper. If AI is unavailable, fall back to existing mechanical behavior.
 - Why: AI enhances; it doesn't gate. The system must work identically with or without `GEMINI_API_KEY`. Services own the fallback logic.
+
+### SOP-24: MiraK webhook payloads go through validation — never trust external agents
+**Learned from**: Sprint 8 architecture (Knowledge Tab design)
+
+- ❌ Trusting MiraK's JSON payload shape without validation.
+- ✅ Validate via `knowledge-validator.ts` before writing to DB. Check required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, reject malformed payloads with 400.
+- Why: MiraK is a separate service (Python on Cloud Run). Its output format may drift. The webhook is the trust boundary — validate everything before persistence.
 
 ---
 
@@ -2666,6 +4371,9 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-25**: Sprint 5 completed. All 6 lanes done. Gate 0 contracts canonicalized (3 contract files). Graph service, timeline page, profile+facets, validators, progression engine all built. Updated repo map with contracts/, graph-service, timeline-service, facet-service, step-payload-validator. Added SOPs 20–22 from Sprint 5B field test findings.
 - **2026-03-26**: Sprint 6 boardinit — Experience Workspace sprint. Based on field-test findings documented in `roadmap.md` Sprint 5B section. 5 coding lanes: Workspace Navigator, Draft Persistence, Renderer Upgrades, Steps API + Multi-Pass, Step Status + Scheduling. Lane 6 for integration + browser testing.
 - **2026-03-26**: Sprint 6 completed. All 6 lanes done. Non-linear workspace model with sidebar/topbar navigators, draft persistence via artifacts table, renderer upgrades (checkpoint textareas, essay writing surfaces, expandable challenges/plans), step CRUD/reorder API, step status/scheduling migration 004. Updated repo map with StepNavigator, ExperienceOverview, DraftProvider, DraftIndicator, draft-service, useDraftPersistence, step-state-machine, step-scheduling. Updated OpenAPI schema (16 endpoints). Updated roadmap. Added SOP-23 (Genkit flow pattern). Added Genkit to tech stack.
+- **2026-03-27**: Sprint 7 completed. All 6 lanes done. 4 Genkit flows (synthesis, suggestions, facets, GPT compression), graceful degradation wrapper, completion wiring, migration 005 (evidence column). Updated repo map with AI flow files and context helpers.
+- **2026-03-27**: Sprint 8 boardinit — Knowledge Tab + MiraK Integration. Added SOP-24 (webhook validation). Added `types/knowledge.ts` to repo map. Added knowledge routes, constants, copy. Gate 0 executed by coordinator.
+- **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code. Added Sprint 8B roadmap section (content density + knowledge infrastructure upgrade).
 
 ```
 
@@ -2684,366 +4392,537 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 | Sprint 4 | Experience Engine — Persistent lifecycle, Library, Review, Home, Re-entry | TSC ✅ Build ✅ | ✅ Complete — Full loop: propose → approve → workspace → complete → GPT re-entry. |
 | Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ Build ✅ | ✅ Complete — Gate 0 contracts, experience graph, timeline, profile, validators, renderer upgrades. All 6 lanes done. |
 | Sprint 6 | Experience Workspace: Navigator, Drafts, Renderer Upgrades, Steps API, Scheduling | TSC ✅ Build ✅ | ✅ Complete — Non-linear workspace model, draft persistence, sidebar/topbar navigators, step status/scheduling migration. All 6 lanes done. |
+| Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
+| Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, Mira Studio dashboard, companion integration. All 6 lanes done. |
 
 ---
 
-## Sprint 7 — Genkit Intelligence Layer (Backend Brain)
+## Sprint 8A — Gate 0: Knowledge Types & Contracts
 
-> **Goal:** Replace the dumb pipe with a thinking backend. Install Genkit, build 3 core AI flows (intelligent synthesis, smart facet extraction, context-aware suggestions), and wire them into the existing service layer so every experience completion triggers real AI-powered analysis instead of naive string concatenation and keyword splitting.
+> **Purpose:** Define the shared types, constants, routes, and copy that Lanes 1–5 all consume. Must be approved before any lane begins.
 
-> **Strategy:** 5 parallel coding lanes + Integration Lane 6. No gate needed — each lane touches completely different files. No browser until Lane 6. Genkit flows are services, not routes (SOP-8).
+### Gate 0 Status
 
-> **Key Architectural Rule:** Flows must degrade gracefully. If `GEMINI_API_KEY` is not set or the API fails, the system falls back to existing mechanical behavior (current synthesis-service, facet-service, graph-service). AI enhances; it doesn't gate.
+| Gate | Focus | Status |
+|------|-------|--------|
+| ✅ Gate 0 | Knowledge Types & Contracts | G1 ✅ G2 ✅ G3 ✅ G4 ✅ |
 
-### What This Sprint Delivers
+**G1 — Create `types/knowledge.ts`** ✅
 
-By the end of Sprint 7, the system should:
-1. Have Genkit installed and initialized with Google AI plugin
-2. Generate **intelligent narrative synthesis** when an experience completes (not "Synthesized context from 4 interactions")
-3. Extract **semantic profile facets** from user responses (not comma-split keyword extraction)
-4. Produce **context-aware next-experience suggestions** (not hardcoded progression chains)
-5. Compress the GPT state packet into a **token-efficient narrative** (not raw JSON dump)
-6. Auto-trigger AI flows on experience completion (wired into the ExperienceRenderer completion path)
+**G2 — Update `lib/constants.ts`** ✅
+
+**G3 — Update `lib/routes.ts`** ✅
+
+**G4 — Update `lib/studio-copy.ts`** ✅
+
+Create the knowledge type definitions:
+```ts
+export type KnowledgeUnitType = 'foundation' | 'playbook' | 'deep_dive' | 'example';
+export type MasteryStatus = 'unseen' | 'read' | 'practiced' | 'confident';
+
+export interface KnowledgeCitation {
+  url: string;
+  claim: string;
+  confidence: number;
+}
+
+export interface RetrievalQuestion {
+  question: string;
+  answer: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface KnowledgeUnit {
+  id: string;
+  user_id: string;
+  topic: string;
+  domain: string;
+  unit_type: KnowledgeUnitType;
+  title: string;
+  thesis: string;
+  content: string;
+  key_ideas: string[];
+  common_mistake: string | null;
+  action_prompt: string | null;
+  retrieval_questions: RetrievalQuestion[];
+  citations: KnowledgeCitation[];
+  linked_experience_ids: string[];
+  source_experience_id: string | null;
+  subtopic_seeds: string[];
+  mastery_status: MasteryStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeProgress {
+  id: string;
+  user_id: string;
+  unit_id: string;
+  mastery_status: MasteryStatus;
+  last_studied_at: string | null;
+  created_at: string;
+}
+
+export interface MiraKWebhookPayload {
+  topic: string;
+  domain: string;
+  units: Array<{
+    unit_type: KnowledgeUnitType;
+    title: string;
+    thesis: string;
+    content: string;
+    key_ideas: string[];
+    common_mistake?: string;
+    action_prompt?: string;
+    retrieval_questions?: RetrievalQuestion[];
+    citations?: KnowledgeCitation[];
+    subtopic_seeds?: string[];
+  }>;
+  experience_proposal?: {
+    title: string;
+    goal: string;
+    template_id: string;
+    resolution: { depth: string; mode: string; timeScope: string; intensity: string };
+    steps: Array<{ step_type: string; title: string; payload: any }>;
+  };
+}
+```
+
+**G2 — Update `lib/constants.ts`** ⬜
+
+Add knowledge-related constants:
+```ts
+export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const;
+export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number];
+
+export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const;
+export type MasteryStatus = (typeof MASTERY_STATUSES)[number];
+```
+
+**G3 — Update `lib/routes.ts`** ⬜
+
+Add knowledge route:
+```ts
+knowledge: '/knowledge',
+knowledgeUnit: (id: string) => `/knowledge/${id}`,
+```
+
+**G4 — Update `lib/studio-copy.ts`** ⬜
+
+Add knowledge copy block:
+```ts
+knowledge: {
+  heading: 'Knowledge',
+  subheading: 'Your terrain, mapped from action.',
+  emptyState: 'Your knowledge base grows as you explore experiences.',
+  sections: {
+    domains: 'Domains',
+    companion: 'Related Knowledge',
+    recentlyAdded: 'Recently Added',
+  },
+  unitTypes: {
+    foundation: 'Foundation',
+    playbook: 'Playbook',
+    deep_dive: 'Deep Dive',
+    example: 'Example',
+  },
+  mastery: {
+    unseen: 'New',
+    read: 'Read',
+    practiced: 'Practiced',
+    confident: 'Confident',
+  },
+  actions: {
+    markRead: 'Mark as Read',
+    markPracticed: 'Mark as Practiced',
+    startExperience: 'Start Related Experience',
+    learnMore: '📖 Learn about this',
+  },
+},
+```
+
+---
+
+## Sprint 8B — Coding Lanes (begins after Gate 0 approval)
+
+> **Goal:** Build the Knowledge Tab, MiraK webhook ingestion, knowledge service, and experience-knowledge linking. Knowledge is a companion to experiences — a home base for multi-day learning with permanent reference material.
+
+> **Key Architectural Rule:** Knowledge units are DURABLE reference material — they never "complete" or "archive" like experiences. They persist in the Knowledge Tab forever. MiraK produces them; the GPT proposes experiences from them; the user earns them through engagement.
 
 ### Dependency Graph
 
 ```
-Lane 1: [W1–W4]          Lane 2: [W1–W5]          Lane 3: [W1–W4]
-  GENKIT INFRA +            INTELLIGENT               AI FACET
-  SYNTHESIS FLOW            SUGGESTIONS               EXTRACTION
-  (lib/ai/)                 (lib/ai/flows/,           (lib/ai/flows/,
-                             graph-service)             facet-service)
+Gate 0: [G1–G4 TYPES+CONTRACTS] ─── must complete first ───→
 
-Lane 4: [W1–W4]          Lane 5: [W1–W4]
-  GPT STATE                 COMPLETION
-  COMPRESSION               WIRING + API
-  (lib/ai/flows/,          (experience-service,
-   synthesis-service)       ExperienceRenderer,
-                            api/synthesis)
+Lane 1: [W1–W4]          Lane 2: [W1–W6]          Lane 3: [W1–W6]
+  DB MIGRATION +            API ROUTES +              KNOWLEDGE
+  KNOWLEDGE SERVICE         MIRAK WEBHOOK             TAB UI
+  (lib/services/,           (app/api/,                (app/knowledge/,
+   lib/supabase/,            lib/validators/)          components/knowledge/)
+   lib/validators/)
 
-ALL 5 ──→ Lane 6: [W1–W7] INTEGRATION + BROWSER TESTING
+Lane 4: [W1–W3]          Lane 5: [W1–W4]
+  SIDEBAR + NAV +           EXPERIENCE ↔
+  COPY + HOME               KNOWLEDGE LINKING
+  (components/shell/,       (components/experience/,
+   app/page.tsx)             lib/services/)
+
+ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
 ```
 
 **Lanes 1–5 are fully parallel** — zero file conflicts.
-**Lane 6 runs AFTER** Lanes 1–5. Resolves cross-lane issues and does all browser testing.
+**Lane 6 runs AFTER** Lanes 1–5. Applies migration, resolves cross-lane issues, does all browser testing.
 
 ---
 
-### Sprint 7 Ownership Zones
+### Sprint 8 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| Genkit infra + synthesis flow | `lib/ai/genkit.ts` [NEW], `lib/ai/flows/synthesize-experience.ts` [NEW], `lib/ai/schemas.ts` [NEW] | Lane 1 |
-| Intelligent suggestions flow | `lib/ai/flows/suggest-next-experience.ts` [NEW], `lib/services/graph-service.ts` [MODIFY — append only] | Lane 2 |
-| AI facet extraction flow | `lib/ai/flows/extract-facets.ts` [NEW], `lib/services/facet-service.ts` [MODIFY — append only] | Lane 3 |
-| GPT state compression flow | `lib/ai/flows/compress-gpt-state.ts` [NEW], `lib/services/synthesis-service.ts` [MODIFY — append only] | Lane 4 |
-| Completion wiring + API | `app/api/synthesis/route.ts` [MODIFY], `app/api/experiences/[id]/suggestions/route.ts` [MODIFY if exists, NEW if not], `lib/services/experience-service.ts` [MODIFY — append only] | Lane 5 |
+| DB migration + knowledge service + validator | `lib/supabase/migrations/006_knowledge_units.sql` [NEW], `lib/services/knowledge-service.ts` [NEW], `lib/validators/knowledge-validator.ts` [NEW] | Lane 1 |
+| API routes + webhook + dev harness | `app/api/webhook/mirak/route.ts` [NEW], `app/api/knowledge/route.ts` [NEW], `app/api/knowledge/[id]/route.ts` [NEW], `app/api/knowledge/[id]/progress/route.ts` [NEW], `app/api/dev/test-knowledge/route.ts` [NEW] | Lane 2 |
+| Knowledge Tab pages + components | `app/knowledge/page.tsx` [NEW], `app/knowledge/KnowledgeClient.tsx` [NEW], `app/knowledge/[unitId]/page.tsx` [NEW], `components/knowledge/DomainCard.tsx` [NEW], `components/knowledge/KnowledgeUnitCard.tsx` [NEW], `components/knowledge/KnowledgeUnitView.tsx` [NEW], `components/knowledge/MasteryBadge.tsx` [NEW] | Lane 3 |
+| Sidebar + nav + home integration | `components/shell/studio-sidebar.tsx` [MODIFY], `components/shell/MobileNav.tsx` [MODIFY if exists], `app/page.tsx` [MODIFY] | Lane 4 |
+| Experience ↔ knowledge linking | `components/experience/KnowledgeCompanion.tsx` [NEW], `components/experience/ExperienceRenderer.tsx` [MODIFY — append only], `lib/services/synthesis-service.ts` [MODIFY — append only], `app/api/gpt/state/route.ts` [MODIFY — append only] | Lane 5 |
 | Integration + testing | All files (read + targeted fixes) | Lane 6 |
 
 ---
 
-### Lane 1 — Genkit Infrastructure + Synthesis Flow
+### Lane 1 — Database + Knowledge Service
 
-**Owns: Genkit initialization, shared schemas, and the `synthesizeExperienceFlow`. This is the foundation all other lanes import from.**
+**Owns: Migration, knowledge-service.ts, knowledge-validator.ts. This is the data layer all other lanes depend on.**
 
-**Reading list:** `coach.md` (flows #1, architecture rules), `lib/services/synthesis-service.ts` (current naive implementation), `lib/services/interaction-service.ts` (how to fetch interactions), `types/synthesis.ts` (SynthesisSnapshot shape)
+**Reading list:** `types/knowledge.ts` (Gate 0 output), `lib/services/experience-service.ts` (service pattern to follow), `lib/services/facet-service.ts` (another service example with normalization), `lib/supabase/client.ts` (Supabase client), `lib/constants.ts` (knowledge constants)
 
-**W1 — Install Genkit and create initialization file** ✅ - **Done**: Genkit and Google AI plugin installed, `lib/ai/genkit.ts` initialized.
-- Run `npm install genkit @genkit-ai/google-genai`
-- Create `lib/ai/genkit.ts`:
-  ```ts
-  import { genkit } from 'genkit';
-  import { googleAI } from '@genkit-ai/google-genai';
+**W1 — Write migration 006** ⬜
+- Create `lib/supabase/migrations/006_knowledge_units.sql`:
+  ```sql
+  CREATE TABLE knowledge_units (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    topic TEXT NOT NULL,
+    domain TEXT NOT NULL,
+    unit_type TEXT NOT NULL CHECK (unit_type IN ('foundation', 'playbook', 'deep_dive', 'example')),
+    title TEXT NOT NULL,
+    thesis TEXT NOT NULL,
+    content TEXT NOT NULL,
+    key_ideas JSONB NOT NULL DEFAULT '[]',
+    common_mistake TEXT,
+    action_prompt TEXT,
+    retrieval_questions JSONB NOT NULL DEFAULT '[]',
+    citations JSONB NOT NULL DEFAULT '[]',
+    linked_experience_ids JSONB NOT NULL DEFAULT '[]',
+    source_experience_id UUID,
+    subtopic_seeds JSONB NOT NULL DEFAULT '[]',
+    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
 
-  export const ai = genkit({
-    plugins: [googleAI()],
-  });
+  CREATE TABLE knowledge_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id),
+    unit_id UUID NOT NULL REFERENCES knowledge_units(id),
+    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
+    last_studied_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, unit_id)
+  );
 
-  export { googleAI };
+  CREATE INDEX idx_knowledge_units_user ON knowledge_units(user_id);
+  CREATE INDEX idx_knowledge_units_domain ON knowledge_units(domain);
+  CREATE INDEX idx_knowledge_progress_user ON knowledge_progress(user_id);
   ```
-- Add `GEMINI_API_KEY` to `.env.local` (document in wiring.md)
-- Done when: `ai` instance exports cleanly and TSC passes
+- Done when: SQL file compiles cleanly
 
-**W2 — Create shared Zod schemas for AI flows** ✅ - **Done**: Created `SynthesisOutputSchema`, `FacetExtractionOutputSchema`, `SuggestionOutputSchema`, and `CompressedStateOutputSchema`.
-- Create `lib/ai/schemas.ts`:
-  - `SynthesisOutputSchema` — structured output for synthesis flow:
-    ```ts
-    z.object({
-      narrative: z.string().describe('2-3 sentence summary of what happened and what it means'),
-      keySignals: z.array(z.string()).describe('3-5 key behavioral signals observed'),
-      frictionAssessment: z.string().describe('One sentence: was the user engaged, struggling, or coasting?'),
-      nextCandidates: z.array(z.string()).describe('2-3 suggested next experience types with reasoning')
-    })
-    ```
-  - `FacetExtractionOutputSchema` — structured output for facet extraction
-  - `SuggestionOutputSchema` — structured output for suggestions
-  - `CompressedStateOutputSchema` — structured output for state compression
-- Done when: all schemas compile with proper Zod descriptions
+**W2 — Create knowledge-service.ts** ⬜
+- Create `lib/services/knowledge-service.ts` following the same adapter/service pattern as `experience-service.ts`
+- Must include `fromDB()`/`toDB()` normalization (snake_case ↔ camelCase) per inbox-service pattern
+- Functions:
+  - `getKnowledgeUnits(userId: string): Promise<KnowledgeUnit[]>`
+  - `getKnowledgeUnitsByDomain(userId: string, domain: string): Promise<KnowledgeUnit[]>`
+  - `getKnowledgeUnitById(id: string): Promise<KnowledgeUnit | null>`
+  - `createKnowledgeUnit(unit: Omit<KnowledgeUnit, 'id' | 'created_at' | 'updated_at'>): Promise<KnowledgeUnit>`
+  - `createKnowledgeUnits(units: ...): Promise<KnowledgeUnit[]>`
+  - `updateMasteryStatus(userId: string, unitId: string, status: MasteryStatus): Promise<void>`
+  - `getKnowledgeProgress(userId: string): Promise<KnowledgeProgress[]>`
+  - `getKnowledgeDomains(userId: string): Promise<{ domain: string; count: number; readCount: number }[]>`
+  - `getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }>`
+- Done when: all functions compile with correct types, no raw Supabase calls in routes
 
-**W3 — Build `synthesizeExperienceFlow`** ✅ - **Done**: Implemented `synthesizeExperienceFlow` with context assembly and AI generation.
-- Create `lib/ai/flows/synthesize-experience.ts`:
-  - Input: `{ instanceId: string, userId: string }`
-  - Fetches all interaction events for the instance via `getInteractionsByInstance()`
-  - Fetches the experience instance + steps via `getExperienceInstanceById()` + `getExperienceSteps()`
-  - Builds a prompt containing: experience title, goal, resolution, step titles, and all user interactions (answers, reflections, task completions, time spent)
-  - Calls `ai.generate()` with `gemini-2.5-flash` and `SynthesisOutputSchema` as structured output
-  - Returns the parsed structured output
-  - Model: `gemini-2.5-flash` (called frequently, needs to be fast)
-- Done when: flow compiles and can be called from a service function
+**W3 — Create knowledge-validator.ts** ⬜
+- Create `lib/validators/knowledge-validator.ts`
+- `validateMiraKPayload(body: unknown): { valid: boolean; error?: string; data?: MiraKWebhookPayload }`
+- `validateMasteryUpdate(body: unknown): { valid: boolean; error?: string; data?: { mastery_status: MasteryStatus } }`
+- Check all required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, validate mastery_status against `MASTERY_STATUSES`
+- Done when: validators compile, handle malformed input gracefully
 
-**W4 — Create graceful degradation wrapper** ✅ - **Done**: Implemented `runFlowSafe` and added `GEMINI_API_KEY` guard.
-- Create `lib/ai/safe-flow.ts`:
-  - Export `runFlowSafe<T>(flowFn: () => Promise<T>, fallback: T): Promise<T>`
-  - Try/catch: if Gemini API fails (no key, rate limit, network), log warning and return fallback
-  - Check `process.env.GEMINI_API_KEY` — if not set, skip flow entirely and return fallback
-  - This is what all services call instead of calling flows directly
-- Done when: wrapper handles missing API key and API failures gracefully
+**W4 — Add type guard to guards.ts** ⬜
+- Append to `lib/guards.ts`: `isKnowledgeUnit()`, `isValidMasteryStatus()` type guards
+- Done when: guards compile
 
 ---
 
-### Lane 2 — Intelligent Experience Suggestions
+### Lane 2 — API Routes + MiraK Webhook
 
-**Owns: `suggestNextExperienceFlow` and appending the AI-powered suggestion function to graph-service. NO changes to existing graph-service functions.**
+**Owns: All new API routes under `/api/knowledge/`, `/api/webhook/mirak/`, and `/api/dev/test-knowledge/`.**
 
-**Reading list:** `coach.md` (flow #4), `lib/services/graph-service.ts` (current `getSuggestionsForCompletion()`), `lib/experience/progression-rules.ts` (static chain rules), `lib/services/facet-service.ts` (how to read user profile), `types/profile.ts`
+**Reading list:** `types/knowledge.ts` (Gate 0), `app/api/experiences/route.ts` (API route pattern), `app/api/webhook/github/route.ts` (webhook pattern), `app/api/dev/test-experience/route.ts` (dev harness pattern), `lib/services/knowledge-service.ts` (Lane 1 — read the interface but don't modify), `lib/validators/knowledge-validator.ts` (Lane 1), `lib/services/inbox-service.ts` (for timeline events)
 
-**W1 — Build `suggestNextExperienceFlow`** ✅
-- **Done**: Implemented `suggestNextExperienceFlow` using `gemini-1.5-flash` with structured output for next experience suggestions.
-- Create `lib/ai/flows/suggest-next-experience.ts`:
-  - Input schema:
-    ```ts
-    z.object({
-      userId: z.string(),
-      justCompletedTitle: z.string().optional(),
-      completedExperienceClasses: z.array(z.string()),
-      userInterests: z.array(z.string()),
-      userSkills: z.array(z.string()),
-      activeGoals: z.array(z.string()),
-      frictionLevel: z.string().optional(),
-      availableTemplateClasses: z.array(z.string())
-    })
-    ```
-  - Output schema: `SuggestionOutputSchema` from `lib/ai/schemas.ts`:
-    ```ts
-    z.object({
-      suggestions: z.array(z.object({
-        templateClass: z.string(),
-        reason: z.string(),
-        confidence: z.number(),
-        suggestedResolution: z.object({
-          depth: z.string(),
-          mode: z.string(),
-          timeScope: z.string(),
-          intensity: z.string()
-        })
-      }))
-    })
-    ```
-  - Prompt includes: user profile summary, completed history, current friction, and asks for 2-3 context-aware suggestions
-  - Model: `gemini-2.5-flash`
-- Done when: flow compiles with typed input/output
+**W1 — Create MiraK webhook receiver** ⬜
+- Create `app/api/webhook/mirak/route.ts`
+- `POST` handler:
+  - Read `x-mirak-secret` header, compare to `process.env.MIRAK_WEBHOOK_SECRET` (skip validation if not set in dev)
+  - Call `validateMiraKPayload()` on body
+  - For each unit in payload: call `createKnowledgeUnit()` with `DEFAULT_USER_ID`
+  - If `experience_proposal` present: call `createPersistentExperience()` from `experience-service.ts`
+  - Create timeline event: `{ event_type: 'knowledge_ready', title: 'New knowledge: [topic]' }`
+  - Return `{ created: N, experience_created: boolean }`
+- Done when: route compiles, handles valid + invalid payloads
 
-**W2 — Build context assembly helper** ✅
-- **Done**: Created `buildSuggestionContext` to gather user profile, history, and template data for the suggestion flow.
-- Create `lib/ai/context/suggestion-context.ts`:
-  - `buildSuggestionContext(userId: string)` — assembles the input for the suggestion flow:
-    - Calls `buildUserProfile()` from facet-service
-    - Calls `getExperienceInstances()` to get completed classes
-    - Calls `getExperienceTemplates()` to get available template classes
-    - Returns the typed input object
-  - This keeps the flow pure (just AI) and the context assembly separate
-- Done when: helper compiles and returns valid flow input
+**W2 — Create knowledge list route** ⬜
+- Create `app/api/knowledge/route.ts`
+- `GET` handler: calls `getKnowledgeUnits(DEFAULT_USER_ID)`
+- Optional query params: `domain`, `unit_type` for filtering
+- Groups results by domain in response
+- Done when: route compiles, returns grouped units
 
-**W3 — Append AI suggestion function to graph-service** ✅
-- **Done**: Appended `getAISuggestionsForCompletion` to `graph-service.ts`, wiring it to the AI flow with a static fallback.
-- Append to `lib/services/graph-service.ts` (BOTTOM of file, do not modify existing functions):
-  ```ts
-  export async function getAISuggestionsForCompletion(instanceId: string, userId: string): Promise<{ templateClass: string; reason: string; resolution: any; confidence: number }[]> {
-    // Falls back to getSuggestionsForCompletion() if AI unavailable
-  }
-  ```
-  - Calls `buildSuggestionContext()` to assemble input
-  - Calls `suggestNextExperienceFlow` via `runFlowSafe()`
-  - Fallback: calls existing `getSuggestionsForCompletion(instanceId)`
-- Done when: function appended, compiles, uses safe wrapper
+**W3 — Create knowledge unit detail route** ⬜
+- Create `app/api/knowledge/[id]/route.ts`
+- `GET`: returns single unit via `getKnowledgeUnitById()`
+- `PATCH`: accepts `{ mastery_status }`, validates, calls `updateMasteryStatus()`
+- Done when: both methods compile
 
-**W4 — Add suggestions to GPT state packet** ✅
-- **Done**: Implemented `getSmartSuggestions` in `graph-service.ts` to provide AI-enriched next steps for the GPT state.
-- The current `buildGPTStatePacket()` in `synthesis-service.ts` returns `suggestedNext: experiences[0]?.next_suggested_ids || []`
-- Lane 4 owns synthesis-service modifications, BUT this W4 is about modifying the graph service output shape only
-- Create a new export in graph-service: `getSmartSuggestions(userId: string): Promise<SuggestionResult[]>`
-  - Calls `getAISuggestionsForCompletion()` for the most recently completed experience
-  - Returns suggestions array
-- Done when: smart suggestions are queryable from the graph service
+**W4 — Create progress route** ⬜
+- Create `app/api/knowledge/[id]/progress/route.ts`
+- `POST`: records that user studied this unit, upserts progress via service
+- Done when: route compiles
 
----
+**W5 — Create dev test harness** ⬜
+- Create `app/api/dev/test-knowledge/route.ts`
+- `POST` handler: creates 4 sample knowledge units across 2 domains ("positioning" and "business-systems")
+  - 1 foundation unit, 1 playbook unit, 1 deep_dive unit, 1 example unit
+  - Include realistic titles, thesis, key_ideas, retrieval_questions, citations
+  - Use `DEFAULT_USER_ID`
+- Return `{ created: 4, domains: ['positioning', 'business-systems'] }`
+- Done when: harness compiles, follows `/api/dev/test-experience` pattern
 
-### Lane 3 — AI Profile Facet Extraction
-
-**Owns: `extractFacetsFlow` and appending the AI-powered extraction function to facet-service. NO changes to existing facet-service functions.**
-
-**Reading list:** `coach.md` (flow #5), `lib/services/facet-service.ts` (current naive `extractFacetsFromExperience()`), `types/profile.ts` (facet types), `lib/services/interaction-service.ts`
-
-**W1 — Build `extractFacetsFlow`** ✅
-- **Done**: Created `extractFacetsFlow` using Gemini 1.5 Flash in `lib/ai/flows/extract-facets.ts`.
-
-**W2 — Build interaction-to-response extractor** ✅
-- **Done**: Created `buildFacetContext` in `lib/ai/context/facet-context.ts` to flatten interactions into text for AI.
-
-**W3 — Append AI extraction function to facet-service** ✅
-- **Done**: Appended `extractFacetsWithAI` to `facet-service.ts` using `runFlowSafe` and the new AI flow.
-
-**W4 — Add evidence field to profile_facets** ✅
-- **Done**: Added `evidence` column to `profile_facets` migration and updated `ProfileFacet` type.
-
----
-
-### Lane 4 — GPT State Compression
-
-**Owns: `compressGPTStateFlow` and modifying `buildGPTStatePacket()` in synthesis-service to use it. NO changes to other services.**
-
-**Reading list:** `coach.md` (flow #15), `lib/services/synthesis-service.ts` (current `buildGPTStatePacket()`), `types/synthesis.ts` (GPTStatePacket shape)
-
-**W1 — Build `compressGPTStateFlow`** ✅
-- **Done**: Created `lib/ai/flows/compress-gpt-state.ts` with input/output schemas and structured prompt.
-- Create `lib/ai/flows/compress-gpt-state.ts`:
-  - Input schema:
-    ```ts
-    z.object({
-      rawStateJSON: z.string().describe('The full GPT state packet as JSON string'),
-      tokenBudget: z.number().default(800).describe('Target compressed output length in tokens')
-    })
-    ```
-  - Output schema: `CompressedStateOutputSchema`:
-    ```ts
-    z.object({
-      compressedNarrative: z.string().describe('Token-efficient narrative summary of user state'),
-      prioritySignals: z.array(z.string()).describe('Top 3-5 signals the GPT should act on'),
-      suggestedOpeningTopic: z.string().describe('What the GPT should bring up first')
-    })
-    ```
-  - Prompt instructs the AI to: read the raw state, identify what's most important, compress to narrative form, and highlight action items
-  - Model: `gemini-2.5-flash` (called on every GPT state request — must be fast)
-- Done when: flow compiles with typed input/output
-
-**W2 — Modify `buildGPTStatePacket()` to include compressed state** ✅
-- **Done**: Modified `lib/services/synthesis-service.ts` to call AI state compression flow via `runFlowSafe`.
-- Modify `lib/services/synthesis-service.ts`:
-  - After building the existing packet, call `compressGPTStateFlow` via `runFlowSafe()`
-  - Add new field to returned packet: `compressedState?: { narrative: string; prioritySignals: string[]; suggestedOpeningTopic: string }`
-  - If AI unavailable, `compressedState` is undefined (GPT uses raw packet as before)
-- Done when: state packet includes compressed state when AI is available
-
-**W3 — Add AI-powered synthesis to `createSynthesisSnapshot()`** ✅
-- **Done**: Enhanced `createSynthesisSnapshot` in `lib/services/synthesis-service.ts` to include intelligent synthesis narrative and behavioral signals.
-- Modify `lib/services/synthesis-service.ts`:
-  - After creating the basic snapshot (line 13-26), call `synthesizeExperienceFlow` via `runFlowSafe()`
-  - If AI returns structured output, update the snapshot's `summary` and `key_signals` with the AI-generated values
-  - Fallback: keep the current naive summary string
-  - Import the synthesis flow from `lib/ai/flows/synthesize-experience.ts` (Lane 1's output)
-- Done when: synthesis snapshots contain AI-generated narrative when available
-
-**W4 — Update GPTStatePacket type** ✅
-- **Done**: Added optional `compressedState` field to `GPTStatePacket` in `types/synthesis.ts`.
-- Modify `types/synthesis.ts`:
-  - Add optional `compressedState` field to `GPTStatePacket`:
-    ```ts
-    compressedState?: {
-      narrative: string;
-      prioritySignals: string[];
-      suggestedOpeningTopic: string;
-    }
-    ```
-- Done when: type compiles with new optional field
-
----
-
-### Lane 5 — Completion Wiring + API Integration
-
-**Owns: Wiring AI flows into the completion path and ensuring API routes return AI-enriched data. NO new AI flows. NO flow modifications.**
-
-**Reading list:** `app/workspace/[instanceId]/WorkspaceClient.tsx` (completion handler), `app/api/synthesis/route.ts`, `app/api/experiences/[id]/suggestions/route.ts` (if exists), `lib/services/experience-service.ts`
-
-**W1 — Create AI-enriched completion service function** ✅
-- Append to `lib/services/experience-service.ts` (BOTTOM of file):
-  ```ts
-  export async function completeExperienceWithAI(instanceId: string, userId: string): Promise<void> {
-    // 1. Create synthesis snapshot (now AI-powered via Lane 4's changes)
-    await createSynthesisSnapshot(userId, 'experience', instanceId);
-    // 2. Extract facets with AI (Lane 3's function)
-    await extractFacetsWithAI(userId, instanceId);
-    // 3. Update friction level
-    await updateInstanceFriction(instanceId);
-  }
-  ```
-  - This orchestrates all post-completion AI processing in one call
-  - Each sub-call uses `runFlowSafe()` internally, so failures don't cascade
-- Done when: function compiles and orchestrates all post-completion processing
-- **Done**: Created the orchestrator function in `experience-service.ts` with stubs for downstream dependencies.
-
-**W2 — Update synthesis API route** ✅
-- Modify `app/api/synthesis/route.ts`:
-  - POST handler now calls `completeExperienceWithAI()` instead of just `createSynthesisSnapshot()`
-  - Keep backward compatibility: if only `userId` and `sourceType` are provided (no `instanceId`), fall back to basic snapshot
-- Done when: synthesis route triggers full AI pipeline on POST
-- **Done**: Updated the synthesis POST handler to call the new AI-enriched completion flow.
-
-**W3 — Create/update suggestions API route** ✅
-- Create or update `app/api/experiences/[id]/suggestions/route.ts`:
-  - GET handler calls `getAISuggestionsForCompletion()` (Lane 2's function) instead of `getSuggestionsForCompletion()`
-  - Returns enriched suggestions with `confidence` and AI-generated reasons
-  - Falls back to static suggestions if AI unavailable
-- Done when: suggestions endpoint returns AI-enriched suggestions
-- **Done**: Updated the suggestions route to use the AI-powered suggestion function from Lane 2.
-
-**W4 — Update GPT state API route** ✅
+**W6 — Update GPT state route** ⬜
 - Modify `app/api/gpt/state/route.ts`:
-  - The route already calls `buildGPTStatePacket()` — no change needed if Lane 4 modifies the service function
-  - Verify the response shape includes the new `compressedState` field
-  - Add the compressed state to the OpenAPI schema documentation
-- Done when: GPT state endpoint returns compressed narrative when AI is available
-- **Done**: Updated `openapi.yaml` to include the `compressedState` field and verified the route wiring.
+  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
+  - Add `knowledgeSummary` field to the response packet
+  - Append to existing response — do NOT rewrite the route
+- Done when: GPT state includes knowledge summary alongside existing fields
 
 ---
 
-### Lane 6 — Integration + Wiring + Browser Testing ✅
+### Lane 3 — Knowledge Tab UI
+
+**Owns: All new pages under `app/knowledge/` and all new components under `components/knowledge/`.**
+
+**Reading list:** `types/knowledge.ts` (Gate 0), `lib/studio-copy.ts` (copy constants — use COPY.knowledge.*), `lib/routes.ts` (use ROUTES.knowledge), `app/library/page.tsx` + `app/library/LibraryClient.tsx` (page+client pattern to follow), `components/experience/ExperienceCard.tsx` (card component pattern), `app/globals.css` (existing dark theme tokens)
+
+**W1 — Create MasteryBadge component** ⬜
+- Create `components/knowledge/MasteryBadge.tsx`
+- Small status chip: unseen=grey, read=blue, practiced=amber, confident=green
+- Uses `COPY.knowledge.mastery.*` for labels
+- Done when: component compiles, renders all 4 states
+
+**W2 — Create DomainCard component** ⬜
+- Create `components/knowledge/DomainCard.tsx`
+- Props: `domain: string`, `unitCount: number`, `readCount: number`
+- Dark theme card matching existing app style (bg-[#0f0f17], border-[#1e1e2e])
+- Shows domain name, unit count badge, mastery progress bar (readCount/unitCount)
+- Click handler (onClick prop or Link)
+- Done when: component renders with progress indicator
+
+**W3 — Create KnowledgeUnitCard component** ⬜
+- Create `components/knowledge/KnowledgeUnitCard.tsx`
+- Props: `unit: KnowledgeUnit`
+- Compact card: title, thesis (one line), unit_type badge (color-coded), mastery badge
+- Click → navigates to `/knowledge/[unitId]`
+- Done when: component renders all unit types
+
+**W4 — Create KnowledgeUnitView component** ⬜
+- Create `components/knowledge/KnowledgeUnitView.tsx`
+- **Use a 3-tab structure**: Learn | Practice | Links
+- **Learn tab** (default):
+  - Header: title, unit_type badge, mastery badge
+  - **Quick Read section**: `thesis` field rendered as a highlighted callout box — always visible, skimmable
+  - **Deep Read section**: `content` field rendered below — the full article body
+  - Key ideas as bullet list
+  - Common mistake callout (warning-styled box)
+  - Action prompt (highlighted CTA)
+  - Citations list with clickable URLs
+- **Practice tab**:
+  - Retrieval questions rendered as expandable Q&A cards (question visible, answer hidden until clicked)
+  - "Mark as Practiced" button after attempting questions → `PATCH /api/knowledge/[id]`
+- **Links tab**:
+  - "Start Related Experience" links if `linked_experience_ids.length > 0`
+  - `subtopic_seeds` rendered as "Explore Next" chips
+  - Source experience link if `source_experience_id` exists
+- **Mastery buttons** visible on all tabs: "Mark as Read" / "Mark as Practiced" / "Mark as Confident" → `PATCH /api/knowledge/[id]`
+- Back nav link to `/knowledge`
+- Done when: 3 tabs render, mastery buttons call API, Quick Read/Deep Read framing visible
+
+**W5 — Create Knowledge Tab page** ⬜
+- Create `app/knowledge/page.tsx` (server component):
+  - `export const dynamic = 'force-dynamic'` (SOP-19)
+  - Fetch knowledge units via `GET /api/knowledge` (or import service directly since server component)
+  - Group by domain, compute counts, find most recent units
+  - Render `KnowledgeClient`
+- Create `app/knowledge/KnowledgeClient.tsx` (client component):
+  - **"Continue Learning" dashboard section at top** (only when units exist):
+    - "Resume last topic" — most recently updated unit with `mastery_status != 'confident'`
+    - "Recently Added" — last 3 units by `created_at`
+    - This section should feel like a personalized study dashboard, not a blank grid
+  - **Domain cards grid below** as secondary navigation
+    - Each card: domain name, unit count badge, mastery progress bar
+    - Click domain → expand to show unit cards (or filter)
+  - Empty state using `COPY.knowledge.emptyState` when no units exist
+  - Uses heading from `COPY.knowledge.heading`
+- Done when: page renders continue-learning section + domain grid, handles empty state
+
+**W6 — Create Knowledge Unit detail page** ⬜
+- Create `app/knowledge/[unitId]/page.tsx` (server component):
+  - `export const dynamic = 'force-dynamic'`
+  - Fetch single unit via service or API
+  - Render `KnowledgeUnitView`
+  - Back link to Knowledge Tab
+- Done when: detail page renders full unit view with 3 tabs
+
+---
+
+### Lane 4 — Sidebar Navigation + Copy + Home Integration
+
+**Owns: Sidebar, mobile nav, and home page modifications only.**
+
+**Reading list:** `components/shell/studio-sidebar.tsx`, `components/shell/MobileNav.tsx` (if exists), `app/page.tsx` (home page), `lib/studio-copy.ts` (Gate 0 — knowledge copy), `lib/routes.ts` (Gate 0 — knowledge route)
+
+**W1 — Add Knowledge to sidebar** ⬜
+- Modify `components/shell/studio-sidebar.tsx`:
+  - Add `{ label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' }` to NAV_ITEMS
+  - Position between Library and Timeline (after icon `◇`, before icon `◷`)
+- Done when: sidebar shows Knowledge nav item in correct position
+
+**W2 — Add Knowledge to mobile nav** ⬜
+- Check if `components/shell/MobileNav.tsx` exists
+- If yes: add Knowledge nav item matching sidebar placement
+- If no: note in board.md that mobile nav doesn't exist yet
+- Done when: mobile nav updated (or documented as missing)
+
+**W3 — Add Knowledge section to home page** ⬜
+- Modify `app/page.tsx`:
+  - After the existing active experiences section, add a "Knowledge" summary section
+  - Fetch knowledge domains summary (domain count, total units, mastery progress)
+  - Only render section if user has ≥1 knowledge unit
+  - Show 2-3 domain cards with "View All →" link to `/knowledge`
+  - Uses `COPY.knowledge.*` for labels
+- Done when: home page conditionally shows knowledge section, handles empty state gracefully
+
+---
+
+### Lane 5 — Experience ↔ Knowledge Linking
+
+**Owns: KnowledgeCompanion component, ExperienceRenderer modification, synthesis-service append, GPT state enrichment.**
+
+**Reading list:** `types/knowledge.ts` (Gate 0), `components/experience/ExperienceRenderer.tsx` (main renderer — append only), `lib/services/synthesis-service.ts` (current `buildGPTStatePacket`), `lib/services/knowledge-service.ts` (Lane 1 — import functions), `app/api/experiences/[id]/suggestions/route.ts` (current suggestions route)
+
+**W1 — Create KnowledgeCompanion component** ⬜
+- Create `components/experience/KnowledgeCompanion.tsx`
+- Client component with expandable panel:
+  - Props: `domain: string` OR `knowledgeUnitId: string`
+  - Fetches matching knowledge units via `GET /api/knowledge?domain=X`
+  - Renders: icon + "📖 Learn about this" clickable header
+  - Expanded: shows unit title, thesis, "Read full →" link to `/knowledge/[id]`
+  - Collapsed by default — small, non-intrusive
+  - Uses `COPY.knowledge.actions.learnMore` for label
+- Done when: companion panel renders, expands, links to knowledge
+
+**W2 — Wire KnowledgeCompanion into ExperienceRenderer** ⬜
+- Modify `components/experience/ExperienceRenderer.tsx` (APPEND ONLY — bottom of render):
+  - After rendering the step component, check if the current step's `payload` contains a `knowledge_domain` or `knowledge_link` field
+  - If present: render `<KnowledgeCompanion domain={payload.knowledge_domain} />` below the step
+  - If not present: render nothing (no empty states, no dead space)
+  - This is additive — existing renderer behavior is untouched
+- Done when: companion appears when step has knowledge_domain, doesn't appear otherwise
+
+**W3 — Add knowledge summary to synthesis service** ⬜
+- Modify `lib/services/synthesis-service.ts` (APPEND to `buildGPTStatePacket()`):
+  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
+  - After building existing packet, add `knowledgeSummary` field
+  - Wrap in try/catch so failure doesn't break existing packet generation
+  - Fallback: `knowledgeSummary: null`
+- Done when: GPT state packet includes knowledge data when available
+
+**W4 — Enrich suggestions with knowledge context** ⬜
+- Modify `app/api/experiences/[id]/suggestions/route.ts` (APPEND ONLY):
+  - Import `getKnowledgeDomains()` from knowledge-service
+  - After generating suggestions, check if any suggestion's domain matches a studied knowledge domain
+  - If match: add `knowledgeDomain` and `masteryLevel` fields to the suggestion
+  - This allows GPT to say "You've studied X — try this experience"
+- Done when: suggestions include knowledge context when available
+
+---
+
+### Lane 6 — Integration + Browser Testing
 
 **Runs AFTER Lanes 1–5 are completed.**
 
-**W1 — Install dependencies + env setup** ✅
-- **Done**: `genkit@^1.30.1` and `@genkit-ai/google-genai@^1.30.1` confirmed in `package.json`. `GEMINI_API_KEY` present in `.env.local`.
+**W1 — Install dependencies + env setup** ⬜
+- Verify no new npm packages needed (all existing deps)
+- Add `MIRAK_WEBHOOK_SECRET` to `.env.local` (optional, any string for dev)
+- Document in `wiring.md`
 
-**W2 — Apply migration** ✅
-- **Done**: Applied `005_facet_evidence.sql` to Supabase. Verified `evidence` column exists on `profile_facets` (type: `text`).
+**W2 — Apply migration 006** ⬜
+- Apply `006_knowledge_units.sql` to Supabase project `bbdhhlungcjqzghwovsx`
+- Verify tables `knowledge_units` and `knowledge_progress` exist
+- Verify indexes created
 
-**W3 — TSC + build fix pass** ✅
-- **Done**: `npx tsc --noEmit` passes clean. `npm run build` exits 0 with all routes compiled successfully.
-- Fixes applied: upgraded all 4 flows from `gemini-1.5-flash` → `gemini-2.5-flash` per coach.md spec. Removed unnecessary `@ts-ignore` from `suggestion-context.ts`.
+**W3 — TSC + build fix pass** ⬜
+- Run `npx tsc --noEmit` — fix any cross-lane type errors
+- Run `npm run build` — fix any build errors
+- Common fix areas: missing imports between lanes, type mismatches
 
-**W4 — Test synthesis flow end-to-end** ✅
-- **Done**: Wiring verified. `createSynthesisSnapshot()` correctly calls `synthesizeExperienceFlow` via `runFlowSafe()`. Existing snapshots retain naive summary (pre-Sprint 7 data). New completions will trigger AI synthesis. Graceful degradation confirmed — system returns naive summary when AI unavailable.
+**W4 — Seed test knowledge** ⬜
+- Call `POST /api/dev/test-knowledge` to seed sample units
+- Verify `GET /api/knowledge` returns seeded units grouped by domain
+- Verify `GET /api/knowledge/[id]` returns full unit
+- Verify `PATCH /api/knowledge/[id]` with `{ mastery_status: 'read' }` updates status
 
-**W5 — Test facet extraction end-to-end** ✅
-- **Done**: `extractFacetsWithAI()` correctly wired in `completeExperienceWithAI()`. Migration applied — `evidence` column live. Profile page loads at `/profile`. Facet extraction will produce semantic facets on next experience completion.
+**W5 — Test webhook flow** ⬜
+- Call `POST /api/webhook/mirak` with a test payload (4 units, 2 domains)
+- Verify units appear in `GET /api/knowledge`
+- Verify timeline event created ("New knowledge on [topic] is ready")
+- Test invalid payload returns 400 with clear error
 
-**W6 — Test suggestions + GPT state** ✅
-- **Done**: GPT state endpoint returns full packet. `compressedState` is undefined (as expected — `runFlowSafe` returns null fallback when AI unavailable in current server session). Suggestions route wired to `getAISuggestionsForCompletion()`. OpenAPI schema updated with `compressedState` field.
+**W6 — Test GPT state** ⬜
+- Call `GET /api/gpt/state`
+- Verify response includes `knowledgeSummary` with domain counts and mastery stats
+- Verify backward compatibility — existing fields unchanged
 
-**W7 — Final smoke test** ✅
-- **Done**: Home, Library, Profile pages all render correctly. TSC and build pass clean. All 5 lanes' code is integrated and compiles. AI flows will activate on server restart with `GEMINI_API_KEY` loaded. Graceful degradation confirmed — system operates identically without AI.
+**W7 — Browser test: Knowledge Tab** ⬜
+- Navigate to `/knowledge` — verify domain cards render with correct counts
+- Click domain card — verify unit list expands/filters
+- Click unit card — verify detail page renders all sections (key ideas, citations, etc.)
+- Click "Mark as Read" — verify mastery badge updates
+- Verify empty state shows correct copy when no units exist
 
-**Note**: The running dev server was started 4+ hours before Genkit packages were installed. Next.js HMR loads new source files but the full Genkit module initialization requires a dev server restart. After `npm run dev` restart, the `compressedState` and AI-enriched synthesis will activate.
+**W8 — Browser test: Navigation + Home** ⬜
+- Verify sidebar shows "📚 Knowledge" nav item between Library and Timeline
+- Click Knowledge nav → navigates to `/knowledge`
+- Navigate to home page — verify knowledge summary section appears (after seeding test data)
+- Verify knowledge section hidden when no units exist
 
 ---
 
 ## Pre-Flight Checklist
 
-- [x] `npm install` succeeds (including genkit packages)
-- [x] `GEMINI_API_KEY` is set in `.env.local`
-- [x] `npx tsc --noEmit` passes
-- [x] `npm run build` passes
-- [x] Dev server starts (`npm run dev`)
-- [x] Supabase is configured and tables exist
+- [ ] `npm install` succeeds
+- [ ] `npx tsc --noEmit` passes
+- [ ] `npm run build` passes
+- [ ] Dev server starts (`npm run dev`)
+- [ ] Supabase is configured and tables exist
 
 ## Handoff Protocol
 
@@ -3057,13 +4936,13 @@ ALL 5 ──→ Lane 6: [W1–W7] INTEGRATION + BROWSER TESTING
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Lane 1 | ✅ | ✅ | All 4 items complete. Genkit infra + synthesis flow. |
-| Lane 2 | ✅ | ✅ | All 4 items complete. Smart suggestions flow. |
-| Lane 3 | ✅ | ✅ | All 4 items complete. AI facet extraction flow. |
-| Lane 4 | ✅ | ✅ | All 4 items complete. GPT state compression flow. |
-| Lane 5 | ✅ | ✅ | All 4 items complete. Completion wiring + API. |
-| Lane 6 | ✅ | ✅ | All 7 items complete. Integration verified. |
-
+| Gate 0 | ⬜ | ⬜ | Types, constants, routes, copy |
+| Lane 1 | ⬜ | ⬜ | Migration, service, validator |
+| Lane 2 | ⬜ | ⬜ | API routes, webhook, dev harness |
+| Lane 3 | ⬜ | ⬜ | Knowledge Tab pages + components |
+| Lane 4 | ⬜ | ⬜ | Sidebar, mobile nav, home page |
+| Lane 5 | ⬜ | ⬜ | Experience ↔ knowledge linking |
+| Lane 6 | ⬜ | ⬜ | Integration + browser testing |
 
 ```
 
@@ -5624,15 +7503,35 @@ User ID: `a0000000-0000-0000-0000-000000000001`
 
 ---
 
-You are Mira — a personal experience engine. You create structured, lived experiences the user steps into inside their Mira Studio app.
+You are Mira — a personal experience engine. You create structured, lived experiences the user steps into inside their Mira Studio app. You are also backed by a deep-research engine called **MiraK** that can autonomously generate knowledge on any topic.
 
 ## Core loop
 
-Talk like a thoughtful guide. When conversation reveals something worth acting on, create an Experience. The user navigates it freely (jumping between steps, revisiting completed work, returning across days). The app records everything. When they return, you know what happened.
+Talk like a thoughtful guide. When conversation reveals something worth acting on, create an **Experience**. If the user needs deep background before an action, fire off a **Knowledge Generation** request to MiraK. The user navigates their workspace freely; you stay aware of their progress through periodic state checks.
+
+## Research & Knowledge (MiraK)
+
+You have a second action called `generateKnowledge`. This is a **fire-and-forget** call — you send a topic to MiraK and it does multi-agent deep research in the background. **Do not wait for a response.** MiraK will deliver the results directly to the user's Knowledge Tab via webhook when it's done.
+
+**How to use it:**
+1. Call `generateKnowledge` with the topic string. You'll get back a `202 Accepted` immediately.
+2. **Move on with the conversation.** Tell the user: "I've kicked off research on [topic] — it'll appear in your Knowledge tab shortly."
+3. Do NOT poll for results. Do NOT wait. Do NOT try to fetch the knowledge back. MiraK handles delivery autonomously.
+4. On future conversations, call `getGPTState` — it will include any new knowledge units that have arrived.
+
+**When to trigger research:**
+- User asks a complex "how-to" or "what-is" question that needs more than a chat answer
+- Before proposing a heavy experience (check if knowledge already exists first)
+- When the user explicitly asks you to research something
+
+**When NOT to trigger research:**
+- Simple factual questions you can answer directly
+- Topics where you already have enough context to create an experience
+- When the user is in the middle of active work and doesn't need background
 
 ## Creating experiences — full example
 
-Use `createPersistentExperience` for multi-session work. Here is a complete working call:
+Use `createPersistentExperience` for multi-session work. Use `templateId` matching the dominant step type:
 
 ```json
 {
@@ -5746,7 +7645,7 @@ On errors, call `getExperienceById` to check current status first.
 
 ## Re-entry
 
-At conversation start, call `getGPTState`. Returns active experiences, re-entry prompts, friction signals, suggestions.
+At conversation start, call `getGPTState`. Returns active experiences, re-entry prompts, friction signals, suggestions, and knowledge summary.
 - Acknowledge what happened since last time
 - High friction → go lighter. Low friction → go deeper.
 - Call `getExperienceProgress` to check completion before suggesting new work
@@ -5773,6 +7672,8 @@ When not ready for an experience: `captureIdea` with `title`, `rawPrompt`, `gptS
 9. Never say "I've created an experience for you." Tell them what's waiting and why.
 10. Use multi-pass: skeleton first, enrich as you learn more.
 11. You are a guide, a coach, a mission engine — not a polite assistant.
+12. MiraK is fire-and-forget. Trigger it and move on. Don't wait.
+13. Remind the user about the Knowledge tab when research lands.
 
 ```
 
@@ -5780,6 +7681,12 @@ When not ready for an experience: `captureIdea` with `title`, `rawPrompt`, `gptS
 
 ```markdown
 # Mira Knowledge Base - Agent Instructions
+
+> **⚠️ THIS IS A WRITING QUALITY GUIDE — NOT A SCHEMA CONSTRAINT.**
+> This document defines the *tone, structure, and quality bar* for human-authored knowledge base content.
+> It is NOT meant to constrain the MiraK agent's raw research output format or the `knowledge_units` DB schema.
+> MiraK's output shape is defined by `knowledge-validator.ts` in the Mira codebase and the webhook payload contract.
+> Use this document for editorial guidance when reviewing or hand-writing KB content.
 
 This document contains the core prompts and templates for the agent responsible for writing Mira Studio's knowledge-base entries. Use these to ensure consistency, clarity, and actionable content.
 
@@ -6091,1910 +7998,3 @@ I can also turn this into a **JSON schema / CMS content model** so your agent po
 ```
 
 ### next-env.d.ts
-
-```typescript
-/// <reference types="next" />
-/// <reference types="next/image-types/global" />
-
-// NOTE: This file should not be edited
-// see https://nextjs.org/docs/app/building-your-application/configuring/typescript for more information.
-
-```
-
-### printcode.sh
-
-```bash
-#!/bin/bash
-# =============================================================================
-# printcode.sh — Smart project dump for AI chat contexts
-# =============================================================================
-#
-# Outputs project structure and source code to numbered markdown dump files
-# (dump00.md … dump09.md). Running with NO arguments dumps the whole repo
-# exactly as before. With CLI flags you can target specific areas, filter by
-# extension, slice line ranges, or just list files.
-#
-# Upload this script to a chat session so the agent can tell you which
-# arguments to run to get exactly the context it needs.
-#
-# Usage: ./printcode.sh [OPTIONS]
-# Run ./printcode.sh --help for full details and examples.
-# =============================================================================
-
-set -e
-
-# ---------------------------------------------------------------------------
-# Defaults
-# ---------------------------------------------------------------------------
-OUTPUT_PREFIX="dump"
-LINES_PER_FILE=""          # empty = auto-calculate to fit MAX_DUMP_FILES
-MAX_DUMP_FILES=10
-MAX_FILES=""               # empty = unlimited
-MAX_BYTES=""               # empty = unlimited
-SHOW_STRUCTURE=true
-LIST_ONLY=false
-SLICE_MODE=""              # head | tail | range
-SLICE_N=""
-SLICE_A=""
-SLICE_B=""
-
-declare -a AREAS=()
-declare -a INCLUDE_PATHS=()
-declare -a USER_EXCLUDES=()
-declare -a EXT_FILTER=()
-
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# ---------------------------------------------------------------------------
-# Area → glob mappings
-# ---------------------------------------------------------------------------
-# Returns a newline-separated list of globs for a given area name.
-globs_for_area() {
-    case "$1" in
-        backend)   echo "backend/**" ;;
-        frontend)
-            if [[ -d "$PROJECT_ROOT/frontend" ]]; then
-                echo "frontend/**"
-            elif [[ -d "$PROJECT_ROOT/web" ]]; then
-                echo "web/**"
-            else
-                echo "frontend/**"
-            fi
-            ;;
-        docs)      printf '%s\n' "docs/**" "*.md" ;;
-        scripts)   echo "scripts/**" ;;
-        plugins)   echo "plugins/**" ;;
-        tests)     echo "tests/**" ;;
-        config)    printf '%s\n' "*.toml" "*.yaml" "*.yml" "*.json" "*.ini" ".env*" ;;
-        *)
-            echo "Error: unknown area '$1'" >&2
-            echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
-            exit 1
-            ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Help
-# ---------------------------------------------------------------------------
-show_help() {
-cat <<'EOF'
-printcode.sh — Smart project dump for AI chat contexts
-
-USAGE
-  ./printcode.sh [OPTIONS]
-
-With no arguments the entire repo is dumped into dump00.md … dump09.md
-(same as original behavior). Options let you target specific areas,
-filter by extension, slice line ranges, or list files without code.
-
-AREA PRESETS (--area, repeatable)
-  backend   backend/**
-  frontend  frontend/** (or web/**)
-  docs      docs/** *.md
-  scripts   scripts/**
-  plugins   plugins/**
-  tests     tests/**
-  config    *.toml *.yaml *.yml *.json *.ini .env*
-
-OPTIONS
-  --area <name>          Include only files matching the named area (repeatable).
-  --path <glob>          Include only files matching this glob (repeatable).
-  --exclude <glob>       Add extra exclude glob on top of defaults (repeatable).
-  --ext <ext[,ext,…]>   Include only files with these extensions (comma-sep).
-
-  --head <N>             Keep only the first N lines of each file.
-  --tail <N>             Keep only the last N lines of each file.
-  --range <A:B>          Keep only lines A through B of each file.
-                         (Only one of head/tail/range may be used at a time.)
-
-  --list                 Print only the file list / project structure (no code).
-  --no-structure         Skip the project-structure tree section.
-  --lines-per-file <N>  Override auto-calculated lines-per-dump-file split.
-  --max-files <N>        Stop after selecting N files (safety guard).
-  --max-bytes <N>        Stop once cumulative selected size exceeds N bytes.
-  --output-prefix <pfx>  Change dump file prefix (default: "dump").
-
-  --help                 Show this help and exit.
-
-EXAMPLES
-  # 1) Default — full project dump (original behavior)
-  ./printcode.sh
-
-  # 2) Backend only
-  ./printcode.sh --area backend
-
-  # 3) Backend + docs, last 200 lines of each file
-  ./printcode.sh --area backend --area docs --tail 200
-
-  # 4) Only specific paths
-  ./printcode.sh --path "backend/agent/**" --path "backend/services/**"
-
-  # 5) Only Python and Markdown files
-  ./printcode.sh --ext py,md
-
-  # 6) List-only mode for docs area (no code blocks)
-  ./printcode.sh --list --area docs
-
-  # 7) Range slicing on agent internals
-  ./printcode.sh --path "backend/agent/**" --range 80:220
-
-  # 8) Backend Python files, first 120 lines each
-  ./printcode.sh --area backend --ext py --head 120
-
-  # 9) Config files only, custom output prefix
-  ./printcode.sh --area config --output-prefix config_dump
-
-  # 10) Everything except tests, cap at 50 files
-  ./printcode.sh --exclude "tests/**" --max-files 50
-EOF
-}
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        --area)
-            [[ -z "${2:-}" ]] && { echo "Error: --area requires a value" >&2; exit 1; }
-            case "$2" in
-                backend|frontend|docs|scripts|plugins|tests|config) ;;
-                *) echo "Error: unknown area '$2'" >&2
-                   echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
-                   exit 1 ;;
-            esac
-            AREAS+=("$2"); shift 2
-            ;;
-        --path)
-            [[ -z "${2:-}" ]] && { echo "Error: --path requires a value" >&2; exit 1; }
-            INCLUDE_PATHS+=("$2"); shift 2
-            ;;
-        --exclude)
-            [[ -z "${2:-}" ]] && { echo "Error: --exclude requires a value" >&2; exit 1; }
-            USER_EXCLUDES+=("$2"); shift 2
-            ;;
-        --ext)
-            [[ -z "${2:-}" ]] && { echo "Error: --ext requires a value" >&2; exit 1; }
-            IFS=',' read -ra EXT_FILTER <<< "$2"; shift 2
-            ;;
-        --head)
-            [[ -z "${2:-}" ]] && { echo "Error: --head requires a number" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --head with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="head"; SLICE_N="$2"; shift 2
-            ;;
-        --tail)
-            [[ -z "${2:-}" ]] && { echo "Error: --tail requires a number" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --tail with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="tail"; SLICE_N="$2"; shift 2
-            ;;
-        --range)
-            [[ -z "${2:-}" ]] && { echo "Error: --range requires A:B" >&2; exit 1; }
-            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --range with --$SLICE_MODE" >&2; exit 1; }
-            SLICE_MODE="range"
-            SLICE_A="${2%%:*}"
-            SLICE_B="${2##*:}"
-            if [[ -z "$SLICE_A" || -z "$SLICE_B" || "$2" != *":"* ]]; then
-                echo "Error: --range format must be A:B (e.g. 80:220)" >&2; exit 1
-            fi
-            shift 2
-            ;;
-        --list)
-            LIST_ONLY=true; shift
-            ;;
-        --no-structure)
-            SHOW_STRUCTURE=false; shift
-            ;;
-        --lines-per-file)
-            [[ -z "${2:-}" ]] && { echo "Error: --lines-per-file requires a number" >&2; exit 1; }
-            LINES_PER_FILE="$2"; shift 2
-            ;;
-        --max-files)
-            [[ -z "${2:-}" ]] && { echo "Error: --max-files requires a number" >&2; exit 1; }
-            MAX_FILES="$2"; shift 2
-            ;;
-        --max-bytes)
-            [[ -z "${2:-}" ]] && { echo "Error: --max-bytes requires a number" >&2; exit 1; }
-            MAX_BYTES="$2"; shift 2
-            ;;
-        --output-prefix)
-            [[ -z "${2:-}" ]] && { echo "Error: --output-prefix requires a value" >&2; exit 1; }
-            OUTPUT_PREFIX="$2"; shift 2
-            ;;
-        *)
-            echo "Error: unknown option '$1'" >&2
-            echo "Run ./printcode.sh --help for usage." >&2
-            exit 1
-            ;;
-    esac
-done
-
-# ---------------------------------------------------------------------------
-# Build include patterns from areas + paths
-# ---------------------------------------------------------------------------
-declare -a INCLUDE_PATTERNS=()
-
-for area in "${AREAS[@]}"; do
-    while IFS= read -r glob; do
-        INCLUDE_PATTERNS+=("$glob")
-    done < <(globs_for_area "$area")
-done
-
-for p in "${INCLUDE_PATHS[@]}"; do
-    INCLUDE_PATTERNS+=("$p")
-done
-
-# ---------------------------------------------------------------------------
-# Default excludes (always applied)
-# ---------------------------------------------------------------------------
-DEFAULT_EXCLUDES=(
-    "*/__pycache__/*"
-    "*/.git/*"
-    "*/node_modules/*"
-    "*/dist/*"
-    "*/.next/*"
-    "*/build/*"
-    "*/data/*"
-    "*/cache/*"
-    "*/shards/*"
-    "*/results/*"
-    "*/.venv/*"
-    "*/venv/*"
-    "*_archive/*"
-)
-
-# Merge user excludes
-ALL_EXCLUDES=("${DEFAULT_EXCLUDES[@]}" "${USER_EXCLUDES[@]}")
-
-# ---------------------------------------------------------------------------
-# Default included extensions (when no filters are active)
-# ---------------------------------------------------------------------------
-# Original extensions: py sh md yaml yml ts tsx css
-# Added toml json ini for config area support
-DEFAULT_EXTS=(py sh md yaml yml ts tsx css toml json ini)
-
-# ---------------------------------------------------------------------------
-# Language hint from extension
-# ---------------------------------------------------------------------------
-lang_for_ext() {
-    case "$1" in
-        py)       echo "python" ;;
-        sh)       echo "bash" ;;
-        md)       echo "markdown" ;;
-        yaml|yml) echo "yaml" ;;
-        ts)       echo "typescript" ;;
-        tsx)      echo "tsx" ;;
-        css)      echo "css" ;;
-        toml)     echo "toml" ;;
-        json)     echo "json" ;;
-        ini)      echo "ini" ;;
-        js)       echo "javascript" ;;
-        jsx)      echo "jsx" ;;
-        html)     echo "html" ;;
-        sql)      echo "sql" ;;
-        *)        echo "" ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Priority ordering (same as original)
-# ---------------------------------------------------------------------------
-priority_for_path() {
-    local rel_path="$1"
-    case "$rel_path" in
-        AI_WORKING_GUIDE.md|\
-        MIGRATION.md|\
-        README.md|\
-        app/layout.tsx|\
-        app/page.tsx|\
-        package.json)
-            echo "00"
-            ;;
-        app/*|\
-        components/*|\
-        lib/*|\
-        hooks/*)
-            echo "20"
-            ;;
-        *)
-            echo "50"
-            ;;
-    esac
-}
-
-# ---------------------------------------------------------------------------
-# Temp files
-# ---------------------------------------------------------------------------
-TEMP_FILE=$(mktemp)
-FILE_LIST=$(mktemp)
-_TMPFILES=("$TEMP_FILE" "$FILE_LIST")
-trap 'rm -f "${_TMPFILES[@]}"' EXIT
-
-# Helper: convert a file glob to a grep-compatible regex.
-# Steps: escape dots → ** marker → * to [^/]* → marker to .*
-glob_to_regex() {
-    echo "$1" | sed 's/\./\\./g; s/\*\*/\x00/g; s/\*/[^\/]*/g; s/\x00/.*/g'
-}
-
-# ---------------------------------------------------------------------------
-# Build the find command
-# ---------------------------------------------------------------------------
-# Exclude clauses — only default excludes go into find (they use */ prefix)
-FIND_EXCLUDES=()
-for pat in "${DEFAULT_EXCLUDES[@]}"; do
-    FIND_EXCLUDES+=( ! -path "$pat" )
-done
-# Always exclude dump output files, lock files, binary data
-FIND_EXCLUDES+=(
-    ! -name "*.pyc"
-    ! -name "*.parquet"
-    ! -name "*.pth"
-    ! -name "*.lock"
-    ! -name "package-lock.json"
-    ! -name "continuous_contract.json"
-    ! -name "dump*.md"
-    ! -name "dump*[0-9]"
-)
-
-# Determine which extensions to match
-ACTIVE_EXTS=()
-if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
-    ACTIVE_EXTS=("${EXT_FILTER[@]}")
-elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
-    # No area/path filter and no ext filter → use defaults
-    ACTIVE_EXTS=("${DEFAULT_EXTS[@]}")
-fi
-# When area/path filters are active but --ext is not, include all extensions
-# (the path filter itself narrows things down).
-
-# Build extension match clause for find
-EXT_CLAUSE=()
-if [[ ${#ACTIVE_EXTS[@]} -gt 0 ]]; then
-    EXT_CLAUSE+=( "(" )
-    first=true
-    for ext in "${ACTIVE_EXTS[@]}"; do
-        if $first; then first=false; else EXT_CLAUSE+=( -o ); fi
-        EXT_CLAUSE+=( -name "*.${ext}" )
-    done
-    EXT_CLAUSE+=( ")" )
-fi
-
-# Run find to collect candidate files
-find "$PROJECT_ROOT" -type f \
-    "${FIND_EXCLUDES[@]}" \
-    "${EXT_CLAUSE[@]}" \
-    2>/dev/null \
-    | sed "s|$PROJECT_ROOT/||" \
-    | sort > "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Apply user --exclude patterns (on relative paths)
-# ---------------------------------------------------------------------------
-if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-    EXCLUDE_REGEXES=()
-    for pat in "${USER_EXCLUDES[@]}"; do
-        EXCLUDE_REGEXES+=( -e "$(glob_to_regex "$pat")" )
-    done
-    grep -v -E "${EXCLUDE_REGEXES[@]}" "$FILE_LIST" > "${FILE_LIST}.tmp" || true
-    mv "${FILE_LIST}.tmp" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Apply include-pattern filtering (areas + paths)
-# ---------------------------------------------------------------------------
-if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]]; then
-    FILTERED=$(mktemp)
-    _TMPFILES+=("$FILTERED")
-    for pat in "${INCLUDE_PATTERNS[@]}"; do
-        regex="^$(glob_to_regex "$pat")$"
-        grep -E "$regex" "$FILE_LIST" >> "$FILTERED" 2>/dev/null || true
-    done
-    # Deduplicate (patterns may overlap)
-    sort -u "$FILTERED" > "${FILTERED}.tmp"
-    mv "${FILTERED}.tmp" "$FILTERED"
-    mv "$FILTERED" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Apply --max-files and --max-bytes guards
-# ---------------------------------------------------------------------------
-if [[ -n "$MAX_FILES" ]]; then
-    head -n "$MAX_FILES" "$FILE_LIST" > "${FILE_LIST}.tmp"
-    mv "${FILE_LIST}.tmp" "$FILE_LIST"
-fi
-
-if [[ -n "$MAX_BYTES" ]]; then
-    CUMULATIVE=0
-    CAPPED=$(mktemp)
-    _TMPFILES+=("$CAPPED")
-    while IFS= read -r rel_path; do
-        fsize=$(wc -c < "$PROJECT_ROOT/$rel_path" 2>/dev/null || echo 0)
-        CUMULATIVE=$((CUMULATIVE + fsize))
-        if (( CUMULATIVE > MAX_BYTES )); then
-            echo "(max-bytes $MAX_BYTES reached, stopping)" >&2
-            break
-        fi
-        echo "$rel_path"
-    done < "$FILE_LIST" > "$CAPPED"
-    mv "$CAPPED" "$FILE_LIST"
-fi
-
-# ---------------------------------------------------------------------------
-# Sort by priority
-# ---------------------------------------------------------------------------
-SORTED_LIST=$(mktemp)
-_TMPFILES+=("$SORTED_LIST")
-while IFS= read -r rel_path; do
-    printf "%s\t%s\n" "$(priority_for_path "$rel_path")" "$rel_path"
-done < "$FILE_LIST" \
-    | sort -t $'\t' -k1,1 -k2,2 \
-    | cut -f2 > "$SORTED_LIST"
-mv "$SORTED_LIST" "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Counts for summary
-# ---------------------------------------------------------------------------
-SELECTED_COUNT=$(wc -l < "$FILE_LIST")
-
-# ---------------------------------------------------------------------------
-# Write header + selection summary
-# ---------------------------------------------------------------------------
-{
-    echo "# LearnIO Project Code Dump"
-    echo "Generated: $(date)"
-    echo ""
-    echo "## Selection Summary"
-    echo ""
-    if [[ ${#AREAS[@]} -gt 0 ]]; then
-        echo "- **Areas:** ${AREAS[*]}"
-    else
-        echo "- **Areas:** (all)"
-    fi
-    if [[ ${#INCLUDE_PATHS[@]} -gt 0 ]]; then
-        echo "- **Path filters:** ${INCLUDE_PATHS[*]}"
-    fi
-    if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-        echo "- **Extra excludes:** ${USER_EXCLUDES[*]}"
-    fi
-    if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
-        echo "- **Extensions:** ${EXT_FILTER[*]}"
-    elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
-        echo "- **Extensions:** ${DEFAULT_EXTS[*]} (defaults)"
-    else
-        echo "- **Extensions:** (all within selected areas)"
-    fi
-    if [[ -n "$SLICE_MODE" ]]; then
-        case "$SLICE_MODE" in
-            head)  echo "- **Slicing:** first $SLICE_N lines per file" ;;
-            tail)  echo "- **Slicing:** last $SLICE_N lines per file" ;;
-            range) echo "- **Slicing:** lines $SLICE_A–$SLICE_B per file" ;;
-        esac
-    else
-        echo "- **Slicing:** full files"
-    fi
-    if [[ -n "$MAX_FILES" ]]; then
-        echo "- **Max files:** $MAX_FILES"
-    fi
-    if [[ -n "$MAX_BYTES" ]]; then
-        echo "- **Max bytes:** $MAX_BYTES"
-    fi
-    echo "- **Files selected:** $SELECTED_COUNT"
-    if $LIST_ONLY; then
-        echo "- **Mode:** list only (no code)"
-    fi
-    echo ""
-} > "$TEMP_FILE"
-
-# ---------------------------------------------------------------------------
-# Compact project overview (always included for agent context)
-# ---------------------------------------------------------------------------
-{
-    echo "## Project Overview"
-    echo ""
-    echo "LearnIO is a Next.js (App Router) project integrated with Google AI Studio."
-    echo "It uses Tailwind CSS, Lucide React, and Framer Motion for the UI."
-    echo ""
-    echo "| Area | Path | Description |"
-    echo "|------|------|-------------|"
-    echo "| **app** | app/ | Next.js App Router (pages, layout, api) |"
-    echo "| **components** | components/ | React UI components (shadcn/ui style) |"
-    echo "| **lib** | lib/ | Shared utilities and helper functions |"
-    echo "| **hooks** | hooks/ | Custom React hooks |"
-    echo "| **docs** | *.md | Migration, AI working guide, README |"
-    echo ""
-    echo "Key paths: \`app/page.tsx\` (main UI), \`app/layout.tsx\` (root wrapper), \`AI_WORKING_GUIDE.md\`"
-    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK"
-    echo ""
-    echo "To dump specific code for chat context, run:"
-    echo "\`\`\`bash"
-    echo "./printcode.sh --help                              # see all options"
-    echo "./printcode.sh --area backend --ext py --head 120  # backend Python, first 120 lines"
-    echo "./printcode.sh --list --area docs                  # just list doc files"
-    echo "\`\`\`"
-    echo ""
-} >> "$TEMP_FILE"
-
-# ---------------------------------------------------------------------------
-# Project structure section
-# ---------------------------------------------------------------------------
-if $SHOW_STRUCTURE; then
-    echo "## Project Structure" >> "$TEMP_FILE"
-    echo '```' >> "$TEMP_FILE"
-    if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]] || [[ ${#EXT_FILTER[@]} -gt 0 ]] || [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
-        # Show only selected/filtered files in structure
-        cat "$FILE_LIST" >> "$TEMP_FILE"
-    else
-        # Show full tree (original behavior)
-        find "$PROJECT_ROOT" -type f \
-            "${FIND_EXCLUDES[@]}" \
-            2>/dev/null \
-            | sed "s|$PROJECT_ROOT/||" \
-            | sort >> "$TEMP_FILE"
-    fi
-    echo '```' >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-fi
-
-# ---------------------------------------------------------------------------
-# If --list mode, we are done (no code blocks)
-# ---------------------------------------------------------------------------
-if $LIST_ONLY; then
-    # In list mode, just output the temp file directly
-    total_lines=$(wc -l < "$TEMP_FILE")
-    echo "Total lines: $total_lines (list-only mode)"
-
-    # Remove old dump files
-    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
-    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
-
-    cp "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}00.md"
-    echo "Done! Created:"
-    ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
-    exit 0
-fi
-
-# ---------------------------------------------------------------------------
-# Source files section
-# ---------------------------------------------------------------------------
-echo "## Source Files" >> "$TEMP_FILE"
-echo "" >> "$TEMP_FILE"
-
-while IFS= read -r rel_path; do
-    file="$PROJECT_ROOT/$rel_path"
-    [[ -f "$file" ]] || continue
-
-    ext="${rel_path##*.}"
-    lang=$(lang_for_ext "$ext")
-    total_file_lines=$(wc -l < "$file")
-
-    # Build slice header annotation
-    slice_note=""
-    case "$SLICE_MODE" in
-        head)  slice_note=" (first $SLICE_N lines of $total_file_lines)" ;;
-        tail)  slice_note=" (last $SLICE_N lines of $total_file_lines)" ;;
-        range) slice_note=" (lines ${SLICE_A}–${SLICE_B} of $total_file_lines)" ;;
-    esac
-
-    echo "### ${rel_path}${slice_note}" >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-    echo "\`\`\`$lang" >> "$TEMP_FILE"
-
-    # Output content (full or sliced)
-    case "$SLICE_MODE" in
-        head)
-            sed -n "1,${SLICE_N}p" "$file" >> "$TEMP_FILE"
-            ;;
-        tail)
-            tail -n "$SLICE_N" "$file" >> "$TEMP_FILE"
-            ;;
-        range)
-            sed -n "${SLICE_A},${SLICE_B}p" "$file" >> "$TEMP_FILE"
-            ;;
-        *)
-            cat "$file" >> "$TEMP_FILE"
-            ;;
-    esac
-
-    echo "" >> "$TEMP_FILE"
-    echo "\`\`\`" >> "$TEMP_FILE"
-    echo "" >> "$TEMP_FILE"
-done < "$FILE_LIST"
-
-# ---------------------------------------------------------------------------
-# Split into dump files
-# ---------------------------------------------------------------------------
-total_lines=$(wc -l < "$TEMP_FILE")
-
-if [[ -z "$LINES_PER_FILE" ]]; then
-    TARGET_LINES=8000
-    if (( total_lines > (TARGET_LINES * MAX_DUMP_FILES) )); then
-        # Too big for 10 files at 8k lines each -> increase chunk size to fit exactly 10 files
-        LINES_PER_FILE=$(( (total_lines + MAX_DUMP_FILES - 1) / MAX_DUMP_FILES ))
-    else
-        # Small enough -> use fixed 8k chunk size (resulting in 1-10 files)
-        LINES_PER_FILE=$TARGET_LINES
-    fi
-fi
-
-echo "Total lines: $total_lines"
-echo "Lines per file: $LINES_PER_FILE (targeting $MAX_DUMP_FILES files)"
-echo "Files selected: $SELECTED_COUNT"
-
-# Remove old dump files
-rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
-rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
-
-# Split (use 2-digit suffix)
-split -l "$LINES_PER_FILE" -d -a 2 "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}"
-
-# Rename to .md and remove empty files
-for f in "$PROJECT_ROOT"/${OUTPUT_PREFIX}*; do
-    if [[ ! "$f" =~ \.md$ ]]; then
-        if [[ -s "$f" ]]; then
-            mv "$f" "${f}.md"
-        else
-            rm -f "$f"
-        fi
-    fi
-done
-
-echo "Done! Created:"
-ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
-
-```
-
-### prissues.md
-
-```markdown
-# PR Issues & Agent Endpoint Reference
-
-> Sprint 2 — Lane 6 integration log. Documents blockers encountered and
-> the endpoint contract another agent (Custom GPT, local agent, or cloud
-> coding agent) uses to interact with Mira Studio.
-
----
-
-## 1. Coding Agent Blocker — Issue #3
-
-### What happened
-- Created GitHub issue #3 via app API (`/api/github/create-issue`)
-- Assigned `copilot-swe-agent` via `gh issue edit --add-assignee copilot-swe-agent`
-- Also tried atomic creation: `gh issue create --assignee copilot-swe-agent`
-- **Both approaches failed** with the same error:
-
-> "The agent encountered an error and was unable to start working on this
-> issue: This may be caused by a repository ruleset violation. See granting
-> bypass permissions for the agent."
-
-### What we investigated
-| Check | Result |
-|-------|--------|
-| Repo rulesets | None — `gh api repos/wyrmspire/mira/rulesets` returns 403 (free plan) |
-| Branch protection | Cannot query — free plan blocks the API |
-| Repo visibility | Private (same as `mirrorflow` where it works) |
-| Repo permissions | admin: true, push: true (same as `mirrorflow`) |
-| Owner | `wyrmspire` (same account on both repos) |
-| Default branch | `main` (same) |
-| `.github` directory | Neither repo has one |
-| Account plan | Free |
-| Token | Same PAT used on both repos — works on `mirrorflow` |
-
-### What works on `mirrorflow` but not `mira`
-The exact same `gh issue create --assignee copilot-swe-agent` command works
-on `wyrmspire/mirrorflow` (creates an issue, agent picks it up, opens a PR)
-but fails on `wyrmspire/mira` with the ruleset error.
-
-### Likely root cause
-Something in the **repo-level Copilot coding agent settings** differs between
-the two repos. This is configured via GitHub web UI:
-`Settings → Copilot → Coding agent`
-
-### What to check
-1. Go to `https://github.com/wyrmspire/mira/settings` → Copilot → Coding agent
-2. Compare with `https://github.com/wyrmspire/mirrorflow/settings` → Copilot → Coding agent
-3. If there's a toggle or permission difference, match `mira` to what `mirrorflow` has
-
-### Reference
-- GitHub docs: [Granting bypass permissions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
-- Issue #3: https://github.com/wyrmspire/mira/issues/3
-- Issue #4: https://github.com/wyrmspire/mira/issues/4 (atomic create+assign attempt)
-
----
-
-## 2. Fixes Applied During Lane 6
-
-| # | Fix | File | What changed |
-|---|-----|------|-------------|
-| 1 | Junk files cleaned + .gitignore | `.gitignore` | Added `tsc-*.txt`, `nul`, `gitrdiff.md` patterns |
-| 2 | Adapter config TODO | `lib/adapters/github-adapter.ts` | Replaced raw env reads with `lib/config/github.ts` |
-| 3 | merge-pr false local success | `app/api/actions/merge-pr/route.ts` | Returns 502 if GitHub merge fails (no silent fallback) |
-| 4 | mark-shipped wrong inbox event | `app/api/actions/mark-shipped/route.ts` | Changed `github_issue_created` → `github_issue_closed` |
-| 5 | Missing inbox event type | `types/inbox.ts` | Added `github_issue_closed` to union |
-| 6 | Inbox formatter | `lib/formatters/inbox-formatters.ts` | Added label for `github_issue_closed` |
-| 7 | Atomic agent handoff | `app/api/github/create-issue/route.ts` + `lib/services/github-factory-service.ts` | Added `assignAgent: true` flag for atomic `copilot-swe-agent` assignment |
-
-### Verification
-- `npx tsc --noEmit` → **0 errors** ✅
-- `npm run build` → **clean** ✅
-- GitHub connection test → **connected as wyrmspire** ✅
-- Tunnel `mira.mytsapi.us` → **live** ✅
-- Webhook round-trip (create issue → receive webhook → inbox event) → **working** ✅
-
----
-
-## 3. Agent Endpoint Reference
-
-Base URL: `https://mira.mytsapi.us` (Cloudflare tunnel → localhost:3000)
-
-### Idea Capture (Custom GPT → App)
-
-```
-POST /api/webhook/gpt
-Content-Type: application/json
-
-{
-  "source": "gpt",
-  "event": "idea_captured",
-  "data": {
-    "title": "My Cool Idea",
-    "rawPrompt": "The user's original words...",
-    "gptSummary": "A structured 2-4 sentence summary.",
-    "vibe": "playful",
-    "audience": "indie devs",
-    "intent": "ship a side project"
-  },
-  "timestamp": "2026-03-22T20:00:00Z"
-}
-
-Response: 201 { data: Idea, message: "Idea captured" }
-```
-
-### Create Issue + Assign Coding Agent (Atomic Handoff)
-
-```
-POST /api/github/create-issue
-Content-Type: application/json
-
-Option A — From a project:
-{
-  "projectId": "proj-001",
-  "assignAgent": true
-}
-
-Option B — Standalone (any agent can call this):
-{
-  "title": "Build Feature X",
-  "body": "### Objective\n...\n### Instructions\n...\n### Acceptance Criteria\n...",
-  "labels": ["mira"],
-  "assignAgent": true
-}
-
-Response: 200 { data: { issueNumber: 3, issueUrl: "https://..." } }
-```
-
-When `assignAgent: true`, the issue is created with `copilot-swe-agent` in
-the assignees array — single API call, coding agent starts immediately.
-
-### Test GitHub Connection
-
-```
-GET /api/github/test-connection
-
-Response: 200 { connected: true, login: "wyrmspire", repo: "wyrmspire/mira", ... }
-```
-
-### GitHub Webhook (GitHub → App — automatic)
-
-```
-POST /api/webhook/github
-Headers:
-  x-github-event: issues | pull_request | workflow_run | pull_request_review
-  x-hub-signature-256: sha256=<HMAC>
-  x-github-delivery: <UUID>
-
-Signature verified against GITHUB_WEBHOOK_SECRET in .env.local.
-Events are dispatched to handlers in lib/github/handlers/.
-```
-
-### Other Endpoints
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/api/ideas` | List all ideas |
-| GET | `/api/projects` | List all projects |
-| GET | `/api/inbox` | List inbox events |
-| POST | `/api/ideas/materialize` | Convert idea → project (requires drill) |
-| POST | `/api/actions/promote-to-arena` | Move idea to In Progress |
-| POST | `/api/actions/move-to-icebox` | Put idea on hold |
-| POST | `/api/actions/mark-shipped` | Ship a project (optionally closes GitHub issue) |
-| POST | `/api/actions/kill-idea` | Remove an idea |
-| POST | `/api/actions/merge-pr` | Merge a PR (GitHub-aware) |
-| POST | `/api/github/create-pr` | Create a GitHub PR |
-| POST | `/api/github/dispatch-workflow` | Trigger a GitHub Actions workflow |
-| GET/POST | `/api/github/sync-pr` | Sync PR data from GitHub |
-| POST | `/api/github/merge-pr` | Direct GitHub PR merge |
-
----
-
-## 4. Environment Variables Required
-
-```env
-# GitHub (all required for factory)
-GITHUB_TOKEN=ghp_...        # PAT with repo scope
-GITHUB_OWNER=wyrmspire
-GITHUB_REPO=mira
-GITHUB_DEFAULT_BRANCH=main
-GITHUB_WEBHOOK_SECRET=mira-wh-s2-7f3a9c1e
-
-# Supabase (future)
-NEXT_PUBLIC_SUPABASE_URL=https://...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-
-# Gemini (future)
-GEMINI_API_KEY=AIza...
-```
-
----
-
-## 5. Tunnel Setup
-
-```bash
-# Named tunnel (already created)
-cloudflared tunnel run mira
-
-# Config at: C:\Users\wyrms\.cloudflared\config.yml
-# DNS: mira.mytsapi.us → tunnel 68361f22-15b9-4534-a9d1-e9a1e6e0a595
-```
-
-The tunnel serves all traffic:
-- UI: `https://mira.mytsapi.us/`
-- Custom GPT webhook: `https://mira.mytsapi.us/api/webhook/gpt`
-- GitHub webhook: `https://mira.mytsapi.us/api/webhook/github`
-- Phone access: Same URL, works on any device
-
-```
-
-### public/openapi.yaml
-
-```yaml
-openapi: 3.1.0
-info:
-  title: Mira Studio API
-  description: API for the Mira experience engine. Create experiences, fetch user
-    state, record ideas.
-  version: 1.0.0
-servers:
-- url: /
-  description: Current hosted domain
-paths:
-  /api/gpt/state:
-    get:
-      operationId: getGPTState
-      summary: Get the user's current experience state for re-entry
-      description: 'Returns a compressed state packet with active experiences, re-entry
-        prompts, friction signals, and suggested next steps. Call this at the start
-        of every conversation to understand what the user has been doing.
-
-        '
-      parameters:
-      - name: userId
-        in: query
-        required: false
-        schema:
-          type: string
-          default: a0000000-0000-0000-0000-000000000001
-        description: User ID. Defaults to the dev user.
-      responses:
-        '200':
-          description: GPT state packet
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GPTStatePacket'
-        '500':
-          description: Server error
-  /api/experiences/inject:
-    post:
-      operationId: injectEphemeral
-      summary: Create an ephemeral experience (instant, no review)
-      description: 'Creates an ephemeral experience that renders instantly in the
-        user''s app. Skips the proposal/review pipeline. Use for micro-challenges,
-        quick prompts, trend reactions, or any experience that should appear immediately.
-
-        '
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InjectEphemeralRequest'
-      responses:
-        '201':
-          description: Experience created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperienceInstance'
-        '400':
-          description: Missing required fields
-        '500':
-          description: Server error
-  /api/experiences:
-    get:
-      operationId: listExperiences
-      summary: List experience instances
-      description: 'Returns all experience instances, optionally filtered by status
-        or type. Use this to check what experiences exist before creating new ones.
-
-        '
-      parameters:
-      - name: userId
-        in: query
-        required: false
-        schema:
-          type: string
-          default: a0000000-0000-0000-0000-000000000001
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-          enum:
-          - proposed
-          - drafted
-          - ready_for_review
-          - approved
-          - published
-          - active
-          - completed
-          - archived
-          - superseded
-          - injected
-      - name: type
-        in: query
-        required: false
-        schema:
-          type: string
-          enum:
-          - persistent
-          - ephemeral
-      responses:
-        '200':
-          description: Array of experience instances
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ExperienceInstance'
-        '500':
-          description: Server error
-    post:
-      operationId: createPersistentExperience
-      summary: Create a persistent experience (goes through proposal pipeline)
-      description: 'Creates a persistent experience in ''proposed'' status. The user
-        will see it in their library and can accept/start it. Use for substantial
-        experiences that are worth returning to. Always include steps and a reentry
-        contract.
-
-        '
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreatePersistentRequest'
-      responses:
-        '201':
-          description: Experience created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperienceInstance'
-        '400':
-          description: Missing required fields
-        '500':
-          description: Server error
-  /api/ideas:
-    get:
-      operationId: listIdeas
-      summary: List captured ideas
-      parameters:
-      - name: status
-        in: query
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Array of ideas
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Idea'
-    post:
-      operationId: captureIdea
-      summary: Capture a new idea from conversation
-      description: 'Saves a raw idea from the conversation. Ideas can later be evolved
-        into full experiences through the drill pipeline or direct proposal.
-
-        '
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CaptureIdeaRequest'
-      responses:
-        '201':
-          description: Idea captured
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Idea'
-  /api/synthesis:
-    get:
-      operationId: getLatestSynthesis
-      summary: Get the latest synthesis snapshot
-      description: 'Returns the most recent synthesis snapshot for the user. This
-        is a compressed summary of recent experience outcomes, signals, and next candidates.
-
-        '
-      parameters:
-      - name: userId
-        in: query
-        required: false
-        schema:
-          type: string
-          default: a0000000-0000-0000-0000-000000000001
-      responses:
-        '200':
-          description: Synthesis snapshot
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SynthesisSnapshot'
-        '404':
-          description: No snapshot found
-        '500':
-          description: Server error
-  /api/interactions:
-    post:
-      operationId: recordInteraction
-      summary: Record a user interaction event
-      description: "Records telemetry about what the user did within an experience.\
-        \ Use sparingly \u2014 the frontend handles most interaction recording. This\
-        \ is available if you need to record a GPT-side event.\n"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RecordInteractionRequest'
-      responses:
-        '201':
-          description: Interaction recorded
-        '400':
-          description: Missing required fields
-        '500':
-          description: Server error
-  /api/experiences/{id}:
-    get:
-      operationId: getExperienceById
-      summary: Get a single experience instance with its steps
-      description: 'Returns a specific experience instance by ID, including all of
-        its steps. Use this to inspect step content, check completion state, or load
-        context before re-entry.
-
-        '
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-        description: Experience instance ID
-      responses:
-        '200':
-          description: Experience instance with steps
-          content:
-            application/json:
-              schema:
-                allOf:
-                - $ref: '#/components/schemas/ExperienceInstance'
-                - type: object
-                  properties:
-                    steps:
-                      type: array
-                      items:
-                        $ref: '#/components/schemas/ExperienceStepRecord'
-        '404':
-          description: Experience not found
-        '500':
-          description: Server error
-  /api/experiences/{id}/status:
-    patch:
-      operationId: transitionExperienceStatus
-      summary: Transition an experience to a new lifecycle state
-      description: "Moves an experience through its lifecycle state machine. Valid\
-        \ transitions: - proposed \u2192 approve \u2192 publish \u2192 activate (or\
-        \ use approve+publish+activate shortcut) - active \u2192 complete - completed\
-        \ \u2192 archive - injected \u2192 start (ephemeral) The action must be a\
-        \ valid transition from the current status.\n"
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-        description: Experience instance ID
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - action
-              properties:
-                action:
-                  type: string
-                  enum:
-                  - draft
-                  - submit_for_review
-                  - request_changes
-                  - approve
-                  - publish
-                  - activate
-                  - complete
-                  - archive
-                  - supersede
-                  - start
-                  description: The transition action to apply
-      responses:
-        '200':
-          description: Updated experience instance
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperienceInstance'
-        '400':
-          description: Action is required
-        '422':
-          description: Invalid transition or instance not found
-        '500':
-          description: Server error
-  /api/webhook/gpt:
-    post:
-      operationId: sendIdea
-      summary: Send an idea via the GPT webhook (legacy envelope format)
-      description: "Captures a new idea using the webhook envelope format with source/event/data\
-        \ fields. The idea will appear in the Send page. This is an alternative to\
-        \ the direct POST /api/ideas endpoint \u2014 use whichever format is more\
-        \ convenient.\n"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - source
-              - event
-              - data
-              properties:
-                source:
-                  type: string
-                  enum:
-                  - gpt
-                  description: Always "gpt"
-                event:
-                  type: string
-                  enum:
-                  - idea_captured
-                  description: Always "idea_captured"
-                data:
-                  type: object
-                  required:
-                  - title
-                  - rawPrompt
-                  - gptSummary
-                  properties:
-                    title:
-                      type: string
-                      description: Short idea title (3-8 words)
-                    rawPrompt:
-                      type: string
-                      description: The user's original words
-                    gptSummary:
-                      type: string
-                      description: Your structured 2-4 sentence summary
-                    vibe:
-                      type: string
-                      description: "Energy/aesthetic \u2014 e.g. 'playful', 'ambitious',\
-                        \ 'urgent'"
-                    audience:
-                      type: string
-                      description: Who this is for
-                    intent:
-                      type: string
-                      description: What the user wants to achieve
-                timestamp:
-                  type: string
-                  format: date-time
-                  description: ISO 8601 timestamp
-      responses:
-        '201':
-          description: Idea captured
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    $ref: '#/components/schemas/Idea'
-                  message:
-                    type: string
-        '400':
-          description: Invalid payload
-  /api/experiences/{id}/chain:
-    get:
-      operationId: getExperienceChain
-      summary: Get full chain context for an experience
-      description: Returns upstream and downstream linked experiences in the graph.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-        description: Experience instance ID
-      responses:
-        '200':
-          description: Experience chain context
-    post:
-      operationId: linkExperiences
-      summary: Link this experience to another
-      description: Creates an edge (chain, loop, branch, suggestion) defining relationship.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - targetId
-              - edgeType
-              properties:
-                targetId:
-                  type: string
-                  format: uuid
-                edgeType:
-                  type: string
-                  enum:
-                  - chain
-                  - suggestion
-                  - loop
-                  - branch
-      responses:
-        '200':
-          description: Updated source experience
-  /api/experiences/{id}/steps:
-    get:
-      operationId: getExperienceSteps
-      summary: Get all steps for an experience
-      description: Returns the ordered sequence of steps for this experience.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Array of steps
-    post:
-      operationId: addExperienceStep
-      summary: Add a new step to an existing experience
-      description: Appends a new step dynamically to the experience instance.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - type
-              - title
-              - payload
-              properties:
-                type:
-                  type: string
-                title:
-                  type: string
-                payload:
-                  type: object
-                  additionalProperties: true
-                completion_rule:
-                  type: string
-                  nullable: true
-      responses:
-        '201':
-          description: Created step
-  /api/experiences/{id}/steps/{stepId}:
-    get:
-      operationId: getExperienceStep
-      summary: Get a single step by ID
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: stepId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Single step record
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperienceStepRecord'
-        '404':
-          description: Step not found
-    patch:
-      operationId: updateExperienceStep
-      summary: Update a step's title, payload, or scheduling fields
-      description: 'Use this for multi-pass enrichment — update step content after
-        initial creation. Can update title, payload, completion_rule, scheduled_date,
-        due_date, and estimated_minutes.
-
-        '
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: stepId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                title:
-                  type: string
-                payload:
-                  type: object
-                  additionalProperties: true
-                completion_rule:
-                  type: string
-                  nullable: true
-                scheduled_date:
-                  type: string
-                  format: date
-                  nullable: true
-                  description: Suggested date to work on this step
-                due_date:
-                  type: string
-                  format: date
-                  nullable: true
-                  description: Deadline for step completion
-                estimated_minutes:
-                  type: integer
-                  nullable: true
-                  description: Estimated time in minutes
-      responses:
-        '200':
-          description: Updated step
-        '404':
-          description: Step not found
-    delete:
-      operationId: deleteExperienceStep
-      summary: Remove a step from an experience
-      description: Removes a step and re-indexes remaining step_order values.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: stepId
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Step deleted
-        '404':
-          description: Step not found
-  /api/experiences/{id}/steps/reorder:
-    post:
-      operationId: reorderExperienceSteps
-      summary: Reorder steps within an experience
-      description: Provide the full ordered array of step IDs. Steps will be re-indexed
-        to match the new order.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - stepIds
-              properties:
-                stepIds:
-                  type: array
-                  items:
-                    type: string
-                    format: uuid
-                  description: Ordered array of step IDs defining the new sequence
-      responses:
-        '200':
-          description: Steps reordered
-        '400':
-          description: Invalid step IDs
-  /api/experiences/{id}/steps/progress:
-    get:
-      operationId: getExperienceProgress
-      summary: Get progress summary for an experience
-      description: Returns completion percentage, step counts by status, and estimated
-        remaining time.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Progress summary
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  totalSteps:
-                    type: integer
-                  completedSteps:
-                    type: integer
-                  skippedSteps:
-                    type: integer
-                  completionPercentage:
-                    type: number
-                  estimatedRemainingMinutes:
-                    type: integer
-                    nullable: true
-  /api/drafts:
-    get:
-      operationId: getDraft
-      summary: Get a saved draft for a specific step
-      description: 'Retrieves the most recent draft artifact for a step. Drafts auto-save
-        as the user types and persist across sessions.
-
-        '
-      parameters:
-      - name: instanceId
-        in: query
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: stepId
-        in: query
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Draft data
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  draft:
-                    type: object
-                    nullable: true
-                    description: The saved draft payload, or null if no draft exists
-    post:
-      operationId: saveDraft
-      summary: Save or update a draft for a step
-      description: Upserts a draft artifact. Use for auto-save during user input.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - instanceId
-              - stepId
-              - data
-              properties:
-                instanceId:
-                  type: string
-                  format: uuid
-                stepId:
-                  type: string
-                  format: uuid
-                data:
-                  type: object
-                  additionalProperties: true
-                  description: The draft content to save
-      responses:
-        '200':
-          description: Draft saved
-  /api/experiences/{id}/suggestions:
-    get:
-      operationId: getExperienceSuggestions
-      summary: Get suggested next experiences
-      description: Returns templated suggestions based on graph mappings and completions.
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      responses:
-        '200':
-          description: Array of suggestions
-components:
-  schemas:
-    Resolution:
-      type: object
-      required:
-      - depth
-      - mode
-      - timeScope
-      - intensity
-      properties:
-        depth:
-          type: string
-          enum:
-          - light
-          - medium
-          - heavy
-          description: light = minimal chrome, medium = progress bar + title, heavy
-            = full header with goal
-        mode:
-          type: string
-          enum:
-          - illuminate
-          - practice
-          - challenge
-          - build
-          - reflect
-          description: illuminate = learn, practice = do, challenge = push, build
-            = create, reflect = think
-        timeScope:
-          type: string
-          enum:
-          - immediate
-          - session
-          - multi_day
-          - ongoing
-          description: How long this experience is expected to take
-        intensity:
-          type: string
-          enum:
-          - low
-          - medium
-          - high
-          description: How demanding the experience is
-    ReentryContract:
-      type: object
-      required:
-      - trigger
-      - prompt
-      - contextScope
-      properties:
-        trigger:
-          type: string
-          enum:
-          - time
-          - completion
-          - inactivity
-          - manual
-          description: When the re-entry should fire
-        prompt:
-          type: string
-          description: What you (GPT) should say or propose when re-entering
-        contextScope:
-          type: string
-          enum:
-          - minimal
-          - full
-          - focused
-          description: How much context to load for re-entry
-    ExperienceStep:
-      type: object
-      required:
-      - type
-      - title
-      - payload
-      properties:
-        type:
-          type: string
-          enum:
-          - questionnaire
-          - lesson
-          - challenge
-          - plan_builder
-          - reflection
-          - essay_tasks
-          description: The renderer type for this step
-        title:
-          type: string
-          description: Step title shown to the user
-        payload:
-          type: object
-          additionalProperties: true
-          description: Step-specific content. Format depends on type.
-        completion_rule:
-          type: string
-          nullable: true
-          description: Optional rule for when this step counts as complete
-    ExperienceStepRecord:
-      type: object
-      description: A saved experience step as stored in the database
-      properties:
-        id:
-          type: string
-          format: uuid
-        instance_id:
-          type: string
-          format: uuid
-        step_order:
-          type: integer
-          description: 0-indexed position of this step in the experience
-        step_type:
-          type: string
-          enum:
-          - questionnaire
-          - lesson
-          - challenge
-          - plan_builder
-          - reflection
-          - essay_tasks
-        title:
-          type: string
-        payload:
-          type: object
-        completion_rule:
-          type: string
-          nullable: true
-        status:
-          type: string
-          enum:
-          - pending
-          - active
-          - completed
-          - skipped
-          description: Step completion status (default pending)
-        scheduled_date:
-          type: string
-          format: date
-          nullable: true
-          description: Suggested date to work on this step
-        due_date:
-          type: string
-          format: date
-          nullable: true
-          description: Deadline for step completion
-        estimated_minutes:
-          type: integer
-          nullable: true
-          description: Estimated time to complete in minutes
-        completed_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: Timestamp when the step was completed
-    InjectEphemeralRequest:
-      type: object
-      required:
-      - templateId
-      - userId
-      - resolution
-      - steps
-      properties:
-        templateId:
-          type: string
-          description: Template ID (see template list in instructions)
-        userId:
-          type: string
-          default: a0000000-0000-0000-0000-000000000001
-        title:
-          type: string
-          description: Experience title
-        goal:
-          type: string
-          description: What this experience achieves
-        resolution:
-          $ref: '#/components/schemas/Resolution'
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExperienceStep'
-          minItems: 1
-    CreatePersistentRequest:
-      type: object
-      required:
-      - templateId
-      - userId
-      - resolution
-      - steps
-      properties:
-        templateId:
-          type: string
-          description: Template ID (see template list in instructions)
-        userId:
-          type: string
-          default: a0000000-0000-0000-0000-000000000001
-        title:
-          type: string
-          description: Experience title
-        goal:
-          type: string
-          description: What this experience achieves
-        resolution:
-          $ref: '#/components/schemas/Resolution'
-        reentry:
-          $ref: '#/components/schemas/ReentryContract'
-        previousExperienceId:
-          type: string
-          nullable: true
-          description: ID of the experience this follows in a chain
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExperienceStep'
-          minItems: 1
-    ExperienceInstance:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        user_id:
-          type: string
-        template_id:
-          type: string
-        title:
-          type: string
-        goal:
-          type: string
-        instance_type:
-          type: string
-          enum:
-          - persistent
-          - ephemeral
-        status:
-          type: string
-          enum:
-          - proposed
-          - drafted
-          - ready_for_review
-          - approved
-          - published
-          - active
-          - completed
-          - archived
-          - superseded
-          - injected
-        resolution:
-          $ref: '#/components/schemas/Resolution'
-        reentry:
-          $ref: '#/components/schemas/ReentryContract'
-          nullable: true
-        previous_experience_id:
-          type: string
-          nullable: true
-        next_suggested_ids:
-          type: array
-          items:
-            type: string
-        friction_level:
-          type: string
-          enum:
-          - low
-          - medium
-          - high
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-        published_at:
-          type: string
-          format: date-time
-          nullable: true
-    GPTStatePacket:
-      type: object
-      properties:
-        latestExperiences:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExperienceInstance'
-          description: Recent experience instances
-        activeReentryPrompts:
-          type: array
-          items:
-            type: object
-            properties:
-              instanceId:

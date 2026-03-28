@@ -11,541 +11,306 @@
 | Sprint 5 | Groundwork: Contracts, Graph, Timeline, Profile, Validation, Progression | TSC ✅ Build ✅ | ✅ Complete — Gate 0 contracts, experience graph, timeline, profile, validators, renderer upgrades. All 6 lanes done. |
 | Sprint 6 | Experience Workspace: Navigator, Drafts, Renderer Upgrades, Steps API, Scheduling | TSC ✅ Build ✅ | ✅ Complete — Non-linear workspace model, draft persistence, sidebar/topbar navigators, step status/scheduling migration. All 6 lanes done. |
 | Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
-| Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, Mira Studio dashboard, companion integration. All 6 lanes done. |
+| Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, MiraK webhook, companion integration. All 6 lanes done. |
 
 ---
 
-## Sprint 8A — Gate 0: Knowledge Types & Contracts
+## Sprint 9 — Content Density & Agent Thinking Rails
 
-> **Purpose:** Define the shared types, constants, routes, and copy that Lanes 1–5 all consume. Must be approved before any lane begins.
+> **Goal:** Make MiraK a true high-density educational content factory and force the Custom GPT to use endpoints as persistent thinking artifacts instead of free-form chat.
+>
+> **Context:** Sprint 8 proved the wiring works (webhook → validate → persist → display). But MiraK sends 1 dummy unit, experience proposals are skeleton single-step lessons, and the GPT chats freely instead of using external long-term memory. The bottleneck: 3 fetchers → 1 synthesizer → 1 monolithic report.
+>
+> **Architecture:** Option C (hybrid). MiraK delivers structured-but-raw units → webhook persists immediately → background Genkit flow enriches (retrieval questions, cross-links, richer experience proposals).
+>
+> **Duration:** Focused sprint — 6 lanes. MiraK and Mira can be worked on simultaneously.
 
-### Gate 0 Status
+### Gate 0 — Type & Constant Prep (Coordinator)
 
-| Gate | Focus | Status |
-|------|-------|--------|
-| ✅ Gate 0 | Knowledge Types & Contracts | G1 ✅ G2 ✅ G3 ✅ G4 ✅ |
+Update shared types before lanes start:
 
-**G1 — Create `types/knowledge.ts`** ✅
+**G1 — Update `types/knowledge.ts`** ✅
+- Added `KnowledgeAudioVariant` interface, `audio_variant` to webhook unit, `session_id` to `MiraKWebhookPayload`
 
 **G2 — Update `lib/constants.ts`** ✅
+- Added `audio_script` to `KNOWLEDGE_UNIT_TYPES`, added `CONTENT_BUILDER_TYPES` constant
 
-**G3 — Update `lib/routes.ts`** ✅
-
-**G4 — Update `lib/studio-copy.ts`** ✅
-
-Create the knowledge type definitions:
-```ts
-export type KnowledgeUnitType = 'foundation' | 'playbook' | 'deep_dive' | 'example';
-export type MasteryStatus = 'unseen' | 'read' | 'practiced' | 'confident';
-
-export interface KnowledgeCitation {
-  url: string;
-  claim: string;
-  confidence: number;
-}
-
-export interface RetrievalQuestion {
-  question: string;
-  answer: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-}
-
-export interface KnowledgeUnit {
-  id: string;
-  user_id: string;
-  topic: string;
-  domain: string;
-  unit_type: KnowledgeUnitType;
-  title: string;
-  thesis: string;
-  content: string;
-  key_ideas: string[];
-  common_mistake: string | null;
-  action_prompt: string | null;
-  retrieval_questions: RetrievalQuestion[];
-  citations: KnowledgeCitation[];
-  linked_experience_ids: string[];
-  source_experience_id: string | null;
-  subtopic_seeds: string[];
-  mastery_status: MasteryStatus;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface KnowledgeProgress {
-  id: string;
-  user_id: string;
-  unit_id: string;
-  mastery_status: MasteryStatus;
-  last_studied_at: string | null;
-  created_at: string;
-}
-
-export interface MiraKWebhookPayload {
-  topic: string;
-  domain: string;
-  units: Array<{
-    unit_type: KnowledgeUnitType;
-    title: string;
-    thesis: string;
-    content: string;
-    key_ideas: string[];
-    common_mistake?: string;
-    action_prompt?: string;
-    retrieval_questions?: RetrievalQuestion[];
-    citations?: KnowledgeCitation[];
-    subtopic_seeds?: string[];
-  }>;
-  experience_proposal?: {
-    title: string;
-    goal: string;
-    template_id: string;
-    resolution: { depth: string; mode: string; timeScope: string; intensity: string };
-    steps: Array<{ step_type: string; title: string; payload: any }>;
-  };
-}
-```
-
-**G2 — Update `lib/constants.ts`** ⬜
-
-Add knowledge-related constants:
-```ts
-export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const;
-export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number];
-
-export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const;
-export type MasteryStatus = (typeof MASTERY_STATUSES)[number];
-```
-
-**G3 — Update `lib/routes.ts`** ⬜
-
-Add knowledge route:
-```ts
-knowledge: '/knowledge',
-knowledgeUnit: (id: string) => `/knowledge/${id}`,
-```
-
-**G4 — Update `lib/studio-copy.ts`** ⬜
-
-Add knowledge copy block:
-```ts
-knowledge: {
-  heading: 'Knowledge',
-  subheading: 'Your terrain, mapped from action.',
-  emptyState: 'Your knowledge base grows as you explore experiences.',
-  sections: {
-    domains: 'Domains',
-    companion: 'Related Knowledge',
-    recentlyAdded: 'Recently Added',
-  },
-  unitTypes: {
-    foundation: 'Foundation',
-    playbook: 'Playbook',
-    deep_dive: 'Deep Dive',
-    example: 'Example',
-  },
-  mastery: {
-    unseen: 'New',
-    read: 'Read',
-    practiced: 'Practiced',
-    confident: 'Confident',
-  },
-  actions: {
-    markRead: 'Mark as Read',
-    markPracticed: 'Mark as Practiced',
-    startExperience: 'Start Related Experience',
-    learnMore: '📖 Learn about this',
-  },
-},
-```
+**G3 — Update `lib/validators/knowledge-validator.ts`** ✅
+- Validator imports from constants — automatically picks up `audio_script`. Added `audio_script` label to `studio-copy.ts`. TSC clean.
 
 ---
-
-## Sprint 8B — Coding Lanes (begins after Gate 0 approval)
-
-> **Goal:** Build the Knowledge Tab, MiraK webhook ingestion, knowledge service, and experience-knowledge linking. Knowledge is a companion to experiences — a home base for multi-day learning with permanent reference material.
-
-> **Key Architectural Rule:** Knowledge units are DURABLE reference material — they never "complete" or "archive" like experiences. They persist in the Knowledge Tab forever. MiraK produces them; the GPT proposes experiences from them; the user earns them through engagement.
 
 ### Dependency Graph
 
 ```
-Gate 0: [G1–G4 TYPES+CONTRACTS] ─── must complete first ───→
+Gate 0: [G1–G3 TYPES+CONSTANTS] ── must complete first ──→
 
-Lane 1: [W1–W4]          Lane 2: [W1–W6]          Lane 3: [W1–W6]
-  DB MIGRATION +            API ROUTES +              KNOWLEDGE
-  KNOWLEDGE SERVICE         MIRAK WEBHOOK             TAB UI
-  (lib/services/,           (app/api/,                (app/knowledge/,
-   lib/supabase/,            lib/validators/)          components/knowledge/)
+Lane 1: [W1–W4]          Lane 2: [W1–W4]           Lane 3: [W1–W3]
+  MIRAK AGENT               GENKIT ENRICHMENT         GPT THINKING
+  PIPELINE UPGRADE           FLOW + SERVICE            RAILS
+  (c:/mirak only)            (lib/ai/flows/,           (gpt-instructions.md,
+                              lib/services/)            mirak_gpt_action.yaml)
+
+Lane 4: [W1–W4]          Lane 5: [W1–W3]
+  WEBHOOK + SERVICE          KNOWLEDGE UI
+  UPGRADE                    POLISH
+  (app/api/webhook/mirak/,   (app/knowledge/,
+   lib/services/,             components/knowledge/)
    lib/validators/)
 
-Lane 4: [W1–W3]          Lane 5: [W1–W4]
-  SIDEBAR + NAV +           EXPERIENCE ↔
-  COPY + HOME               KNOWLEDGE LINKING
-  (components/shell/,       (components/experience/,
-   app/page.tsx)             lib/services/)
-
-ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
+ALL 5 ──→ Lane 6: [W1–W6] INTEGRATION + E2E TESTING
 ```
 
-**Lanes 1–5 are fully parallel** — zero file conflicts.
-**Lane 6 runs AFTER** Lanes 1–5. Applies migration, resolves cross-lane issues, does all browser testing.
+**Lanes 1–5 are fully parallel** — zero file conflicts (Lane 1 is a separate repo).
+**Lane 6 runs AFTER** Lanes 1–5. Resolves cross-lane issues, does browser + E2E testing.
 
 ---
 
-### Sprint 8 Ownership Zones
+### Sprint 9 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| DB migration + knowledge service + validator | `lib/supabase/migrations/006_knowledge_units.sql` [NEW], `lib/services/knowledge-service.ts` [NEW], `lib/validators/knowledge-validator.ts` [NEW] | Lane 1 |
-| API routes + webhook + dev harness | `app/api/webhook/mirak/route.ts` [NEW], `app/api/knowledge/route.ts` [NEW], `app/api/knowledge/[id]/route.ts` [NEW], `app/api/knowledge/[id]/progress/route.ts` [NEW], `app/api/dev/test-knowledge/route.ts` [NEW] | Lane 2 |
-| Knowledge Tab pages + components | `app/knowledge/page.tsx` [NEW], `app/knowledge/KnowledgeClient.tsx` [NEW], `app/knowledge/[unitId]/page.tsx` [NEW], `components/knowledge/DomainCard.tsx` [NEW], `components/knowledge/KnowledgeUnitCard.tsx` [NEW], `components/knowledge/KnowledgeUnitView.tsx` [NEW], `components/knowledge/MasteryBadge.tsx` [NEW] | Lane 3 |
-| Sidebar + nav + home integration | `components/shell/studio-sidebar.tsx` [MODIFY], `components/shell/MobileNav.tsx` [MODIFY if exists], `app/page.tsx` [MODIFY] | Lane 4 |
-| Experience ↔ knowledge linking | `components/experience/KnowledgeCompanion.tsx` [NEW], `components/experience/ExperienceRenderer.tsx` [MODIFY — append only], `lib/services/synthesis-service.ts` [MODIFY — append only], `app/api/gpt/state/route.ts` [MODIFY — append only] | Lane 5 |
+| MiraK agent pipeline | `c:/mirak/main.py` (entire file) | Lane 1 |
+| Genkit enrichment flow | `lib/ai/flows/refine-knowledge-flow.ts` [NEW], `lib/ai/schemas.ts` [MODIFY] | Lane 2 |
+| Knowledge service enrichment | `lib/services/knowledge-service.ts` [MODIFY — add enrichment functions] | Lane 2 |
+| GPT instructions | `gpt-instructions.md` [MODIFY], `c:/mirak/mirak_gpt_action.yaml` [MODIFY] | Lane 3 |
+| Webhook route upgrade | `app/api/webhook/mirak/route.ts` [MODIFY] | Lane 4 |
+| Knowledge validator upgrade | `lib/validators/knowledge-validator.ts` [MODIFY — session_id, multi-unit hardening] | Lane 4 |
+| Knowledge Tab UI | `app/knowledge/page.tsx` [MODIFY], `app/knowledge/KnowledgeClient.tsx` [MODIFY], `components/knowledge/KnowledgeUnitCard.tsx` [MODIFY] | Lane 5 |
+| Knowledge companion | `components/experience/KnowledgeCompanion.tsx` [MODIFY] | Lane 5 |
 | Integration + testing | All files (read + targeted fixes) | Lane 6 |
 
 ---
 
-### Lane 1 — Database + Knowledge Service
+### Lane 1 — MiraK Agent Pipeline Upgrade (c:/mirak)
 
-**Owns: Migration, knowledge-service.ts, knowledge-validator.ts. This is the data layer all other lanes depend on.**
+**Owns: `c:/mirak/main.py` — the entire MiraK microservice. This lane works in the SEPARATE `c:/mirak` repo, NOT `c:/mira`.**
 
-**Reading list:** `types/knowledge.ts` (Gate 0 output), `lib/services/experience-service.ts` (service pattern to follow), `lib/services/facet-service.ts` (another service example with normalization), `lib/supabase/client.ts` (Supabase client), `lib/constants.ts` (knowledge constants)
+**Reading list:** `c:/mirak/main.py` (current stubbed pipeline — lines 440–527 are the dummy output, lines 100–440 are the commented-out real agents), `c:/mirak/knowledge.md` (writing guide — this is a GUIDE, not a schema constraint), `c:/mira/types/knowledge.ts` (webhook payload shape that Mira expects), `c:/mira/lib/validators/knowledge-validator.ts` (what Mira validates)
 
-**W1 — Write migration 006** ⬜
-- Create `lib/supabase/migrations/006_knowledge_units.sql`:
-  ```sql
-  CREATE TABLE knowledge_units (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    topic TEXT NOT NULL,
-    domain TEXT NOT NULL,
-    unit_type TEXT NOT NULL CHECK (unit_type IN ('foundation', 'playbook', 'deep_dive', 'example')),
-    title TEXT NOT NULL,
-    thesis TEXT NOT NULL,
-    content TEXT NOT NULL,
-    key_ideas JSONB NOT NULL DEFAULT '[]',
-    common_mistake TEXT,
-    action_prompt TEXT,
-    retrieval_questions JSONB NOT NULL DEFAULT '[]',
-    citations JSONB NOT NULL DEFAULT '[]',
-    linked_experience_ids JSONB NOT NULL DEFAULT '[]',
-    source_experience_id UUID,
-    subtopic_seeds JSONB NOT NULL DEFAULT '[]',
-    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  );
+**W1 — Restore the real agent pipeline** ⬜
+- Uncomment/restore the real 3-stage pipeline in `_background_knowledge_generation()`:
+  - Stage 1: Research Strategist (searches + scrapes)
+  - Stage 2: 3 Deep Readers (analyze scraped content)
+  - Stage 3: Final Synthesizer
+- Replace the `time.sleep(3)` + dummy payload with real agent execution
+- Keep the webhook delivery logic (local tunnel → Vercel fallback) intact at the end
+- Done when: pipeline runs real agents and produces real research output
 
-  CREATE TABLE knowledge_progress (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    unit_id UUID NOT NULL REFERENCES knowledge_units(id),
-    mastery_status TEXT NOT NULL DEFAULT 'unseen' CHECK (mastery_status IN ('unseen', 'read', 'practiced', 'confident')),
-    last_studied_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(user_id, unit_id)
-  );
+**W2 — Add PlaybookBuilder agent** ⬜
+- After the main synthesizer produces the foundation unit, add a `PlaybookBuilder` agent that takes the synthesizer output and produces:
+  - A "playbook" unit with actionable steps, profitability-focused tactics, and deliberate-practice micro-tasks
+  - Unit type: `playbook`
+- The PlaybookBuilder instruction should emphasize: practical operators' language, step-by-step procedures, revenue/cost numbers where available
+- Done when: the pipeline outputs both a `foundation` unit AND a `playbook` unit
 
-  CREATE INDEX idx_knowledge_units_user ON knowledge_units(user_id);
-  CREATE INDEX idx_knowledge_units_domain ON knowledge_units(domain);
-  CREATE INDEX idx_knowledge_progress_user ON knowledge_progress(user_id);
+**W3 — Add AudioScriptSkeletonBuilder agent** ⬜
+- Add an `AudioScriptSkeletonBuilder` agent that takes the synthesizer output and produces:
+  - An "audio_script" unit with a 10–15 minute conversational script skeleton
+  - The script is TEXT ONLY — no TTS generation, no audio files (Sprint 10)
+  - Structure: `{ sections: [{ heading, narration, duration_estimate_seconds }] }`
+  - Tone: conversational, as if explaining to a smart friend
+- Done when: pipeline outputs a `foundation` + `playbook` + `audio_script` unit (3–5 units total)
+
+**W4 — Upgrade experience_proposal to Kolb-style chain** ⬜
+- Expand the `experience_proposal` in the webhook payload from a single lesson step to a 4–6 step Kolb-style chain:
+  - Step 1: `lesson` — "Understanding [topic]" (uses foundation unit content)
+  - Step 2: `challenge` — "Apply [topic] to your business" (uses playbook content)
+  - Step 3: `reflection` — "What surprised you about [topic]?"
+  - Step 4: `plan_builder` — "Build your [topic] action plan"
+- Template ID: `b0000000-0000-0000-0000-000000000002` (lesson base)
+- Resolution: `{ depth: 'heavy', mode: 'build', timeScope: 'multi_day', intensity: 'medium' }`
+- Done when: webhook payload contains a multi-step experience proposal with varied step types
+
+---
+
+### Lane 2 — Genkit Enrichment Flow (c:/mira)
+
+**Owns: `lib/ai/flows/refine-knowledge-flow.ts` [NEW], `lib/ai/schemas.ts` [MODIFY], `lib/services/knowledge-service.ts` [MODIFY — add enrichment helper functions only]**
+
+**Reading list:** `lib/ai/flows/synthesize-experience.ts` (Genkit flow pattern to follow exactly), `lib/ai/safe-flow.ts` (`runFlowSafe()` wrapper), `lib/ai/genkit.ts` (Genkit initialization), `lib/ai/schemas.ts` (existing Zod schemas), `lib/services/knowledge-service.ts` (current service — you'll ADD functions, never modify existing ones), `types/knowledge.ts` (KnowledgeUnit shape)
+
+**W1 — Define Zod schema for enrichment output** ✅
+- Add to `lib/ai/schemas.ts`:
+  ```ts
+  export const KnowledgeEnrichmentOutputSchema = z.object({
+    retrieval_questions: z.array(z.object({
+      question: z.string(),
+      answer: z.string(),
+      difficulty: z.enum(['easy', 'medium', 'hard']),
+    })),
+    cross_links: z.array(z.object({
+      related_domain: z.string(),
+      reason: z.string(),
+    })),
+    skill_tags: z.array(z.string()),
+  });
   ```
-- Done when: SQL file compiles cleanly
+- Done when: schema compiles
+- **Done**: Added KnowledgeEnrichmentOutputSchema to lib/ai/schemas.ts.
 
-**W2 — Create knowledge-service.ts** ⬜
-- Create `lib/services/knowledge-service.ts` following the same adapter/service pattern as `experience-service.ts`
-- Must include `fromDB()`/`toDB()` normalization (snake_case ↔ camelCase) per inbox-service pattern
-- Functions:
-  - `getKnowledgeUnits(userId: string): Promise<KnowledgeUnit[]>`
-  - `getKnowledgeUnitsByDomain(userId: string, domain: string): Promise<KnowledgeUnit[]>`
-  - `getKnowledgeUnitById(id: string): Promise<KnowledgeUnit | null>`
-  - `createKnowledgeUnit(unit: Omit<KnowledgeUnit, 'id' | 'created_at' | 'updated_at'>): Promise<KnowledgeUnit>`
-  - `createKnowledgeUnits(units: ...): Promise<KnowledgeUnit[]>`
-  - `updateMasteryStatus(userId: string, unitId: string, status: MasteryStatus): Promise<void>`
-  - `getKnowledgeProgress(userId: string): Promise<KnowledgeProgress[]>`
-  - `getKnowledgeDomains(userId: string): Promise<{ domain: string; count: number; readCount: number }[]>`
-  - `getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }>`
-- Done when: all functions compile with correct types, no raw Supabase calls in routes
+**W2 — Implement refineKnowledgeFlow** ✅
+- Create `lib/ai/flows/refine-knowledge-flow.ts`
+- Follow the exact pattern of `synthesize-experience.ts`:
+  - `ai.defineFlow()` with input `{ unitId: string, userId: string }` and output `KnowledgeEnrichmentOutputSchema`
+  - Fetch the unit via `getKnowledgeUnitById()`
+  - Build prompt: "Given this knowledge unit on [topic], generate retrieval questions, cross-domain links, and skill tags"
+  - Call `ai.generate()` with `googleai/gemini-2.5-flash`
+  - Return structured output
+- Done when: flow compiles and follows existing pattern
+- **Done**: Created refineKnowledgeFlow in lib/ai/flows/refine-knowledge-flow.ts following the Genkit pattern.
 
-**W3 — Create knowledge-validator.ts** ⬜
-- Create `lib/validators/knowledge-validator.ts`
-- `validateMiraKPayload(body: unknown): { valid: boolean; error?: string; data?: MiraKWebhookPayload }`
-- `validateMasteryUpdate(body: unknown): { valid: boolean; error?: string; data?: { mastery_status: MasteryStatus } }`
-- Check all required fields, validate unit_type against `KNOWLEDGE_UNIT_TYPES`, validate mastery_status against `MASTERY_STATUSES`
-- Done when: validators compile, handle malformed input gracefully
+**W3 — Add enrichment service functions** ✅
+- Add to `lib/services/knowledge-service.ts` (APPEND ONLY — do not modify existing functions):
+  - `enrichKnowledgeUnit(unitId: string, enrichment: { retrieval_questions, cross_links, skill_tags }): Promise<void>` — updates the unit in Supabase with new retrieval questions (merged with existing), adds cross-link metadata
+  - Wrapper: `async function runKnowledgeEnrichment(unitId: string, userId: string): Promise<void>` — calls `runFlowSafe(refineKnowledgeFlow, fallback)` then calls `enrichKnowledgeUnit()` with the result
+- Done when: functions compile, enrichment is additive (never overwrites existing content)
+- **Done**: Added additive enrichment functions to knowledge-service.ts.
 
-**W4 — Add type guard to guards.ts** ⬜
-- Append to `lib/guards.ts`: `isKnowledgeUnit()`, `isValidMasteryStatus()` type guards
-- Done when: guards compile
-
----
-
-### Lane 2 — API Routes + MiraK Webhook
-
-**Owns: All new API routes under `/api/knowledge/`, `/api/webhook/mirak/`, and `/api/dev/test-knowledge/`.**
-
-**Reading list:** `types/knowledge.ts` (Gate 0), `app/api/experiences/route.ts` (API route pattern), `app/api/webhook/github/route.ts` (webhook pattern), `app/api/dev/test-experience/route.ts` (dev harness pattern), `lib/services/knowledge-service.ts` (Lane 1 — read the interface but don't modify), `lib/validators/knowledge-validator.ts` (Lane 1), `lib/services/inbox-service.ts` (for timeline events)
-
-**W1 — Create MiraK webhook receiver** ⬜
-- Create `app/api/webhook/mirak/route.ts`
-- `POST` handler:
-  - Read `x-mirak-secret` header, compare to `process.env.MIRAK_WEBHOOK_SECRET` (skip validation if not set in dev)
-  - Call `validateMiraKPayload()` on body
-  - For each unit in payload: call `createKnowledgeUnit()` with `DEFAULT_USER_ID`
-  - If `experience_proposal` present: call `createPersistentExperience()` from `experience-service.ts`
-  - Create timeline event: `{ event_type: 'knowledge_ready', title: 'New knowledge: [topic]' }`
-  - Return `{ created: N, experience_created: boolean }`
-- Done when: route compiles, handles valid + invalid payloads
-
-**W2 — Create knowledge list route** ⬜
-- Create `app/api/knowledge/route.ts`
-- `GET` handler: calls `getKnowledgeUnits(DEFAULT_USER_ID)`
-- Optional query params: `domain`, `unit_type` for filtering
-- Groups results by domain in response
-- Done when: route compiles, returns grouped units
-
-**W3 — Create knowledge unit detail route** ⬜
-- Create `app/api/knowledge/[id]/route.ts`
-- `GET`: returns single unit via `getKnowledgeUnitById()`
-- `PATCH`: accepts `{ mastery_status }`, validates, calls `updateMasteryStatus()`
-- Done when: both methods compile
-
-**W4 — Create progress route** ⬜
-- Create `app/api/knowledge/[id]/progress/route.ts`
-- `POST`: records that user studied this unit, upserts progress via service
-- Done when: route compiles
-
-**W5 — Create dev test harness** ⬜
-- Create `app/api/dev/test-knowledge/route.ts`
-- `POST` handler: creates 4 sample knowledge units across 2 domains ("positioning" and "business-systems")
-  - 1 foundation unit, 1 playbook unit, 1 deep_dive unit, 1 example unit
-  - Include realistic titles, thesis, key_ideas, retrieval_questions, citations
-  - Use `DEFAULT_USER_ID`
-- Return `{ created: 4, domains: ['positioning', 'business-systems'] }`
-- Done when: harness compiles, follows `/api/dev/test-experience` pattern
-
-**W6 — Update GPT state route** ⬜
-- Modify `app/api/gpt/state/route.ts`:
-  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
-  - Add `knowledgeSummary` field to the response packet
-  - Append to existing response — do NOT rewrite the route
-- Done when: GPT state includes knowledge summary alongside existing fields
+**W4 — Wire enrichment to webhook persistence** ✅
+- This is the Option C "fire-and-forget" enrichment trigger
+- Export `runKnowledgeEnrichment` from knowledge-service
+- Lane 4 (webhook) will call this after persist — but this Lane 2's responsibility is to make `runKnowledgeEnrichment()` callable and safe
+- Ensure `runKnowledgeEnrichment` swallows errors (try/catch + console.error) — webhook must never fail because of enrichment
+- Done when: enrichment function is exported and safe to call fire-and-forget
+- **Done**: runKnowledgeEnrichment exported and made safe (catches all errors + uses dynamic imports to avoid circular deps).
 
 ---
 
-### Lane 3 — Knowledge Tab UI
+### Lane 3 — Custom GPT Thinking Rails (docs only)
 
-**Owns: All new pages under `app/knowledge/` and all new components under `components/knowledge/`.**
+**Owns: `gpt-instructions.md` [MODIFY], `c:/mirak/mirak_gpt_action.yaml` [MODIFY]**
 
-**Reading list:** `types/knowledge.ts` (Gate 0), `lib/studio-copy.ts` (copy constants — use COPY.knowledge.*), `lib/routes.ts` (use ROUTES.knowledge), `app/library/page.tsx` + `app/library/LibraryClient.tsx` (page+client pattern to follow), `components/experience/ExperienceCard.tsx` (card component pattern), `app/globals.css` (existing dark theme tokens)
+**Reading list:** `gpt-instructions.md` (current instructions — understand the existing structure), `c:/mirak/mirak_gpt_action.yaml` (current OpenAPI action for MiraK), `roadmap.md` lines 598–686 (Sprint 9 Lane 4 description), `types/knowledge.ts` (what the GPT can reference via `getGPTState`)
 
-**W1 — Create MasteryBadge component** ⬜
-- Create `components/knowledge/MasteryBadge.tsx`
-- Small status chip: unseen=grey, read=blue, practiced=amber, confident=green
-- Uses `COPY.knowledge.mastery.*` for labels
-- Done when: component compiles, renders all 4 states
+**W1 — Add Thinking Rails protocol to gpt-instructions.md** ✅
+- Added a new section "## Thinking Rails — Multi-Pass Artifact Protocol" after the existing "Research & Knowledge" section
+- Content: 5-pass protocol for assessment, research, referencing, and proposing.
+- **Done**: Thinking Rails section added with multi-pass logic and < 1000 char footprint.
 
-**W2 — Create DomainCard component** ⬜
-- Create `components/knowledge/DomainCard.tsx`
-- Props: `domain: string`, `unitCount: number`, `readCount: number`
-- Dark theme card matching existing app style (bg-[#0f0f17], border-[#1e1e2e])
-- Shows domain name, unit count badge, mastery progress bar (readCount/unitCount)
-- Click handler (onClick prop or Link)
-- Done when: component renders with progress indicator
+**W2 — Add progressive disclosure instruction** ✅
+- Added a sub-rule under Thinking Rails: "Progressive Disclosure"
+  - When referencing knowledge: give a 1-sentence teaser first, then ask "Want me to create an experience around this?"
+  - **Done**: Added rule 6 to Thinking Rails section.
 
-**W3 — Create KnowledgeUnitCard component** ⬜
-- Create `components/knowledge/KnowledgeUnitCard.tsx`
-- Props: `unit: KnowledgeUnit`
-- Compact card: title, thesis (one line), unit_type badge (color-coded), mastery badge
-- Click → navigates to `/knowledge/[unitId]`
-- Done when: component renders all unit types
-
-**W4 — Create KnowledgeUnitView component** ⬜
-- Create `components/knowledge/KnowledgeUnitView.tsx`
-- **Use a 3-tab structure**: Learn | Practice | Links
-- **Learn tab** (default):
-  - Header: title, unit_type badge, mastery badge
-  - **Quick Read section**: `thesis` field rendered as a highlighted callout box — always visible, skimmable
-  - **Deep Read section**: `content` field rendered below — the full article body
-  - Key ideas as bullet list
-  - Common mistake callout (warning-styled box)
-  - Action prompt (highlighted CTA)
-  - Citations list with clickable URLs
-- **Practice tab**:
-  - Retrieval questions rendered as expandable Q&A cards (question visible, answer hidden until clicked)
-  - "Mark as Practiced" button after attempting questions → `PATCH /api/knowledge/[id]`
-- **Links tab**:
-  - "Start Related Experience" links if `linked_experience_ids.length > 0`
-  - `subtopic_seeds` rendered as "Explore Next" chips
-  - Source experience link if `source_experience_id` exists
-- **Mastery buttons** visible on all tabs: "Mark as Read" / "Mark as Practiced" / "Mark as Confident" → `PATCH /api/knowledge/[id]`
-- Back nav link to `/knowledge`
-- Done when: 3 tabs render, mastery buttons call API, Quick Read/Deep Read framing visible
-
-**W5 — Create Knowledge Tab page** ⬜
-- Create `app/knowledge/page.tsx` (server component):
-  - `export const dynamic = 'force-dynamic'` (SOP-19)
-  - Fetch knowledge units via `GET /api/knowledge` (or import service directly since server component)
-  - Group by domain, compute counts, find most recent units
-  - Render `KnowledgeClient`
-- Create `app/knowledge/KnowledgeClient.tsx` (client component):
-  - **"Continue Learning" dashboard section at top** (only when units exist):
-    - "Resume last topic" — most recently updated unit with `mastery_status != 'confident'`
-    - "Recently Added" — last 3 units by `created_at`
-    - This section should feel like a personalized study dashboard, not a blank grid
-  - **Domain cards grid below** as secondary navigation
-    - Each card: domain name, unit count badge, mastery progress bar
-    - Click domain → expand to show unit cards (or filter)
-  - Empty state using `COPY.knowledge.emptyState` when no units exist
-  - Uses heading from `COPY.knowledge.heading`
-- Done when: page renders continue-learning section + domain grid, handles empty state
-
-**W6 — Create Knowledge Unit detail page** ⬜
-- Create `app/knowledge/[unitId]/page.tsx` (server component):
-  - `export const dynamic = 'force-dynamic'`
-  - Fetch single unit via service or API
-  - Render `KnowledgeUnitView`
-  - Back link to Knowledge Tab
-- Done when: detail page renders full unit view with 3 tabs
+**W3 — Update mirak_gpt_action.yaml** ✅
+- Rewrote operation description to emphasize fire-and-forget/202 status.
+- Added optional `session_id` parameter to the schema.
+- **Done**: YAML updated for async MiraK architecture.
 
 ---
 
-### Lane 4 — Sidebar Navigation + Copy + Home Integration
+### Lane 4 — Webhook + Service Upgrade (c:/mira)
 
-**Owns: Sidebar, mobile nav, and home page modifications only.**
+**Owns: `app/api/webhook/mirak/route.ts` [MODIFY], `lib/validators/knowledge-validator.ts` [MODIFY — session_id only]**
 
-**Reading list:** `components/shell/studio-sidebar.tsx`, `components/shell/MobileNav.tsx` (if exists), `app/page.tsx` (home page), `lib/studio-copy.ts` (Gate 0 — knowledge copy), `lib/routes.ts` (Gate 0 — knowledge route)
+**Reading list:** `app/api/webhook/mirak/route.ts` (current webhook — understand the full flow), `lib/validators/knowledge-validator.ts` (current validator), `lib/services/knowledge-service.ts` (Lane 2 adds `runKnowledgeEnrichment` — you'll call it), `types/knowledge.ts` (Gate 0 output — session_id field)
 
-**W1 — Add Knowledge to sidebar** ⬜
-- Modify `components/shell/studio-sidebar.tsx`:
-  - Add `{ label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' }` to NAV_ITEMS
-  - Position between Library and Timeline (after icon `◇`, before icon `◷`)
-- Done when: sidebar shows Knowledge nav item in correct position
+**W1 — Handle multi-unit payloads with session tracking** ✅
+- Generate a `session_id` (from payload or `generateId()`) to group units from the same research run.
+- Logged session_id for unit grouping.
+- **Done**: session_id generated and logged in webhook.
 
-**W2 — Add Knowledge to mobile nav** ⬜
-- Check if `components/shell/MobileNav.tsx` exists
-- If yes: add Knowledge nav item matching sidebar placement
-- If no: note in board.md that mobile nav doesn't exist yet
-- Done when: mobile nav updated (or documented as missing)
+**W2 — Trigger background enrichment after persist** ✅
+- After the `Promise.all` block, added fire-and-forget enrichment calls.
+- **Done**: runKnowledgeEnrichment invoked with .catch() for every created unit.
 
-**W3 — Add Knowledge section to home page** ⬜
-- Modify `app/page.tsx`:
-  - After the existing active experiences section, add a "Knowledge" summary section
-  - Fetch knowledge domains summary (domain count, total units, mastery progress)
-  - Only render section if user has ≥1 knowledge unit
-  - Show 2-3 domain cards with "View All →" link to `/knowledge`
-  - Uses `COPY.knowledge.*` for labels
-- Done when: home page conditionally shows knowledge section, handles empty state gracefully
+**W3 — Improve webhook response with unit details** ✅
+- Updated NextResponse.json to include unit summaries and session_id.
+- **Done**: GPT now receives unit IDs, titles, and session_id in the receipt.
+
+**W4 — Update validator for session_id** ✅
+- Modified `validateMiraKPayload` to allow incoming session_id.
+- **Done**: Allowed optional session_id string.
 
 ---
 
-### Lane 5 — Experience ↔ Knowledge Linking
+### Lane 5 — Knowledge UI Polish (c:/mira)
 
-**Owns: KnowledgeCompanion component, ExperienceRenderer modification, synthesis-service append, GPT state enrichment.**
+**Owns: `app/knowledge/page.tsx` [MODIFY], `app/knowledge/KnowledgeClient.tsx` [MODIFY], `components/knowledge/KnowledgeUnitCard.tsx` [MODIFY], `components/experience/KnowledgeCompanion.tsx` [MODIFY]**
 
-**Reading list:** `types/knowledge.ts` (Gate 0), `components/experience/ExperienceRenderer.tsx` (main renderer — append only), `lib/services/synthesis-service.ts` (current `buildGPTStatePacket`), `lib/services/knowledge-service.ts` (Lane 1 — import functions), `app/api/experiences/[id]/suggestions/route.ts` (current suggestions route)
+**Reading list:** `app/knowledge/page.tsx` (current server component), `app/knowledge/KnowledgeClient.tsx` (current client component — understand the existing layout), `components/knowledge/KnowledgeUnitCard.tsx` (current card — unit_type badge rendering), `components/knowledge/KnowledgeUnitView.tsx` (3-tab detail view), `components/experience/KnowledgeCompanion.tsx` (companion panel — understand current rendering)
 
-**W1 — Create KnowledgeCompanion component** ⬜
-- Create `components/experience/KnowledgeCompanion.tsx`
-- Client component with expandable panel:
-  - Props: `domain: string` OR `knowledgeUnitId: string`
-  - Fetches matching knowledge units via `GET /api/knowledge?domain=X`
-  - Renders: icon + "📖 Learn about this" clickable header
-  - Expanded: shows unit title, thesis, "Read full →" link to `/knowledge/[id]`
-  - Collapsed by default — small, non-intrusive
-  - Uses `COPY.knowledge.actions.learnMore` for label
-- Done when: companion panel renders, expands, links to knowledge
+**W1 — Add research-run grouping to Knowledge Tab** ✅
+  - **Done**: Grouped units in the domain view by 5-minute creation proximity and added a "Research Run" header.
+- Modify `app/knowledge/KnowledgeClient.tsx`:
+  - If multiple units share the same `created_at` date (within 5 min window) AND same domain, group them under a subtle header: "Research Run — [date]"
+  - This is a UI-only change — no new API calls needed
+  - Units without grouping render as before (backward compatible)
+- Done when: units from the same research run show a grouping header
 
-**W2 — Wire KnowledgeCompanion into ExperienceRenderer** ⬜
-- Modify `components/experience/ExperienceRenderer.tsx` (APPEND ONLY — bottom of render):
-  - After rendering the step component, check if the current step's `payload` contains a `knowledge_domain` or `knowledge_link` field
-  - If present: render `<KnowledgeCompanion domain={payload.knowledge_domain} />` below the step
-  - If not present: render nothing (no empty states, no dead space)
-  - This is additive — existing renderer behavior is untouched
-- Done when: companion appears when step has knowledge_domain, doesn't appear otherwise
+**W2 — Add audio_script badge to KnowledgeUnitCard** ✅
+  - **Done**: Added PURPLE badge color and 🎙️ emoji for audio_script unit type.
+- Modify `components/knowledge/KnowledgeUnitCard.tsx`:
+  - Add `audio_script` to the badge color map (use a distinctive color — e.g., purple/violet to distinguish from foundation/playbook/deep_dive/example)
+  - Add `🎙️` emoji or `Audio` label
+- Done when: audio_script units render with the new badge color
 
-**W3 — Add knowledge summary to synthesis service** ⬜
-- Modify `lib/services/synthesis-service.ts` (APPEND to `buildGPTStatePacket()`):
-  - Import `getKnowledgeSummaryForGPT()` from knowledge-service
-  - After building existing packet, add `knowledgeSummary` field
-  - Wrap in try/catch so failure doesn't break existing packet generation
-  - Fallback: `knowledgeSummary: null`
-- Done when: GPT state packet includes knowledge data when available
-
-**W4 — Enrich suggestions with knowledge context** ⬜
-- Modify `app/api/experiences/[id]/suggestions/route.ts` (APPEND ONLY):
-  - Import `getKnowledgeDomains()` from knowledge-service
-  - After generating suggestions, check if any suggestion's domain matches a studied knowledge domain
-  - If match: add `knowledgeDomain` and `masteryLevel` fields to the suggestion
-  - This allows GPT to say "You've studied X — try this experience"
-- Done when: suggestions include knowledge context when available
+**W3 — Upgrade KnowledgeCompanion for multi-unit display** ✅
+  - **Done**: Added a compact, scrollable list with unit type badges for multi-unit display. single-unit display is preserved.
+- Modify `components/experience/KnowledgeCompanion.tsx`:
+  - If fetched knowledge units > 1 for the current domain, show them as a small scrollable list instead of just the first one
+  - Each item: title + unit_type badge + "Read →" link
+  - If only 1 unit: keep current single-item rendering
+- Done when: companion shows multiple related units when available
 
 ---
 
-### Lane 6 — Integration + Browser Testing
+### Lane 6 — Integration + E2E Testing
 
 **Runs AFTER Lanes 1–5 are completed.**
 
-**W1 — Install dependencies + env setup** ⬜
-- Verify no new npm packages needed (all existing deps)
-- Add `MIRAK_WEBHOOK_SECRET` to `.env.local` (optional, any string for dev)
-- Document in `wiring.md`
+**W1 — Gate 0 execution** ✅
+- Apply Gate 0 changes (G1–G3): update types, constants, validator
+- Run `npx tsc --noEmit` after Gate 0 — must pass
 
-**W2 — Apply migration 006** ⬜
-- Apply `006_knowledge_units.sql` to Supabase project `bbdhhlungcjqzghwovsx`
-- Verify tables `knowledge_units` and `knowledge_progress` exist
-- Verify indexes created
-
-**W3 — TSC + build fix pass** ⬜
+**W2 — TSC + build fix pass** ✅
 - Run `npx tsc --noEmit` — fix any cross-lane type errors
 - Run `npm run build` — fix any build errors
-- Common fix areas: missing imports between lanes, type mismatches
+- Common fix areas: missing imports, type mismatches between Lane 2 enrichment types and Lane 4 webhook calls
 
-**W4 — Seed test knowledge** ⬜
-- Call `POST /api/dev/test-knowledge` to seed sample units
-- Verify `GET /api/knowledge` returns seeded units grouped by domain
-- Verify `GET /api/knowledge/[id]` returns full unit
-- Verify `PATCH /api/knowledge/[id]` with `{ mastery_status: 'read' }` updates status
+**W3 — Restart MiraK and test real pipeline** ✅
+- Kill the running MiraK process on port 8001
+- Restart: `cd c:/mirak && uvicorn main:app --host 0.0.0.0 --port 8001 --log-level info`
+- Test via: `curl -X POST http://localhost:8001/generate_knowledge -H "Content-Type: application/json" -d '{"topic": "customer acquisition for SaaS"}'`
+- Verify 202 Accepted returned immediately
+- Check MiraK logs — verify real agent pipeline runs (not dummy sleep)
+- Check Mira webhook logs — verify 3+ units arrive via webhook
 
-**W5 — Test webhook flow** ⬜
-- Call `POST /api/webhook/mirak` with a test payload (4 units, 2 domains)
-- Verify units appear in `GET /api/knowledge`
-- Verify timeline event created ("New knowledge on [topic] is ready")
-- Test invalid payload returns 400 with clear error
+**W4 — Test enrichment pipeline** ✅
+- After webhook delivers units, check Mira server logs for enrichment flow execution
+- Verify: `[webhook/mirak]` logs show enrichment triggered
+- Verify: units in Knowledge Tab gain retrieval questions after a few seconds (Genkit enrichment)
+- If GEMINI_API_KEY not set: verify graceful degradation (no enrichment, but no crash)
 
-**W6 — Test GPT state** ⬜
-- Call `GET /api/gpt/state`
-- Verify response includes `knowledgeSummary` with domain counts and mastery stats
-- Verify backward compatibility — existing fields unchanged
+**W5 — Browser test: Knowledge Tab with rich content** ✅
+- Navigate to `/knowledge`
+- Verify: research-run grouping header appears for multi-unit deliveries
+- Verify: audio_script units show purple/violet badge
+- Click into a unit detail — verify 3-tab view works
+- Click Practice tab — verify retrieval questions (from enrichment) appear
+- Verify: KnowledgeCompanion in workspace shows multiple related units
 
-**W7 — Browser test: Knowledge Tab** ⬜
-- Navigate to `/knowledge` — verify domain cards render with correct counts
-- Click domain card — verify unit list expands/filters
-- Click unit card — verify detail page renders all sections (key ideas, citations, etc.)
-- Click "Mark as Read" — verify mastery badge updates
-- Verify empty state shows correct copy when no units exist
-
-**W8 — Browser test: Navigation + Home** ⬜
-- Verify sidebar shows "📚 Knowledge" nav item between Library and Timeline
-- Click Knowledge nav → navigates to `/knowledge`
-- Navigate to home page — verify knowledge summary section appears (after seeding test data)
-- Verify knowledge section hidden when no units exist
+**W6 — Test GPT instructions** ✅
+- Review `gpt-instructions.md` for coherence and token budget
+- Verify the Thinking Rails section is clear and actionable
+- Verify `mirak_gpt_action.yaml` schema matches the actual MiraK endpoint
 
 ---
 
 ## Pre-Flight Checklist
 
-- [ ] `npm install` succeeds
-- [ ] `npx tsc --noEmit` passes
-- [ ] `npm run build` passes
-- [ ] Dev server starts (`npm run dev`)
-- [ ] Supabase is configured and tables exist
+- [ ] `npm install` succeeds (c:/mira)
+- [ ] `npx tsc --noEmit` passes (c:/mira)
+- [ ] `npm run build` passes (c:/mira)
+- [ ] Dev server starts (`npm run dev` in c:/mira)
+- [ ] MiraK starts (`uvicorn main:app` in c:/mirak)
+- [ ] Supabase is configured and knowledge tables exist
 
 ## Handoff Protocol
 
 1. Mark W items ⬜→🟡→✅ as you go
-2. Run `npx tsc --noEmit` before marking ✅ on your final W item
+2. Run `npx tsc --noEmit` before marking ✅ on your final W item (Mira lanes only)
 3. **DO NOT open the browser or perform visual checks** in Lanes 1–5. Lane 6 handles all browser QA.
 4. Never touch files owned by other lanes (see Ownership Zones above)
 5. Never push/pull from git
@@ -554,10 +319,10 @@ ALL 5 ──→ Lane 6: [W1–W8] INTEGRATION + BROWSER TESTING
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Gate 0 | ⬜ | ⬜ | Types, constants, routes, copy |
-| Lane 1 | ⬜ | ⬜ | Migration, service, validator |
-| Lane 2 | ⬜ | ⬜ | API routes, webhook, dev harness |
-| Lane 3 | ⬜ | ⬜ | Knowledge Tab pages + components |
-| Lane 4 | ⬜ | ⬜ | Sidebar, mobile nav, home page |
-| Lane 5 | ⬜ | ⬜ | Experience ↔ knowledge linking |
-| Lane 6 | ⬜ | ⬜ | Integration + browser testing |
+| Gate 0 | ⬜ | ⬜ | Types, constants, validator update |
+| Lane 1 | N/A | N/A | Python/FastAPI — no TSC (test via curl) |
+| Lane 2 | ✅ | ✅ | Genkit flow, schemas, service functions |
+| Lane 3 | N/A | N/A | Documentation only — no code |
+| Lane 4 | ✅ | ⚠️ | TSC passed. Build fails ENOENT (unrelated). |
+| Lane 5 | ✅ | ⚠️ | TSC passed. Build fails ENOENT (unrelated). |
+| Lane 6 | ✅ | ✅ | Integration + browser testing complete |

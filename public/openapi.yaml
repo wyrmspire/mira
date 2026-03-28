@@ -8,6 +8,66 @@ servers:
 - url: /
   description: Current hosted domain
 paths:
+  /api/knowledge:
+    get:
+      operationId: listKnowledgeUnits
+      summary: List all knowledge units
+      description: |
+        Returns all high-density research units (foundations, playbooks) created by MiraK.
+        Use this to browse the current knowledge base before proposing new experiences or research.
+      parameters:
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by broad domain (e.g., "SaaS Strategy")
+        - name: unit_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [foundation, playbook, deep_dive, example]
+          description: Filter by unit type.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/KnowledgeUnit'
+                  total:
+                    type: integer
+  /api/knowledge/{id}:
+    get:
+      operationId: getKnowledgeUnit
+      summary: Get a single knowledge unit by ID
+      description: |
+        Returns the full, dense content of a specific research unit.
+        Use this to read the reference material produced by MiraK.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unit ID
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KnowledgeUnit'
+        '404':
+          description: Unit not found
   /api/gpt/state:
     get:
       operationId: getGPTState
@@ -1183,3 +1243,66 @@ components:
         eventPayload:
           type: object
           description: Event-specific data
+    KnowledgeUnit:
+      type: object
+      required:
+        - id
+        - topic
+        - domain
+        - title
+        - thesis
+        - content
+      properties:
+        id:
+          type: string
+        topic:
+          type: string
+        domain:
+          type: string
+        unit_type:
+          type: string
+          enum: [foundation, playbook, deep_dive, example]
+        title:
+          type: string
+        thesis:
+          type: string
+        content:
+          type: string
+          description: The full, dense, high-density research content.
+        key_ideas:
+          type: array
+          items:
+            type: string
+        citations:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeCitation'
+        retrieval_questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/RetrievalQuestion'
+        mastery_status:
+          type: string
+          enum: [unseen, read, practiced, confident]
+        created_at:
+          type: string
+          format: date-time
+    KnowledgeCitation:
+      type: object
+      properties:
+        url:
+          type: string
+        claim:
+          type: string
+        confidence:
+          type: number
+    RetrievalQuestion:
+      type: object
+      properties:
+        question:
+          type: string
+        answer:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]

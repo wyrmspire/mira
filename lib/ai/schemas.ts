@@ -35,3 +35,16 @@ export const CompressedStateOutputSchema = z.object({
   prioritySignals: z.array(z.string()).describe('Top 3-5 signals the GPT should act on'),
   suggestedOpeningTopic: z.string().describe('What the GPT should bring up first')
 });
+
+export const KnowledgeEnrichmentOutputSchema = z.object({
+  retrieval_questions: z.array(z.object({
+    question: z.string(),
+    answer: z.string(),
+    difficulty: z.enum(['easy', 'medium', 'hard']),
+  })),
+  cross_links: z.array(z.object({
+    related_domain: z.string(),
+    reason: z.string(),
+  })),
+  skill_tags: z.array(z.string()),
+});

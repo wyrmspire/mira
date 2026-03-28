@@ -22,6 +22,8 @@ export default function KnowledgeUnitCard({ unit }: KnowledgeUnitCardProps) {
         return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
       case 'example':
         return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      case 'audio_script':
+        return 'text-fuchsia-400 bg-fuchsia-500/10 border-fuchsia-500/20';
       default:
         return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
     }
@@ -34,7 +36,7 @@ export default function KnowledgeUnitCard({ unit }: KnowledgeUnitCardProps) {
     >
       <div className="flex justify-between items-start mb-3">
         <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)}`}>
-          {COPY.knowledge.unitTypes[unit.unit_type]}
+          {unit.unit_type === 'audio_script' ? '🎙️ ' : ''}{COPY.knowledge.unitTypes[unit.unit_type as keyof typeof COPY.knowledge.unitTypes]}
         </div>
         <MasteryBadge status={unit.mastery_status} />
       </div>

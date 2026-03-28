@@ -618,6 +618,41 @@ while IFS= read -r rel_path; do
 done < "$FILE_LIST"
 
 # ---------------------------------------------------------------------------
+# MiraK microservice dump (c:/mirak — separate repo)
+# ---------------------------------------------------------------------------
+MIRAK_DIR="/c/mirak"
+if [[ -d "$MIRAK_DIR" ]]; then
+    echo "## MiraK Microservice (c:/mirak)" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+    echo "MiraK is a Python/FastAPI research agent on Cloud Run. Separate repo, integrated via webhooks." >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+
+    MIRAK_FILES=(
+        "main.py"
+        "Dockerfile"
+        "requirements.txt"
+        "knowledge.md"
+        "mirak_gpt_action.yaml"
+        "README.md"
+    )
+
+    for mf in "${MIRAK_FILES[@]}"; do
+        mirak_file="$MIRAK_DIR/$mf"
+        if [[ -f "$mirak_file" ]]; then
+            ext="${mf##*.}"
+            lang=$(lang_for_ext "$ext")
+            echo "### mirak/${mf}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`$lang" >> "$TEMP_FILE"
+            cat "$mirak_file" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
 # Split into dump files
 # ---------------------------------------------------------------------------
 total_lines=$(wc -l < "$TEMP_FILE")

@@ -74,9 +74,9 @@ Replaced naive string summaries and keyword-splitting with AI-powered intelligen
 - **Graceful Degradation** — `runFlowSafe()` wrapper ensures all AI flows fall back to existing mechanical behavior when `GEMINI_API_KEY` is unavailable
 - **Migration 005** — `evidence` column added to `profile_facets` for AI-generated extraction justification
 
-### 🔄 Current Phase — Intelligent Experience Engine Live
+### 🔄 Current Phase — Multi-Agent Experience Engine Live
 
-The GPT Custom instructions and OpenAPI schema are defined in `openschema.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
+The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
 - Fetch user state (`getGPTState`) — **now includes AI-compressed narrative + priority signals**
 - Create ephemeral experiences (`injectEphemeral`) — including 20-question intake pages
 - Propose persistent experiences (`createPersistentExperience`) — including 18-step multi-day curricula
@@ -86,92 +86,79 @@ The GPT Custom instructions and OpenAPI schema are defined in `openschema.md` / 
 - Add/remove/reorder steps (`addExperienceStep`, `deleteExperienceStep`, `reorderExperienceSteps`)
 - Check progress (`getExperienceProgress`)
 - Read/write drafts (`getDraft`, `saveDraft`)
-- **NEW:** Get AI-enriched next-experience suggestions (`getSuggestions`)
+- Get AI-enriched next-experience suggestions (`getSuggestions`)
+- **Trigger deep research** (`generateKnowledge` via MiraK — fire-and-forget, 202 Accepted)
 
 ### Current Architecture Snapshot
 
 ```
-GPT (Custom GPT "Mira")
-  ↓ OpenAPI actions (16+ endpoints)
-  ↓ via Cloudflare tunnel (mira.mytsapi.us)
+Custom GPT ("Mira" — high-token brain)
+  ↓ OpenAPI actions (16+ endpoints) + "Thinking Rails" protocol
+  ↓ via Cloudflare tunnel (mira.mytsapi.us) or Vercel (mira-mocha-kappa.vercel.app)
 Mira Studio (Next.js 14, App Router)
-  ├── workspace/  ← navigable experience workspace (overview + step grid + sidebar/topbar)
-  ├── library/    ← all experiences: active, completed, proposed
-  ├── timeline/   ← chronological event feed
-  ├── profile/    ← compiled user direction (AI-powered facets)
-  ├── send/       ← captured ideas
-  ├── drill/      ← 6-step clarification
-  ├── arena/      ← active projects (max 3)
-  ├── review/     ← PR review surface
-  ├── icebox/     ← deferred
-  ├── shipped/    ← done
-  ├── killed/     ← removed
-  └── api/        ← endpoints for GPT + GitHub webhooks
+  ├── workspace/    ← navigable experience workspace (overview + step grid + sidebar/topbar)
+  ├── knowledge/    ← durable reference + mastery (3-tab: Learn | Practice | Links)
+  ├── library/      ← all experiences: active, completed, proposed
+  ├── timeline/     ← chronological event feed
+  ├── profile/      ← compiled user direction (AI-powered facets)
+  └── api/          ← same contract GPT hits
         ↕
-Genkit Intelligence Layer (Sprint 7)
-  ├── synthesizeExperienceFlow  (narrative synthesis on completion)
-  ├── extractFacetsFlow         (semantic profile extraction)
-  ├── suggestNextExperienceFlow (context-aware recommendations)
-  ├── compressGPTStateFlow      (token-efficient state compression)
-  └── runFlowSafe()             (graceful degradation wrapper)
+Genkit Intelligence Layer
+  ├── synthesize-experience-flow     → narrative + behavioral signals on completion
+  ├── suggest-next-experience-flow   → personalized recommendations
+  ├── extract-facets-flow            → semantic profile facet mining
+  ├── compress-gpt-state-flow       → token-efficient GPT state packets
+  └── refine-knowledge-flow (Sprint 9) → polish + cross-pollinate MiraK output
         ↕
-MiraK (Python/FastAPI research agent) ← Cloud Run (Sprint 8)
-  ├── /generate_knowledge (research pipeline)
-  └── Callback to /api/webhook/mirak
+MiraK (Python/FastAPI on Cloud Run — separate repo: c:/mirak)
+  ├── POST /generate_knowledge → 202 Accepted immediately
+  ├── BackgroundTasks: 3-stage agent pipeline (strategist + 3 readers + synthesizer)
+  ├── Webhook delivery: local tunnel primary → Vercel fallback
+  └── Currently stubbed (dummy data) — real agents ship in Sprint 9
         ↕
-Supabase (Postgres — canonical runtime store)
-  ├── experience_instances, experience_steps, ...
-  ├── knowledge_units       (durable reference content)
-  ├── knowledge_progress    (mastery & practice tracking)
-  └── 10 more tables...
+Supabase (runtime truth)
+  ├── experience_instances  (20 columns, lifecycle state machine)
+  ├── experience_steps      (per-step payload + status + scheduling)
+  ├── knowledge_units       (research content from MiraK)
+  ├── knowledge_progress    (mastery tracking per user per unit)
+  ├── interaction_events    (telemetry: 7 event types)
+  ├── synthesis_snapshots   (AI-enriched completion analysis)
+  ├── profile_facets        (interests, skills, goals, preferences)
+  ├── artifacts             (draft persistence)
+  ├── timeline_events       (inbox/event feed)
+  └── experience_templates  (6 Tier 1 seeded)
         ↕
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
   └── factory services ready but not in active use
 ```
 
-**What works:** GPT → create experience → user navigates freely in workspace → drafts persist across sessions → interactions recorded → GPT re-enters with AI-compressed state. Experience completion triggers: AI synthesis → semantic facet extraction → context-aware suggestions. Full lifecycle for both ephemeral and persistent experiences. The system degrades gracefully without API key.
+**What works today:**
+- GPT can create rich multi-step experiences (18+ steps, mixed types)
+- Knowledge Tab is live and populated via MiraK webhook
+- Multi-pass enrichment APIs are wired (update/add/reorder steps)
+- Draft persistence, non-linear navigation, step scheduling all ship
+- Genkit flows run safely with graceful degradation
+- Experience completion triggers: AI synthesis → semantic facet extraction → context-aware suggestions
 
-**What's next:** Sprint 8 — Proposal/Realization/Coder Pipeline. Wire the approval flow to trigger realization via GitHub SWE agent. Or: Sprint 8 — Coaching Layer. Build `coachChatFlow` for in-app, context-aware step-level feedback during experience navigation.
+**What is still stubbed:**
+- MiraK only produces 1 dummy unit (real agent pipeline commented out)
+- Custom GPT still chats freely instead of using endpoints as structured artifacts
+- No progressive disclosure or deterministic multi-pass thinking protocol yet
 
----
-
-## Target Architecture
+### Target Architecture (next 3 sprints)
 
 ```
-GPT (Custom GPT "Mira")
-  ↓ endpoints (propose experience, inject ephemeral, fetch state, submit feedback)
-Mira Studio (Next.js 14, App Router)
-  ├── workspace/        ← lived experience surface (renders typed modules)
-  ├── library/          ← all experiences: active, completed, paused, suggested
-  ├── timeline/         ← chronological event feed
-  ├── profile/          ← compiled user direction (read-only, derived)
-  ├── review/           ← "approve experience" (maps to realization/PR internally)
-  ├── send/             ← preserved: idea capture
-  ├── drill/            ← preserved: idea clarification
-  ├── arena/            ← evolves: active realizations + active experiences
-  └── api/
-        ├── experiences/ ← CRUD for templates, instances, steps
-        ├── interactions/← event telemetry
-        ├── synthesis/   ← compressed state packets for GPT re-entry
-        ├── ideas/       ← preserved
-        ├── github/      ← preserved
-        └── webhook/     ← preserved (GPT + GitHub)
-              ↕
-Supabase (Postgres)          GitHub (realization substrate)
-  ├── users                    ├── Issues (large realizations)
-  ├── ideas                    ├── PRs (finished goods)
-  ├── conversations            ├── Actions (workflows)
-  ├── experience_templates     ├── Checks (validation)
-  ├── experience_instances     └── Releases
-  ├── experience_steps
-  ├── interaction_events
-  ├── artifacts
-  ├── synthesis_snapshots
-  ├── profile_facets
-  ├── agent_runs
-  ├── realizations
-  └── realization_reviews
+Custom GPT
+  ↓ Thinking Rails (multi-pass + artifact IDs)
+Mira Studio
+  ├── Genkit flows (refine, enrich, TTS skeletons)
+  ├── Knowledge (multi-unit, audio-ready scripts)
+  └── Experiences (Kolb + deliberate practice loops)
+        ↕
+MiraK (expanded content factory)
+  ├── 3–5 specialized Content Builders per call
+  └── webhook delivers raw → Genkit polishes
 ```
 
 ### Two Parallel Truths
@@ -606,8 +593,131 @@ The coder gets involved when:
 > **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run.
 >
 > **Results:** Implemented the "Option B" Webhook Handoff architecture. Built a 3-tab study workspace (Learn/Practice/Links), domain-organized grid, and home page "Continue Learning" dashboard. Integrated knowledge metadata into Genkit synthesis and suggestion flows. All 6 lanes verified.
+
+---
+
+### 🔲 Sprint 9 — Content Density & Agent Thinking Rails
+
+> **Goal:** Make MiraK a true high-density educational content factory and force the Custom GPT to use endpoints as persistent thinking artifacts instead of free-form chat. This sprint ships the richer knowledge base and the deterministic educational cycles.
 >
-### 🔲 Sprint 9 — Proposal → Realization → Coder Pipeline (Deferred)
+> **Context:** Sprint 8 proved the wiring works (webhook → validate → persist → display). But the content is thin: MiraK sends 1 dummy unit, experiences proposed from research are skeleton single-step lessons, and the GPT chats freely instead of using endpoints as external long-term memory. The bottleneck is clear: 3 fetcher agents → 1 synthesizer → 1 monolithic report. We need specialized Content Builder agents, a proper "receptacle" architecture, and the GPT to use deterministic thinking rails.
+>
+> **Architecture:** Option C (hybrid). MiraK delivers structured-but-raw units → webhook persists immediately (user sees content fast) → background Genkit flow enriches over the next few minutes (retrieval questions, cross-links, richer experience proposals).
+>
+> **Duration:** One focused week — 6 parallel lanes (same ownership discipline as Sprints 5–8). MiraK and Mira can be worked on simultaneously.
+
+#### Gate 0 (done before lanes start)
+
+- Update `types/knowledge.ts` with `KnowledgeAudioVariant` and `CONTENT_BUILDER_TYPES`
+- Update `lib/constants.ts` with new constants
+- Update `gpt-instructions.md` with the new "Thinking Rails" protocol
+
+```ts
+// New constants (lib/constants.ts)
+export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const;
+export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number];
+```
+
+#### Lane 1 — MiraK Research Agent Upgrade (c:/mirak)
+
+**Owner:** MiraK repo (Python/FastAPI + Google ADK)
+- Restore real agent pipeline (currently `time.sleep(3)` + dummy payload)
+- Add two specialized Content Builder agents:
+  - `PlaybookBuilder` — turns raw research into actionable, profitability-focused playbooks with deliberate-practice micro-tasks
+  - `AudioScriptSkeletonBuilder` — generates 10–15 min conversational script outlines (text only, no TTS yet — audio generation deferred to Sprint 10)
+- Output 3–5 units per `/generate_knowledge` call (foundation + playbook + deep_dive + example + 1–2 audio script skeletons)
+- Experience proposal becomes rich: 4–6 step Kolb-style chain (Lesson → Challenge → Reflection → Practice) that references the new units
+- Webhook payload stays backward-compatible (just bigger `units[]` array)
+
+#### Lane 2 — Genkit Enrichment Flow (c:/mira)
+
+**Owner:** `lib/ai/flows/refine-knowledge-flow.ts` (new file)
+- Background `runFlowSafe` flow triggered after webhook persist (Option C)
+- Takes raw MiraK units → adds:
+  - Retrieval questions (Practice tab ready)
+  - Cross-pollination links (e.g., "this customer-interaction playbook connects to your life-balance experience")
+  - Skill-tree metadata (maps to future gamified roadmap)
+- Fleshes out experience proposal if MiraK's version is too skeletal
+- All enrichment is additive — never overwrites original MiraK content
+
+#### Lane 3 — Webhook + Knowledge Service Upgrade (c:/mira)
+
+**Owner:** `app/api/webhook/mirak/route.ts` + `lib/services/knowledge-service.ts`
+- Handle multi-unit payloads (persist all units from one research run)
+- Group units under a "research run" parent ID (new `research_run_id` field or shared `session_id`)
+- Knowledge Tab UI gets a tiny grouping header ("Research Run — March 27")
+- All additive — existing single-unit flow untouched
+
+#### Lane 4 — Custom GPT Thinking Rails (c:/mira + GPT config)
+
+**Owner:** `gpt-instructions.md` + `mirak_gpt_action.yaml`
+- New "Multi-Pass Artifact Thinking Protocol" section in GPT instructions:
+  1. Assess user goal (profitability + education + life balance)
+  2. Decide research depth → call `/generate_knowledge` with progressive strategy
+  3. Treat returned units as persistent artifacts (reference by ID in follow-up messages)
+  4. Pass 2+: enrich or propose experiences based on what landed
+  5. Always return progressive disclosure (teaser first → full unit → experience proposal)
+- This is the behavioral change: endpoints become external long-term memory, not just data fetchers
+- This is a documentation/instructions change — no code changes in Mira
+
+#### Lane 5 — Frontend Polish & Knowledge Companion Upgrade (c:/mira)
+
+**Owner:** Knowledge UI + ExperienceRenderer
+- `KnowledgeCompanion` now shows research-run grouping when multiple related units exist
+- "Continue Learning" dashboard shows latest research-run units with richer previews
+- All additive — existing 3-tab view untouched
+
+#### Lane 6 — Integration + End-to-End Testing
+
+**Owner:** Everyone (post-lane work)
+- Seed richer test data via `/api/dev/test-knowledge`
+- Test full loop: GPT → MiraK (multi-unit) → webhook → Genkit refine → KB shows 4–5 units + rich experience proposal
+- Verify GPT references artifact IDs in follow-up messages (multi-pass visible)
+- Verify no breaking changes to existing single-unit or experience flows
+- Browser + phone test
+
+#### Sprint 9 Verification
+- One GPT message can trigger MiraK → 4+ rich units land in Knowledge Tab
+- GPT references artifact IDs in follow-up messages (multi-pass visible)
+- Experience proposal from MiraK is a real 4–6 step Kolb-style chain
+- Genkit enrichment adds retrieval questions and cross-links after persist
+- No breaking changes to existing single-unit or experience flows
+- Custom GPT instructions updated and tested in the real Custom GPT
+
+#### Sprint 9 Lane 6 Integration Notes & Bug Log (Agent Handoff)
+> **Note to Builder Agent:** I (the troubleshooting agent) attempted to resolve the `400 Invalid unit type: audio_script` error and the "3-sentence truncation" issue in `c:/mirak/main.py`. The user has requested that I document my findings here and cease making code changes so you can restore the file and resolve this properly through the established architectural patterns (hitting endpoints via the tunnel only).
+
+**1. The "Invalid unit type: audio_script" 400 Error & Webhook Misunderstanding:**
+- **What Happened:** The webhook payload failed validation with a 400 error. I incorrectly assumed the webhook delivery targeting system and timeout logic in `c:/mirak/main.py` were flawed.
+- **My Misunderstanding:** The webhooks were working perfectly fine in Lane 6. The script's logic to ping the Cloudflare tunnel (`mira.mytsapi.us`) with a `timeout=2` was correct. When it timed out, it gracefully degraded to Vercel (which resulted in the 400 error because the Vercel validator lacks the Sprint 9 `audio_script` constant). 
+- **The Core Issue to Trace:** Instead of investigating *what caused the tunnel to take longer than 2 seconds to respond* (the actual root cause), I dismantled the webhook targeting by pointing it to `localhost` and inflating the timeout. This was a mistake that obscured the real issue. 
+- **Note to Builder Agent:** You will need to trace back to what actually caused the timeout on `mira.mytsapi.us` rather than changing the delivery logic, as the logic itself was behaving exactly as architected. Please investigate the tunnel latency or Next.js response time that triggered the fallback.
+
+**2. The "3-Sentence Content Truncation" Issue:**
+- **What Happened:** The generated content arriving at the Knowledge Tab was only 3 sentences long, instead of the massive rich content output by the Synthesizer and Playbook agents.
+- **Why It Happened:** The `webhook_packager` LLM agent was tasked with embedding thousands of tokens of content deeply within a JSON array. LLMs commonly summarize and truncate text when forced to wrap massive blocks inside JSON.
+- **My Attempted Fix:** I modified `c:/mirak/main.py` so the `webhook_packager` only generated the JSON metadata (thesis, title, key ideas). Then, I programmatically extracted the full string outputs from the Synthesizer and injected them directly into the JSON payload in Python before sending the request. 
+
+Please review my changes to `c:/mirak/main.py` and revert/fix them in accordance with the Lane 6 work you've already completed. I will make no further code changes.
+
+---
+
+### 🔲 Sprint 10 — Voice & Gamification Layer (Deferred until content is rich)
+
+> **Goal:** Add audio playback (TTS button on any >200-word knowledge block) + light skill-tree / calendar nudges once we have real data to build on. This sprint only starts after Sprint 9 has proven we have dense, high-quality educational content flowing.
+>
+> **Prerequisite:** Sprint 9 must be complete with real multi-unit content in the Knowledge Tab.
+>
+> **Scope (tentative):**
+> - TTS button on knowledge unit content (Gemini Voice Kit or equivalent — see `c:/gemlink` for existing audio patterns)
+> - Audio URL storage in `knowledge_units` table (`audio_urls` JSONB column)
+> - Mini skill-tree / learning roadmap teaser on `/knowledge` page
+> - Calendar nudge: next deliberate-practice reminder (spaced repetition from mastery_status)
+> - Cross-pollination chips in Links tab ("This connects to your [experience name]")
+
+---
+
+### 🔲 Sprint 11 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
@@ -737,7 +847,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 10 — Chained Experiences + Spontaneity
+### 🔲 Sprint 12 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -764,7 +874,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 11 — GitHub Hardening + GitHub App
+### 🔲 Sprint 13 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
@@ -779,7 +889,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 12 — Personalization + Coder Knowledge
+### 🔲 Sprint 14 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -795,7 +905,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 13 — Production Deployment
+### 🔲 Sprint 15 — Production Deployment
 
 > **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
 >
@@ -816,7 +926,7 @@ GPT calls propose endpoint
 | 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
 | 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
 
-#### Key decisions to make before Sprint 10
+#### Key decisions to make before Sprint 15
 
 | Question | Options | Impact |
 |----------|---------|--------|
@@ -825,7 +935,7 @@ GPT calls propose endpoint
 | Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects Sprint 6 + 8 architecture |
 | Custom domain? | `mira.mytsapi.us` via Vercel, or new domain | Affects GPT config + webhook registration |
 
-#### Sprint 10 Verification
+#### Sprint 15 Verification
 - App is live on Vercel at a permanent URL
 - GPT Actions point at production URL and all 10 endpoints work
 - GitHub webhooks deliver to production without tunnel dependency

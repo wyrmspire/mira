@@ -102,9 +102,14 @@ export type ResolutionIntensity = (typeof RESOLUTION_INTENSITIES)[number]
 
 // --- Sprint 8: Knowledge Tab ---
 
-export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const
+export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const
 export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number]
 
 export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const
 export type MasteryStatus = (typeof MASTERY_STATUSES)[number]
+
+// --- Sprint 9: Content Density ---
+
+export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const
+export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number]
 

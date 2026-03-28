@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DEFAULT_USER_ID } from '@/lib/constants'
-import { createKnowledgeUnit } from '@/lib/services/knowledge-service'
+import { createKnowledgeUnit, runKnowledgeEnrichment } from '@/lib/services/knowledge-service'
 import { validateMiraKPayload } from '@/lib/validators/knowledge-validator'
 import { createExperienceInstance, createExperienceSteps } from '@/lib/services/experience-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
+import { generateId } from '@/lib/utils'
 
 /**
  * POST /api/webhook/mirak
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = DEFAULT_USER_ID
+    const sessionId = data.session_id || generateId()
 
     // 1. Create Knowledge Units
     const createdUnits = await Promise.all(
@@ -48,7 +50,16 @@ export async function POST(request: NextRequest) {
       )
     )
 
-    // 2. Handle Experience Proposal if present
+    console.log(`[webhook/mirak] Created ${createdUnits.length} units for session: ${sessionId}`)
+
+    // 2. Trigger background enrichment after persist (Option C — never blocks webhook response)
+    for (const unit of createdUnits) {
+      runKnowledgeEnrichment(unit.id, userId).catch((err: any) =>
+        console.error('[webhook/mirak] Enrichment failed for unit', unit.id, err)
+      );
+    }
+
+    // 3. Handle Experience Proposal if present
     let experienceCreated = false
     if (data.experience_proposal) {
       const { steps, resolution, ...instanceData } = data.experience_proposal
@@ -88,7 +99,7 @@ export async function POST(request: NextRequest) {
       experienceCreated = true
     }
 
-    // 3. Create Timeline Event
+    // 4. Create Timeline Event
     await createInboxEvent({
       type: 'knowledge_ready',
       title: `New knowledge: ${data.topic}`,
@@ -98,6 +109,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       created: createdUnits.length,
+      units: createdUnits.map(u => ({ id: u.id, title: u.title, unit_type: u.unit_type })),
+      session_id: sessionId,
       experience_created: experienceCreated,
       topic: data.topic,
       domain: data.domain,

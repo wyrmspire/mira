@@ -37,6 +37,51 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 | GitHub | `@octokit/rest` via `lib/adapters/github-adapter.ts` |
 | Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
 | AI Intelligence | Genkit + `@genkit-ai/google-genai` via `lib/ai/genkit.ts` |
+| Research Engine | **MiraK** — Python/FastAPI microservice on Cloud Run (`c:/mirak` repo) |
+
+### MiraK Microservice (Separate Repo: `c:/mirak`)
+
+MiraK is a Python/FastAPI research agent that runs as a Cloud Run microservice. It is a **separate project** from Mira Studio but deeply integrated via webhooks.
+
+| Layer | Tech |
+|-------|------|
+| Framework | FastAPI (Python 3.11+) |
+| AI Agents | Google ADK (Agent Development Kit) |
+| Deployment | Google Cloud Run |
+| Endpoint | `POST /generate_knowledge` |
+| Cloud URL | `https://mirak-lqooqdw7lq-uc.a.run.app` |
+| GPT Action | `mirak_gpt_action.yaml` (OpenAPI schema in `c:/mirak/`) |
+
+**Architecture:**
+```
+Custom GPT → POST /generate_knowledge (Cloud Run)
+  ↓ 202 Accepted (immediate)
+  ↓ BackgroundTasks: agent pipeline runs
+  ↓ On completion: webhook delivery
+  ↓
+  ├── Primary: https://mira.mytsapi.us/api/webhook/mirak (local tunnel)
+  └── Fallback: https://mira-mocha-kappa.vercel.app/api/webhook/mirak (production)
+  ↓
+Mira Studio webhook receiver validates + persists to Supabase:
+  ├── knowledge_units table (the research content)
+  └── experience_instances table (auto-proposed experience from research)
+```
+
+**Key files in `c:/mirak`:**
+- `main.py` — FastAPI app, `/generate_knowledge` endpoint, agent pipeline, webhook delivery
+- `knowledge.md` — Writing guide for content quality (NOT a schema constraint)
+- `mirak_gpt_action.yaml` — OpenAPI schema for the Custom GPT Action
+- `Dockerfile` — Cloud Run container definition
+- `requirements.txt` — Python dependencies
+
+**Webhook routing logic (in `main.py`):**
+1. Tries local tunnel diagnostic check (`GET /api/dev/diagnostic`)
+2. If local is up → delivers to local tunnel
+3. If local is down → delivers to Vercel production URL
+4. Authentication via `MIRAK_WEBHOOK_SECRET` header (`x-mirak-secret`)
+
+**Environment variables (both repos must share):**
+- `MIRAK_WEBHOOK_SECRET` in `c:/mira/.env.local` AND `c:/mirak/.env`
 
 ---
 
@@ -480,3 +525,5 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-26**: Sprint 6 completed. All 6 lanes done. Non-linear workspace model with sidebar/topbar navigators, draft persistence via artifacts table, renderer upgrades (checkpoint textareas, essay writing surfaces, expandable challenges/plans), step CRUD/reorder API, step status/scheduling migration 004. Updated repo map with StepNavigator, ExperienceOverview, DraftProvider, DraftIndicator, draft-service, useDraftPersistence, step-state-machine, step-scheduling. Updated OpenAPI schema (16 endpoints). Updated roadmap. Added SOP-23 (Genkit flow pattern). Added Genkit to tech stack.
 - **2026-03-27**: Sprint 7 completed. All 6 lanes done. 4 Genkit flows (synthesis, suggestions, facets, GPT compression), graceful degradation wrapper, completion wiring, migration 005 (evidence column). Updated repo map with AI flow files and context helpers.
 - **2026-03-27**: Sprint 8 boardinit — Knowledge Tab + MiraK Integration. Added SOP-24 (webhook validation). Added `types/knowledge.ts` to repo map. Added knowledge routes, constants, copy. Gate 0 executed by coordinator.
+- **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code.
+- **2026-03-27**: Major roadmap restructuring. Replaced Sprint 8B pondering with concrete Sprint 9 (Content Density & Agent Thinking Rails — 6 lanes). Added Sprint 10 placeholder (Voice & Gamification). Renumbered downstream sprints (old 9→11, 10→12, 11→13, 12→14, 13→15). Updated architecture snapshot to include MiraK + Knowledge + full Supabase table list. Added "Target Architecture (next 3 sprints)" diagram. Preserved all sprint history and open decisions.

@@ -18,6 +18,15 @@ export interface RetrievalQuestion {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
+export interface KnowledgeAudioVariant {
+  format: 'script_skeleton';
+  sections: Array<{
+    heading: string;
+    narration: string;
+    duration_estimate_seconds: number;
+  }>;
+}
+
 export interface KnowledgeUnit {
   id: string;
   user_id: string;
@@ -52,6 +61,7 @@ export interface KnowledgeProgress {
 export interface MiraKWebhookPayload {
   topic: string;
   domain: string;
+  session_id?: string;
   units: Array<{
     unit_type: KnowledgeUnitType;
     title: string;
@@ -63,6 +73,7 @@ export interface MiraKWebhookPayload {
     retrieval_questions?: RetrievalQuestion[];
     citations?: KnowledgeCitation[];
     subtopic_seeds?: string[];
+    audio_variant?: KnowledgeAudioVariant;
   }>;
   experience_proposal?: {
     title: string;
@@ -72,3 +83,4 @@ export interface MiraKWebhookPayload {
     steps: Array<{ step_type: string; title: string; payload: any }>;
   };
 }
+

@@ -43,6 +43,10 @@ export function validateMiraKPayload(body: any): { valid: boolean; error?: strin
     }
   }
 
+  if (body.session_id && typeof body.session_id !== 'string') {
+    return { valid: false, error: 'Invalid session_id' };
+  }
+
   return { valid: true, data: body as MiraKWebhookPayload };
 }
 

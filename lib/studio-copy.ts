@@ -200,6 +200,7 @@ export const COPY = {
       playbook: 'Playbook',
       deep_dive: 'Deep Dive',
       example: 'Example',
+      audio_script: 'Audio Script',
     },
     mastery: {
       unseen: 'New',

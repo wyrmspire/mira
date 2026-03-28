@@ -1,3 +1,1945 @@
+
+```typescript
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/building-your-application/configuring/typescript for more information.
+
+```
+
+### printcode.sh
+
+```bash
+#!/bin/bash
+# =============================================================================
+# printcode.sh — Smart project dump for AI chat contexts
+# =============================================================================
+#
+# Outputs project structure and source code to numbered markdown dump files
+# (dump00.md … dump09.md). Running with NO arguments dumps the whole repo
+# exactly as before. With CLI flags you can target specific areas, filter by
+# extension, slice line ranges, or just list files.
+#
+# Upload this script to a chat session so the agent can tell you which
+# arguments to run to get exactly the context it needs.
+#
+# Usage: ./printcode.sh [OPTIONS]
+# Run ./printcode.sh --help for full details and examples.
+# =============================================================================
+
+set -e
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+OUTPUT_PREFIX="dump"
+LINES_PER_FILE=""          # empty = auto-calculate to fit MAX_DUMP_FILES
+MAX_DUMP_FILES=10
+MAX_FILES=""               # empty = unlimited
+MAX_BYTES=""               # empty = unlimited
+SHOW_STRUCTURE=true
+LIST_ONLY=false
+SLICE_MODE=""              # head | tail | range
+SLICE_N=""
+SLICE_A=""
+SLICE_B=""
+
+declare -a AREAS=()
+declare -a INCLUDE_PATHS=()
+declare -a USER_EXCLUDES=()
+declare -a EXT_FILTER=()
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# Area → glob mappings
+# ---------------------------------------------------------------------------
+# Returns a newline-separated list of globs for a given area name.
+globs_for_area() {
+    case "$1" in
+        backend)   echo "backend/**" ;;
+        frontend)
+            if [[ -d "$PROJECT_ROOT/frontend" ]]; then
+                echo "frontend/**"
+            elif [[ -d "$PROJECT_ROOT/web" ]]; then
+                echo "web/**"
+            else
+                echo "frontend/**"
+            fi
+            ;;
+        docs)      printf '%s\n' "docs/**" "*.md" ;;
+        scripts)   echo "scripts/**" ;;
+        plugins)   echo "plugins/**" ;;
+        tests)     echo "tests/**" ;;
+        config)    printf '%s\n' "*.toml" "*.yaml" "*.yml" "*.json" "*.ini" ".env*" ;;
+        *)
+            echo "Error: unknown area '$1'" >&2
+            echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Help
+# ---------------------------------------------------------------------------
+show_help() {
+cat <<'EOF'
+printcode.sh — Smart project dump for AI chat contexts
+
+USAGE
+  ./printcode.sh [OPTIONS]
+
+With no arguments the entire repo is dumped into dump00.md … dump09.md
+(same as original behavior). Options let you target specific areas,
+filter by extension, slice line ranges, or list files without code.
+
+AREA PRESETS (--area, repeatable)
+  backend   backend/**
+  frontend  frontend/** (or web/**)
+  docs      docs/** *.md
+  scripts   scripts/**
+  plugins   plugins/**
+  tests     tests/**
+  config    *.toml *.yaml *.yml *.json *.ini .env*
+
+OPTIONS
+  --area <name>          Include only files matching the named area (repeatable).
+  --path <glob>          Include only files matching this glob (repeatable).
+  --exclude <glob>       Add extra exclude glob on top of defaults (repeatable).
+  --ext <ext[,ext,…]>   Include only files with these extensions (comma-sep).
+
+  --head <N>             Keep only the first N lines of each file.
+  --tail <N>             Keep only the last N lines of each file.
+  --range <A:B>          Keep only lines A through B of each file.
+                         (Only one of head/tail/range may be used at a time.)
+
+  --list                 Print only the file list / project structure (no code).
+  --no-structure         Skip the project-structure tree section.
+  --lines-per-file <N>  Override auto-calculated lines-per-dump-file split.
+  --max-files <N>        Stop after selecting N files (safety guard).
+  --max-bytes <N>        Stop once cumulative selected size exceeds N bytes.
+  --output-prefix <pfx>  Change dump file prefix (default: "dump").
+
+  --help                 Show this help and exit.
+
+EXAMPLES
+  # 1) Default — full project dump (original behavior)
+  ./printcode.sh
+
+  # 2) Backend only
+  ./printcode.sh --area backend
+
+  # 3) Backend + docs, last 200 lines of each file
+  ./printcode.sh --area backend --area docs --tail 200
+
+  # 4) Only specific paths
+  ./printcode.sh --path "backend/agent/**" --path "backend/services/**"
+
+  # 5) Only Python and Markdown files
+  ./printcode.sh --ext py,md
+
+  # 6) List-only mode for docs area (no code blocks)
+  ./printcode.sh --list --area docs
+
+  # 7) Range slicing on agent internals
+  ./printcode.sh --path "backend/agent/**" --range 80:220
+
+  # 8) Backend Python files, first 120 lines each
+  ./printcode.sh --area backend --ext py --head 120
+
+  # 9) Config files only, custom output prefix
+  ./printcode.sh --area config --output-prefix config_dump
+
+  # 10) Everything except tests, cap at 50 files
+  ./printcode.sh --exclude "tests/**" --max-files 50
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --area)
+            [[ -z "${2:-}" ]] && { echo "Error: --area requires a value" >&2; exit 1; }
+            case "$2" in
+                backend|frontend|docs|scripts|plugins|tests|config) ;;
+                *) echo "Error: unknown area '$2'" >&2
+                   echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
+                   exit 1 ;;
+            esac
+            AREAS+=("$2"); shift 2
+            ;;
+        --path)
+            [[ -z "${2:-}" ]] && { echo "Error: --path requires a value" >&2; exit 1; }
+            INCLUDE_PATHS+=("$2"); shift 2
+            ;;
+        --exclude)
+            [[ -z "${2:-}" ]] && { echo "Error: --exclude requires a value" >&2; exit 1; }
+            USER_EXCLUDES+=("$2"); shift 2
+            ;;
+        --ext)
+            [[ -z "${2:-}" ]] && { echo "Error: --ext requires a value" >&2; exit 1; }
+            IFS=',' read -ra EXT_FILTER <<< "$2"; shift 2
+            ;;
+        --head)
+            [[ -z "${2:-}" ]] && { echo "Error: --head requires a number" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --head with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="head"; SLICE_N="$2"; shift 2
+            ;;
+        --tail)
+            [[ -z "${2:-}" ]] && { echo "Error: --tail requires a number" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --tail with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="tail"; SLICE_N="$2"; shift 2
+            ;;
+        --range)
+            [[ -z "${2:-}" ]] && { echo "Error: --range requires A:B" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --range with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="range"
+            SLICE_A="${2%%:*}"
+            SLICE_B="${2##*:}"
+            if [[ -z "$SLICE_A" || -z "$SLICE_B" || "$2" != *":"* ]]; then
+                echo "Error: --range format must be A:B (e.g. 80:220)" >&2; exit 1
+            fi
+            shift 2
+            ;;
+        --list)
+            LIST_ONLY=true; shift
+            ;;
+        --no-structure)
+            SHOW_STRUCTURE=false; shift
+            ;;
+        --lines-per-file)
+            [[ -z "${2:-}" ]] && { echo "Error: --lines-per-file requires a number" >&2; exit 1; }
+            LINES_PER_FILE="$2"; shift 2
+            ;;
+        --max-files)
+            [[ -z "${2:-}" ]] && { echo "Error: --max-files requires a number" >&2; exit 1; }
+            MAX_FILES="$2"; shift 2
+            ;;
+        --max-bytes)
+            [[ -z "${2:-}" ]] && { echo "Error: --max-bytes requires a number" >&2; exit 1; }
+            MAX_BYTES="$2"; shift 2
+            ;;
+        --output-prefix)
+            [[ -z "${2:-}" ]] && { echo "Error: --output-prefix requires a value" >&2; exit 1; }
+            OUTPUT_PREFIX="$2"; shift 2
+            ;;
+        *)
+            echo "Error: unknown option '$1'" >&2
+            echo "Run ./printcode.sh --help for usage." >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Build include patterns from areas + paths
+# ---------------------------------------------------------------------------
+declare -a INCLUDE_PATTERNS=()
+
+for area in "${AREAS[@]}"; do
+    while IFS= read -r glob; do
+        INCLUDE_PATTERNS+=("$glob")
+    done < <(globs_for_area "$area")
+done
+
+for p in "${INCLUDE_PATHS[@]}"; do
+    INCLUDE_PATTERNS+=("$p")
+done
+
+# ---------------------------------------------------------------------------
+# Default excludes (always applied)
+# ---------------------------------------------------------------------------
+DEFAULT_EXCLUDES=(
+    "*/__pycache__/*"
+    "*/.git/*"
+    "*/node_modules/*"
+    "*/dist/*"
+    "*/.next/*"
+    "*/build/*"
+    "*/data/*"
+    "*/cache/*"
+    "*/shards/*"
+    "*/results/*"
+    "*/.venv/*"
+    "*/venv/*"
+    "*_archive/*"
+)
+
+# Merge user excludes
+ALL_EXCLUDES=("${DEFAULT_EXCLUDES[@]}" "${USER_EXCLUDES[@]}")
+
+# ---------------------------------------------------------------------------
+# Default included extensions (when no filters are active)
+# ---------------------------------------------------------------------------
+# Original extensions: py sh md yaml yml ts tsx css
+# Added toml json ini for config area support
+DEFAULT_EXTS=(py sh md yaml yml ts tsx css toml json ini)
+
+# ---------------------------------------------------------------------------
+# Language hint from extension
+# ---------------------------------------------------------------------------
+lang_for_ext() {
+    case "$1" in
+        py)       echo "python" ;;
+        sh)       echo "bash" ;;
+        md)       echo "markdown" ;;
+        yaml|yml) echo "yaml" ;;
+        ts)       echo "typescript" ;;
+        tsx)      echo "tsx" ;;
+        css)      echo "css" ;;
+        toml)     echo "toml" ;;
+        json)     echo "json" ;;
+        ini)      echo "ini" ;;
+        js)       echo "javascript" ;;
+        jsx)      echo "jsx" ;;
+        html)     echo "html" ;;
+        sql)      echo "sql" ;;
+        *)        echo "" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Priority ordering (same as original)
+# ---------------------------------------------------------------------------
+priority_for_path() {
+    local rel_path="$1"
+    case "$rel_path" in
+        AI_WORKING_GUIDE.md|\
+        MIGRATION.md|\
+        README.md|\
+        app/layout.tsx|\
+        app/page.tsx|\
+        package.json)
+            echo "00"
+            ;;
+        app/*|\
+        components/*|\
+        lib/*|\
+        hooks/*)
+            echo "20"
+            ;;
+        *)
+            echo "50"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Temp files
+# ---------------------------------------------------------------------------
+TEMP_FILE=$(mktemp)
+FILE_LIST=$(mktemp)
+_TMPFILES=("$TEMP_FILE" "$FILE_LIST")
+trap 'rm -f "${_TMPFILES[@]}"' EXIT
+
+# Helper: convert a file glob to a grep-compatible regex.
+# Steps: escape dots → ** marker → * to [^/]* → marker to .*
+glob_to_regex() {
+    echo "$1" | sed 's/\./\\./g; s/\*\*/\x00/g; s/\*/[^\/]*/g; s/\x00/.*/g'
+}
+
+# ---------------------------------------------------------------------------
+# Build the find command
+# ---------------------------------------------------------------------------
+# Exclude clauses — only default excludes go into find (they use */ prefix)
+FIND_EXCLUDES=()
+for pat in "${DEFAULT_EXCLUDES[@]}"; do
+    FIND_EXCLUDES+=( ! -path "$pat" )
+done
+# Always exclude dump output files, lock files, binary data
+FIND_EXCLUDES+=(
+    ! -name "*.pyc"
+    ! -name "*.parquet"
+    ! -name "*.pth"
+    ! -name "*.lock"
+    ! -name "package-lock.json"
+    ! -name "continuous_contract.json"
+    ! -name "dump*.md"
+    ! -name "dump*[0-9]"
+)
+
+# Determine which extensions to match
+ACTIVE_EXTS=()
+if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
+    ACTIVE_EXTS=("${EXT_FILTER[@]}")
+elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
+    # No area/path filter and no ext filter → use defaults
+    ACTIVE_EXTS=("${DEFAULT_EXTS[@]}")
+fi
+# When area/path filters are active but --ext is not, include all extensions
+# (the path filter itself narrows things down).
+
+# Build extension match clause for find
+EXT_CLAUSE=()
+if [[ ${#ACTIVE_EXTS[@]} -gt 0 ]]; then
+    EXT_CLAUSE+=( "(" )
+    first=true
+    for ext in "${ACTIVE_EXTS[@]}"; do
+        if $first; then first=false; else EXT_CLAUSE+=( -o ); fi
+        EXT_CLAUSE+=( -name "*.${ext}" )
+    done
+    EXT_CLAUSE+=( ")" )
+fi
+
+# Run find to collect candidate files
+find "$PROJECT_ROOT" -type f \
+    "${FIND_EXCLUDES[@]}" \
+    "${EXT_CLAUSE[@]}" \
+    2>/dev/null \
+    | sed "s|$PROJECT_ROOT/||" \
+    | sort > "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# Apply user --exclude patterns (on relative paths)
+# ---------------------------------------------------------------------------
+if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+    EXCLUDE_REGEXES=()
+    for pat in "${USER_EXCLUDES[@]}"; do
+        EXCLUDE_REGEXES+=( -e "$(glob_to_regex "$pat")" )
+    done
+    grep -v -E "${EXCLUDE_REGEXES[@]}" "$FILE_LIST" > "${FILE_LIST}.tmp" || true
+    mv "${FILE_LIST}.tmp" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Apply include-pattern filtering (areas + paths)
+# ---------------------------------------------------------------------------
+if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]]; then
+    FILTERED=$(mktemp)
+    _TMPFILES+=("$FILTERED")
+    for pat in "${INCLUDE_PATTERNS[@]}"; do
+        regex="^$(glob_to_regex "$pat")$"
+        grep -E "$regex" "$FILE_LIST" >> "$FILTERED" 2>/dev/null || true
+    done
+    # Deduplicate (patterns may overlap)
+    sort -u "$FILTERED" > "${FILTERED}.tmp"
+    mv "${FILTERED}.tmp" "$FILTERED"
+    mv "$FILTERED" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Apply --max-files and --max-bytes guards
+# ---------------------------------------------------------------------------
+if [[ -n "$MAX_FILES" ]]; then
+    head -n "$MAX_FILES" "$FILE_LIST" > "${FILE_LIST}.tmp"
+    mv "${FILE_LIST}.tmp" "$FILE_LIST"
+fi
+
+if [[ -n "$MAX_BYTES" ]]; then
+    CUMULATIVE=0
+    CAPPED=$(mktemp)
+    _TMPFILES+=("$CAPPED")
+    while IFS= read -r rel_path; do
+        fsize=$(wc -c < "$PROJECT_ROOT/$rel_path" 2>/dev/null || echo 0)
+        CUMULATIVE=$((CUMULATIVE + fsize))
+        if (( CUMULATIVE > MAX_BYTES )); then
+            echo "(max-bytes $MAX_BYTES reached, stopping)" >&2
+            break
+        fi
+        echo "$rel_path"
+    done < "$FILE_LIST" > "$CAPPED"
+    mv "$CAPPED" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Sort by priority
+# ---------------------------------------------------------------------------
+SORTED_LIST=$(mktemp)
+_TMPFILES+=("$SORTED_LIST")
+while IFS= read -r rel_path; do
+    printf "%s\t%s\n" "$(priority_for_path "$rel_path")" "$rel_path"
+done < "$FILE_LIST" \
+    | sort -t $'\t' -k1,1 -k2,2 \
+    | cut -f2 > "$SORTED_LIST"
+mv "$SORTED_LIST" "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# Counts for summary
+# ---------------------------------------------------------------------------
+SELECTED_COUNT=$(wc -l < "$FILE_LIST")
+
+# ---------------------------------------------------------------------------
+# Write header + selection summary
+# ---------------------------------------------------------------------------
+{
+    echo "# LearnIO Project Code Dump"
+    echo "Generated: $(date)"
+    echo ""
+    echo "## Selection Summary"
+    echo ""
+    if [[ ${#AREAS[@]} -gt 0 ]]; then
+        echo "- **Areas:** ${AREAS[*]}"
+    else
+        echo "- **Areas:** (all)"
+    fi
+    if [[ ${#INCLUDE_PATHS[@]} -gt 0 ]]; then
+        echo "- **Path filters:** ${INCLUDE_PATHS[*]}"
+    fi
+    if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+        echo "- **Extra excludes:** ${USER_EXCLUDES[*]}"
+    fi
+    if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
+        echo "- **Extensions:** ${EXT_FILTER[*]}"
+    elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
+        echo "- **Extensions:** ${DEFAULT_EXTS[*]} (defaults)"
+    else
+        echo "- **Extensions:** (all within selected areas)"
+    fi
+    if [[ -n "$SLICE_MODE" ]]; then
+        case "$SLICE_MODE" in
+            head)  echo "- **Slicing:** first $SLICE_N lines per file" ;;
+            tail)  echo "- **Slicing:** last $SLICE_N lines per file" ;;
+            range) echo "- **Slicing:** lines $SLICE_A–$SLICE_B per file" ;;
+        esac
+    else
+        echo "- **Slicing:** full files"
+    fi
+    if [[ -n "$MAX_FILES" ]]; then
+        echo "- **Max files:** $MAX_FILES"
+    fi
+    if [[ -n "$MAX_BYTES" ]]; then
+        echo "- **Max bytes:** $MAX_BYTES"
+    fi
+    echo "- **Files selected:** $SELECTED_COUNT"
+    if $LIST_ONLY; then
+        echo "- **Mode:** list only (no code)"
+    fi
+    echo ""
+} > "$TEMP_FILE"
+
+# ---------------------------------------------------------------------------
+# Compact project overview (always included for agent context)
+# ---------------------------------------------------------------------------
+{
+    echo "## Project Overview"
+    echo ""
+    echo "LearnIO is a Next.js (App Router) project integrated with Google AI Studio."
+    echo "It uses Tailwind CSS, Lucide React, and Framer Motion for the UI."
+    echo ""
+    echo "| Area | Path | Description |"
+    echo "|------|------|-------------|"
+    echo "| **app** | app/ | Next.js App Router (pages, layout, api) |"
+    echo "| **components** | components/ | React UI components (shadcn/ui style) |"
+    echo "| **lib** | lib/ | Shared utilities and helper functions |"
+    echo "| **hooks** | hooks/ | Custom React hooks |"
+    echo "| **docs** | *.md | Migration, AI working guide, README |"
+    echo ""
+    echo "Key paths: \`app/page.tsx\` (main UI), \`app/layout.tsx\` (root wrapper), \`AI_WORKING_GUIDE.md\`"
+    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK"
+    echo ""
+    echo "To dump specific code for chat context, run:"
+    echo "\`\`\`bash"
+    echo "./printcode.sh --help                              # see all options"
+    echo "./printcode.sh --area backend --ext py --head 120  # backend Python, first 120 lines"
+    echo "./printcode.sh --list --area docs                  # just list doc files"
+    echo "\`\`\`"
+    echo ""
+} >> "$TEMP_FILE"
+
+# ---------------------------------------------------------------------------
+# Project structure section
+# ---------------------------------------------------------------------------
+if $SHOW_STRUCTURE; then
+    echo "## Project Structure" >> "$TEMP_FILE"
+    echo '```' >> "$TEMP_FILE"
+    if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]] || [[ ${#EXT_FILTER[@]} -gt 0 ]] || [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+        # Show only selected/filtered files in structure
+        cat "$FILE_LIST" >> "$TEMP_FILE"
+    else
+        # Show full tree (original behavior)
+        find "$PROJECT_ROOT" -type f \
+            "${FIND_EXCLUDES[@]}" \
+            2>/dev/null \
+            | sed "s|$PROJECT_ROOT/||" \
+            | sort >> "$TEMP_FILE"
+    fi
+    echo '```' >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+fi
+
+# ---------------------------------------------------------------------------
+# If --list mode, we are done (no code blocks)
+# ---------------------------------------------------------------------------
+if $LIST_ONLY; then
+    # In list mode, just output the temp file directly
+    total_lines=$(wc -l < "$TEMP_FILE")
+    echo "Total lines: $total_lines (list-only mode)"
+
+    # Remove old dump files
+    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
+    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
+
+    cp "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}00.md"
+    echo "Done! Created:"
+    ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Source files section
+# ---------------------------------------------------------------------------
+echo "## Source Files" >> "$TEMP_FILE"
+echo "" >> "$TEMP_FILE"
+
+while IFS= read -r rel_path; do
+    file="$PROJECT_ROOT/$rel_path"
+    [[ -f "$file" ]] || continue
+
+    ext="${rel_path##*.}"
+    lang=$(lang_for_ext "$ext")
+    total_file_lines=$(wc -l < "$file")
+
+    # Build slice header annotation
+    slice_note=""
+    case "$SLICE_MODE" in
+        head)  slice_note=" (first $SLICE_N lines of $total_file_lines)" ;;
+        tail)  slice_note=" (last $SLICE_N lines of $total_file_lines)" ;;
+        range) slice_note=" (lines ${SLICE_A}–${SLICE_B} of $total_file_lines)" ;;
+    esac
+
+    echo "### ${rel_path}${slice_note}" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+    echo "\`\`\`$lang" >> "$TEMP_FILE"
+
+    # Output content (full or sliced)
+    case "$SLICE_MODE" in
+        head)
+            sed -n "1,${SLICE_N}p" "$file" >> "$TEMP_FILE"
+            ;;
+        tail)
+            tail -n "$SLICE_N" "$file" >> "$TEMP_FILE"
+            ;;
+        range)
+            sed -n "${SLICE_A},${SLICE_B}p" "$file" >> "$TEMP_FILE"
+            ;;
+        *)
+            cat "$file" >> "$TEMP_FILE"
+            ;;
+    esac
+
+    echo "" >> "$TEMP_FILE"
+    echo "\`\`\`" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+done < "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# MiraK microservice dump (c:/mirak — separate repo)
+# ---------------------------------------------------------------------------
+MIRAK_DIR="/c/mirak"
+if [[ -d "$MIRAK_DIR" ]]; then
+    echo "## MiraK Microservice (c:/mirak)" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+    echo "MiraK is a Python/FastAPI research agent on Cloud Run. Separate repo, integrated via webhooks." >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+
+    MIRAK_FILES=(
+        "main.py"
+        "Dockerfile"
+        "requirements.txt"
+        "knowledge.md"
+        "mirak_gpt_action.yaml"
+        "README.md"
+    )
+
+    for mf in "${MIRAK_FILES[@]}"; do
+        mirak_file="$MIRAK_DIR/$mf"
+        if [[ -f "$mirak_file" ]]; then
+            ext="${mf##*.}"
+            lang=$(lang_for_ext "$ext")
+            echo "### mirak/${mf}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`$lang" >> "$TEMP_FILE"
+            cat "$mirak_file" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# Split into dump files
+# ---------------------------------------------------------------------------
+total_lines=$(wc -l < "$TEMP_FILE")
+
+if [[ -z "$LINES_PER_FILE" ]]; then
+    TARGET_LINES=8000
+    if (( total_lines > (TARGET_LINES * MAX_DUMP_FILES) )); then
+        # Too big for 10 files at 8k lines each -> increase chunk size to fit exactly 10 files
+        LINES_PER_FILE=$(( (total_lines + MAX_DUMP_FILES - 1) / MAX_DUMP_FILES ))
+    else
+        # Small enough -> use fixed 8k chunk size (resulting in 1-10 files)
+        LINES_PER_FILE=$TARGET_LINES
+    fi
+fi
+
+echo "Total lines: $total_lines"
+echo "Lines per file: $LINES_PER_FILE (targeting $MAX_DUMP_FILES files)"
+echo "Files selected: $SELECTED_COUNT"
+
+# Remove old dump files
+rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
+rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
+
+# Split (use 2-digit suffix)
+split -l "$LINES_PER_FILE" -d -a 2 "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}"
+
+# Rename to .md and remove empty files
+for f in "$PROJECT_ROOT"/${OUTPUT_PREFIX}*; do
+    if [[ ! "$f" =~ \.md$ ]]; then
+        if [[ -s "$f" ]]; then
+            mv "$f" "${f}.md"
+        else
+            rm -f "$f"
+        fi
+    fi
+done
+
+echo "Done! Created:"
+ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
+
+```
+
+### prissues.md
+
+```markdown
+# PR Issues & Agent Endpoint Reference
+
+> Sprint 2 — Lane 6 integration log. Documents blockers encountered and
+> the endpoint contract another agent (Custom GPT, local agent, or cloud
+> coding agent) uses to interact with Mira Studio.
+
+---
+
+## 1. Coding Agent Blocker — Issue #3
+
+### What happened
+- Created GitHub issue #3 via app API (`/api/github/create-issue`)
+- Assigned `copilot-swe-agent` via `gh issue edit --add-assignee copilot-swe-agent`
+- Also tried atomic creation: `gh issue create --assignee copilot-swe-agent`
+- **Both approaches failed** with the same error:
+
+> "The agent encountered an error and was unable to start working on this
+> issue: This may be caused by a repository ruleset violation. See granting
+> bypass permissions for the agent."
+
+### What we investigated
+| Check | Result |
+|-------|--------|
+| Repo rulesets | None — `gh api repos/wyrmspire/mira/rulesets` returns 403 (free plan) |
+| Branch protection | Cannot query — free plan blocks the API |
+| Repo visibility | Private (same as `mirrorflow` where it works) |
+| Repo permissions | admin: true, push: true (same as `mirrorflow`) |
+| Owner | `wyrmspire` (same account on both repos) |
+| Default branch | `main` (same) |
+| `.github` directory | Neither repo has one |
+| Account plan | Free |
+| Token | Same PAT used on both repos — works on `mirrorflow` |
+
+### What works on `mirrorflow` but not `mira`
+The exact same `gh issue create --assignee copilot-swe-agent` command works
+on `wyrmspire/mirrorflow` (creates an issue, agent picks it up, opens a PR)
+but fails on `wyrmspire/mira` with the ruleset error.
+
+### Likely root cause
+Something in the **repo-level Copilot coding agent settings** differs between
+the two repos. This is configured via GitHub web UI:
+`Settings → Copilot → Coding agent`
+
+### What to check
+1. Go to `https://github.com/wyrmspire/mira/settings` → Copilot → Coding agent
+2. Compare with `https://github.com/wyrmspire/mirrorflow/settings` → Copilot → Coding agent
+3. If there's a toggle or permission difference, match `mira` to what `mirrorflow` has
+
+### Reference
+- GitHub docs: [Granting bypass permissions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
+- Issue #3: https://github.com/wyrmspire/mira/issues/3
+- Issue #4: https://github.com/wyrmspire/mira/issues/4 (atomic create+assign attempt)
+
+---
+
+## 2. Fixes Applied During Lane 6
+
+| # | Fix | File | What changed |
+|---|-----|------|-------------|
+| 1 | Junk files cleaned + .gitignore | `.gitignore` | Added `tsc-*.txt`, `nul`, `gitrdiff.md` patterns |
+| 2 | Adapter config TODO | `lib/adapters/github-adapter.ts` | Replaced raw env reads with `lib/config/github.ts` |
+| 3 | merge-pr false local success | `app/api/actions/merge-pr/route.ts` | Returns 502 if GitHub merge fails (no silent fallback) |
+| 4 | mark-shipped wrong inbox event | `app/api/actions/mark-shipped/route.ts` | Changed `github_issue_created` → `github_issue_closed` |
+| 5 | Missing inbox event type | `types/inbox.ts` | Added `github_issue_closed` to union |
+| 6 | Inbox formatter | `lib/formatters/inbox-formatters.ts` | Added label for `github_issue_closed` |
+| 7 | Atomic agent handoff | `app/api/github/create-issue/route.ts` + `lib/services/github-factory-service.ts` | Added `assignAgent: true` flag for atomic `copilot-swe-agent` assignment |
+
+### Verification
+- `npx tsc --noEmit` → **0 errors** ✅
+- `npm run build` → **clean** ✅
+- GitHub connection test → **connected as wyrmspire** ✅
+- Tunnel `mira.mytsapi.us` → **live** ✅
+- Webhook round-trip (create issue → receive webhook → inbox event) → **working** ✅
+
+---
+
+## 3. Agent Endpoint Reference
+
+Base URL: `https://mira.mytsapi.us` (Cloudflare tunnel → localhost:3000)
+
+### Idea Capture (Custom GPT → App)
+
+```
+POST /api/webhook/gpt
+Content-Type: application/json
+
+{
+  "source": "gpt",
+  "event": "idea_captured",
+  "data": {
+    "title": "My Cool Idea",
+    "rawPrompt": "The user's original words...",
+    "gptSummary": "A structured 2-4 sentence summary.",
+    "vibe": "playful",
+    "audience": "indie devs",
+    "intent": "ship a side project"
+  },
+  "timestamp": "2026-03-22T20:00:00Z"
+}
+
+Response: 201 { data: Idea, message: "Idea captured" }
+```
+
+### Create Issue + Assign Coding Agent (Atomic Handoff)
+
+```
+POST /api/github/create-issue
+Content-Type: application/json
+
+Option A — From a project:
+{
+  "projectId": "proj-001",
+  "assignAgent": true
+}
+
+Option B — Standalone (any agent can call this):
+{
+  "title": "Build Feature X",
+  "body": "### Objective\n...\n### Instructions\n...\n### Acceptance Criteria\n...",
+  "labels": ["mira"],
+  "assignAgent": true
+}
+
+Response: 200 { data: { issueNumber: 3, issueUrl: "https://..." } }
+```
+
+When `assignAgent: true`, the issue is created with `copilot-swe-agent` in
+the assignees array — single API call, coding agent starts immediately.
+
+### Test GitHub Connection
+
+```
+GET /api/github/test-connection
+
+Response: 200 { connected: true, login: "wyrmspire", repo: "wyrmspire/mira", ... }
+```
+
+### GitHub Webhook (GitHub → App — automatic)
+
+```
+POST /api/webhook/github
+Headers:
+  x-github-event: issues | pull_request | workflow_run | pull_request_review
+  x-hub-signature-256: sha256=<HMAC>
+  x-github-delivery: <UUID>
+
+Signature verified against GITHUB_WEBHOOK_SECRET in .env.local.
+Events are dispatched to handlers in lib/github/handlers/.
+```
+
+### Other Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/ideas` | List all ideas |
+| GET | `/api/projects` | List all projects |
+| GET | `/api/inbox` | List inbox events |
+| POST | `/api/ideas/materialize` | Convert idea → project (requires drill) |
+| POST | `/api/actions/promote-to-arena` | Move idea to In Progress |
+| POST | `/api/actions/move-to-icebox` | Put idea on hold |
+| POST | `/api/actions/mark-shipped` | Ship a project (optionally closes GitHub issue) |
+| POST | `/api/actions/kill-idea` | Remove an idea |
+| POST | `/api/actions/merge-pr` | Merge a PR (GitHub-aware) |
+| POST | `/api/github/create-pr` | Create a GitHub PR |
+| POST | `/api/github/dispatch-workflow` | Trigger a GitHub Actions workflow |
+| GET/POST | `/api/github/sync-pr` | Sync PR data from GitHub |
+| POST | `/api/github/merge-pr` | Direct GitHub PR merge |
+
+---
+
+## 4. Environment Variables Required
+
+```env
+# GitHub (all required for factory)
+GITHUB_TOKEN=ghp_...        # PAT with repo scope
+GITHUB_OWNER=wyrmspire
+GITHUB_REPO=mira
+GITHUB_DEFAULT_BRANCH=main
+GITHUB_WEBHOOK_SECRET=mira-wh-s2-7f3a9c1e
+
+# Supabase (future)
+NEXT_PUBLIC_SUPABASE_URL=https://...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+
+# Gemini (future)
+GEMINI_API_KEY=AIza...
+```
+
+---
+
+## 5. Tunnel Setup
+
+```bash
+# Named tunnel (already created)
+cloudflared tunnel run mira
+
+# Config at: C:\Users\wyrms\.cloudflared\config.yml
+# DNS: mira.mytsapi.us → tunnel 68361f22-15b9-4534-a9d1-e9a1e6e0a595
+```
+
+The tunnel serves all traffic:
+- UI: `https://mira.mytsapi.us/`
+- Custom GPT webhook: `https://mira.mytsapi.us/api/webhook/gpt`
+- GitHub webhook: `https://mira.mytsapi.us/api/webhook/github`
+- Phone access: Same URL, works on any device
+
+```
+
+### public/openapi.yaml
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Mira Studio API
+  description: API for the Mira experience engine. Create experiences, fetch user
+    state, record ideas.
+  version: 1.0.0
+servers:
+- url: /
+  description: Current hosted domain
+paths:
+  /api/gpt/state:
+    get:
+      operationId: getGPTState
+      summary: Get the user's current experience state for re-entry
+      description: 'Returns a compressed state packet with active experiences, re-entry
+        prompts, friction signals, and suggested next steps. Call this at the start
+        of every conversation to understand what the user has been doing.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        description: User ID. Defaults to the dev user.
+      responses:
+        '200':
+          description: GPT state packet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GPTStatePacket'
+        '500':
+          description: Server error
+  /api/experiences/inject:
+    post:
+      operationId: injectEphemeral
+      summary: Create an ephemeral experience (instant, no review)
+      description: 'Creates an ephemeral experience that renders instantly in the
+        user''s app. Skips the proposal/review pipeline. Use for micro-challenges,
+        quick prompts, trend reactions, or any experience that should appear immediately.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InjectEphemeralRequest'
+      responses:
+        '201':
+          description: Experience created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/experiences:
+    get:
+      operationId: listExperiences
+      summary: List experience instances
+      description: 'Returns all experience instances, optionally filtered by status
+        or type. Use this to check what experiences exist before creating new ones.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - proposed
+          - drafted
+          - ready_for_review
+          - approved
+          - published
+          - active
+          - completed
+          - archived
+          - superseded
+          - injected
+      - name: type
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - persistent
+          - ephemeral
+      responses:
+        '200':
+          description: Array of experience instances
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExperienceInstance'
+        '500':
+          description: Server error
+    post:
+      operationId: createPersistentExperience
+      summary: Create a persistent experience (goes through proposal pipeline)
+      description: 'Creates a persistent experience in ''proposed'' status. The user
+        will see it in their library and can accept/start it. Use for substantial
+        experiences that are worth returning to. Always include steps and a reentry
+        contract.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePersistentRequest'
+      responses:
+        '201':
+          description: Experience created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/ideas:
+    get:
+      operationId: listIdeas
+      summary: List captured ideas
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Array of ideas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Idea'
+    post:
+      operationId: captureIdea
+      summary: Capture a new idea from conversation
+      description: 'Saves a raw idea from the conversation. Ideas can later be evolved
+        into full experiences through the drill pipeline or direct proposal.
+
+        '
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CaptureIdeaRequest'
+      responses:
+        '201':
+          description: Idea captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Idea'
+  /api/synthesis:
+    get:
+      operationId: getLatestSynthesis
+      summary: Get the latest synthesis snapshot
+      description: 'Returns the most recent synthesis snapshot for the user. This
+        is a compressed summary of recent experience outcomes, signals, and next candidates.
+
+        '
+      parameters:
+      - name: userId
+        in: query
+        required: false
+        schema:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+      responses:
+        '200':
+          description: Synthesis snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesisSnapshot'
+        '404':
+          description: No snapshot found
+        '500':
+          description: Server error
+  /api/interactions:
+    post:
+      operationId: recordInteraction
+      summary: Record a user interaction event
+      description: "Records telemetry about what the user did within an experience.\
+        \ Use sparingly \u2014 the frontend handles most interaction recording. This\
+        \ is available if you need to record a GPT-side event.\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordInteractionRequest'
+      responses:
+        '201':
+          description: Interaction recorded
+        '400':
+          description: Missing required fields
+        '500':
+          description: Server error
+  /api/experiences/{id}:
+    get:
+      operationId: getExperienceById
+      summary: Get a single experience instance with its steps
+      description: 'Returns a specific experience instance by ID, including all of
+        its steps. Use this to inspect step content, check completion state, or load
+        context before re-entry.
+
+        '
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      responses:
+        '200':
+          description: Experience instance with steps
+          content:
+            application/json:
+              schema:
+                allOf:
+                - $ref: '#/components/schemas/ExperienceInstance'
+                - type: object
+                  properties:
+                    steps:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/ExperienceStepRecord'
+        '404':
+          description: Experience not found
+        '500':
+          description: Server error
+  /api/experiences/{id}/status:
+    patch:
+      operationId: transitionExperienceStatus
+      summary: Transition an experience to a new lifecycle state
+      description: "Moves an experience through its lifecycle state machine. Valid\
+        \ transitions: - proposed \u2192 approve \u2192 publish \u2192 activate (or\
+        \ use approve+publish+activate shortcut) - active \u2192 complete - completed\
+        \ \u2192 archive - injected \u2192 start (ephemeral) The action must be a\
+        \ valid transition from the current status.\n"
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - action
+              properties:
+                action:
+                  type: string
+                  enum:
+                  - draft
+                  - submit_for_review
+                  - request_changes
+                  - approve
+                  - publish
+                  - activate
+                  - complete
+                  - archive
+                  - supersede
+                  - start
+                  description: The transition action to apply
+      responses:
+        '200':
+          description: Updated experience instance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceInstance'
+        '400':
+          description: Action is required
+        '422':
+          description: Invalid transition or instance not found
+        '500':
+          description: Server error
+  /api/webhook/gpt:
+    post:
+      operationId: sendIdea
+      summary: Send an idea via the GPT webhook (legacy envelope format)
+      description: "Captures a new idea using the webhook envelope format with source/event/data\
+        \ fields. The idea will appear in the Send page. This is an alternative to\
+        \ the direct POST /api/ideas endpoint \u2014 use whichever format is more\
+        \ convenient.\n"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - source
+              - event
+              - data
+              properties:
+                source:
+                  type: string
+                  enum:
+                  - gpt
+                  description: Always "gpt"
+                event:
+                  type: string
+                  enum:
+                  - idea_captured
+                  description: Always "idea_captured"
+                data:
+                  type: object
+                  required:
+                  - title
+                  - rawPrompt
+                  - gptSummary
+                  properties:
+                    title:
+                      type: string
+                      description: Short idea title (3-8 words)
+                    rawPrompt:
+                      type: string
+                      description: The user's original words
+                    gptSummary:
+                      type: string
+                      description: Your structured 2-4 sentence summary
+                    vibe:
+                      type: string
+                      description: "Energy/aesthetic \u2014 e.g. 'playful', 'ambitious',\
+                        \ 'urgent'"
+                    audience:
+                      type: string
+                      description: Who this is for
+                    intent:
+                      type: string
+                      description: What the user wants to achieve
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp
+      responses:
+        '201':
+          description: Idea captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Idea'
+                  message:
+                    type: string
+        '400':
+          description: Invalid payload
+  /api/experiences/{id}/chain:
+    get:
+      operationId: getExperienceChain
+      summary: Get full chain context for an experience
+      description: Returns upstream and downstream linked experiences in the graph.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Experience instance ID
+      responses:
+        '200':
+          description: Experience chain context
+    post:
+      operationId: linkExperiences
+      summary: Link this experience to another
+      description: Creates an edge (chain, loop, branch, suggestion) defining relationship.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - targetId
+              - edgeType
+              properties:
+                targetId:
+                  type: string
+                  format: uuid
+                edgeType:
+                  type: string
+                  enum:
+                  - chain
+                  - suggestion
+                  - loop
+                  - branch
+      responses:
+        '200':
+          description: Updated source experience
+  /api/experiences/{id}/steps:
+    get:
+      operationId: getExperienceSteps
+      summary: Get all steps for an experience
+      description: Returns the ordered sequence of steps for this experience.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Array of steps
+    post:
+      operationId: addExperienceStep
+      summary: Add a new step to an existing experience
+      description: Appends a new step dynamically to the experience instance.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - type
+              - title
+              - payload
+              properties:
+                type:
+                  type: string
+                title:
+                  type: string
+                payload:
+                  type: object
+                  additionalProperties: true
+                completion_rule:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Created step
+  /api/experiences/{id}/steps/{stepId}:
+    get:
+      operationId: getExperienceStep
+      summary: Get a single step by ID
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Single step record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperienceStepRecord'
+        '404':
+          description: Step not found
+    patch:
+      operationId: updateExperienceStep
+      summary: Update a step's title, payload, or scheduling fields
+      description: 'Use this for multi-pass enrichment — update step content after
+        initial creation. Can update title, payload, completion_rule, scheduled_date,
+        due_date, and estimated_minutes.
+
+        '
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                payload:
+                  type: object
+                  additionalProperties: true
+                completion_rule:
+                  type: string
+                  nullable: true
+                scheduled_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Suggested date to work on this step
+                due_date:
+                  type: string
+                  format: date
+                  nullable: true
+                  description: Deadline for step completion
+                estimated_minutes:
+                  type: integer
+                  nullable: true
+                  description: Estimated time in minutes
+      responses:
+        '200':
+          description: Updated step
+        '404':
+          description: Step not found
+    delete:
+      operationId: deleteExperienceStep
+      summary: Remove a step from an experience
+      description: Removes a step and re-indexes remaining step_order values.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Step deleted
+        '404':
+          description: Step not found
+  /api/experiences/{id}/steps/reorder:
+    post:
+      operationId: reorderExperienceSteps
+      summary: Reorder steps within an experience
+      description: Provide the full ordered array of step IDs. Steps will be re-indexed
+        to match the new order.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - stepIds
+              properties:
+                stepIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  description: Ordered array of step IDs defining the new sequence
+      responses:
+        '200':
+          description: Steps reordered
+        '400':
+          description: Invalid step IDs
+  /api/experiences/{id}/steps/progress:
+    get:
+      operationId: getExperienceProgress
+      summary: Get progress summary for an experience
+      description: Returns completion percentage, step counts by status, and estimated
+        remaining time.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Progress summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalSteps:
+                    type: integer
+                  completedSteps:
+                    type: integer
+                  skippedSteps:
+                    type: integer
+                  completionPercentage:
+                    type: number
+                  estimatedRemainingMinutes:
+                    type: integer
+                    nullable: true
+  /api/drafts:
+    get:
+      operationId: getDraft
+      summary: Get a saved draft for a specific step
+      description: 'Retrieves the most recent draft artifact for a step. Drafts auto-save
+        as the user types and persist across sessions.
+
+        '
+      parameters:
+      - name: instanceId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: stepId
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Draft data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draft:
+                    type: object
+                    nullable: true
+                    description: The saved draft payload, or null if no draft exists
+    post:
+      operationId: saveDraft
+      summary: Save or update a draft for a step
+      description: Upserts a draft artifact. Use for auto-save during user input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - instanceId
+              - stepId
+              - data
+              properties:
+                instanceId:
+                  type: string
+                  format: uuid
+                stepId:
+                  type: string
+                  format: uuid
+                data:
+                  type: object
+                  additionalProperties: true
+                  description: The draft content to save
+      responses:
+        '200':
+          description: Draft saved
+  /api/experiences/{id}/suggestions:
+    get:
+      operationId: getExperienceSuggestions
+      summary: Get suggested next experiences
+      description: Returns templated suggestions based on graph mappings and completions.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Array of suggestions
+components:
+  schemas:
+    Resolution:
+      type: object
+      required:
+      - depth
+      - mode
+      - timeScope
+      - intensity
+      properties:
+        depth:
+          type: string
+          enum:
+          - light
+          - medium
+          - heavy
+          description: light = minimal chrome, medium = progress bar + title, heavy
+            = full header with goal
+        mode:
+          type: string
+          enum:
+          - illuminate
+          - practice
+          - challenge
+          - build
+          - reflect
+          description: illuminate = learn, practice = do, challenge = push, build
+            = create, reflect = think
+        timeScope:
+          type: string
+          enum:
+          - immediate
+          - session
+          - multi_day
+          - ongoing
+          description: How long this experience is expected to take
+        intensity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          description: How demanding the experience is
+    ReentryContract:
+      type: object
+      required:
+      - trigger
+      - prompt
+      - contextScope
+      properties:
+        trigger:
+          type: string
+          enum:
+          - time
+          - completion
+          - inactivity
+          - manual
+          description: When the re-entry should fire
+        prompt:
+          type: string
+          description: What you (GPT) should say or propose when re-entering
+        contextScope:
+          type: string
+          enum:
+          - minimal
+          - full
+          - focused
+          description: How much context to load for re-entry
+    ExperienceStep:
+      type: object
+      required:
+      - type
+      - title
+      - payload
+      properties:
+        type:
+          type: string
+          enum:
+          - questionnaire
+          - lesson
+          - challenge
+          - plan_builder
+          - reflection
+          - essay_tasks
+          description: The renderer type for this step
+        title:
+          type: string
+          description: Step title shown to the user
+        payload:
+          type: object
+          additionalProperties: true
+          description: Step-specific content. Format depends on type.
+        completion_rule:
+          type: string
+          nullable: true
+          description: Optional rule for when this step counts as complete
+    ExperienceStepRecord:
+      type: object
+      description: A saved experience step as stored in the database
+      properties:
+        id:
+          type: string
+          format: uuid
+        instance_id:
+          type: string
+          format: uuid
+        step_order:
+          type: integer
+          description: 0-indexed position of this step in the experience
+        step_type:
+          type: string
+          enum:
+          - questionnaire
+          - lesson
+          - challenge
+          - plan_builder
+          - reflection
+          - essay_tasks
+        title:
+          type: string
+        payload:
+          type: object
+        completion_rule:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - completed
+          - skipped
+          description: Step completion status (default pending)
+        scheduled_date:
+          type: string
+          format: date
+          nullable: true
+          description: Suggested date to work on this step
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          description: Deadline for step completion
+        estimated_minutes:
+          type: integer
+          nullable: true
+          description: Estimated time to complete in minutes
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the step was completed
+    InjectEphemeralRequest:
+      type: object
+      required:
+      - templateId
+      - userId
+      - resolution
+      - steps
+      properties:
+        templateId:
+          type: string
+          description: Template ID (see template list in instructions)
+        userId:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        title:
+          type: string
+          description: Experience title
+        goal:
+          type: string
+          description: What this experience achieves
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceStep'
+          minItems: 1
+    CreatePersistentRequest:
+      type: object
+      required:
+      - templateId
+      - userId
+      - resolution
+      - steps
+      properties:
+        templateId:
+          type: string
+          description: Template ID (see template list in instructions)
+        userId:
+          type: string
+          default: a0000000-0000-0000-0000-000000000001
+        title:
+          type: string
+          description: Experience title
+        goal:
+          type: string
+          description: What this experience achieves
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        reentry:
+          $ref: '#/components/schemas/ReentryContract'
+        previousExperienceId:
+          type: string
+          nullable: true
+          description: ID of the experience this follows in a chain
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceStep'
+          minItems: 1
+    ExperienceInstance:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+        template_id:
+          type: string
+        title:
+          type: string
+        goal:
+          type: string
+        instance_type:
+          type: string
+          enum:
+          - persistent
+          - ephemeral
+        status:
+          type: string
+          enum:
+          - proposed
+          - drafted
+          - ready_for_review
+          - approved
+          - published
+          - active
+          - completed
+          - archived
+          - superseded
+          - injected
+        resolution:
+          $ref: '#/components/schemas/Resolution'
+        reentry:
+          $ref: '#/components/schemas/ReentryContract'
+          nullable: true
+        previous_experience_id:
+          type: string
+          nullable: true
+        next_suggested_ids:
+          type: array
+          items:
+            type: string
+        friction_level:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+    GPTStatePacket:
+      type: object
+      properties:
+        latestExperiences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperienceInstance'
+          description: Recent experience instances
+        activeReentryPrompts:
+          type: array
+          items:
+            type: object
+            properties:
+              instanceId:
                 type: string
               instanceTitle:
                 type: string
@@ -288,16 +2230,15 @@ Genkit Intelligence Layer (Sprint 7)
   ├── compressGPTStateFlow      (token-efficient state compression)
   └── runFlowSafe()             (graceful degradation wrapper)
         ↕
+MiraK (Python/FastAPI research agent) ← Cloud Run (Sprint 8)
+  ├── /generate_knowledge (research pipeline)
+  └── Callback to /api/webhook/mirak
+        ↕
 Supabase (Postgres — canonical runtime store)
-  ├── experience_templates (6 seeded)
-  ├── experience_instances
-  ├── experience_steps (+ status, scheduling, estimated_minutes)
-  ├── interaction_events
-  ├── artifacts (+ step_draft type for draft persistence)
-  ├── synthesis_snapshots
-  ├── experience_graph_edges
-  ├── profile_facets (+ evidence column)
-  └── 8 more tables...
+  ├── experience_instances, experience_steps, ...
+  ├── knowledge_units       (durable reference content)
+  ├── knowledge_progress    (mastery & practice tracking)
+  └── 10 more tables...
         ↕
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
@@ -775,192 +2716,12 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 8 — Knowledge Tab + MiraK Integration (Brainstorming)
+### ✅ Sprint 8 — Knowledge Tab + MiraK Integration (Complete)
 
-> **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run. This is NOT just a content dump. The Knowledge Tab is a learning companion that links back to Experiences and generates tests.
+> **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run.
 >
-> **Key architectural decisions are OPEN and must be resolved before coding begins.**
-
-#### Where MiraK Lives
-
-MiraK is a standalone Python/FastAPI microservice running on **Google Cloud Run**:
-- **Project:** `gen-lang-client-0029382557`
-- **Service URL:** `https://mirak-lqooqdw7lq-uc.a.run.app`
-- **Local repo:** `c:\mirak` (separate from `c:\mira`)
-- **API Key:** Uses the Vertex AI / Gemini Search API key (`GOOGLE_API_KEY`)
-- **Current endpoint:** `POST /generate_knowledge` → returns a structured KB article in markdown
-
-#### Updated Architecture Snapshot (with MiraK)
-
-```
-GPT (Custom GPT "Mira")
-  ↓ OpenAPI actions (16+ endpoints)
-  ↓ via Cloudflare tunnel / Vercel
-Mira Studio (Next.js 14, App Router) ← Vercel
-  ├── workspace/     ← lived experience surface
-  ├── library/       ← all experiences
-  ├── knowledge/     ← NEW: study + practice + mastery tracking
-  ├── timeline/      ← chronological event feed
-  ├── profile/       ← compiled user direction
-  └── api/           ← endpoints for GPT + GitHub + MiraK results
-        ↕
-MiraK (Python/FastAPI) ← Cloud Run
-  ├── root_agent → synth → [child_1, child_2, child_3]
-  ├── GoogleSearch + URLContext tools (Vertex API)
-  ├── Returns: structured KB article (knowledge.md format)
-  └── Future: writes directly to Supabase? or calls Mira API?
-        ↕
-Supabase (Postgres — canonical runtime store)
-  ├── experience_instances, experience_steps, ...
-  ├── knowledge_entries     ← NEW table
-  ├── knowledge_tests       ← NEW table (quizzes, practice problems)
-  ├── knowledge_progress    ← NEW table (user mastery tracking)
-  └── ...existing tables...
-```
-
-#### Open Decision: How Does Data Flow?
-
-This is the biggest architectural question. Two options:
-
-| Option | Flow | Pros | Cons |
-|--------|------|------|------|
-| **A: MiraK → Supabase direct** | MiraK writes knowledge_entries directly to Supabase using the service role key | Simple, testable, no Mira dependency, MiraK is self-contained | MiraK needs Supabase credentials, two writers to the same DB, harder to enforce business logic |
-| **B: MiraK → Mira API** | MiraK calls `POST /api/knowledge` on the deployed Mira app, which validates and writes to Supabase | Single writer (Mira owns the DB), validation in one place, consistent with SOP-5 | Harder to test locally (need both services running), circular dependency risk, slower |
-
-> **Recommendation:** Start with **Option A** (direct DB writes). MiraK already has the Supabase credentials in its `.env`. This makes testing trivial — you POST a topic, MiraK researches it, and the result appears in the DB immediately. Later, if we need validation or business logic before insert, we can add a thin Mira API layer on top.
-
-#### Open Decision: What Does the Knowledge Tab Actually Do?
-
-This is a UX brainstorming space. Core questions:
-
-1. **Is it just articles, or is it a study system?**
-   - Minimum: Browse KB entries by category, read them
-   - Medium: Mark entries as "read" / "studying" / "mastered", spaced repetition prompts
-   - Maximum: Auto-generated quizzes, practice problems, flashcards, linked exercises
-
-2. **How do Experiences and Knowledge link?**
-   - A Lesson step could reference a KB entry ("Read this before proceeding")
-   - Completing a Challenge could auto-generate a KB entry summarizing what was learned
-   - The GPT could say "Before we build your brand strategy, study these 3 KB entries"
-   - KB entries could link back to Experiences ("Practice this concept → [Start Challenge]")
-
-3. **Should MiraK generate tests?**
-   - MiraK's Synth agent already generates "Reflection / retrieval" questions per knowledge.md spec
-   - We could add a dedicated test-generation sub-agent that creates:
-     - Multiple choice questions
-     - Short answer prompts
-     - "Apply this concept" scenarios
-     - Code challenges (if the topic is technical)
-   - Tests could be stored as `knowledge_tests` in Supabase
-   - The Knowledge Tab renders them inline or as a separate "Practice" mode
-
-4. **Does the GPT teach MiraK what to research, or does MiraK decide?**
-   - Option A: GPT calls MiraK with specific topics ("Research Next.js App Router")
-   - Option B: MiraK auto-generates related topics from experience completions
-   - Option C: Both — GPT triggers on-demand, MiraK suggests proactively
-
-5. **Categories and navigation**
-   - Should categories be predefined (e.g., "Business", "Tech", "Personal Growth")?
-   - Or should MiraK auto-categorize based on the content?
-   - Should the Knowledge Tab have a search function?
-   - Tree structure vs. flat list vs. card grid?
-
-#### Open Decision: Agent Instructions
-
-1. **MiraK agent updates:**
-   - Teach the Synth agent to also generate test questions alongside the article
-   - Teach the Synth agent to output structured JSON (not just markdown) so fields can be stored in separate DB columns
-   - Add a `category` field to the output
-   - Add a `difficulty_level` field
-   - Potentially add a "prerequisites" graph — "Read X before Y"
-
-2. **Custom GPT updates:**
-   - New action: `generateKnowledge` → POSTs to MiraK Cloud Run URL
-   - New action: `listKnowledgeEntries` → reads from Supabase via Mira API
-   - Updated instructions: "When the user is about to start an experience that requires background knowledge, check the KB first. If no entry exists, trigger MiraK to create one."
-   - Updated instructions: "After completing a research-heavy experience, generate a KB entry summarizing the key learnings."
-
-3. **MiraK's `knowledge.md`:**
-   - Already lives in `c:\mirak\knowledge.md`
-   - Should it be the canonical copy, or should Mira also have it?
-   - The Synth agent reads it at prompt-time to enforce formatting
-   - If we update the formatting, we update it in MiraK and redeploy
-
-#### Proposed Supabase Schema (Draft — Needs Discussion)
-
-```sql
--- Core knowledge entries
-CREATE TABLE knowledge_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  topic TEXT NOT NULL,
-  category TEXT,
-  difficulty TEXT CHECK (difficulty IN ('beginner', 'intermediate', 'advanced')),
-  content TEXT NOT NULL,              -- The full markdown article
-  metadata JSONB,                     -- Audience, keywords, reading time, etc.
-  source_experience_id UUID,          -- Which experience triggered this (nullable)
-  citations JSONB,                    -- URLs, confidence notes
-  status TEXT DEFAULT 'active',       -- active, archived
-  mastery_status TEXT DEFAULT 'new',  -- new, reading, practicing, mastered
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Auto-generated tests/quizzes per KB entry
-CREATE TABLE knowledge_tests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_id UUID REFERENCES knowledge_entries(id),
-  question_type TEXT,                 -- multiple_choice, short_answer, apply, code
-  question TEXT NOT NULL,
-  options JSONB,                      -- For multiple choice
-  correct_answer TEXT,
-  explanation TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- User progress tracking
-CREATE TABLE knowledge_progress (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
-  entry_id UUID REFERENCES knowledge_entries(id),
-  tests_attempted INT DEFAULT 0,
-  tests_passed INT DEFAULT 0,
-  last_studied_at TIMESTAMPTZ,
-  next_review_at TIMESTAMPTZ,        -- Spaced repetition
-  mastery_score FLOAT DEFAULT 0,     -- 0.0 to 1.0
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-#### What Needs to Happen (Ordered)
-
-| # | Item | Dependency |
-|---|------|------------|
-| 1 | **Resolve data flow** (Option A vs B above) | Architecture decision |
-| 2 | **Create Supabase tables** (knowledge_entries, knowledge_tests, knowledge_progress) | Decision #1 |
-| 3 | **Update MiraK** to write to Supabase after generation | Tables exist |
-| 4 | **Update MiraK Synth agent** to also output test questions | Can be parallel |
-| 5 | **Build Knowledge Tab UI** in Mira (browse, read, study, practice) | Tables exist |
-| 6 | **Add Custom GPT action** (`generateKnowledge`) pointing to MiraK | MiraK is ready |
-| 7 | **Update GPT instructions** to trigger knowledge generation contextually | Action exists |
-| 8 | **Link Experiences ↔ Knowledge** (reference KB from steps, generate KB on completion) | Both surfaces exist |
-| 9 | **Spaced repetition / mastery tracking** logic | Progress table + tests exist |
-
-#### Open Questions (Must Resolve Before Sprint Starts)
-
-- [ ] Option A (MiraK → Supabase direct) or Option B (MiraK → Mira API)?
-- [ ] Should MiraK return structured JSON or markdown? (JSON is better for DB, markdown is better for reading)
-- [ ] How many test questions per KB entry? Auto-generated or curated?
-- [ ] Should the Knowledge Tab be part of the Mira main nav or a separate section?
-- [ ] Does the user manually trigger "research this topic" or does the system decide?
-- [ ] Should KB entries be public (shared across users) or private (per-user)?
-- [ ] How does mastery tracking affect Experience recommendations? (e.g., "You haven't mastered X yet, so we suggest this Experience")
-- [ ] Should MiraK also be able to update/improve existing KB entries? (re-research with fresh sources)
-- [ ] When deploying to "roland" (production GCP), does the Cloud Run URL change?
-- [ ] Does the Custom GPT need two separate server URLs now? (Mira on Vercel + MiraK on Cloud Run)
-
----
-
+> **Results:** Implemented the "Option B" Webhook Handoff architecture. Built a 3-tab study workspace (Learn/Practice/Links), domain-organized grid, and home page "Continue Learning" dashboard. Integrated knowledge metadata into Genkit synthesis and suggestion flows. All 6 lanes verified.
+>
 ### 🔲 Sprint 9 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
@@ -968,6 +2729,70 @@ CREATE TABLE knowledge_progress (
 > **Prerequisite:** Sprint 5 testing proves the experience loop works but identifies specific gaps that only a coder can fill.
 >
 > **Key insight:** The GPT doesn't just "assign" work to the coder — it writes a living spec that IS the coder's instructions. The spec lives as a GitHub Issue. The frontend can also edit it. This makes the issue a contract between GPT, user, and coder.
+
+---
+
+### 🧠 Sprint 8B — Content Density & Knowledge Infrastructure Upgrade (Pondering)
+
+> **Status:** Active exploration. The async webhook pipeline works. Now the question is: is the *content* good enough? And is the *surface* that displays it doing it justice?
+
+#### The Problem
+
+MiraK's research pipeline generates knowledge units that land in the Knowledge Tab. But right now:
+1. **The Bottleneck (3 fetchers → 1 report):** We currently go fetch with three deep reader agents, then bottleneck into a single synthesizer agent that spits out one output report. For an extensive knowledge base, a single monolithic report doesn't cut it. There needs to be more than one output.
+2. **Missing Receptacle Architecture:** The knowledge base shouldn't just be a flat list or a simple bucket. We don't have the "cradle" or "receptacle" fully mapped out. It needs to be vast and structured enough that it actually takes strategic planning to populate it. Information needs to be broken down into specific functional areas.
+3. **No Content Builders:** We are currently just "snapping something together" into a quick output. We actually need a couple of specialized agents that *build* specific types of content from the research and construct it properly for the knowledge base.
+4. **Experiences generated from research are skeletons.** The `experience_proposal` that MiraK attaches is too simplistic (single lesson with one section). The experience should be *as rich as the research*.
+
+#### What Needs to Change
+
+**MiraK Output Quality & Agent Roles (c:/mirak):**
+- Expand the pipeline past a single synthesizer. Define multiple "Content Builder" agents that take the research and construct specific outputs (e.g., one agent writes the foundation, another builds the playbook, another writes the experience proposal).
+- Decouple the KnowledgeBase writing guide (`knowledge.md`) from the agent's actual research output. The agent should be producing raw, high-density research data, which builds into structured outputs, rather than rigid formatted articles.
+
+**The "Receptacle" & Payload Evolution (c:/mirak → c:/mira):**
+- Current: `{ topic, domain, units: [1 unit], experience_proposal: { ... } }`
+- Future: `{ topic, domain, units: [3-5 units], experience_proposal: { ... richer steps ... }, metadata: { ... } }`
+- The webhook receiver in Mira (`/api/webhook/mirak`) must be the gateway to this expanded receptacle, handling multi-unit payloads gracefully and placing the constructed information into the right specific functions in the DB.
+
+**Knowledge Tab UI (c:/mira):**
+- Add search/filter to `/knowledge` page
+- Add "Related Units" linking (units from the same research run, or same domain)
+- Add a "Research Run" grouping concept — all units from one `generateKnowledge` call are linked
+- Consider a richer unit detail page: collapsible sections, code examples, embedded diagrams
+- The Knowledge Tab must feel like a personal research library (the "receptacle"), not a flat list of articles.
+
+**Experience Generation from Research:**
+- The `experience_proposal` in the webhook should generate multi-step experiences that actually use the research content as lesson material
+- A research run on "Next.js App Router" should produce: Lesson (foundations) → Challenge (build something) → Reflection (what surprised you)
+- The experience steps should reference specific knowledge units so the user can jump between "learning" and "reference" modes
+
+#### Architectural Thoughts
+
+The core question: **should MiraK produce finished content, or should Mira process raw research into polished content?**
+
+Option A: **MiraK produces everything.** The Python agent pipeline handles research, synthesis, formatting, and experience generation. Mira just persists and renders. *Pro: simpler Mira code. Con: MiraK becomes monolithic, harder to iterate on content quality.*
+
+Option B: **MiraK produces raw research, Mira's Genkit layer refines it.** MiraK sends dense, ugly research blobs. A new Genkit flow (`refineKnowledgeFlow`) in Mira processes them into polished units and rich experiences. *Pro: Mira controls the quality bar, can re-process old research. Con: more infra in Mira.*
+
+Option C: **Hybrid.** MiraK produces structured-but-raw units. The webhook receiver persists them immediately (so the user sees *something* fast). Then a background Genkit flow enriches them over the next few minutes — adding retrieval questions, linking to existing experiences, generating a richer experience proposal. *Pro: fast delivery + eventual quality. Con: complexity.*
+
+**Current lean: Option C.** The user gets immediate gratification (research appeared!), then the system quietly makes it better. This matches the existing pattern of "fire-and-forget + background enrichment."
+
+#### Impact on Existing Code
+
+| Area | Change Needed |
+|------|---------------|
+| `c:/mirak/main.py` | Multi-unit output, richer agent pipeline stages |
+| `c:/mirak/knowledge.md` | Clarify this is a writing *guide*, not a schema constraint |
+| `c:/mira/lib/validators/knowledge-validator.ts` | Handle multi-unit payloads |
+| `c:/mira/app/api/webhook/mirak/route.ts` | Persist multiple units per request |
+| `c:/mira/app/knowledge/page.tsx` | Search, filter, research-run grouping |
+| `c:/mira/app/knowledge/[unitId]/page.tsx` | Related units, richer detail sections |
+| `c:/mira/lib/ai/flows/` | New `refineKnowledgeFlow` (Option C) |
+| `c:/mira/lib/services/knowledge-service.ts` | Multi-unit create, linking, search |
+
+---
 
 | # | Work Item | Detail |
 |---|-----------|--------|
@@ -1997,6 +3822,9 @@ export type InboxEventType =
   | 'github_copilot_assigned'
   | 'github_sync_failed'
   | 'github_connection_error'
+  // Knowledge lifecycle events
+  | 'knowledge_ready'
+  | 'knowledge_updated'
 
 export interface InboxEvent {
   id: string
@@ -2044,6 +3872,86 @@ export interface Artifact {
   title: string;
   content: string;
   metadata: any; // JSONB
+}
+
+```
+
+### types/knowledge.ts
+
+```typescript
+// types/knowledge.ts
+import {
+  KnowledgeUnitType,
+  MasteryStatus,
+} from '@/lib/constants';
+
+export type { KnowledgeUnitType, MasteryStatus };
+
+export interface KnowledgeCitation {
+  url: string;
+  claim: string;
+  confidence: number;
+}
+
+export interface RetrievalQuestion {
+  question: string;
+  answer: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface KnowledgeUnit {
+  id: string;
+  user_id: string;
+  topic: string;
+  domain: string;
+  unit_type: KnowledgeUnitType;
+  title: string;
+  thesis: string;
+  content: string;
+  key_ideas: string[];
+  common_mistake: string | null;
+  action_prompt: string | null;
+  retrieval_questions: RetrievalQuestion[];
+  citations: KnowledgeCitation[];
+  linked_experience_ids: string[];
+  source_experience_id: string | null;
+  subtopic_seeds: string[];
+  mastery_status: MasteryStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeProgress {
+  id: string;
+  user_id: string;
+  unit_id: string;
+  mastery_status: MasteryStatus;
+  last_studied_at: string | null;
+  created_at: string;
+}
+
+export interface MiraKWebhookPayload {
+  topic: string;
+  domain: string;
+  units: Array<{
+    unit_type: KnowledgeUnitType;
+    title: string;
+    thesis: string;
+    content: string;
+    key_ideas: string[];
+    common_mistake?: string;
+    action_prompt?: string;
+    retrieval_questions?: RetrievalQuestion[];
+    citations?: KnowledgeCitation[];
+    subtopic_seeds?: string[];
+  }>;
+  experience_proposal?: {
+    title: string;
+    goal: string;
+    template_id: string;
+    resolution: { depth: string; mode: string; timeScope: string; intensity: string };
+    steps: Array<{ step_type: string; title: string; payload: any }>;
+  };
 }
 
 ```
@@ -2610,6 +4518,1092 @@ To use Copilot coding agent as the "spawn coder" path:
  ```
  
  This starts the Genkit UI at `http://localhost:4000`. You can see every AI call's trace, input, and structured output.
+
+```
+
+## MiraK Microservice (c:/mirak)
+
+MiraK is a Python/FastAPI research agent on Cloud Run. Separate repo, integrated via webhooks.
+
+### mirak/main.py
+
+```python
+# ==============================================================================
+# MiraK v0.4 — Knowledge Generation Microservice (Scrape-First Pipeline)
+# ==============================================================================
+#
+# PIPELINE (v0.4 — 3 logical stages):
+# ------------------------------------
+# 1. RESEARCH STRATEGIST — Searches the web across multiple angles, selects
+#    the best 6-8 URLs, AND reads/scrapes those URLs to extract raw content.
+#    Returns both the research plan and the scraped source content.
+#
+# 2. DEEP READERS (x3) — Pure analysis agents (NO search tools). They receive
+#    the raw scraped content from the strategist and extract structured findings:
+#    data points, tables, numbers, quotes, frameworks.
+#    Much faster than v0.3 because they don't make any API calls.
+#
+# 3. FINAL SYNTHESIZER — Designs educational structure AND produces the final
+#    reference-grade document in one pass.
+#
+# Total runner calls: 5 (1 strategist + 3 readers + 1 synthesizer)
+# Expected runtime: 60-120 seconds (v0.3 was 224s, readers were 150s of that)
+# ==============================================================================
+
+import os
+import time
+import traceback
+import uuid
+import logging
+
+from dotenv import load_dotenv
+load_dotenv('.env')
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+import requests
+from pydantic import BaseModel
+from typing import Optional, List
+
+from google.adk.agents import LlmAgent
+from google.adk.tools import agent_tool
+from google.adk.tools.google_search_tool import GoogleSearchTool
+from google.adk.tools import url_context
+
+# ==============================================================================
+# Logging
+# ==============================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger("mirak")
+
+# ==============================================================================
+# FastAPI App
+# ==============================================================================
+
+app = FastAPI(
+    title="MiraK — Knowledge Generation API",
+    description="Deep research pipeline for comprehensive knowledge-base entries.",
+    version="0.4.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ==============================================================================
+# Request / Response Models
+# ==============================================================================
+
+class GenerateKnowledgeRequest(BaseModel):
+    topic: str
+    user_id: str = "default_user"
+    session_id: Optional[str] = None
+    category: Optional[str] = None
+    experience_context: Optional[str] = None
+
+
+class KnowledgeResponse(BaseModel):
+    status: str
+    topic: str
+    content: str
+    raw_events: List[str]
+    session_id: str
+    timing: Optional[dict] = None
+
+
+# ==============================================================================
+# STAGE 1: RESEARCH STRATEGIST (searches + scrapes)
+# ==============================================================================
+# This agent does ALL the web work: searches across angles, evaluates results,
+# AND reads the top URLs to extract raw content. This way the readers don't
+# need search tools at all — they get pre-scraped content to analyze.
+# ==============================================================================
+
+strategist_search = LlmAgent(
+    name='strategist_search',
+    model='gemini-2.5-flash',
+    description='Searches the web.',
+    sub_agents=[],
+    instruction='Use GoogleSearchTool to search the web. Return all results with URLs and snippets.',
+    tools=[GoogleSearchTool()],
+)
+
+strategist_url = LlmAgent(
+    name='strategist_url',
+    model='gemini-2.5-flash',
+    description='Reads URLs to extract their content.',
+    sub_agents=[],
+    instruction='Use UrlContextTool to read and extract the full content of URLs. Return as much content as possible.',
+    tools=[url_context],
+)
+
+research_strategist = LlmAgent(
+    name='research_strategist',
+    model='gemini-2.5-flash',
+    description='Plans research, executes searches, and scrapes top sources.',
+    sub_agents=[],
+    instruction='''You are an elite Research Strategist working for a growth engineering team. You do ALL the web work for the pipeline.
+
+STEP 1: PLAN — Identify 5-7 advanced, technical research angles for the topic.
+DO NOT search for beginner tutorials (e.g., "how to make short form videos").
+INSTEAD, search for operator-level mechanics:
+- Algorithmic factors, ranking signals, and feed mechanisms
+- Advanced retention curves and pacing metrics
+- Implementation workflows, batching logic, infrastructure
+- Hard data, benchmarks (e.g., "YouTube Shorts engaged views methodology")
+- Monetization and compliance mechanics
+
+STEP 2: SEARCH — For each angle, run 1-2 highly specific search queries (5-10 total).
+Use technical vocabulary in your queries (e.g., "retention curve methodology" instead of "how to get more watch time").
+
+STEP 3: SELECT — Pick the top 6-8 URLs. Prioritize engineering blogs, platform documentation, technical teardowns, and hard data. Ignore generic SEO marketing blogs.
+
+STEP 4: READ — Use the URL reading tool to scrape/read the URLs. Extract all highly granular, actionable content.
+
+STEP 5: ORGANIZE — Package everything into 3 groups for deep readers:
+- GROUP_1: Content about foundational mechanisms and models
+- GROUP_2: Content about practical implementation, how-to guides, tools
+- GROUP_3: Content about recent trends, statistics, platform updates
+
+OUTPUT FORMAT:
+
+## Research Results
+
+### Key Questions to Answer
+[5-8 questions the final document must address]
+
+### GROUP 1 — Foundational (for Reader 1)
+**Source: [URL 1]**
+[Extracted content from this page — include ALL useful text, data, quotes]
+
+**Source: [URL 2]**
+[Extracted content]
+
+### GROUP 2 — Practical (for Reader 2)
+**Source: [URL 3]**
+[Extracted content]
+
+**Source: [URL 4]**
+[Extracted content]
+
+### GROUP 3 — Trends & Data (for Reader 3)
+**Source: [URL 5]**
+[Extracted content]
+
+**Source: [URL 6]**
+[Extracted content]
+
+CRITICAL RULES:
+- You MUST read/scrape the URLs, not just list them.
+- Extract as much content as possible from each URL.
+- The readers will ONLY see what you extract — they cannot access the web.
+- Include specific numbers, dates, statistics, quotes from each source.
+- If a URL is inaccessible, note it and use search snippet content instead.''',
+    tools=[
+        agent_tool.AgentTool(agent=strategist_search),
+        agent_tool.AgentTool(agent=strategist_url),
+    ],
+)
+
+
+# ==============================================================================
+# STAGE 2: DEEP READERS (x3) — Pure analysis, NO search tools
+# ==============================================================================
+# These agents receive pre-scraped content and extract structured findings.
+# No web access = fast (5-10s each vs 20-80s with search tools).
+# ==============================================================================
+
+def _make_deep_reader(reader_name: str):
+    """Factory for pure-analysis reader agents (no search tools)."""
+    return LlmAgent(
+        name=reader_name,
+        model='gemini-2.5-flash',
+        description=f'Analyzes pre-scraped source content and extracts structured findings.',
+        sub_agents=[],
+        instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
+
+You receive RAW SCRAPED CONTENT from web sources. You have NO web access.
+
+Your job: Extract brutally concise, high-signal, operator-level mechanics. 
+IGNORE all generic advice, throat-clearing, and beginner "SEO fluff".
+If a source says "Use good lighting and a hook," IGNORE it.
+If a source says "Hooks must be <2s and resolve a 3-second hold proxy," EXTRACT it.
+
+FOCUS EXCLUSIVELY ON:
+1. **Hard Data & Formulas**: Benchmarks, precise dates, statistical thresholds, algorithmic weighting.
+2. **Mental Models & Workflows**: Specific sequential steps (e.g., "Hook → Value → Payoff").
+3. **Platform Mechanics**: Specific UI constraints, discovery algorithms (e.g., "Swipe-based feed ranking").
+4. **KPI Definitions**: How metrics are actually calculated (e.g., "Engaged views vs starts").
+5. **Implementation Specifics**: Naming specific tools, constraints, frameworks, or legal checks.
+
+OUTPUT FORMAT (KEEP UNDER 3000 CHARACTERS):
+## Findings from {reader_name}
+
+### Key Data Points (top 15-20)
+- [specific data point with numbers/dates/source]
+- [specific data point]
+[Prioritize: numbers > frameworks > quotes > general observations]
+
+### Comparison Data
+[Any head-to-head comparisons found (platform vs platform, etc.)]
+
+### Implementation Specifics
+[Concrete settings, workflows, tools, parameters]
+
+### Warnings
+[Top 3-5 mistakes or gotchas with fixes]
+
+Rules:
+- Be SPECIFIC — include numbers, dates, percentages, names.
+- Extract EVERYTHING useful. More is better at this stage.
+- Note contradictions between sources explicitly.
+- Do NOT write a final article — just extract structured findings.''',
+        tools=[],  # NO tools — pure analysis
+    )
+
+
+deep_reader_1 = _make_deep_reader('deep_reader_1')
+deep_reader_2 = _make_deep_reader('deep_reader_2')
+deep_reader_3 = _make_deep_reader('deep_reader_3')
+
+
+# ==============================================================================
+# STAGE 3: FINAL SYNTHESIZER
+# ==============================================================================
+
+synth_search = LlmAgent(
+    name='synth_search',
+    model='gemini-2.5-flash',
+    description='Supplementary searches for fact-checking.',
+    sub_agents=[],
+    instruction='Use GoogleSearchTool to verify specific claims or fill data gaps.',
+    tools=[GoogleSearchTool()],
+)
+
+synth_url = LlmAgent(
+    name='synth_url',
+    model='gemini-2.5-flash',
+    description='Reads URLs for fact-checking.',
+    sub_agents=[],
+    instruction='Use UrlContextTool to verify information from specific sources.',
+    tools=[url_context],
+)
+
+final_synthesizer = LlmAgent(
+    name='final_synthesizer',
+    model='gemini-2.5-pro',
+    description='Produces the final comprehensive knowledge-base document.',
+    sub_agents=[],
+    instruction='''You are an elite Growth Engineer and Technical Educator.
+Your job is to synthesize raw research into a definitive, action-oriented knowledge asset.
+
+Follow the exact structure defined in the entry below.
+DO NOT use markdown tables. Tables are banned as they cause formatting issues. Use dense bulleted lists instead.
+
+# [Specific, Professional Title]
+
+## Executive summary
+[3-4 sentences of extremely high-signal, tactical synthesis. Define the "real" objective—not the glossy one. Cite specific algorithmic/platform changes. NO FLUFF. NO "In today's fast-paced digital world..."]
+
+## Definitions and mechanics
+[Strict, operator-level definitions of formats, surfaces, or algorithms. Focus on HOW things work under the hood.]
+
+### Algorithm ranking & platform comparison
+[Detailed comparison using dense bulleted lists mapping platforms to their specific measurement criteria, max lengths, and ranking logic. NO TABLES.]
+
+## Implementation workflows
+[Concrete frameworks or mental models (e.g., "Hook -> Value -> Payoff -> Action").]
+[Process diagram (mermaid flowchart) showing the exact pipeline/workflow.]
+
+## Measurement and KPIs
+[What to measure, mapped by funnel stage (Top/Mid/Bottom). How metrics are calculated.]
+[KPIs mapped to platforms using dense bullet lists. NO TABLES.]
+
+## 30-day implementation calendar
+[Mermaid gantt and/or highly specific bulleted list showing batching, testing cadence, and exact tasks.]
+
+## Compliance and risk constraints 
+[Specific failure modes, legal issues (e.g., music rights, FTC disclosures).]
+
+## Sources and Citations
+[Cite the URLs provided by the readers as inline references or endnotes.]
+
+---
+Audience: Growth Engineering / Expert Operators
+Estimated reading time: [X min]
+---
+
+CRITICAL RULES:
+- BAN ALL FLUFF. Never use introductory filler. Never say "Crucially", "In conclusion", "As we navigate". 
+- Write in a dense, analytical, matter-of-fact tone. 
+- Prioritize mechanics and algorithms over soft skills.
+- Use explicit terminology ("retention curves", "cold-start testing", "cohorts").
+- MERMAID for processes is allowed, but NO tables. Use dense lists.
+- Do NOT use tools. Just write the document.
+''',
+    tools=[],  # NO tools — pure writer
+)
+
+
+# ==============================================================================
+# Root agent (unused — pipeline is code-orchestrated)
+# ==============================================================================
+
+root_agent = LlmAgent(
+    name='mirak_root',
+    model='gemini-2.5-flash',
+    description='Unused root agent — pipeline is code-orchestrated.',
+    sub_agents=[],
+    instruction='This agent is not used.',
+    tools=[],
+)
+
+
+# ==============================================================================
+# Pipeline Runner
+# ==============================================================================
+
+def run_agent_stage(agent, prompt_text: str, stage_name: str, user_id: str, session_id: str) -> str:
+    """Run a single agent stage and extract the text output."""
+    from google.adk import Runner
+    import google.adk.sessions
+    from google.genai.types import Content, Part
+
+    stage_session_id = f"{session_id}_{stage_name}"
+    stage_session_service = google.adk.sessions.InMemorySessionService()
+
+    msg = Content(role="user", parts=[Part.from_text(text=prompt_text)])
+    runner = Runner(
+        app_name="mirak",
+        agent=agent,
+        session_service=stage_session_service,
+        auto_create_session=True,
+    )
+
+    all_text = []
+    event_count = 0
+    tool_call_count = 0
+
+    logger.info(f"[{stage_name}] 🚀 Starting agent run...")
+
+    for event in runner.run(
+        user_id=user_id,
+        session_id=stage_session_id,
+        new_message=msg,
+    ):
+        event_count += 1
+        author = getattr(event, "author", "?")
+
+        if hasattr(event, "content") and event.content is not None:
+            if hasattr(event.content, "parts"):
+                for part in event.content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        tool_call_count += 1
+                        fn_name = getattr(part.function_call, "name", "unknown")
+                        logger.info(f"[{stage_name}] 🔧 Tool call #{tool_call_count}: {fn_name} (by {author})")
+
+                    if hasattr(part, "text") and part.text and len(part.text.strip()) > 0:
+                        all_text.append(part.text)
+                        preview = part.text[:100].replace('\n', ' ').strip()
+                        logger.info(f"[{stage_name}] 📝 Text [{author}]: {len(part.text)} chars — {preview}...")
+
+            elif hasattr(event.content, "text") and event.content.text:
+                all_text.append(event.content.text)
+                logger.info(f"[{stage_name}] 📝 Text [{author}]: {len(event.content.text)} chars")
+
+    # Combine ALL text blocks (not just the longest) for complete output
+    if all_text:
+        # If there's one dominant block (>80% of total), use it; otherwise concat all
+        total_chars = sum(len(t) for t in all_text)
+        longest = max(all_text, key=len)
+        if len(longest) > total_chars * 0.7:
+            result = longest
+        else:
+            result = "\n\n".join(all_text)
+        logger.info(f"[{stage_name}] ✅ Done — {event_count} events, {tool_call_count} tool calls, {len(result)} chars output")
+        return result
+    else:
+        logger.warning(f"[{stage_name}] ⚠️ No text output! ({event_count} events, {tool_call_count} tool calls)")
+        return f"[{stage_name} produced no output]"
+
+
+# ==============================================================================
+# API Endpoints
+# ==============================================================================
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "mirak", "version": "0.4.0"}
+
+
+@app.post("/generate_knowledge")
+def generate_knowledge(req: GenerateKnowledgeRequest, background_tasks: BackgroundTasks):
+    """
+    Generate a knowledge-base entry asynchronously via 3-stage pipeline.
+    Immediately returns 202-like response to unblock the caller.
+    """
+    session_id = req.session_id or str(uuid.uuid4())
+    logger.info(f"Accepted request for topic: {req.topic} | session: {session_id}")
+    
+    background_tasks.add_task(_background_knowledge_generation, req, session_id)
+    
+    return {
+        "status": "accepted",
+        "message": "Research started asynchronously",
+        "topic": req.topic,
+        "session_id": session_id
+    }
+
+def _background_knowledge_generation(req: GenerateKnowledgeRequest, session_id: str):
+    pipeline_start = time.time()
+    logger.info("=" * 60)
+    logger.info(f"BACKGROUND GENERATION START: {req.topic}")
+    logger.info("=" * 60)
+    
+    try:
+        # Simulate heavy LLM execution delay
+        logger.info("Simulating LLM agent processing via sleep...")
+        time.sleep(3)
+        
+        # Build dummy knowledge webhook payload matching validateMiraKPayload
+        dummy_payload = {
+            "topic": req.topic,
+            "domain": "Systems Engineering",
+            "units": [
+                {
+                    "unit_type": "foundation",
+                    "title": f"Core Mechanics of {req.topic}",
+                    "thesis": "This is a simulated thesis generated by MiraK.",
+                    "content": f"Here is the simulated content regarding {req.topic}. Deep research indicates XYZ.",
+                    "key_ideas": ["First simulated idea", "Second simulated idea"],
+                    "citations": ["https://example.com/source1"]
+                }
+            ],
+            "experience_proposal": {
+                "title": f"Master {req.topic}",
+                "goal": "Understand the core concepts",
+                "template_id": "b0000000-0000-0000-0000-000000000002",
+                "resolution": {
+                    "depth": "surface",
+                    "mode": "illuminate",
+                    "timeScope": "session",
+                    "intensity": "low"
+                },
+                "steps": [
+                    {
+                        "step_type": "lesson",
+                        "title": "Welcome to the Concept",
+                        "payload": {
+                            "sections": [
+                                {
+                                    "heading": "Introduction",
+                                    "body": "Welcome to this auto-generated lesson.",
+                                    "type": "text"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+        
+        # Webhook Routing: Local Primary, Vercel Fallback
+        local_target = "https://mira.mytsapi.us"
+        vercel_target = os.environ.get("VERCEL_WEBHOOK_URL", "https://mira-mocha-kappa.vercel.app")
+        
+        target_webhook = f"{vercel_target}/api/webhook/mirak"
+        local_up = False
+        try:
+            health_check = requests.get(f"{local_target}/api/dev/diagnostic", timeout=2)
+            if health_check.status_code == 200:
+                local_up = True
+                target_webhook = f"{local_target}/api/webhook/mirak"
+        except requests.RequestException:
+            pass
+            
+        logger.info(f"Targeting webhook: {target_webhook} (Local up: {local_up})")
+        
+        secret = os.environ.get("MIRAK_WEBHOOK_SECRET", "")
+        headers = {"x-mirak-secret": secret}
+        
+        resp = requests.post(target_webhook, json=dummy_payload, headers=headers, timeout=10)
+        logger.info(f"Webhook delivered to {target_webhook}. Status: {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"Webhook error response: {resp.text}")
+            
+    except Exception as e:
+        logger.error(f"Background task failed: {e}")
+        traceback.print_exc()
+
+
+# ==============================================================================
+# Entry Point
+# ==============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("PORT", 8001))
+    logger.info(f"Starting MiraK v0.4 on port {port}")
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+
+```
+
+### mirak/Dockerfile
+
+```
+# ==============================================================================
+# MiraK Dockerfile — Google Cloud Run
+# ==============================================================================
+# This container runs the FastAPI knowledge generation service.
+# Cloud Run will set the PORT env var automatically.
+# ==============================================================================
+
+FROM python:3.13-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install dependencies first (for Docker layer caching)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Cloud Run sets PORT env var; default to 8080 for Cloud Run convention
+ENV PORT=8080
+
+# Expose the port (informational for Cloud Run)
+EXPOSE 8080
+
+# Run the FastAPI app with uvicorn
+# NOTE: Cloud Run requires listening on 0.0.0.0 and the PORT env var
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
+
+```
+
+### mirak/requirements.txt
+
+```
+google-adk
+fastapi
+uvicorn[standard]
+python-dotenv
+google-genai
+requests
+
+```
+
+### mirak/knowledge.md
+
+```markdown
+# Mira Knowledge Base - Agent Instructions
+
+> **⚠️ THIS IS A WRITING QUALITY GUIDE — NOT A SCHEMA CONSTRAINT.**
+> This document defines the *tone, structure, and quality bar* for human-authored knowledge base content.
+> It is NOT meant to constrain the MiraK agent's raw research output format or the `knowledge_units` DB schema.
+> MiraK's output shape is defined by `knowledge-validator.ts` in the Mira codebase and the webhook payload contract.
+> Use this document for editorial guidance when reviewing or hand-writing KB content.
+
+This document contains the core prompts and templates for the agent responsible for writing Mira Studio's knowledge-base entries. Use these to ensure consistency, clarity, and actionable content.
+
+---
+
+## 1. System / Task Prompt
+
+Use this as the **system / task prompt** for the agent that writes your knowledge-base entries.
+
+```text
+You are an expert instructional writer designing knowledge-base content for a platform that teaches through executional experiences.
+
+Your job is to create articles that help people:
+1. find the answer fast,
+2. understand it deeply enough to act,
+3. retain it after reading,
+4. connect the reading to a real executional experience.
+
+Do not write like a marketer, essayist, or academic. Write like a sharp operator-teacher who respects the reader’s time.
+
+GOAL
+
+Create a knowledge-base entry that is:
+- immediately useful for skimmers,
+- clear for beginners,
+- still valuable as a reference for advanced users,
+- tightly connected to action, practice, and reflection.
+
+PRIMARY WRITING RULES
+
+1. Organize around a user job, not a broad topic.
+Each article must answer one concrete question or support one concrete task.
+
+2. Lead with utility.
+The first screen must tell the reader:
+- what this is,
+- when to use it,
+- the core takeaway,
+- what to do next.
+
+3. Front-load the answer.
+Do not warm up. Do not add history first. Do not bury the key point.
+
+4. Use plain language.
+Prefer short sentences, concrete verbs, and familiar words.
+Define jargon once, then use it consistently.
+
+5. One paragraph = one idea.
+Keep paragraphs short. Avoid walls of text.
+
+6. Prefer examples before abstraction for beginner-facing material.
+If a concept is important, show it in action before expanding theory.
+
+7. Every concept must cash out into action.
+For each major concept, explain:
+- what to do,
+- what to look for,
+- what can go wrong,
+- how to recover.
+
+8. Support two reading modes.
+Include:
+- a guided, scaffolded explanation for less experienced readers,
+- a concise decision-rule/reference layer for more advanced readers.
+
+9. Build retrieval into the page.
+End with recall/reflection prompts, not just “summary.”
+
+10. No fluff.
+Cut generic motivation, inflated adjectives, filler transitions, and empty encouragement.
+
+VOICE AND STYLE
+
+Write with this tone:
+- clear
+- practical
+- intelligent
+- grounded
+- concise
+- slightly punchy when useful
+
+Do not sound:
+- corporate
+- academic
+- mystical
+- over-explanatory
+- salesy
+- “AI assistant”-ish
+
+Never write phrases like:
+- “In today’s fast-paced world…”
+- “It is important to note that…”
+- “This comprehensive guide…”
+- “Let’s dive in”
+- “In conclusion”
+
+LEARNING DESIGN RULES
+
+Your writing must help the learner move through:
+- orientation,
+- understanding,
+- execution,
+- reflection,
+- retention.
+
+For each article, include all of the following where relevant:
+
+A. Orientation
+Help the reader quickly decide whether this page is relevant.
+
+B. Explanation
+Explain the core idea simply and directly.
+
+C. Worked example
+Show one realistic example with enough detail to make the idea concrete.
+
+D. Guided application
+Give the reader a way to try the concept in a constrained, supported way.
+
+E. Failure modes
+List common mistakes, misreads, or traps.
+
+F. Retrieval
+Ask short questions that require recall, comparison, or explanation.
+
+G. Transfer
+Help the reader know when to apply this in a different but related context.
+
+ARTICLE SHAPE
+
+Produce the article in exactly this structure unless told otherwise:
+
+# Title
+Use an outcome-focused title. It should describe the job to be done.
+
+## Use this when
+2–4 bullets describing when this article is relevant.
+
+## What you’ll get
+2–4 bullets describing what the reader will be able to do or understand.
+
+## Core idea
+A short explanation in 2–5 paragraphs.
+The first sentence must contain the main answer or rule.
+
+## Worked example
+Provide one realistic example.
+Show:
+- situation,
+- action,
+- reasoning,
+- result,
+- what to notice.
+
+## Try it now
+Give the reader a short guided exercise, prompt, or mini-task.
+
+## Decision rules
+Provide 3–7 crisp rules, heuristics, or if/then checks.
+
+## Common mistakes
+List 3–7 mistakes with a short correction for each.
+
+## Reflection / retrieval
+Provide 3–5 questions that require the reader to recall, explain, compare, or apply the idea.
+
+## Related topics
+List 3–5 related article ideas or next steps.
+
+REQUIRED CONTENT CONSTRAINTS
+
+- The article must be standalone.
+- The article must solve one primary job only.
+- The article must include at least one concrete example.
+- The article must include at least one action step.
+- The article must include at least one “what to watch for” cue.
+- The article must include retrieval/reflection questions.
+- The article must be skimmable from headings alone.
+- The article must not assume prior knowledge unless prerequisites are explicitly stated.
+- The article must not over-explain obvious points.
+
+FORMAT RULES
+
+- Use descriptive headings only.
+- Use bullets for lists, rules, and mistakes.
+- Use numbered steps only when sequence matters.
+- Bold only key phrases, not full sentences.
+- Do not use tables unless the content is clearly comparative.
+- Do not use long intro paragraphs.
+- Do not use giant nested bullet structures.
+- Do not exceed the minimum length needed for clarity.
+
+ADAPTIVE DIFFICULTY RULE
+
+When the input suggests the reader is a beginner:
+- define terms,
+- slow down slightly,
+- show more scaffolding,
+- include a simpler example.
+
+When the input suggests the reader is experienced:
+- shorten explanations,
+- emphasize distinctions and edge cases,
+- prioritize heuristics and failure modes,
+- avoid basic hand-holding.
+
+OUTPUT METADATA
+
+At the end, append this metadata block:
+
+---
+Audience: [Beginner / Intermediate / Advanced]
+Primary job to be done: [one sentence]
+Prerequisites: [short list or “None”]
+Keywords: [5–10 tags]
+Content type: [Concept / How-to / Diagnostic / Comparison / Reference]
+Estimated reading time: [X min]
+---
+
+QUALITY BAR BEFORE FINALIZING
+
+Before producing the final article, silently check:
+1. Can a skimmer get the answer from the headings and first lines?
+2. Is the core rule obvious in the first screen?
+3. Does the article contain a real example rather than vague explanation?
+4. Does it tell the reader what to do, not just what to know?
+5. Are the decision rules crisp and memorable?
+6. Are the mistakes realistic?
+7. Do the retrieval questions require thinking rather than parroting?
+8. Is there any fluff left to cut?
+9. Would this still be useful as a reference after the first read?
+10. Is every section earning its place?
+
+If anything fails this check, fix it before returning the article.
+```
+
+---
+
+## 2. Input Template
+
+Use this **input template** whenever you want the agent to generate a page:
+
+```text
+Create a knowledge-base entry using the writing spec above.
+
+Topic:
+[insert topic]
+
+Primary reader:
+[beginner / intermediate / advanced / mixed]
+
+User job to be done:
+[what the person is trying to accomplish]
+
+Executional experience this should support:
+[describe the exercise, workflow, simulation, task, or experience]
+
+Must include:
+[list any required ideas, examples, terminology, edge cases]
+
+Avoid:
+[list anything you do not want emphasized]
+
+Desired length:
+[short / medium / long]
+```
+
+---
+
+## 3. Review / Rewrite Prompt
+
+This is the **review / rewrite prompt** for linting existing KB pages:
+
+```text
+Review the article below against this standard:
+- skimmable,
+- task-first,
+- plain language,
+- strong first screen,
+- concrete example,
+- decision rules,
+- common mistakes,
+- retrieval prompts,
+- tied to action.
+
+Return:
+1. the top 5 problems,
+2. what to cut,
+3. what to rewrite,
+4. missing sections,
+5. a tightened replacement outline.
+
+Do not praise weak writing. Be direct.
+```
+
+---
+
+## 4. Design Guidelines
+
+A strong next step is to make the agent emit content in **two layers** every time:
+
+* **Quick Read** for scanners
+* **Deep Read** for learners doing the full experience
+
+That usually gives you a KB that works both as a training layer and as a reference layer.
+
+I can also turn this into a **JSON schema / CMS content model** so your agent populates entries in a structured format instead of raw prose.
+
+```
+
+### mirak/mirak_gpt_action.yaml
+
+```yaml
+openapi: 3.1.0
+info:
+  title: MiraK Research API
+  description: API for the MiraK research agent. Generate high-density knowledge units from a topic.
+  version: 1.0.0
+servers:
+  - url: https://mirak-lqooqdw7lq-uc.a.run.app
+    description: MiraK Research Engine (Cloud Run)
+paths:
+  /generate_knowledge:
+    post:
+      operationId: generateKnowledge
+      summary: Trigger deep research on a topic
+      description: |
+        Starts a multi-agent research pipeline on a given topic. 
+        MiraK will perform web searches, synthesize findings, 
+        and then POST the finalized Knowledge Unit back to Mira Studio's webhook.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - topic
+              properties:
+                topic:
+                  type: string
+                  description: The research topic or question (e.g., "Next.js 14 App Router fundamentals")
+                user_id:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
+                callback_url:
+                  type: string
+                  description: Where MiraK should POST the results.
+                  default: "https://mira-mocha-kappa.vercel.app/api/webhook/mirak"
+      responses:
+        '202':
+          description: Research started (asynchronous)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job_id:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: Invalid request
+        '500':
+          description: Server error
+
+```
+
+### mirak/README.md
+
+```markdown
+# MiraK — Knowledge Generation Microservice
+
+> A standalone Python/FastAPI service that uses the Google ADK multi-agent pipeline to generate structured knowledge-base entries for **Mira Studio**.
+
+## Why does this exist?
+
+Mira Studio (Next.js, deployed on Vercel) can't run heavy Python workloads like the Google ADK agent framework. MiraK lives on **Google Cloud Run** as a separate service that Mira (and the Custom GPT) can call via HTTP.
+
+## Architecture
+
+```
+┌─────────────────────┐          ┌──────────────────────┐
+│  Custom GPT          │          │  Mira (Next.js)      │
+│  (ChatGPT Action)    │          │  (Vercel)            │
+└────────┬────────────┘          └──────────┬───────────┘
+         │  POST /generate_knowledge         │  POST /generate_knowledge
+         │                                   │
+         ▼                                   ▼
+┌────────────────────────────────────────────────────────┐
+│  MiraK (FastAPI on Cloud Run)                          │
+│                                                        │
+│  root_agent → synth → [child_1, child_2, child_3]      │
+│           ↓ GoogleSearch + URLContext tools             │
+│                                                        │
+│  Returns: Structured KB article (markdown)             │
+│  Future:  Writes directly to Supabase                  │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Supabase (shared DB)                                  │
+│  Table: knowledge_entries (future)                     │
+│  - id, topic, category, content, user_id, created_at   │
+└────────────────────────────────────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────┐
+│  Mira UI — Knowledge Tab (future)                      │
+│  - Browse KB entries by category                       │
+│  - Mark entries as "learned" / "practicing"             │
+│  - Linked to but separate from Experiences             │
+└────────────────────────────────────────────────────────┘
+```
+
+## Local Development
+
+```bash
+# 1. Install dependencies
+pip install -r requirements.txt
+
+# 2. Set your Vertex / Gemini Search API key in .env
+#    GOOGLE_API_KEY=<your key>
+
+# 3. Run the server
+python main.py
+# → FastAPI running on http://localhost:8001
+
+# 4. Test it
+curl -X POST http://localhost:8001/generate_knowledge \
+  -H "Content-Type: application/json" \
+  -d '{"topic": "Next.js App Router fundamentals"}'
+```
+
+## Deploying to Cloud Run
+
+This service is deployed via the Cloud Run MCP tool or the `gcloud` CLI:
+
+```bash
+gcloud run deploy mirak \
+  --source . \
+  --region us-central1 \
+  --set-env-vars GOOGLE_API_KEY=<your-key>
+```
+
+Or via the MCP `deploy_local_folder` tool pointing at `c:\mirak`.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `GOOGLE_API_KEY` | ✅ | Vertex / Gemini Search API key (the "gemini_search" key) |
+| `PORT` | Auto | Set by Cloud Run (default 8080) |
+| `SUPABASE_URL` | Future | Supabase project URL for direct DB writes |
+| `SUPABASE_SERVICE_KEY` | Future | Supabase service role key |
+
+## Integration Notes
+
+### For the Custom GPT
+- A new **action** will be added to the Custom GPT's OpenAPI schema.
+- The action will POST to the MiraK Cloud Run URL with a `topic` field.
+- The GPT instructions will be updated to use this action when populating knowledge.
+
+### For the Mira Knowledge Tab
+- A new `knowledge_entries` table will be created in Supabase.
+- MiraK will write to this table after generating an entry.
+- The Mira frontend will read from this table to render the Knowledge Tab.
+- Knowledge entries follow the format defined in `knowledge.md`.
+
+### For the "roland" deployment
+- When deploying to the production GCP project, the Cloud Run URL will change.
+- The Custom GPT action URL and any Mira backend references must be updated.
+- Supabase connection strings remain the same (shared DB).
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `main.py` | FastAPI app + all ADK agent definitions |
+| `knowledge.md` | The formatting rules the Synth agent enforces |
+| `requirements.txt` | Python dependencies |
+| `Dockerfile` | Cloud Run container definition |
+| `.env` | Local environment variables (not committed) |
+| `README.md` | This file |
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/health` | Health check |
+| `POST` | `/generate_knowledge` | Generate a KB entry for a topic |
 
 ```
 

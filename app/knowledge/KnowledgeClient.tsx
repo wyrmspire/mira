@@ -21,9 +21,33 @@ export default function KnowledgeClient({
 }: KnowledgeClientProps) {
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
 
-  const filteredUnits = useMemo(() => {
+  const unitGroups = useMemo(() => {
     if (!selectedDomain) return [];
-    return units.filter(u => u.domain === selectedDomain);
+    
+    const domainUnits = units
+      .filter(u => u.domain === selectedDomain)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    const groups: { date: string; units: KnowledgeUnit[]; isRun: boolean }[] = [];
+    
+    domainUnits.forEach(unit => {
+      const unitTime = new Date(unit.created_at).getTime();
+      const lastGroup = groups[groups.length - 1];
+      
+      // If within 5 min window
+      if (lastGroup && Math.abs(new Date(lastGroup.date).getTime() - unitTime) < 5 * 60 * 1000) {
+        lastGroup.units.push(unit);
+        lastGroup.isRun = true;
+      } else {
+        groups.push({
+          date: unit.created_at,
+          units: [unit],
+          isRun: false
+        });
+      }
+    });
+    
+    return groups;
   }, [units, selectedDomain]);
 
   if (units.length === 0) {
@@ -107,16 +131,29 @@ export default function KnowledgeClient({
           
           <header className="mb-12">
             <h2 className="text-3xl font-bold text-[#f1f5f9] capitalize mb-2">{selectedDomain.replace(/-/g, ' ')}</h2>
-            <p className="text-[#4a4a6a]">{filteredUnits.length} Units of knowledge in this domain.</p>
+            <p className="text-[#4a4a6a]">{units.filter(u => u.domain === selectedDomain).length} Units of knowledge in this domain.</p>
           </header>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredUnits.map(unit => (
-              <KnowledgeUnitCard key={unit.id} unit={unit} />
+          <div className="space-y-12">
+            {unitGroups.map((group, idx) => (
+              <div key={idx} className="space-y-6">
+                {group.isRun && (
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#4a4a6a] flex items-center">
+                    <span className="w-8 h-px bg-[#1e1e2e] mr-4"></span>
+                    Research Run &mdash; {new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  </h3>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {group.units.map(unit => (
+                    <KnowledgeUnitCard key={unit.id} unit={unit} />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
     </div>
+
   );
 }

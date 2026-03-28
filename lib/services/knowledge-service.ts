@@ -1,6 +1,8 @@
 import { KnowledgeUnit, KnowledgeProgress, MasteryStatus } from '@/types/knowledge';
 import { getStorageAdapter } from '@/lib/storage-adapter';
 import { generateId } from '@/lib/utils';
+import { runFlowSafe } from '@/lib/ai/safe-flow';
+// Dynamic import used in runKnowledgeEnrichment to avoid circular dependency
 
 /**
  * Normalize a DB row (snake_case from knowledge_units) to the TS KnowledgeUnit shape (camelCase).
@@ -218,5 +220,72 @@ export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domai
       totalUnits: 0,
       masteredCount: 0
     };
+  }
+}
+
+/**
+ * enrichKnowledgeUnit - Lane 2
+ * Updates a knowledge unit with enrichment data.
+ */
+export async function enrichKnowledgeUnit(
+  unitId: string, 
+  enrichment: { 
+    retrieval_questions: any[], 
+    cross_links: any[], 
+    skill_tags: string[] 
+  }
+): Promise<void> {
+  const adapter = getStorageAdapter();
+  const unit = await getKnowledgeUnitById(unitId);
+  if (!unit) return;
+
+  const now = new Date().toISOString();
+  
+  // Merge retrieval questions (additive)
+  const existingQuestions = unit.retrieval_questions || [];
+  const mergedQuestions = [...existingQuestions, ...enrichment.retrieval_questions];
+
+  // Merge skill tags into subtopic_seeds (additive + de-duped)
+  const existingSeeds = unit.subtopic_seeds || [];
+  const mergedSeeds = Array.from(new Set([...existingSeeds, ...enrichment.skill_tags]));
+
+  // For cross_links, we'll store them as formatted strings in subtopic_seeds
+  // This maintains type safety with the current string[] schema while still persisting the data
+  const crossLinks = enrichment.cross_links.map(cl => `CrossLink: [${cl.related_domain}] ${cl.reason}`);
+  const finalSeeds = [...mergedSeeds, ...crossLinks];
+
+  await adapter.updateItem<any>('knowledge_units', unitId, {
+    retrieval_questions: mergedQuestions,
+    subtopic_seeds: finalSeeds,
+    updated_at: now
+  });
+}
+
+/**
+ * runKnowledgeEnrichment - Lane 2
+ * Wrapper that runs the enrichment flow and persists the result.
+ * MUST swallow all errors to prevent blocking the caller (webhook).
+ */
+export async function runKnowledgeEnrichment(unitId: string, userId: string): Promise<void> {
+  try {
+    console.log(`[knowledge-service] Starting enrichment for unit: ${unitId}`);
+    
+    // Break circular dependency: refine-knowledge-flow imports this service
+    const { refineKnowledgeFlow } = await import('@/lib/ai/flows/refine-knowledge-flow');
+
+    const result = await runFlowSafe(
+      () => refineKnowledgeFlow({ unitId, userId }),
+      null
+    );
+
+    if (result) {
+      await enrichKnowledgeUnit(unitId, result);
+      console.log(`[knowledge-service] Enrichment completed for unit: ${unitId}`);
+    } else {
+      console.warn(`[knowledge-service] Enrichment skipped or failed (safe-flow returned null) for unit: ${unitId}`);
+    }
+  } catch (error) {
+    console.error(`[knowledge-service] FATAL: runKnowledgeEnrichment failed for unit ${unitId}`, error);
+    // Swallowing error as per W4 requirement: the webhook must NEVER fail because enrichment failed.
   }
 }

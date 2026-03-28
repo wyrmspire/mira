@@ -1,5 +1,11 @@
 # Mira Knowledge Base - Agent Instructions
 
+> **⚠️ THIS IS A WRITING QUALITY GUIDE — NOT A SCHEMA CONSTRAINT.**
+> This document defines the *tone, structure, and quality bar* for human-authored knowledge base content.
+> It is NOT meant to constrain the MiraK agent's raw research output format or the `knowledge_units` DB schema.
+> MiraK's output shape is defined by `knowledge-validator.ts` in the Mira codebase and the webhook payload contract.
+> Use this document for editorial guidance when reviewing or hand-writing KB content.
+
 This document contains the core prompts and templates for the agent responsible for writing Mira Studio's knowledge-base entries. Use these to ensure consistency, clarity, and actionable content.
 
 ---

@@ -1,3 +1,782 @@
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#475569] opacity-80">
+                      {(COPY.workspace.stepTypes as any)[step.step_type] || step.step_type}
+                    </span>
+                    {status === 'skipped' && (
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500/70 border border-amber-500/20 px-1 rounded">Skipped</span>
+                    )}
+                  </div>
+                  <h4 className={`font-bold leading-snug ${isLocked ? 'text-[#475569]' : 'text-[#f1f5f9]'}`}>
+                    {step.title}
+                  </h4>
+                </div>
+                
+                {!isLocked && (
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity translate-x-2 group-hover:translate-x-0">
+                    <svg className="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                )}
+                
+                {isLocked && (
+                  <svg className="w-4 h-4 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/experience/ExperienceRenderer.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import { getRenderer, registerRenderer } from '@/lib/experience/renderer-registry';
+import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
+import { COPY } from '@/lib/studio-copy';
+import type { StepStatus } from './StepNavigator';
+import ExperienceOverview from './ExperienceOverview';
+
+// Import all step renderers
+import QuestionnaireStep from './steps/QuestionnaireStep';
+import LessonStep from './steps/LessonStep';
+import ChallengeStep from './steps/ChallengeStep';
+import PlanBuilderStep from './steps/PlanBuilderStep';
+import ReflectionStep from './steps/ReflectionStep';
+import EssayTasksStep from './steps/EssayTasksStep';
+
+// Register all built-in renderers
+registerRenderer('questionnaire', QuestionnaireStep as any);
+registerRenderer('lesson', LessonStep as any);
+registerRenderer('challenge', ChallengeStep as any);
+registerRenderer('plan_builder', PlanBuilderStep as any);
+registerRenderer('reflection', ReflectionStep as any);
+registerRenderer('essay_tasks', EssayTasksStep as any);
+
+interface ExperienceRendererProps {
+  instance: ExperienceInstance;
+  steps: ExperienceStep[];
+  currentStepId: string | null;
+  stepStatuses: Record<string, StepStatus>;
+  showOverview: boolean;
+  isCompleted: boolean;
+  isLoading: boolean;
+  onStepSelect: (id: string) => void;
+  onResume: () => void;
+  onCompleteStep: (payload?: any) => void;
+  onSkipStep: () => void;
+  onDraftStep: (draft: Record<string, any>) => void;
+  readOnly?: boolean;
+  initialDraft?: Record<string, any> | null;
+}
+
+import { KnowledgeCompanion } from './KnowledgeCompanion';
+
+export default function ExperienceRenderer({
+  instance,
+  steps,
+  currentStepId,
+  stepStatuses,
+  showOverview,
+  isCompleted,
+  isLoading,
+  onStepSelect,
+  onResume,
+  onCompleteStep,
+  onSkipStep,
+  onDraftStep,
+  readOnly,
+  initialDraft
+}: ExperienceRendererProps) {
+  
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[50vh]">
+        <div className="text-[#4a4a6a] italic animate-pulse">Establishing workspace...</div>
+      </div>
+    );
+  }
+
+  if (isCompleted) {
+    return (
+      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center px-6">
+        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div>
+          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
+          <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
+        </div>
+        <div className="bg-[#12121a] p-4 rounded-xl border border-[#1e1e2e] text-[#4a4a6a] text-sm font-medium">
+          {COPY.completion.returnToChat}
+        </div>
+      </div>
+    );
+  }
+
+  if (showOverview) {
+    return (
+      <ExperienceOverview 
+        instance={instance}
+        steps={steps}
+        stepStatuses={stepStatuses}
+        onStepSelect={onStepSelect}
+        onResume={onResume}
+      />
+    );
+  }
+
+  const currentStep = steps.find(s => s.id === currentStepId);
+  const StepComponent = currentStep ? getRenderer(currentStep.step_type) : null;
+  const { depth } = instance.resolution;
+
+  // Build extra props for step renderers that support readOnly/initialData
+  const extraProps: Record<string, any> = {};
+  if (readOnly) extraProps.readOnly = true;
+  if (initialDraft && currentStep) {
+    const stepType = currentStep.step_type;
+    // Map draft data to the correct prop name each renderer expects
+    if (stepType === 'questionnaire') {
+      extraProps.initialAnswers = initialDraft;
+    } else if (stepType === 'reflection') {
+      extraProps.initialResponses = initialDraft;
+    }
+  }
+
+  return (
+    <div className={`w-full max-w-2xl mx-auto px-6 py-12 ${depth === 'light' ? 'flex items-center justify-center min-h-[80vh]' : ''}`}>
+      {currentStep && StepComponent ? (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <StepComponent 
+            step={currentStep} 
+            onComplete={onCompleteStep} 
+            onSkip={onSkipStep} 
+            onDraft={onDraftStep}
+            {...extraProps}
+          />
+          
+          {/* Lane 5: Knowledge Companion */}
+          {(currentStep.payload as any)?.knowledge_domain && (
+            <KnowledgeCompanion domain={(currentStep.payload as any).knowledge_domain} />
+          )}
+        </div>
+      ) : (
+        <div className="text-[#94a3b8] italic text-center animate-pulse">Waking up Step Renderer...</div>
+      )}
+    </div>
+  );
+}
+
+```
+
+### components/experience/HomeExperienceAction.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/lib/routes';
+import { COPY } from '@/lib/studio-copy';
+
+interface HomeExperienceActionProps {
+  id: string;
+  isProposed?: boolean;
+}
+
+export default function HomeExperienceAction({ id, isProposed }: HomeExperienceActionProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  const handleAcceptAndStart = async () => {
+    setLoading(true);
+    try {
+      // Chain: approve → publish → activate
+      // 422 means already past this state — skip to next
+      const steps = ['approve', 'publish', 'activate'];
+      
+      for (const action of steps) {
+        const res = await fetch(`/api/experiences/${id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        });
+        
+        if (res.status === 422) {
+          console.log(`Skipping ${action} — already past this state`);
+          continue;
+        }
+        
+        if (!res.ok) {
+          throw new Error(`Failed to ${action}`);
+        }
+      }
+
+      router.push(ROUTES.workspace(id));
+      router.refresh();
+    } catch (error) {
+      console.error('Workflow failed:', error);
+      // Navigate anyway — experience might already be active
+      router.push(ROUTES.workspace(id));
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (isProposed) {
+    return (
+      <button 
+        onClick={handleAcceptAndStart}
+        disabled={loading}
+        className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
+      >
+        {loading ? 'Starting...' : COPY.library.acceptAndStart + ' →'}
+      </button>
+    );
+  }
+
+  return (
+    <button 
+      onClick={() => router.push(ROUTES.workspace(id))}
+      className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors py-1"
+    >
+      {COPY.library.enter} →
+    </button>
+  );
+}
+
+```
+
+### components/experience/KnowledgeCompanion.tsx
+
+```tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { KnowledgeUnit } from '@/types/knowledge';
+import { COPY } from '@/lib/studio-copy';
+
+interface KnowledgeCompanionProps {
+  domain?: string;
+  knowledgeUnitId?: string;
+}
+
+export function KnowledgeCompanion({ domain, knowledgeUnitId }: KnowledgeCompanionProps) {
+  const [units, setUnits] = useState<KnowledgeUnit[]>([]);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+
+    async function fetchKnowledge() {
+      setLoading(true);
+      try {
+        let url = '/api/knowledge';
+        if (domain) {
+          url += `?domain=${encodeURIComponent(domain)}`;
+        } else if (knowledgeUnitId) {
+          // If we have a single ID, we still might want to fetch all in that same domain 
+          // or just that single unit depending on the instruction.
+          // For now, let's stick to domain-based fetching per Lane 5 requirement.
+        }
+        
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          // API returns units grouped by domain or flat depending on implementation.
+          // Lane 2 W2 says "Groups results by domain in response", so we extract them.
+          if (Array.isArray(data)) {
+            setUnits(data);
+          } else if (data.domains && typeof data.domains === 'object') {
+            // If grouped, flatten for this specific domain
+            const domainUnits = domain ? data.domains[domain] : Object.values(data.domains).flat();
+            setUnits(domainUnits || []);
+          } else {
+            setUnits([]);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch knowledge:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchKnowledge();
+  }, [isExpanded, domain, knowledgeUnitId]);
+
+  if (!domain && !knowledgeUnitId) return null;
+
+  return (
+    <div className="mt-8 border border-[#1e1e2e] rounded-lg bg-[#0f0f17] overflow-hidden transition-all duration-300">
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-4 hover:bg-[#1e1e2e]/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xl">📖</span>
+          <span className="text-sm font-medium text-slate-300">
+            {COPY.knowledge.actions.learnMore}
+          </span>
+          {domain && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              {domain}
+            </span>
+          )}
+        </div>
+        <span className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+          ↓
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="p-4 border-t border-[#1e1e2e] bg-[#0c0c12]">
+          {loading ? (
+            <div className="py-4 text-center text-sm text-slate-500 animate-pulse">
+              {COPY.common.loading}
+            </div>
+          ) : units.length > 0 ? (
+            <div className="space-y-4">
+              {units.map((unit) => (
+                <div key={unit.id} className="group">
+                  <h4 className="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors">
+                    {unit.title}
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                    {unit.thesis}
+                  </p>
+                  <Link
+                    href={`/knowledge/${unit.id}`}
+                    className="text-xs text-blue-400/80 hover:text-blue-400 mt-2 inline-block font-medium"
+                  >
+                    Read full →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-4 text-center text-sm text-slate-500">
+              No specific units found for this domain yet.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+```
+
+### components/experience/StepNavigator.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import type { ExperienceStep } from '@/types/experience';
+import { COPY } from '@/lib/studio-copy';
+
+export type StepStatus = 'locked' | 'available' | 'in_progress' | 'completed' | 'skipped';
+
+interface StepNavigatorProps {
+  steps: ExperienceStep[];
+  currentStepId: string;
+  stepStatuses: Record<string, StepStatus>;
+  onStepSelect: (stepId: string) => void;
+  depth: 'light' | 'medium' | 'heavy';
+}
+
+export default function StepNavigator({
+  steps,
+  currentStepId,
+  stepStatuses,
+  onStepSelect,
+  depth,
+}: StepNavigatorProps) {
+  if (depth === 'light') return null;
+
+  const completedCount = steps.filter((s) => stepStatuses[s.id] === 'completed').length;
+  const totalSteps = steps.length;
+
+  // Medium depth: compact top bar (handled within ExperienceRenderer usually, but we provide it here)
+  if (depth === 'medium') {
+    return (
+      <div className="w-full bg-[#0a0a0f] border-b border-[#1e1e2e] px-4 py-2 flex items-center gap-4 overflow-x-auto no-scrollbar">
+        {steps.map((step, idx) => {
+          const status = stepStatuses[step.id] || 'available';
+          const isActive = currentStepId === step.id;
+          const isLocked = status === 'locked';
+
+          return (
+            <button
+              key={step.id}
+              onClick={() => !isLocked && onStepSelect(step.id)}
+              disabled={isLocked}
+              className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+                isActive 
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' 
+                  : isLocked
+                  ? 'text-[#475569] cursor-not-allowed opacity-50'
+                  : 'text-[#94a3b8] hover:bg-[#1e1e2e]'
+              }`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status)}`} />
+              <span className="text-xs font-medium whitespace-nowrap">{idx + 1}. {step.title}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Heavy depth: Full sidebar
+  return (
+    <div className="w-64 h-full bg-[#0a0a0f] border-r border-[#1e1e2e] flex flex-col flex-shrink-0">
+      <div className="flex-grow overflow-y-auto py-6 px-4 space-y-1 no-scrollbar">
+        {steps.map((step, idx) => {
+          const status = stepStatuses[step.id] || 'available';
+          const isActive = currentStepId === step.id;
+          const isLocked = status === 'locked';
+
+          return (
+            <button
+              key={step.id}
+              onClick={() => !isLocked && onStepSelect(step.id)}
+              disabled={isLocked}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all group ${
+                isActive 
+                  ? 'bg-indigo-500/10 text-indigo-300 border border-indigo-500/20' 
+                  : isLocked
+                  ? 'text-[#475569] cursor-not-allowed'
+                  : 'text-[#94a3b8] hover:bg-[#1e1e2e] hover:text-[#f1f5f9]'
+              }`}
+            >
+              <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center">
+                {status === 'completed' ? (
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                ) : status === 'locked' ? (
+                  <svg className="w-4 h-4 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                ) : (
+                  <div className={`w-2 h-2 rounded-full ${getStatusColor(status)} ${isActive ? 'ring-4 ring-indigo-500/20' : ''}`} />
+                )}
+              </div>
+              <div className="flex flex-col items-start overflow-hidden">
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${isActive ? 'text-indigo-400' : 'text-[#475569] group-hover:text-[#64748b]'}`}>
+                  {(COPY.workspace.stepTypes as any)[step.step_type] || step.step_type}
+                </span>
+                <span className="text-sm font-medium truncate w-full">{step.title}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="p-4 border-t border-[#1e1e2e] bg-[#0d0d14]">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-[10px] font-bold text-[#475569] uppercase tracking-widest">Progress</span>
+          <span className="text-xs font-mono text-indigo-400">
+            {COPY.workspace.stepsCompleted.replace('{count}', completedCount.toString()).replace('{total}', totalSteps.toString())}
+          </span>
+        </div>
+        <div className="h-1 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-indigo-500 transition-all duration-500" 
+            style={{ width: `${(completedCount / totalSteps) * 100}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function getStatusColor(status: StepStatus) {
+  switch (status) {
+    case 'completed': return 'bg-emerald-500';
+    case 'in_progress': return 'bg-indigo-500';
+    case 'available': return 'bg-slate-500';
+    case 'skipped': return 'bg-amber-500';
+    case 'locked': return 'bg-slate-700';
+    default: return 'bg-slate-500';
+  }
+}
+
+```
+
+### components/experience/steps/ChallengeStep.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
+
+interface ChallengePayload {
+  objectives: Array<{
+    id: string;
+    description: string;
+    proof?: string;
+  }>;
+}
+
+interface ChallengeStepProps {
+  step: ExperienceStep;
+  onComplete: (payload: { completedObjectives: Record<string, string> }) => void;
+  onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
+}
+
+export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: ChallengeStepProps) {
+  const [completed, setCompleted] = useState<Record<string, string>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const payload = step.payload as ChallengePayload | null;
+  const objectives = payload?.objectives ?? [];
+
+  const handleBlur = (objectiveId: string) => {
+    if (onDraft && completed[objectiveId]) {
+      onDraft({ objectiveId, proof: completed[objectiveId] });
+    }
+  };
+
+  const completedCount = Object.values(completed).filter(v => !!v.trim()).length;
+  const totalCount = objectives.length;
+  const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onComplete({ completedObjectives: completed });
+  };
+
+  const canComplete = totalCount === 0 || percent >= 60;
+  const isPerfect = percent === 100;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-2xl mx-auto">
+      <div className="flex justify-between items-end mb-6">
+        <div>
+          <h2 className="text-3xl font-bold text-[#e2e8f0] mb-2">{step.title}</h2>
+          <p className="text-xs text-amber-400 p-1 px-3 bg-amber-400/10 rounded-full border border-amber-400/20 inline-block uppercase tracking-widest font-bold">
+            Active Challenge
+          </p>
+        </div>
+        <div className="text-right">
+          <span className="text-3xl font-bold text-amber-400">{percent}%</span>
+          <span className="block text-[10px] text-[#475569] font-mono">COMPLETE</span>
+        </div>
+      </div>
+
+      <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden mb-12 border border-[#33334d]">
+        <div 
+          className="h-full bg-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all duration-700 ease-out"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {objectives.length === 0 && (
+          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+            <p className="text-[#64748b] text-lg">Challenge objectives are being prepared.</p>
+          </div>
+        )}
+        {objectives.map((obj, idx) => {
+          const isDone = !!completed[obj.id]?.trim();
+          const isExpanded = expandedId === obj.id;
+          return (
+            <div
+              key={obj.id}
+              className={`p-6 rounded-2xl border transition-all duration-500 group cursor-pointer ${
+                isDone
+                  ? 'bg-emerald-500/5 border-emerald-500/30'
+                  : isExpanded
+                    ? 'bg-[#1a1a2e] border-amber-500/40 shadow-lg'
+                    : 'bg-[#12121a] border-[#1e1e2e] hover:border-amber-500/20'
+              }`}
+              onClick={() => setExpandedId(isExpanded ? null : obj.id)}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-all flex-shrink-0 ${
+                  isDone
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 rotate-[360deg]'
+                    : 'bg-[#1a1a2e] border-[#33334d] text-[#475569] group-hover:border-amber-500/30'
+                }`}>
+                  {isDone ? '✓' : idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-lg font-medium transition-all ${
+                    isDone ? 'text-emerald-400/70 line-through' : 'text-[#e2e8f0]'
+                  }`}>
+                    {obj.description}
+                  </p>
+                  
+                  {isExpanded && (
+                    <div 
+                      className="mt-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {obj.proof && (
+                        <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                          <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Requirement</p>
+                          <p className="text-sm text-[#94a3b8] italic">{obj.proof}</p>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold text-[#475569] uppercase tracking-[0.2em] ml-1">Record Evidence</label>
+                        <textarea
+                          value={completed[obj.id] || ''}
+                          onChange={(e) => setCompleted((prev) => ({ ...prev, [obj.id]: e.target.value }))}
+                          onBlur={() => handleBlur(obj.id)}
+                          placeholder="What did you achieve? Paste results or describe your progress…"
+                          rows={6}
+                          className={`w-full bg-[#0a0a0f] border rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none transition-all ${
+                            isDone ? 'border-emerald-500/20 focus:border-emerald-500/40' : 'border-[#1e1e2e] focus:border-amber-500/40'
+                          }`}
+                          style={{ minHeight: '150px', maxHeight: '500px' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {!isExpanded && (
+                  <div className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                    <svg className="w-5 h-5 text-[#475569]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="flex items-center justify-between pt-8 border-t border-[#1e1e2e]">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
+          >
+            Skip for now
+          </button>
+          
+          <div className="flex flex-col items-end gap-3">
+            {canComplete && !isPerfect && (
+              <p className="text-[10px] text-amber-500/70 font-mono tracking-tighter">
+                PARTIAL COMPLETION ENABLED (≥60%)
+              </p>
+            )}
+            {!canComplete && (
+              <p className="text-[10px] text-rose-500/70 font-mono tracking-tighter uppercase font-bold">
+                Complete {Math.ceil(totalCount * 0.6) - completedCount} more to finish
+              </p>
+            )}
+            <button
+              type="submit"
+              disabled={!canComplete}
+              className={`px-10 py-4 rounded-xl text-sm font-bold transition-all shadow-xl active:scale-95 border ${
+                canComplete 
+                  ? 'bg-amber-500 text-[#0a0a0f] border-amber-400 shadow-amber-500/20 hover:bg-amber-400' 
+                  : 'bg-amber-500/10 text-amber-500/30 border-amber-500/10 cursor-not-allowed opacity-50'
+              }`}
+            >
+              {isPerfect ? 'Challenge Complete →' : 'Finish Challenge Anyway →'}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+```
+
+### components/experience/steps/EssayTasksStep.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import type { ExperienceStep } from '@/types/experience';
+
+interface EssayTasksPayload {
+  content: string;
+  tasks: Array<{
+    id: string;
+    description: string;
+  }>;
+}
+
+interface EssayTasksStepProps {
+  step: ExperienceStep;
+  onComplete: (payload: { completedTasks: Record<string, boolean> }) => void;
+  onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
+}
+
+export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: EssayTasksStepProps) {
+  const [completed, setCompleted] = useState<Record<string, boolean>>({});
+  const [taskResponses, setTaskResponses] = useState<Record<string, string>>({});
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  
+  const payload = step.payload as EssayTasksPayload | null;
+  const tasks = payload?.tasks ?? [];
+  const content = payload?.content ?? '';
+
+  const toggleTask = (taskId: string) => {
+    const newState = { ...completed, [taskId]: !completed[taskId] };
+    setCompleted(newState);
+    if (onDraft) {
+      onDraft({ completed: newState });
+    }
+  };
+
+  const handleBlur = (taskId: string) => {
+    if (onDraft && taskResponses[taskId]) {
+      onDraft({ taskId, response: taskResponses[taskId] });
+    }
+  };
+
+  const allDone = tasks.length === 0 || tasks.every((t) => !!completed[t.id] || !!taskResponses[t.id]?.trim());
+
+  const handleSubmit = () => {
+    setIsSubmitted(true);
+  };
+
+  const handleFinish = () => {
+    onComplete({ completedTasks: completed });
+  };
+
+  return (
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-700 max-w-3xl mx-auto">
+      <div className="flex justify-between items-end border-b border-rose-500/20 pb-6">
+        <div>
+          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+          <p className="text-sm text-rose-400 uppercase tracking-[0.2em] font-bold">Deep Work Component</p>
+        </div>
+        {isSubmitted && (
+          <div className="bg-rose-500/10 border border-rose-400/30 px-4 py-1.5 rounded-full flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+            <span className="text-[10px] font-bold text-rose-400 tracking-widest uppercase">Under Review</span>
+          </div>
+        )}
+      </div>
 
       <div className="rounded-3xl border bg-[#12121a] border-rose-500/20 p-8">
         <div className="flex justify-between items-center mb-6">
@@ -1280,6 +2059,506 @@ export function InboxFilterTabs({ filter, onChange, counts }: InboxFilterTabsPro
 
 ```
 
+### components/knowledge/DomainCard.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+
+interface DomainCardProps {
+  domain: string;
+  unitCount: number;
+  readCount: number;
+  onClick?: () => void;
+}
+
+export default function DomainCard({ domain, unitCount, readCount, onClick }: DomainCardProps) {
+  const progress = Math.round((readCount / unitCount) * 100);
+
+  return (
+    <div 
+      onClick={onClick}
+      className="flex flex-col p-5 bg-[#0d0d18] border border-[#1e1e2e] rounded-2xl hover:border-indigo-500/30 transition-all group cursor-pointer shadow-sm hover:shadow-indigo-500/5"
+    >
+      <div className="flex justify-between items-start mb-4">
+        <h3 className="text-lg font-bold text-[#f1f5f9] capitalize group-hover:text-indigo-300 transition-colors">
+          {domain.replace(/-/g, ' ')}
+        </h3>
+        <div className="px-2 py-0.5 rounded bg-[#1e1e2e] text-[#94a3b8] text-[10px] font-bold uppercase tracking-tight border border-[#33334d]">
+          {unitCount} {unitCount === 1 ? 'Unit' : 'Units'}
+        </div>
+      </div>
+
+      <div className="mt-auto">
+        <div className="flex justify-between items-center mb-2">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-[#4a4a6a]">
+            Progress
+          </span>
+          <span className="text-[10px] font-mono text-indigo-400">
+            {progress}%
+          </span>
+        </div>
+        <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-indigo-500 transition-all duration-500 rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/knowledge/KnowledgeUnitCard.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { KnowledgeUnit } from '@/types/knowledge';
+import { COPY } from '@/lib/studio-copy';
+import { ROUTES } from '@/lib/routes';
+import MasteryBadge from './MasteryBadge';
+
+interface KnowledgeUnitCardProps {
+  unit: KnowledgeUnit;
+}
+
+export default function KnowledgeUnitCard({ unit }: KnowledgeUnitCardProps) {
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'foundation':
+        return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+      case 'playbook':
+        return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
+      case 'deep_dive':
+        return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+      case 'example':
+        return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      default:
+        return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
+    }
+  };
+
+  return (
+    <Link 
+      href={ROUTES.knowledgeUnit(unit.id)}
+      className="flex flex-col p-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-indigo-500/5 h-full"
+    >
+      <div className="flex justify-between items-start mb-3">
+        <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)}`}>
+          {COPY.knowledge.unitTypes[unit.unit_type]}
+        </div>
+        <MasteryBadge status={unit.mastery_status} />
+      </div>
+
+      <h3 className="text-base font-bold text-[#f1f5f9] mb-2 group-hover:text-indigo-300 transition-colors line-clamp-1">
+        {unit.title}
+      </h3>
+      
+      <p className="text-xs text-[#94a3b8] line-clamp-1 mb-4">
+        {unit.thesis}
+      </p>
+
+      <div className="mt-auto pt-2 flex items-center text-[10px] font-bold uppercase tracking-widest text-[#4a4a6a] group-hover:text-indigo-400/70 transition-colors">
+        Learn about this →
+      </div>
+    </Link>
+  );
+}
+
+```
+
+### components/knowledge/KnowledgeUnitView.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { KnowledgeUnit, MasteryStatus } from '@/types/knowledge';
+import { COPY } from '@/lib/studio-copy';
+import { ROUTES } from '@/lib/routes';
+import MasteryBadge from './MasteryBadge';
+
+interface KnowledgeUnitViewProps {
+  unit: KnowledgeUnit;
+}
+
+type Tab = 'learn' | 'practice' | 'links';
+
+export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>('learn');
+  const [expandedQuestions, setExpandedQuestions] = useState<number[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const toggleQuestion = (index: number) => {
+    setExpandedQuestions(prev => 
+      prev.includes(index) ? prev.filter(i => i !== index) : [...prev, index]
+    );
+  };
+
+  const updateMastery = async (status: MasteryStatus) => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const res = await fetch(`/api/knowledge/${unit.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mastery_status: status }),
+      });
+
+      if (res.ok) {
+        router.refresh();
+      }
+    } catch (err) {
+      console.error('Failed to update mastery:', err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'foundation': return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
+      case 'playbook': return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
+      case 'deep_dive': return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
+      case 'example': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      default: return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto pb-20 px-4 md:px-0">
+      <Link 
+        href={ROUTES.knowledge}
+        className="inline-flex items-center text-xs font-bold uppercase tracking-widest text-[#4a4a6a] hover:text-indigo-400 mb-8 transition-colors"
+      >
+        ← Back to Knowledge
+      </Link>
+
+      <header className="mb-10">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getTypeColor(unit.unit_type)}`}>
+            {COPY.knowledge.unitTypes[unit.unit_type]}
+          </div>
+          <MasteryBadge status={unit.mastery_status} />
+          <span className="text-[10px] uppercase tracking-widest text-[#4a4a6a] font-bold">
+            {unit.domain.replace(/-/g, ' ')}
+          </span>
+        </div>
+        <h1 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{unit.title}</h1>
+      </header>
+
+      {/* Tabs */}
+      <div className="flex border-b border-[#1e1e2e] mb-8 overflow-x-auto no-scrollbar">
+        {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
+              activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      <div className="min-h-[400px]">
+        {activeTab === 'learn' && (
+          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Quick Read Callout */}
+            <div className="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-3">Thesis</h3>
+              <p className="text-xl text-[#f1f5f9] font-medium leading-relaxed italic">
+                "{unit.thesis}"
+              </p>
+            </div>
+
+            {/* Deep Read Body */}
+            <div className="prose prose-invert prose-sm max-w-none">
+              <div className="text-[#e2e8f0] leading-relaxed text-base space-y-4 whitespace-pre-wrap">
+                {unit.content}
+              </div>
+            </div>
+
+            {/* Key Ideas */}
+            {unit.key_ideas.length > 0 && (
+              <section>
+                <h2 className="text-lg font-bold text-[#f1f5f9] mb-4">Key Ideas</h2>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {unit.key_ideas.map((idea, i) => (
+                    <li key={i} className="p-4 bg-[#0d0d18] border border-[#1e1e2e] rounded-xl text-sm text-[#94a3b8] flex items-start">
+                      <span className="text-indigo-400 mr-3 mt-1 leading-none">•</span>
+                      {idea}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/* Common Mistake */}
+            {unit.common_mistake && (
+              <div className="p-5 bg-amber-500/5 border border-amber-500/10 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-amber-500 text-lg">⚠️</span>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-amber-500">Common Mistake</h3>
+                </div>
+                <p className="text-sm text-[#e2e8f0] leading-relaxed italic">
+                  {unit.common_mistake}
+                </p>
+              </div>
+            )}
+
+            {/* Action Prompt */}
+            {unit.action_prompt && (
+              <div className="p-6 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-emerald-500 text-lg">⚡</span>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-emerald-500">Action Prompt</h3>
+                </div>
+                <p className="text-[#f1f5f9] font-semibold">
+                  {unit.action_prompt}
+                </p>
+              </div>
+            )}
+
+            {/* Citations */}
+            {unit.citations.length > 0 && (
+              <section className="pt-8 border-t border-[#1e1e2e]">
+                <h2 className="text-[10px] font-bold uppercase tracking-widest text-[#4a4a6a] mb-4">Citations & Proof</h2>
+                <div className="space-y-3">
+                  {unit.citations.map((cite, i) => (
+                    <a 
+                      key={i} 
+                      href={cite.url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block p-4 border border-[#1e1e2e] rounded-xl hover:bg-[#12121e] transition-colors group"
+                    >
+                      <div className="flex justify-between items-center">
+                        <p className="text-sm text-[#94a3b8] group-hover:text-[#e2e8f0] transition-colors line-clamp-1">
+                          {cite.claim}
+                        </p>
+                        <span className="text-[10px] text-indigo-400 font-mono">
+                          {Math.round(cite.confidence * 100)}% Match
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'practice' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {unit.retrieval_questions.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 gap-4">
+                  {unit.retrieval_questions.map((q, i) => (
+                    <div 
+                      key={i} 
+                      className="bg-[#0d0d18] border border-[#1e1e2e] rounded-xl overflow-hidden"
+                    >
+                      <button 
+                        onClick={() => toggleQuestion(i)}
+                        className="w-full p-5 text-left flex justify-between items-center hover:bg-[#12121e] transition-colors"
+                      >
+                        <div className="flex flex-col">
+                          <span className={`text-[9px] font-bold uppercase tracking-tighter mb-1 ${
+                            q.difficulty === 'easy' ? 'text-emerald-400' : 
+                            q.difficulty === 'medium' ? 'text-amber-400' : 'text-rose-400'
+                          }`}>
+                            {q.difficulty}
+                          </span>
+                          <span className="text-sm font-bold text-[#f1f5f9]">{q.question}</span>
+                        </div>
+                        <span className={`text-[#4a4a6a] transition-transform duration-300 ${expandedQuestions.includes(i) ? 'rotate-180' : ''}`}>
+                          ▼
+                        </span>
+                      </button>
+                      {expandedQuestions.includes(i) && (
+                        <div className="px-5 pb-5 pt-2 border-t border-[#1e1e2e] animate-in slide-in-from-top-1 duration-200">
+                          <p className="text-sm text-[#94a3b8] leading-relaxed">
+                            {q.answer}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="pt-10 flex flex-col items-center">
+                  <p className="text-xs text-[#4a4a6a] mb-4 text-center">
+                    Attempting these retrieval questions solidifies memory.
+                  </p>
+                  <button 
+                    onClick={() => updateMastery('practiced')}
+                    disabled={isUpdating}
+                    className="px-6 py-2.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20 transition-all disabled:opacity-50"
+                  >
+                    {isUpdating ? 'Saving...' : COPY.knowledge.actions.markPracticed}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 text-[#4a4a6a]">
+                <p>No practice questions for this unit.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'links' && (
+          <div className="space-y-12 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Related Experiences */}
+            {unit.linked_experience_ids.length > 0 && (
+              <section>
+                <h2 className="text-lg font-bold text-[#f1f5f9] mb-6">Active Context</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {unit.linked_experience_ids.map((id) => (
+                    <Link 
+                      key={id}
+                      href={ROUTES.workspace(id)}
+                      className="p-5 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl hover:bg-indigo-500/10 transition-colors group"
+                    >
+                      <h4 className="text-sm font-bold text-[#e2e8f0] mb-2 group-hover:text-indigo-300">Continue Related Journey</h4>
+                      <p className="text-[10px] uppercase tracking-widest text-[#4a4a6a] font-bold">Go to Workspace →</p>
+                    </Link>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Subtopic Seeds */}
+            {unit.subtopic_seeds.length > 0 && (
+              <section>
+                <h2 className="text-lg font-bold text-[#f1f5f9] mb-4">Explore Next</h2>
+                <div className="flex flex-wrap gap-2">
+                  {unit.subtopic_seeds.map((seed, i) => (
+                    <span 
+                      key={i} 
+                      className="px-3 py-1.5 bg-[#0d0d18] border border-[#1e1e2e] rounded-full text-xs text-[#94a3b8] font-medium"
+                    >
+                      {seed}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs text-[#4a4a6a]">
+                  These topics have been identified by Mira as your next logical research horizons.
+                </p>
+              </section>
+            )}
+
+            {/* Source Experience Link */}
+            {unit.source_experience_id && (
+              <section className="p-6 bg-[#00000022] border border-dashed border-[#1e1e2e] rounded-2xl">
+                <h4 className="text-xs font-bold uppercase tracking-widest text-[#4a4a6a] mb-2">Genesis</h4>
+                <p className="text-sm text-[#94a3b8] mb-4">
+                  This knowledge unit was synthesized from your participation in an experience.
+                </p>
+                <Link 
+                  href={ROUTES.workspace(unit.source_experience_id)}
+                  className="text-xs font-bold text-indigo-400 hover:text-indigo-300"
+                >
+                  View Source Experience →
+                </Link>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Persistent Mastery Controls */}
+      <footer className="mt-20 pt-10 border-t border-[#1e1e2e] flex flex-wrap justify-center gap-4">
+        {unit.mastery_status !== 'read' && (
+          <button 
+            onClick={() => updateMastery('read')}
+            disabled={isUpdating}
+            className="px-6 py-3 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-sky-500/20 transition-all disabled:opacity-50"
+          >
+            {COPY.knowledge.actions.markRead}
+          </button>
+        )}
+        {unit.mastery_status !== 'practiced' && (
+          <button 
+            onClick={() => updateMastery('practiced')}
+            disabled={isUpdating}
+            className="px-6 py-3 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-amber-500/20 transition-all disabled:opacity-50"
+          >
+            {COPY.knowledge.actions.markPracticed}
+          </button>
+        )}
+        {unit.mastery_status !== 'confident' && (
+          <button 
+            onClick={() => updateMastery('confident')}
+            disabled={isUpdating}
+            className="px-6 py-3 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-emerald-500/20 transition-all disabled:opacity-50"
+          >
+            {COPY.knowledge.actions.markConfident}
+          </button>
+        )}
+      </footer>
+    </div>
+  );
+}
+
+```
+
+### components/knowledge/MasteryBadge.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import { MasteryStatus } from '@/types/knowledge';
+import { COPY } from '@/lib/studio-copy';
+
+interface MasteryBadgeProps {
+  status: MasteryStatus;
+  className?: string;
+}
+
+export default function MasteryBadge({ status, className = '' }: MasteryBadgeProps) {
+  const getStatusStyles = (status: MasteryStatus) => {
+    switch (status) {
+      case 'unseen':
+        return 'bg-[#1e1e2e] text-[#4a4a6a] border-[#1e1e2e]';
+      case 'read':
+        return 'bg-sky-500/10 text-sky-400 border-sky-500/20';
+      case 'practiced':
+        return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+      case 'confident':
+        return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      default:
+        return 'bg-[#1e1e2e] text-[#4a4a6a] border-[#1e1e2e]';
+    }
+  };
+
+  return (
+    <div className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getStatusStyles(status)} ${className}`}>
+      {COPY.knowledge.mastery[status]}
+    </div>
+  );
+}
+
+```
+
 ### components/profile/DirectionSummary.tsx
 
 ```tsx
@@ -2196,6 +3475,7 @@ import { COPY } from '@/lib/studio-copy'
 
 const NAV_ITEMS = [
   { label: 'Progress', href: ROUTES.arena, icon: '▶' },
+  { label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' },
   { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
   { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
   { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
@@ -2284,6 +3564,7 @@ import { COPY } from '@/lib/studio-copy'
 const NAV_ITEMS = [
   { label: COPY.inbox.heading, href: ROUTES.inbox, icon: '◎' },
   { label: COPY.library.heading, href: ROUTES.library, icon: '◇' },
+  { label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' },
   { label: COPY.experience.timelinePage.heading, href: ROUTES.timeline, icon: '◷' },
   { label: COPY.profilePage.heading, href: ROUTES.profile, icon: '👤' },
   { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
@@ -3756,6 +5037,14 @@ export type ResolutionMode = (typeof RESOLUTION_MODES)[number]
 export type ResolutionTimeScope = (typeof RESOLUTION_TIME_SCOPES)[number]
 export type ResolutionIntensity = (typeof RESOLUTION_INTENSITIES)[number]
 
+// --- Sprint 8: Knowledge Tab ---
+
+export const KNOWLEDGE_UNIT_TYPES = ['foundation', 'playbook', 'deep_dive', 'example'] as const
+export type KnowledgeUnitType = (typeof KNOWLEDGE_UNIT_TYPES)[number]
+
+export const MASTERY_STATUSES = ['unseen', 'read', 'practiced', 'confident'] as const
+export type MasteryStatus = (typeof MASTERY_STATUSES)[number]
+
 
 ```
 
@@ -5027,6 +6316,9 @@ export function formatEventType(type: InboxEvent['type']): string {
     github_copilot_assigned: 'Copilot assigned',
     github_sync_failed: 'GitHub sync failed',
     github_connection_error: 'GitHub connection error',
+    // Knowledge lifecycle events
+    knowledge_ready: 'New knowledge ready',
+    knowledge_updated: 'Knowledge updated',
   }
   return labels[type] ?? type
 }
@@ -5483,7 +6775,9 @@ import {
   RESOLUTION_MODES,
   RESOLUTION_TIME_SCOPES,
   RESOLUTION_INTENSITIES,
+  MASTERY_STATUSES,
 } from '@/lib/constants'
+import type { KnowledgeUnit, MasteryStatus } from '@/types/knowledge'
 
 export function isIdea(value: unknown): value is Idea {
   return (
@@ -5534,6 +6828,22 @@ export function isValidResolution(obj: unknown): obj is Resolution {
     RESOLUTION_TIME_SCOPES.includes(res.timeScope as any) &&
     RESOLUTION_INTENSITIES.includes(res.intensity as any)
   )
+}
+
+export function isKnowledgeUnit(val: unknown): val is KnowledgeUnit {
+  return (
+    typeof val === 'object' &&
+    val !== null &&
+    'id' in val &&
+    'topic' in val &&
+    'domain' in val &&
+    'unit_type' in val &&
+    'mastery_status' in val
+  )
+}
+
+export function isValidMasteryStatus(val: unknown): val is MasteryStatus {
+  return typeof val === 'string' && MASTERY_STATUSES.includes(val as any)
 }
 
 ```
@@ -5784,6 +7094,10 @@ export const ROUTES = {
   library: '/library',
   timeline: '/timeline',
   profile: '/profile',
+
+  // --- Sprint 8: Knowledge Tab ---
+  knowledge: '/knowledge',
+  knowledgeUnit: (id: string) => `/knowledge/${id}`,
 } as const
 
 ```
@@ -6684,1317 +7998,3 @@ export async function buildUserProfile(userId: string): Promise<UserProfile> {
   // I'll try to query users table directly via adapter as a fallback.
   const adapter = getStorageAdapter()
   let displayName = 'Studio User'
-  let memberSince = new Date().toISOString()
-  
-  try {
-    const users = await adapter.query<any>('users', { id: userId })
-    if (users.length > 0) {
-      displayName = users[0].display_name || users[0].email || displayName
-      memberSince = users[0].created_at || memberSince
-    }
-  } catch (e) {
-    console.warn('Failed to fetch user details, using defaults')
-  }
-
-  const experienceCount = {
-    total: experiences.length,
-    completed: experiences.filter(e => e.status === 'completed').length,
-    active: experiences.filter(e => e.status === 'active').length,
-    ephemeral: experiences.filter(e => e.instance_type === 'ephemeral').length
-  }
-
-  const topInterests = facets
-    .filter(f => f.facet_type === 'interest')
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 5)
-    .map(f => f.value)
-
-  const topSkills = facets
-    .filter(f => f.facet_type === 'skill')
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 5)
-    .map(f => f.value)
-
-  const activeGoals = facets
-    .filter(f => f.facet_type === 'goal')
-    .map(f => f.value)
-
-  const preferredDepthFacet = facets
-    .filter(f => f.facet_type === 'preferred_depth')
-    .sort((a, b) => b.confidence - a.confidence)[0]
-
-  const preferredModeFacet = facets
-    .filter(f => f.facet_type === 'preferred_mode')
-    .sort((a, b) => b.confidence - a.confidence)[0]
-
-  return {
-    userId,
-    displayName,
-    facets,
-    topInterests,
-    topSkills,
-    activeGoals,
-    experienceCount,
-    preferredDepth: preferredDepthFacet?.value || null,
-    preferredMode: preferredModeFacet?.value || null,
-    memberSince
-  }
-}
-
-/**
- * AI-powered facet extraction.
- * 1. Build context from interactions and experience metadata.
- * 2. Run the AI flow (Gemini) to extract semantic facets.
- * 3. Upsert extracted facets to the user's profile.
- * 4. Fall back to mechanical extraction if AI is unavailable.
- */
-export async function extractFacetsWithAI(userId: string, instanceId: string): Promise<ProfileFacet[]> {
-  const context = await buildFacetContext(instanceId, userId);
-  
-  const result = await runFlowSafe(
-    () => extractFacetsFlow(context),
-    { facets: [] }
-  );
-
-  // If AI failed or returned nothing, fall back to historical mechanical behavior
-  // This ensures Sprint 7 doesn't break baseline functionality.
-  if (!result || !result.facets || result.facets.length === 0) {
-    return extractFacetsFromExperience(userId, instanceId);
-  }
-
-  const upsertedFacets: ProfileFacet[] = [];
-  
-  for (const facet of result.facets) {
-    // Map AI facet extraction results to our canonical types
-    const upserted = await upsertFacet(userId, {
-      facet_type: facet.facetType as FacetType,
-      value: facet.value,
-      confidence: facet.confidence,
-      evidence: facet.evidence
-    });
-    upsertedFacets.push(upserted);
-  }
-
-  return upsertedFacets;
-}
-
-
-```
-
-### lib/services/github-factory-service.ts
-
-```typescript
-/**
- * lib/services/github-factory-service.ts
- *
- * Orchestration layer for GitHub write operations.
- * Routes call THIS service — never the adapter directly (SOP-8).
- * All persistence goes through the storage adapter (SOP-9).
- */
-
-import { isGitHubConfigured, getRepoCoordinates, getGitHubConfig } from '@/lib/config/github'
-import { getGitHubClient } from '@/lib/github/client'
-import { getProjectById, updateProjectState } from '@/lib/services/projects-service'
-import { createPR, getPRsForProject, updatePR } from '@/lib/services/prs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import { createExternalRef } from '@/lib/services/external-refs-service'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-import type { Project } from '@/types/project'
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function requireGitHub(): void {
-  if (!isGitHubConfigured()) {
-    throw new Error(
-      '[github-factory] GitHub is not configured. ' +
-        'Add GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, and GITHUB_WEBHOOK_SECRET to .env.local.'
-    )
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Create a GitHub issue from a local project.
- */
-export async function createIssueFromProject(
-  projectId: string,
-  options?: { assignAgent?: boolean }
-): Promise<{ issueNumber: number; issueUrl: string }> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-
-  const config = getGitHubConfig()
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  const body =
-    `> Created by Mira Studio\n\n` +
-    `**Summary:** ${project.summary}\n\n` +
-    `**Next action:** ${project.nextAction}`
-
-  const labels = config.labelPrefix ? [`${config.labelPrefix}mira`] : ['mira']
-  const assignees = options?.assignAgent ? ['copilot-swe-agent'] : undefined
-
-  const { data: issue } = await octokit.issues.create({
-    owner,
-    repo,
-    title: project.name,
-    body,
-    labels,
-    assignees,
-  })
-
-  // Update project with GitHub issue linkage
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Project>('projects', projectId, {
-    githubIssueNumber: issue.number,
-    githubIssueUrl: issue.html_url,
-    githubOwner: owner,
-    githubRepo: repo,
-    lastSyncedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  } as Partial<Project>)
-
-  // Track external ref
-  await createExternalRef({
-    entityType: 'project',
-    entityId: projectId,
-    provider: 'github',
-    externalId: String(issue.number),
-    externalNumber: issue.number,
-    url: issue.html_url,
-  })
-
-  await createInboxEvent({
-    type: 'task_created',
-    title: `GitHub issue created: #${issue.number}`,
-    body: `Issue "${project.name}" created at ${issue.html_url}`,
-    severity: 'info',
-    projectId,
-    actionUrl: issue.html_url,
-  })
-
-  return { issueNumber: issue.number, issueUrl: issue.html_url }
-}
-
-/**
- * Assign Copilot coding agent to the GitHub issue linked to a project.
- */
-export async function assignCopilotToProject(projectId: string): Promise<void> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-  if (!project.githubIssueNumber) {
-    throw new Error(
-      `Project ${projectId} has no linked GitHub issue. Run createIssueFromProject first.`
-    )
-  }
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  await octokit.issues.addAssignees({
-    owner,
-    repo,
-    issue_number: project.githubIssueNumber,
-    assignees: ['copilot'],
-  })
-
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Project>('projects', projectId, {
-    copilotAssignedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  } as Partial<Project>)
-
-  await createInboxEvent({
-    type: 'task_created',
-    title: `Copilot assigned to issue #${project.githubIssueNumber}`,
-    body: `GitHub Copilot has been assigned to work on "${project.name}".`,
-    severity: 'info',
-    projectId,
-  })
-}
-
-/**
- * Dispatch a prototype GitHub Actions workflow for a project.
- */
-export async function dispatchPrototypeWorkflow(
-  projectId: string,
-  inputs?: Record<string, string>
-): Promise<void> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-
-  const config = getGitHubConfig()
-  const workflowId = config.workflowPrototype
-  if (!workflowId) {
-    throw new Error(
-      'GITHUB_WORKFLOW_PROTOTYPE is not set. Add the workflow filename to .env.local.'
-    )
-  }
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  await octokit.actions.createWorkflowDispatch({
-    owner,
-    repo,
-    workflow_id: workflowId,
-    ref: config.defaultBranch,
-    inputs: {
-      project_id: projectId,
-      project_name: project.name,
-      ...inputs,
-    },
-  })
-
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Project>('projects', projectId, {
-    githubWorkflowStatus: 'queued',
-    updatedAt: new Date().toISOString(),
-  } as Partial<Project>)
-
-  await createInboxEvent({
-    type: 'task_created',
-    title: `Workflow dispatched: ${workflowId}`,
-    body: `Prototype workflow triggered for "${project.name}".`,
-    severity: 'info',
-    projectId,
-  })
-}
-
-/**
- * Create a GitHub PR from a project (manual path, not Copilot).
- */
-export async function createPRFromProject(
-  projectId: string,
-  params: {
-    title: string
-    body: string
-    head: string
-    draft?: boolean
-  }
-): Promise<{ prNumber: number; prUrl: string }> {
-  requireGitHub()
-
-  const project = await getProjectById(projectId)
-  if (!project) throw new Error(`Project not found: ${projectId}`)
-
-  const config = getGitHubConfig()
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  const { data: ghPR } = await octokit.pulls.create({
-    owner,
-    repo,
-    title: params.title,
-    body: params.body,
-    head: params.head,
-    base: config.defaultBranch,
-    draft: params.draft ?? false,
-  })
-
-  const localPR = await createPR({
-    projectId,
-    title: params.title,
-    branch: params.head,
-    status: 'open',
-    previewUrl: undefined,
-    buildState: 'pending',
-    mergeable: false,
-    reviewStatus: 'pending',
-    author: 'local',
-  })
-
-  await updatePR(localPR.id, { number: ghPR.number })
-
-  await createExternalRef({
-    entityType: 'pr',
-    entityId: localPR.id,
-    provider: 'github',
-    externalId: String(ghPR.number),
-    externalNumber: ghPR.number,
-    url: ghPR.html_url,
-  })
-
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Project>('projects', projectId, {
-    copilotPrNumber: ghPR.number,
-    copilotPrUrl: ghPR.html_url,
-    updatedAt: new Date().toISOString(),
-  } as Partial<Project>)
-
-  await createInboxEvent({
-    type: 'pr_opened',
-    title: `PR #${ghPR.number} opened`,
-    body: `"${params.title}" is open and awaiting review.`,
-    severity: 'info',
-    projectId,
-    actionUrl: ghPR.html_url,
-  })
-
-  return { prNumber: ghPR.number, prUrl: ghPR.html_url }
-}
-
-/**
- * Request revisions on a PR by adding a review comment.
- */
-export async function requestRevision(
-  projectId: string,
-  prNumber: number,
-  message: string
-): Promise<void> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  await octokit.issues.createComment({
-    owner,
-    repo,
-    issue_number: prNumber,
-    body: `> ✏️ **Revision request from Mira Studio**\n\n${message}`,
-  })
-
-  const prs = await getPRsForProject(projectId)
-  const pr = prs.find((p) => p.number === prNumber)
-  if (pr) {
-    await updatePR(pr.id, {
-      reviewStatus: 'changes_requested',
-      requestedChanges: message,
-    })
-  }
-
-  await createInboxEvent({
-    type: 'changes_requested',
-    title: `Changes requested on PR #${prNumber}`,
-    body: message.length > 120 ? `${message.slice(0, 120)}…` : message,
-    severity: 'warning',
-    projectId,
-  })
-}
-
-/**
- * Merge a GitHub PR for a project.
- */
-export async function mergeProjectPR(
-  projectId: string,
-  prNumber: number,
-  mergeMethod: 'merge' | 'squash' | 'rebase' = 'squash'
-): Promise<{ sha: string; merged: boolean }> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  const { data: ghPR } = await octokit.pulls.get({
-    owner,
-    repo,
-    pull_number: prNumber,
-  })
-
-  if (ghPR.state !== 'open') {
-    throw new Error(`PR #${prNumber} is not open (state: ${ghPR.state})`)
-  }
-  if (ghPR.mergeable === false) {
-    throw new Error(`PR #${prNumber} is not mergeable (conflicts may exist)`)
-  }
-
-  const { data: mergeResult } = await octokit.pulls.merge({
-    owner,
-    repo,
-    pull_number: prNumber,
-    merge_method: mergeMethod,
-  })
-
-  const prs = await getPRsForProject(projectId)
-  const pr = prs.find((p) => p.number === prNumber)
-  if (pr) {
-    await updatePR(pr.id, { status: 'merged', reviewStatus: 'merged' })
-  }
-
-  await createInboxEvent({
-    type: 'merge_completed',
-    title: `PR #${prNumber} merged`,
-    body: `"${ghPR.title}" was merged successfully.`,
-    severity: 'success',
-    projectId,
-  })
-
-  return {
-    sha: mergeResult.sha ?? '',
-    merged: mergeResult.merged ?? false,
-  }
-}
-
-```
-
-### lib/services/github-sync-service.ts
-
-```typescript
-/**
- * lib/services/github-sync-service.ts
- *
- * Pull GitHub state INTO local records.
- * All persistence goes through the storage adapter (SOP-9).
- */
-
-import { isGitHubConfigured, getRepoCoordinates } from '@/lib/config/github'
-import { getGitHubClient } from '@/lib/github/client'
-import { getProjects } from '@/lib/services/projects-service'
-import { getPRsForProject, updatePR, createPR } from '@/lib/services/prs-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-import { createAgentRun, getAgentRun } from '@/lib/services/agent-runs-service'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-import type { PullRequest } from '@/types/pr'
-import type { AgentRun } from '@/types/agent-run'
-import type { Project } from '@/types/project'
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-function requireGitHub(): void {
-  if (!isGitHubConfigured()) {
-    throw new Error(
-      '[github-sync] GitHub is not configured. Check .env.local and wiring.md.'
-    )
-  }
-}
-
-/** Find local PR by PR number across all projects. */
-async function findLocalPRByNumber(
-  prNumber: number
-): Promise<{ pr: PullRequest; projectId: string } | null> {
-  const projects = await getProjects()
-  for (const project of projects) {
-    const prs = await getPRsForProject(project.id)
-    const match = prs.find((pr) => pr.number === prNumber)
-    if (match) return { pr: match, projectId: project.id }
-  }
-  return null
-}
-
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Sync a single GitHub PR into the local PR record.
- */
-export async function syncPullRequest(prNumber: number): Promise<PullRequest | null> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  let ghPR: Awaited<ReturnType<typeof octokit.pulls.get>>['data']
-  try {
-    const res = await octokit.pulls.get({ owner, repo, pull_number: prNumber })
-    ghPR = res.data
-  } catch (err) {
-    console.error(`[github-sync] Pull request #${prNumber} not found on GitHub:`, err)
-    return null
-  }
-
-  const existing = await findLocalPRByNumber(prNumber)
-
-  const status: PullRequest['status'] =
-    ghPR.merged ? 'merged' : ghPR.state === 'closed' ? 'closed' : 'open'
-  const reviewStatus: PullRequest['reviewStatus'] =
-    ghPR.merged ? 'merged' : 'pending'
-
-  if (existing) {
-    const updated = await updatePR(existing.pr.id, {
-      title: ghPR.title,
-      branch: ghPR.head.ref,
-      status,
-      mergeable: ghPR.mergeable ?? false,
-      reviewStatus,
-    })
-    console.log(`[github-sync] Updated local PR ${existing.pr.id} from GitHub #${prNumber}`)
-    return updated
-  }
-
-  const projects = await getProjects()
-  const linkedProject = projects.find((p) => p.copilotPrNumber === prNumber)
-  const projectId = linkedProject?.id ?? `unknown-${generateId()}`
-
-  const newPR = await createPR({
-    projectId,
-    title: ghPR.title,
-    branch: ghPR.head.ref,
-    status,
-    previewUrl: undefined,
-    buildState: 'pending',
-    mergeable: ghPR.mergeable ?? false,
-    reviewStatus,
-    author: ghPR.user?.login ?? 'unknown',
-  })
-
-  console.log(`[github-sync] Created local PR ${newPR.id} for GitHub #${prNumber}`)
-  return newPR
-}
-
-/**
- * Sync a GitHub workflow run into the local agentRuns store.
- */
-export async function syncWorkflowRun(runId: number): Promise<AgentRun | null> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  let run: Awaited<ReturnType<typeof octokit.actions.getWorkflowRun>>['data']
-  try {
-    const res = await octokit.actions.getWorkflowRun({ owner, repo, run_id: runId })
-    run = res.data
-  } catch (err) {
-    console.error(`[github-sync] Workflow run #${runId} not found:`, err)
-    return null
-  }
-
-  const status: AgentRun['status'] =
-    run.status === 'completed'
-      ? run.conclusion === 'success'
-        ? 'succeeded'
-        : 'failed'
-      : run.status === 'in_progress'
-      ? 'running'
-      : 'queued'
-
-  const now = new Date().toISOString()
-
-  // Check for existing agent run via adapter
-  const adapter = getStorageAdapter()
-  const agentRuns = await adapter.getCollection<AgentRun>('agentRuns')
-  const existing = agentRuns.find(
-    (ar) => ar.githubWorkflowRunId === String(runId)
-  )
-
-  if (existing) {
-    const updated = await adapter.updateItem<AgentRun>('agentRuns', existing.id, {
-      status,
-      finishedAt: status === 'succeeded' || status === 'failed' ? now : undefined,
-      summary: run.conclusion ?? undefined,
-    } as Partial<AgentRun>)
-    console.log(`[github-sync] Updated AgentRun for workflow run #${runId}`)
-    return updated
-  }
-
-  const newRun = await createAgentRun({
-    projectId: '',
-    kind: 'prototype',
-    executionMode: 'delegated' as AgentRun['executionMode'],
-    triggeredBy: 'github',
-    githubWorkflowRunId: String(runId),
-  })
-
-  console.log(`[github-sync] Created AgentRun for workflow run #${runId}`)
-  return newRun
-}
-
-/**
- * Sync a GitHub issue's state into the local project record.
- */
-export async function syncIssue(issueNumber: number): Promise<void> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  let issue: Awaited<ReturnType<typeof octokit.issues.get>>['data']
-  try {
-    const res = await octokit.issues.get({ owner, repo, issue_number: issueNumber })
-    issue = res.data
-  } catch (err) {
-    console.error(`[github-sync] Issue #${issueNumber} not found:`, err)
-    return
-  }
-
-  const projects = await getProjects()
-  const project = projects.find((p) => p.githubIssueNumber === issueNumber)
-
-  if (!project) {
-    console.log(`[github-sync] No local project linked to issue #${issueNumber}`)
-    return
-  }
-
-  const before = project.githubWorkflowStatus
-  const issueState = issue.state
-
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Project>('projects', project.id, {
-    githubWorkflowStatus: issueState,
-    lastSyncedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  } as Partial<Project>)
-
-  console.log(
-    `[github-sync] Issue #${issueNumber} synced. State: ${before} → ${issueState}`
-  )
-}
-
-/**
- * Batch sync: pull all open PRs from GitHub for the configured repo.
- */
-export async function syncAllOpenPRs(): Promise<{ synced: number; created: number }> {
-  requireGitHub()
-
-  const { owner, repo } = getRepoCoordinates()
-  const octokit = getGitHubClient()
-
-  const { data: openPRs } = await octokit.pulls.list({
-    owner,
-    repo,
-    state: 'open',
-    per_page: 100,
-  })
-
-  let synced = 0
-  let created = 0
-
-  for (const ghPR of openPRs) {
-    const existing = await findLocalPRByNumber(ghPR.number)
-    if (existing) {
-      await updatePR(existing.pr.id, {
-        title: ghPR.title,
-        branch: ghPR.head.ref,
-        status: 'open',
-      })
-      synced++
-    } else {
-      const projects = await getProjects()
-      const linked = projects.find((p) => p.copilotPrNumber === ghPR.number)
-      await createPR({
-        projectId: linked?.id ?? `unknown-${generateId()}`,
-        title: ghPR.title,
-        branch: ghPR.head.ref,
-        status: 'open',
-        previewUrl: undefined,
-        buildState: 'pending',
-        mergeable: false,
-        reviewStatus: 'pending',
-        author: ghPR.user?.login ?? 'unknown',
-      })
-      created++
-    }
-  }
-
-  console.log(`[github-sync] Batch sync complete: ${synced} updated, ${created} created`)
-  await createInboxEvent({
-    type: 'pr_opened',
-    title: `PR sync complete`,
-    body: `${synced} PRs updated, ${created} new PRs imported from GitHub.`,
-    severity: 'info',
-  })
-
-  return { synced, created }
-}
-
-```
-
-### lib/services/graph-service.ts
-
-```typescript
-import { ExperienceInstance, getExperienceInstanceById, updateExperienceInstance, getExperienceTemplates, getExperienceInstances } from './experience-service';
-import { ExperienceChainContext } from '@/types/graph';
-import { getProgressionSuggestions, shouldEscalateResolution } from '@/lib/experience/progression-rules';
-import { runFlowSafe } from '../ai/safe-flow';
-import { suggestNextExperienceFlow } from '../ai/flows/suggest-next-experience';
-import { buildSuggestionContext } from '../ai/context/suggestion-context';
-
-/**
- * Walks back via previous_experience_id to find the direct parent.
- * It does NOT walk the entire chain; it just gets the immediate upstream.
- */
-export async function getExperienceChain(instanceId: string): Promise<ExperienceChainContext> {
-  const instance = await getExperienceInstanceById(instanceId);
-  if (!instance) {
-    throw new Error(`Experience instance not found: ${instanceId}`);
-  }
-
-  let previousExperience = null;
-  if (instance.previous_experience_id) {
-    const prev = await getExperienceInstanceById(instance.previous_experience_id);
-    if (prev) {
-      // Need to find the template class for the previous experience
-      const templates = await getExperienceTemplates();
-      const template = templates.find(t => t.id === prev.template_id);
-      
-      previousExperience = {
-        id: prev.id,
-        title: prev.title,
-        status: prev.status,
-        class: template?.class || 'unknown'
-      };
-    }
-  }
-
-  // Get suggested next titles
-  const suggestedNext = [];
-  if (instance.next_suggested_ids && instance.next_suggested_ids.length > 0) {
-    for (const nextId of instance.next_suggested_ids) {
-      const nextExp = await getExperienceInstanceById(nextId);
-      if (nextExp) {
-        suggestedNext.push({
-          id: nextExp.id,
-          title: nextExp.title,
-          reason: 'Suggested next step' // Default reason
-        });
-      }
-    }
-  }
-
-  const depth = await getChainDepth(instanceId);
-
-  return {
-    previousExperience,
-    suggestedNext,
-    chainDepth: depth,
-    resolutionCarryForward: true // Default
-  };
-}
-
-/**
- * Links two experiences together.
- * Sets previous_experience_id on the target and adds the target id to next_suggested_ids on the source.
- */
-export async function linkExperiences(fromId: string, toId: string, edgeType: string): Promise<void> {
-  // Edge type is currently stored implicitly by these two fields
-  
-  // Set upstream link on target
-  await updateExperienceInstance(toId, { previous_experience_id: fromId });
-  
-  // Set downstream link on source
-  const source = await getExperienceInstanceById(fromId);
-  if (source) {
-    const nextSuggestedIds = source.next_suggested_ids || [];
-    if (!nextSuggestedIds.includes(toId)) {
-      await updateExperienceInstance(fromId, { 
-        next_suggested_ids: [...nextSuggestedIds, toId] 
-      });
-    }
-  }
-}
-
-/**
- * Walks backwards counting the number of steps in the chain.
- */
-export async function getChainDepth(instanceId: string): Promise<number> {
-  let depth = 0;
-  let currentId: string | null = instanceId;
-  
-  // Use a map to prevent infinite loops if data is corrupted
-  const visited = new Set<string>();
-
-  while (currentId && !visited.has(currentId)) {
-    visited.add(currentId);
-    const instance = await getExperienceInstanceById(currentId);
-    if (!instance || !instance.previous_experience_id) {
-      break;
-    }
-    depth++;
-    currentId = instance.previous_experience_id;
-  }
-  
-  return depth;
-}
-
-/**
- * Suggests next experiences based on the current instance's class and progression rules.
- */
-export async function getSuggestionsForCompletion(instanceId: string): Promise<{ templateClass: string; reason: string; resolution: any }[]> {
-  const instance = await getExperienceInstanceById(instanceId);
-  if (!instance) return [];
-
-  const templates = await getExperienceTemplates();
-  const currentTemplate = templates.find(t => t.id === instance.template_id);
-  if (!currentTemplate) return [];
-
-  const rules = getProgressionSuggestions(currentTemplate.class);
-  
-  return rules.map(rule => {
-    const nextDepth = shouldEscalateResolution(rule, instance.resolution.depth);
-    return {
-      templateClass: rule.toClass,
-      reason: rule.reason,
-      resolution: {
-        ...instance.resolution,
-        depth: nextDepth
-      }
-    };
-  });
-}
-
-/**
- * Finds all instances of the same template for a user, sorted by created_at.
- */
-export async function getLoopInstances(userId: string, templateId: string): Promise<ExperienceInstance[]> {
-  const instances = await getExperienceInstances({ userId });
-  return instances
-    .filter(inst => inst.template_id === templateId)
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-}
-
-/**
- * Returns the count of same-template instances for a user.
- */
-export async function getLoopCount(userId: string, templateId: string): Promise<number> {
-  const instances = await getLoopInstances(userId, templateId);
-  return instances.length;
-}
-
-/**
- * Aggregates graph stats for the GPT state packet.
- */
-export async function getGraphSummaryForGPT(userId: string): Promise<{ activeChains: number; totalCompleted: number; loopingTemplates: string[]; deepestChain: number }> {
-  const allInstances = await getExperienceInstances({ userId });
-  
-  const completed = allInstances.filter(inst => inst.status === 'completed');
-  
-  // Active chains: count of instances that have no next_suggested_ids and are active/completed
-  // Simple heuristic: leaf nodes in the chain
-  const leafNodes = completed.filter(inst => !inst.next_suggested_ids || inst.next_suggested_ids.length === 0);
-  
-  // Find depth for each leaf node
-  const depths = await Promise.all(leafNodes.map(inst => getChainDepth(inst.id)));
-  const deepestChain = depths.length > 0 ? Math.max(...depths) : 0;
-
-  // Find looping templates (templates with more than 1 instance)
-  const templateCounts: Record<string, number> = {};
-  allInstances.forEach(inst => {
-    templateCounts[inst.template_id] = (templateCounts[inst.template_id] || 0) + 1;
-  });
-  
-  const loopingTemplates = Object.keys(templateCounts).filter(tid => templateCounts[tid] > 1);
-
-  return {
-    activeChains: leafNodes.length,
-    totalCompleted: completed.length,
-    loopingTemplates,
-    deepestChain
-  };
-}
-
-/**
- * Suggestion result with AI confidence and reasoning.
- */
-export interface SuggestionResult {
-  templateClass: string;
-  reason: string;
-  resolution: any;
-  confidence: number;
-}
-
-/**
- * AI-powered suggestion function that falls back to static rules.
- */
-export async function getAISuggestionsForCompletion(instanceId: string, userId: string): Promise<SuggestionResult[]> {
-  // Assemble context
-  const context = await buildSuggestionContext(userId, instanceId);
-  
-  // Static fallback
-  const staticSuggestions = await getSuggestionsForCompletion(instanceId);
-  const fallback: SuggestionResult[] = staticSuggestions.map(s => ({
-    ...s,
-    confidence: 0.5
-  }));
-
-  // Run AI flow with safe wrapper
-  return await runFlowSafe(
-    async () => {
-      const result = await suggestNextExperienceFlow(context);
-      return result.suggestions.map(s => ({
-        templateClass: s.templateClass,
-        reason: s.reason,
-        resolution: s.suggestedResolution,
-        confidence: s.confidence
-      }));
-    },
-    fallback
-  );
-}
-
-/**
- * Gets suggestions for the user based on their most recent activity.
- */
-export async function getSmartSuggestions(userId: string): Promise<SuggestionResult[]> {
-  const allInstances = await getExperienceInstances({ userId });
-  const completed = allInstances
-    .filter(inst => inst.status === 'completed')
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-  if (completed.length === 0) {
-    return [];
-  }
-
-  return getAISuggestionsForCompletion(completed[0].id, userId);
-}
-
-```
-
-### lib/services/ideas-service.ts
-
-```typescript
-import type { Idea, IdeaStatus } from '@/types/idea'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-export async function getIdeas(): Promise<Idea[]> {
-  const adapter = getStorageAdapter()
-  return adapter.getCollection<Idea>('ideas')
-}
-
-export async function getIdeaById(id: string): Promise<Idea | undefined> {
-  const ideas = await getIdeas()
-  return ideas.find((i) => i.id === id)
-}
-
-export async function getIdeasByStatus(status: IdeaStatus): Promise<Idea[]> {
-  const ideas = await getIdeas()
-  return ideas.filter((i) => i.status === status)
-}
-
-export async function createIdea(data: Omit<Idea, 'id' | 'created_at' | 'status'>): Promise<Idea> {
-  const adapter = getStorageAdapter()
-  const idea: Idea = {
-    ...data,
-    id: generateId(),
-    created_at: new Date().toISOString(),
-    status: 'captured',
-  }
-  return adapter.saveItem<Idea>('ideas', idea)
-}
-
-export async function updateIdeaStatus(id: string, status: IdeaStatus): Promise<Idea | null> {
-  const adapter = getStorageAdapter()
-  try {
-    return await adapter.updateItem<Idea>('ideas', id, { status } as Partial<Idea>)
-  } catch {
-    return null
-  }
-}
-
-```
-
-### lib/services/inbox-service.ts
-
-```typescript
-import type { InboxEvent, InboxEventType } from '@/types/inbox'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-/**
- * Normalize a DB row (snake_case from timeline_events) to the TS InboxEvent shape (camelCase).
- */
-function fromDB(row: Record<string, any>): InboxEvent {
-  return {
-    id: row.id,
-    type: row.type,
-    title: row.title,
-    body: row.body,
-    timestamp: row.timestamp,
-    severity: row.severity,
-    read: row.read ?? false,
-    // snake_case DB → camelCase TS
-    projectId: row.project_id ?? row.projectId,
-    actionUrl: row.action_url ?? row.actionUrl,
-    githubUrl: row.github_url ?? row.githubUrl,
-  }
-}
-
-/**
- * Normalize a TS InboxEvent (camelCase) to DB row shape (snake_case for timeline_events).
- */
-function toDB(event: InboxEvent): Record<string, any> {
-  return {
-    id: event.id,
-    type: event.type,
-    title: event.title,
-    body: event.body,
-    timestamp: event.timestamp,
-    severity: event.severity,
-    read: event.read,
-    // camelCase TS → snake_case DB
-    project_id: event.projectId ?? null,
-    action_url: event.actionUrl ?? null,
-    github_url: event.githubUrl ?? null,
-  }
-}
-
-export async function getInboxEvents(): Promise<InboxEvent[]> {
-  const adapter = getStorageAdapter()
-  const raw = await adapter.getCollection<Record<string, any>>('inbox')
-  return raw.map(fromDB)
-}
-
-export async function createInboxEvent(data: {
-  type: InboxEventType
-  title: string
-  body: string
-  severity: InboxEvent['severity']
-  projectId?: string
-  actionUrl?: string
-  githubUrl?: string
-  timestamp?: string
-  read?: boolean
-}): Promise<InboxEvent> {
-  const adapter = getStorageAdapter()
-  const event: InboxEvent = {
-    ...data,
-    id: generateId(),
-    timestamp: data.timestamp ?? new Date().toISOString(),
-    read: data.read ?? false,
-  }
-  // Write as snake_case to timeline_events
-  const dbRow = toDB(event)
-  await adapter.saveItem<Record<string, any>>('inbox', dbRow)
-  return event
-}
-
-export async function markRead(eventId: string): Promise<void> {
-  const adapter = getStorageAdapter()
-  await adapter.updateItem<Record<string, any>>('inbox', eventId, { read: true })
-}
-
-export async function getUnreadCount(): Promise<number> {
-  const inbox = await getInboxEvents()
-  return inbox.filter((e) => !e.read).length
-}
-
-export async function getEventsByFilter(filter: 'all' | 'unread' | 'errors'): Promise<InboxEvent[]> {
-  const inbox = await getInboxEvents()
-  switch (filter) {
-    case 'unread':
-      return inbox.filter((e) => !e.read)
-    case 'errors':
-      return inbox.filter((e) => e.severity === 'error')
-    case 'all':
-    default:
-      return inbox
-  }
-}
-
-/**
- * Convenience wrapper for creating GitHub lifecycle inbox events.
- */
-export async function createGitHubInboxEvent(params: {
-  type: InboxEventType
-  projectId: string
-  title: string
-  body: string
-  githubUrl?: string
-  severity?: InboxEvent['severity']
-}): Promise<InboxEvent> {
-  return createInboxEvent({
-    type: params.type,
-    projectId: params.projectId,
-    title: params.title,
-    body: params.body,
-    severity: params.severity ?? 'info',
-    githubUrl: params.githubUrl,
-  })
-}
-
-
-```
-
-### lib/services/interaction-service.ts
-
-```typescript
-import { InteractionEvent, InteractionEventType, Artifact } from '@/types/interaction'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
-  const adapter = getStorageAdapter()
-  const event: InteractionEvent = {
-    id: generateId(),
-    instance_id: data.instanceId,
-    step_id: data.stepId || null,
-    event_type: data.eventType,
-    event_payload: data.eventPayload,
-    created_at: new Date().toISOString()
-  }
-  return adapter.saveItem<InteractionEvent>('interaction_events', event)
-}
-
-export async function getInteractionsByInstance(instanceId: string): Promise<InteractionEvent[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
-}
-
-export async function createArtifact(data: { instanceId: string; artifactType: string; title: string; content: string; metadata: any }): Promise<Artifact> {
-  const adapter = getStorageAdapter()
-  const artifact: Artifact = {
-    id: generateId(),
-    instance_id: data.instanceId,
-    artifact_type: data.artifactType,
-    title: data.title,
-    content: data.content,
-    metadata: data.metadata || {},
-  }
-  return adapter.saveItem<Artifact>('artifacts', artifact)
-}
-
-export async function getArtifactsByInstance(instanceId: string): Promise<Artifact[]> {
-  const adapter = getStorageAdapter()
-  return adapter.query<Artifact>('artifacts', { instance_id: instanceId })
-}
-
-```
-
-### lib/services/materialization-service.ts
-
-```typescript
-import type { DrillSession } from '@/types/drill'
-import type { Project } from '@/types/project'
-import type { Idea } from '@/types/idea'
-import { createProject } from '@/lib/services/projects-service'
-import { updateIdeaStatus } from '@/lib/services/ideas-service'
-import { createInboxEvent } from '@/lib/services/inbox-service'
-
-export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<Project> {
-  const project = await createProject({
-    ideaId: idea.id,
-    name: idea.title,
-    summary: idea.gpt_summary,
-    state: 'arena',
-    health: 'green',
-    currentPhase: 'Getting started',
-    nextAction: 'Define first task',
-    activePreviewUrl: undefined,
-  })
-
-  await updateIdeaStatus(idea.id, 'arena')
-
-  // W4: Create inbox event to notify about project promotion
-  await createInboxEvent({
-    type: 'project_promoted',
-    title: 'Project created',
-    body: `"${idea.title}" is now in progress (scope: ${drill.scope}).`,
-    severity: 'info',
-    projectId: project.id,
-    actionUrl: `/arena/${project.id}`,
-  })
-
-  return project
-}
-
-```
-
-### lib/services/projects-service.ts
-
-```typescript
-import type { Project, ProjectState } from '@/types/project'
-import { MAX_ARENA_PROJECTS } from '@/lib/constants'
-
-/**
- * QUARANTINED: projects-service
- *
- * The TABLE_MAP previously routed 'projects' → 'realizations', but the
- * Supabase `realizations` table uses snake_case columns (idea_id, current_phase,
- * active_preview_url, created_at) while the TypeScript `Project` interface uses
- * camelCase (ideaId, currentPhase, activePreviewUrl, createdAt).
- *
- * Until a proper migration adds field mapping or aligns the schema,
- * this service returns empty arrays to prevent runtime crashes.
- *
- * Legacy surfaces affected: Arena, Icebox, Shipped, Killed pages.
- */
-
-const QUARANTINE_MSG = '[projects-service] ⚠️  QUARANTINED: realizations table schema does not match Project TS type. Returning empty.'
-
-export async function getProjects(): Promise<Project[]> {
-  console.warn(QUARANTINE_MSG)
-  return []
-}
-
-export async function getProjectById(id: string): Promise<Project | undefined> {
-  console.warn(QUARANTINE_MSG)
-  return undefined
-}
-
-export async function getProjectsByState(state: ProjectState): Promise<Project[]> {
-  console.warn(QUARANTINE_MSG)
-  return []
-}
-
-export async function getArenaProjects(): Promise<Project[]> {
-  return getProjectsByState('arena')
-}
-
-export async function isArenaAtCapacity(): Promise<boolean> {
-  const arena = await getArenaProjects()
-  return arena.length >= MAX_ARENA_PROJECTS
-}
-
-export async function createProject(data: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>): Promise<Project> {
-  throw new Error('[projects-service] QUARANTINED: Cannot create projects until realizations schema is aligned.')
-}
-
-export async function updateProjectState(id: string, state: ProjectState, extra?: Partial<Project>): Promise<Project | null> {
-  console.warn(QUARANTINE_MSG)
-  return null
-}
-
-
-```
-
-### lib/services/prs-service.ts
-
-```typescript
-import type { PullRequest } from '@/types/pr'
-
-/**
- * QUARANTINED: prs-service
- *
- * The TABLE_MAP previously routed 'prs' → 'realization_reviews', but the
- * Supabase table uses snake_case columns (project_id, preview_url, build_state,
- * review_status, local_number, created_at) while the TypeScript `PullRequest`
- * interface uses camelCase (projectId, previewUrl, buildState, reviewStatus,
- * number, createdAt).
- *
- * Until a proper migration adds field mapping or aligns the schema,
- * this service returns empty arrays to prevent runtime crashes.
- *
- * Legacy surfaces affected: Review page, PR cards.
- */
-
-const QUARANTINE_MSG = '[prs-service] ⚠️  QUARANTINED: realization_reviews table schema does not match PullRequest TS type. Returning empty.'
-
-export async function getPRsForProject(projectId: string): Promise<PullRequest[]> {
-  console.warn(QUARANTINE_MSG)
-  return []
-}
-
-export async function getPRById(id: string): Promise<PullRequest | undefined> {
-  console.warn(QUARANTINE_MSG)
-  return undefined
-}
-
-export async function createPR(data: Omit<PullRequest, 'id' | 'createdAt' | 'number'>): Promise<PullRequest> {
-  throw new Error('[prs-service] QUARANTINED: Cannot create PRs until realization_reviews schema is aligned.')
-}
-
-export async function updatePR(id: string, updates: Partial<PullRequest>): Promise<PullRequest | null> {
-  console.warn(QUARANTINE_MSG)
-  return null
-}
-
-
