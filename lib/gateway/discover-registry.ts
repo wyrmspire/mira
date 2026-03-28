@@ -222,9 +222,26 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       }
     },
     when_to_use: 'Before generating serious experiences for a new learning domain.',
-    relatedCapabilities: ['create_experience']
+    relatedCapabilities: ['create_experience', 'dispatch_research']
   }),
 
+  dispatch_research: () => ({
+    capability: 'dispatch_research',
+    endpoint: 'MiraK GPT Action — POST /generate_knowledge',
+    description: 'Dispatch deep research on a topic via MiraK. This is a SEPARATE GPT Action (not a Mira endpoint). Fire-and-forget — results arrive asynchronously via webhook.',
+    schema: {
+      topic: 'string — the research topic',
+      user_id: 'string — defaults to dev user',
+      experience_id: 'optional string — if provided, MiraK will enrich this experience with research results instead of creating a new one',
+    },
+    example: {
+      topic: 'SaaS unit economics: CAC, LTV, churn, payback period',
+      user_id: 'a0000000-0000-0000-0000-000000000001',
+      experience_id: '<ID from POST /api/gpt/create response>',
+    },
+    when_to_use: 'After creating an experience. Pass experience_id so MiraK enriches it with deep research. Do NOT wait for results — tell the user research is underway and they can start the experience now.',
+    relatedCapabilities: ['create_experience', 'create_outline']
+  }),
   tutor_chat: () => ({
     capability: 'tutor_chat',
     endpoint: 'POST /api/coach/chat',

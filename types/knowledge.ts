@@ -63,6 +63,7 @@ export interface MiraKWebhookPayload {
   topic: string;
   domain: string;
   session_id?: string;
+  experience_id?: string;  // If set, webhook enriches this experience instead of creating new
   units: Array<{
     unit_type: KnowledgeUnitType;
     title: string;

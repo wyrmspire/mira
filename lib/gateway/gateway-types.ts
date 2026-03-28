@@ -11,6 +11,7 @@ export type DiscoverCapability =
   | 'step_payload'
   | 'resolution'
   | 'create_outline'
+  | 'dispatch_research'
   | 'tutor_chat'
   | 'grade_checkpoint';
 

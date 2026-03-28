@@ -5,6 +5,8 @@ import {
 } from '@/lib/services/curriculum-outline-service';
 import { DEFAULT_USER_ID } from '@/lib/constants';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/gpt/plan
  *
@@ -12,22 +14,48 @@ import { DEFAULT_USER_ID } from '@/lib/constants';
  *   - create_outline    → validates + persists a CurriculumOutline
  *   - dispatch_research → stub (logs intent, returns dispatched status)
  *   - assess_gaps       → stub with structural gap analysis from subtopic statuses
+ *
+ * Tolerates both nested and flat payload shapes:
+ *   Nested: { action: "create_outline", payload: { topic: "..." } }
+ *   Flat:   { action: "create_outline", topic: "..." }
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { action, payload } = body ?? {};
+    const { action } = body ?? {};
 
     if (!action || typeof action !== 'string') {
       return NextResponse.json(
-        { error: 'Missing or invalid `action` field. Expected: create_outline | dispatch_research | assess_gaps' },
+        {
+          error: 'Missing or invalid `action` field.',
+          expected: {
+            action: 'create_outline | dispatch_research | assess_gaps',
+            payload: '{ topic, subtopics?, domain? } — call GET /api/gpt/discover?capability=create_outline for schema',
+          },
+        },
         { status: 400 }
       );
     }
 
+    // Tolerate flat payloads: if no `payload` key, treat everything except `action` as the payload
+    let payload = body.payload;
+    if (!payload || typeof payload !== 'object') {
+      const { action: _a, ...rest } = body;
+      payload = Object.keys(rest).length > 0 ? rest : null;
+      if (payload) {
+        console.log('[gpt/plan] Normalized flat payload to nested for action:', action);
+      }
+    }
+
     if (!payload || typeof payload !== 'object') {
       return NextResponse.json(
-        { error: 'Missing or invalid `payload` field. Must be an object.' },
+        {
+          error: 'Missing or invalid `payload` field. Must be an object.',
+          expected: {
+            action,
+            payload: '{ ... } — call GET /api/gpt/discover?capability=create_outline for schema',
+          },
+        },
         { status: 400 }
       );
     }

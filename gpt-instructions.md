@@ -26,8 +26,14 @@ Include this as `userId` in all create/update payloads.
 You also have a MiraK action for deep research. Use `generateKnowledge` with:
 - `topic` (required): what to research
 - `user_id`: always `a0000000-0000-0000-0000-000000000001`
+- `experience_id` (optional): pass this to enrich an existing experience with research results
 
-This is **fire-and-forget**. Say "I've started research on [topic] — it'll appear in your Knowledge Tab when ready." Never wait. Never poll. Results arrive asynchronously via webhook.
+### Enrichment Workflow (for any topic worth researching)
+1. **Create** an experience first (skeleton with initial steps) via `createEntity`
+2. **Dispatch** MiraK with `{ topic, user_id, experience_id: <ID from step 1> }`
+3. **Move on** — tell the user: "I've built your [topic] experience and started deep research. You can begin now — it'll get richer as research arrives."
+
+MiraK is **fire-and-forget**. Never wait. Never poll. Results arrive asynchronously via webhook and automatically enrich the experience you created (appending steps, linking knowledge units).
 
 ## How to Discover
 

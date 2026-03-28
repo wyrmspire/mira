@@ -119,7 +119,7 @@ export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number]
 export const CURRICULUM_STATUSES = ['planning', 'active', 'completed', 'archived'] as const
 export type CurriculumStatus = (typeof CURRICULUM_STATUSES)[number]
 
-export const STEP_KNOWLEDGE_LINK_TYPES = ['teaches', 'tests', 'deepens', 'pre_support'] as const
+export const STEP_KNOWLEDGE_LINK_TYPES = ['teaches', 'tests', 'deepens', 'pre_support', 'enrichment'] as const
 export type StepKnowledgeLinkType = (typeof STEP_KNOWLEDGE_LINK_TYPES)[number]
 
 export const CHECKPOINT_ON_FAIL = ['retry', 'continue', 'tutor_redirect'] as const

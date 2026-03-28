@@ -13,15 +13,6 @@
 | Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
 | Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, MiraK webhook, companion integration. All 6 lanes done. |
 | Sprint 9 | Content Density & Agent Thinking Rails — Real MiraK pipeline, Genkit enrichment, GPT thinking protocol, Knowledge UI polish | TSC ✅ Build ✅ | ✅ Complete — Real 3-stage agent pipeline, enrichment flow, thinking rails, multi-unit UI. All 6 lanes done. |
-
----
-
-## Sprint 10 — Curriculum-Aware Experience Engine
-
-> **Goal:** Implement the 3-pillar enrichment thesis — planning-first generation, contextual knowledge delivery, and the smart gateway + progressive discovery architecture for GPT.
->
-> **Source of truth:** `enrichment.md` — the master design document for this sprint.
->
 > **What ships:** Curriculum outlines entity + service, 5 GPT gateway endpoints + 3 coach API endpoints, checkpoint step type + renderer, Genkit tutor chat + grading flows, rewritten GPT instructions (~50 lines → discover-based), and consolidated OpenAPI schema.
 
 ### Gate 0 — Types, Constants, and Contracts (Coordinator)
@@ -400,4 +391,143 @@ ALL 6 ──→ Lane 7: [W1–W6] INTEGRATION + BROWSER QA
 | Lane 5 | ✅ | ✅ | Genkit flows, Coach API routes, KnowledgeCompanion upgrade |
 | Lane 6 | N/A | N/A | Documentation only — no TSC |
 | Lane 7 | ✅ | ✅ | Integration + browser testing. Dynamic import fix for Genkit. Migration 007 applied. |
+
+---
+
+# Sprint 11 — MiraK Enrichment Loop + Gateway Fixes
+
+## Thesis
+
+GPT creates the experience skeleton. MiraK enriches it asynchronously. Today MiraK only creates knowledge units and proposes a NEW experience. It should instead receive the `experience_id` of something GPT already built, then enrich THAT experience — adding depth to existing steps, appending new steps, and linking knowledge units to steps. This makes the first pass richer instead of creating parallel duplicate experiences.
+
+Additionally, the GPT gateway endpoints failed in production testing. The plan endpoint rejected valid payloads, the create endpoint errors weren't surfaced cleanly, and MiraK's separate Action failed to connect. These need to be fixed.
+
+## What broke in the GPT test
+
+1. **Plan endpoint** — GPT sent payload but got rejected (validation or GPT malforming the nested `{ action, payload: { ... } }` structure)
+2. **Create endpoint** — GPT failed to create experiences (same payload structuring issue — GPT may flatten the payload)
+3. **MiraK Action** — Two consecutive failures calling the separate Action (GPT tool wrapper issue with Cloud Run URL)
+4. **Result**: GPT fell back to dumping a massive text wall in chat — the worst possible outcome
+
+## Architecture Change: MiraK Enrichment
+
+**Current flow:**
+```
+GPT → creates experience (or fails)
+GPT → calls MiraK separately (fire-and-forget)
+MiraK → researches → creates knowledge units + proposes NEW experience via webhook
+Result: Two parallel experiences, knowledge disconnected from what user is doing
+```
+
+**New flow:**
+```
+GPT → creates experience with skeleton steps → gets back experience_id
+GPT → calls MiraK with { topic, experience_id } (fire-and-forget)
+MiraK → researches → webhook delivers to Mira with experience_id
+Mira webhook → creates knowledge units + enriches the EXISTING experience:
+  - Updates lesson step payloads with deeper content
+  - Appends additional steps (checkpoint, challenge)
+  - Links knowledge units to steps via step_knowledge_links
+  - Bumps a notification so user sees the experience got richer
+Result: One experience that starts thin and gets deeper over time
+```
+
+---
+
+## Lane 1 — Fix Gateway Endpoints (Bug Fixes)
+
+**Goal**: Make the 5 gateway endpoints actually work when GPT calls them.
+
+### W1: Add error-tolerant payload handling to create route
+The GPT tool wrapper sometimes sends `{ type, payload }` and sometimes `{ type, ...flatPayload }`. The create route should handle both shapes.
+
+**File**: `app/api/gpt/create/route.ts`
+- If `body.payload` exists, use it
+- If not, treat everything except `type` as the payload
+- Log what shape was received for debugging
+
+### W2: Add error-tolerant payload handling to plan route
+Same issue — GPT may flatten `{ action, payload: { topic } }` into `{ action, topic }`.
+
+**File**: `app/api/gpt/plan/route.ts`
+- If `body.payload` exists, use it
+- If not, treat everything except `action` as the payload
+
+### W3: Add error-tolerant payload handling to update route
+Same pattern.
+
+**File**: `app/api/gpt/update/route.ts`
+
+### W4: Better error messages on all gateway routes
+When validation fails, return the expected schema in the error response so GPT can self-correct.
+
+### W5: Verify on production
+Push, wait for Vercel deploy, test all 5 endpoints with curl against production.
+
+---
+
+## Lane 2 — MiraK Enrichment Loop
+
+**Goal**: MiraK enriches an existing experience instead of creating a parallel one.
+
+### W1: Add `experience_id` to MiraK request model
+**File**: `c:\mirak\main.py`
+- Add `experience_id: Optional[str] = None` to `GenerateKnowledgeRequest`
+- Pass it through to the webhook payload
+
+### W2: Update MiraK webhook to support enrichment mode
+**File**: `app/api/webhook/mirak/route.ts`
+- If `experience_id` is present in the payload:
+  - SKIP creating a new experience from `experience_proposal`
+  - Instead, enrich the existing experience:
+    1. Update existing lesson steps with richer content from foundation/playbook
+    2. Append new steps (checkpoint for knowledge testing, challenge for application)
+    3. Create `step_knowledge_links` between steps and the new knowledge units
+  - Create a timeline event: "Your [topic] experience has been enriched with research"
+- If `experience_id` is NOT present, fall back to current behavior (create new experience from proposal)
+
+### W3: Update MiraK OpenAPI schema
+**File**: `c:\mirak\mirak_gpt_action.yaml`
+- Add `experience_id` as optional parameter to the `generateKnowledge` operation
+
+### W4: Update GPT instructions
+**File**: `c:\mira\gpt-instructions.md`
+- Clarify the workflow: GPT creates experience FIRST, then passes `experience_id` to MiraK
+- Remove any implication that GPT should wait for MiraK results
+
+### W5: Deploy MiraK to Cloud Run
+```bash
+cd c:\mirak
+gcloud run deploy mirak --source . --region us-central1 --allow-unauthenticated
+```
+
+---
+
+## Lane 3 (Polish) — Improve Discover Registry + Instructions
+
+### W1: Add `create_outline` example to discover registry
+GPT couldn't figure out the payload shape. The discover registry should return a complete working example.
+
+**File**: `lib/gateway/discover-registry.ts`
+- Ensure `create_outline` capability returns a copy-pasteable example
+
+### W2: Add `dispatch_research` capability to discover registry
+GPT should be able to learn MiraK dispatch format from discover.
+
+### W3: Update instructions to emphasize the enrichment workflow
+The test showed GPT trying to do too many things at once. Instructions should give a clear 3-step protocol:
+1. Create experience (skeleton)
+2. Dispatch MiraK research with `experience_id`
+3. Move on — MiraK will enrich automatically
+
+---
+
+## Acceptance
+
+- [ ] GPT can successfully create an ephemeral experience via gateway (no text dump fallback)
+- [ ] GPT can successfully create a curriculum outline via plan endpoint
+- [ ] GPT can dispatch MiraK research with `experience_id`
+- [ ] MiraK webhook enriches the existing experience instead of creating a new one
+- [ ] Knowledge units are linked to experience steps after enrichment
+- [ ] User sees notification when experience is enriched
 
