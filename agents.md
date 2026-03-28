@@ -49,7 +49,7 @@ MiraK is a Python/FastAPI research agent that runs as a Cloud Run microservice. 
 | AI Agents | Google ADK (Agent Development Kit) |
 | Deployment | Google Cloud Run |
 | Endpoint | `POST /generate_knowledge` |
-| Cloud URL | `https://mirak-lqooqdw7lq-uc.a.run.app` |
+| Cloud URL | `https://mirak-528663818350.us-central1.run.app` |
 | GPT Action | `mirak_gpt_action.yaml` (OpenAPI schema in `c:/mirak/`) |
 
 **Architecture:**
