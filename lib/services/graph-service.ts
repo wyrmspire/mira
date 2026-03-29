@@ -1,4 +1,4 @@
-import { ExperienceInstance, getExperienceInstanceById, updateExperienceInstance, getExperienceTemplates, getExperienceInstances } from './experience-service';
+import { ExperienceInstance, getExperienceInstanceById, updateExperienceInstance, getExperienceTemplates, getExperienceInstances, createExperienceInstance, getExperienceSteps, createExperienceSteps } from './experience-service';
 import { ExperienceChainContext } from '@/types/graph';
 import { getProgressionSuggestions, shouldEscalateResolution } from '@/lib/experience/progression-rules';
 import { runFlowSafe } from '../ai/safe-flow';
@@ -138,12 +138,69 @@ export async function getLoopInstances(userId: string, templateId: string): Prom
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
-/**
- * Returns the count of same-template instances for a user.
- */
+
 export async function getLoopCount(userId: string, templateId: string): Promise<number> {
   const instances = await getLoopInstances(userId, templateId);
   return instances.length;
+}
+
+/**
+ * Creates a new iteration of a recurring experience.
+ */
+export async function createLoopInstance(userId: string, templateId: string, sourceInstanceId: string): Promise<ExperienceInstance> {
+  const source = await getExperienceInstanceById(sourceInstanceId);
+  if (!source) throw new Error(`Source instance not found: ${sourceInstanceId}`);
+
+  const loopCount = await getLoopCount(userId, templateId);
+  const iteration = loopCount + 1;
+  const title = source.title.includes(' (Week ') 
+    ? source.title.replace(/\(Week \d+\)$/, `(Week ${iteration})`)
+    : `${source.title} (Week ${iteration})`;
+
+  const instanceData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
+    user_id: userId,
+    template_id: templateId,
+    title,
+    goal: source.goal,
+    instance_type: 'persistent',
+    status: 'proposed',
+    resolution: source.resolution,
+    reentry: {
+      trigger: 'time',
+      prompt: 'Weekly check-in',
+      contextScope: 'focused'
+    },
+    previous_experience_id: sourceInstanceId,
+    next_suggested_ids: [],
+    friction_level: null,
+    source_conversation_id: source.source_conversation_id,
+    generated_by: 'system',
+    published_at: null
+  };
+
+  const newInstance = await createExperienceInstance(instanceData);
+  
+  // Clone steps from source
+  const sourceSteps = await getExperienceSteps(sourceInstanceId);
+  const newSteps = sourceSteps.map(step => ({
+    instance_id: newInstance.id,
+    step_order: step.step_order,
+    step_type: step.step_type,
+    title: step.title,
+    payload: step.payload,
+    completion_rule: step.completion_rule
+  }));
+
+  await createExperienceSteps(newSteps);
+
+  return newInstance;
+}
+
+/**
+ * Returns loop history (sorted by date)
+ */
+export async function getLoopHistory(userId: string, templateId: string): Promise<ExperienceInstance[]> {
+  return getLoopInstances(userId, templateId);
 }
 
 /**

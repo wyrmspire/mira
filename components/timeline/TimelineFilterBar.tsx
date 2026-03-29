@@ -19,10 +19,11 @@ interface TimelineFilterBarProps {
 
 export function TimelineFilterBar({ filter, onChange, counts }: TimelineFilterBarProps) {
   const tabs: { value: Filter; label: string }[] = [
-    { value: 'all', label: COPY.experience.timelinePage.filterAll },
-    { value: 'experience', label: COPY.experience.timelinePage.filterExperiences },
-    { value: 'idea', label: COPY.experience.timelinePage.filterIdeas },
-    { value: 'system', label: COPY.experience.timelinePage.filterSystem },
+    { value: 'all', label: COPY.experience.timelinePage.filterAll || 'All' },
+    { value: 'experience', label: COPY.experience.timelinePage.filterExperiences || 'Experiences' },
+    { value: 'idea', label: COPY.experience.timelinePage.filterIdeas || 'Ideas' },
+    { value: 'system', label: COPY.experience.timelinePage.filterSystem || 'System' },
+    { value: 'github', label: 'GitHub' },
   ]
 
   return (

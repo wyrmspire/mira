@@ -31,6 +31,15 @@ export interface StudioStore {
   synthesis_snapshots?: any[]
   profile_facets?: any[]
   conversations?: any[]
+  
+  // Sprint 10+ (Goal OS & Intelligence)
+  timeline_events?: any[]
+  goals?: any[]
+  skill_domains?: any[]
+  curriculum_outlines?: any[]
+  step_knowledge_links?: any[]
+  knowledge_units?: any[]
+  knowledge_progress?: any[]
 }
 
 // Full paths for fs operations
@@ -55,6 +64,13 @@ const STORE_DEFAULTS: Partial<StudioStore> = {
   synthesis_snapshots: [],
   profile_facets: [],
   conversations: [],
+  timeline_events: [],
+  goals: [],
+  skill_domains: [],
+  curriculum_outlines: [],
+  step_knowledge_links: [],
+  knowledge_units: [],
+  knowledge_progress: [],
 }
 
 export function readStore(): StudioStore {

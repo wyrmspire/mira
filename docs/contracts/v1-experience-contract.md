@@ -16,8 +16,8 @@
 
 | Level | Meaning | Example |
 |-------|---------|---------|
-| `@stable` | Will not change within v1 | `id`, `user_id`, `title` |
-| `@evolving` | May gain new valid values | `instance_type` may add `'scheduled'` |
+| `@stable` | Will not change within v1 | `id`, `user_id`, `title`, `previous_experience_id`, `next_suggested_ids` |
+| `@evolving` | May gain new valid values | `instance_type` may add `'scheduled'`, `reentry.trigger` may add new types like `manual` / `time` |
 | `@computed` | System-written, read-only to creators | `friction_level` |
 
 ---

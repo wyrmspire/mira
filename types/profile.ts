@@ -20,7 +20,15 @@ export interface UserProfile {
   topInterests: string[];
   topSkills: string[];
   activeGoals: string[];
-  experienceCount: { total: number; completed: number; active: number; ephemeral: number };
+  experienceCount: { 
+    total: number; 
+    completed: number; 
+    active: number; 
+    ephemeral: number;
+    completionRate: number;
+    mostActiveClass: string | null;
+    averageFriction: number;
+  };
   preferredDepth: string | null;
   preferredMode: string | null;
   memberSince: string;

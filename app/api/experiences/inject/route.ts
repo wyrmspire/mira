@@ -55,7 +55,14 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json(instance, { status: 201 })
+    return NextResponse.json({
+      ...instance,
+      notification: {
+        show: true,
+        toast: true,
+        urgency: normalized.urgency
+      }
+    }, { status: 201 })
   } catch (error: any) {
     console.error('Failed to inject experience:', error)
     return NextResponse.json({ error: error.message || 'Failed to inject experience' }, { status: 500 })

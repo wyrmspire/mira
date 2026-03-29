@@ -84,6 +84,9 @@ export function validateExperiencePayload(body: any): { valid: boolean; errors: 
   if (body.goal && (typeof body.goal !== 'string' || body.goal.length > 1000)) {
     errors.push('goal must be a string (max 1000 chars)')
   }
+  if (body.urgency && !['low', 'medium', 'high'].includes(body.urgency)) {
+    errors.push('invalid urgency: (must be "low" | "medium" | "high")')
+  }
 
   // 5. Steps (normalization + validation)
   const normalizedSteps: any[] = []
@@ -127,6 +130,7 @@ export function validateExperiencePayload(body: any): { valid: boolean; errors: 
     reentry: body.reentry || null,
     previousExperienceId: body.previousExperienceId || null,
     steps: normalizedSteps,
+    urgency: body.urgency || 'low',
     generated_by: body.generated_by || null,
     source_conversation_id: body.source_conversation_id || null
   }

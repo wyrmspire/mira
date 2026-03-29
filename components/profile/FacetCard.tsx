@@ -17,27 +17,53 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 export function FacetCard({ facet }: FacetCardProps) {
+  const isStrongSignal = facet.confidence > 0.8
   const colorClass = TYPE_COLORS[facet.facet_type] || 'bg-slate-500/10 text-slate-400 border-slate-500/20'
 
   return (
-    <div className={`p-3 rounded-lg border ${colorClass} flex flex-col gap-2 relative overflow-hidden group transition-all hover:bg-opacity-20`}>
+    <div className={`p-4 rounded-xl border-2 ${colorClass} flex flex-col gap-3 relative overflow-hidden group transition-all hover:bg-opacity-20 animate-in fade-in slide-in-from-bottom-2`}>
       <div className="flex justify-between items-start">
-        <span className="text-xs uppercase tracking-widest font-semibold opacity-70">
+        <span className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-60">
           {facet.facet_type.replace('_', ' ')}
         </span>
-        <span className="text-xs font-mono opacity-50">
-          {(facet.confidence * 100).toFixed(0)}%
-        </span>
+        {isStrongSignal && (
+          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-current text-slate-900 font-black uppercase tracking-tighter shadow-sm">
+            Strong Signal
+          </span>
+        )}
       </div>
       
-      <span className="text-lg font-medium leading-tight">
-        {facet.value}
-      </span>
+      <div className="space-y-1">
+        <span className="text-xl font-bold leading-tight block">
+          {facet.value}
+        </span>
+        {facet.evidence && (
+          <p className="text-[11px] leading-relaxed opacity-70 line-clamp-2 italic">
+            "{facet.evidence}"
+          </p>
+        )}
+      </div>
 
-      {/* Confidence Bar */}
-      <div className="absolute bottom-0 left-0 h-1 bg-current opacity-20 w-full" />
+      <div className="mt-auto flex items-center justify-between pt-2">
+         <div className="flex gap-0.5" title={`${(facet.confidence * 100).toFixed(0)}% confidence`}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div 
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full ${i <= Math.round(facet.confidence * 5) ? 'bg-current' : 'bg-current/10'}`}
+              />
+            ))}
+         </div>
+         {facet.source_snapshot_id && (
+           <span className="text-[9px] font-mono opacity-40 uppercase">
+             Ref: {facet.source_snapshot_id.slice(0, 4)}
+           </span>
+         )}
+      </div>
+
+      {/* Confidence Bar background */}
+      <div className="absolute bottom-0 left-0 h-1 bg-current opacity-5 w-full" />
       <div 
-        className="absolute bottom-0 left-0 h-1 bg-current transition-all duration-500" 
+        className="absolute bottom-0 left-0 h-1 bg-current transition-all duration-700 delay-100 ease-out" 
         style={{ width: `${facet.confidence * 100}%` }} 
       />
     </div>

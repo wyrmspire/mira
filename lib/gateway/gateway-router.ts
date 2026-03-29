@@ -18,7 +18,12 @@ import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'
 export async function dispatchCreate(type: string, payload: any) {
   switch (type) {
     case 'experience':
-      return createExperienceInstance(payload);
+      const newInstance = await createExperienceInstance(payload);
+      if (payload.previous_experience_id) {
+        const { linkExperiences } = await import('@/lib/services/graph-service');
+        await linkExperiences(payload.previous_experience_id, newInstance.id, 'chain');
+      }
+      return newInstance;
     case 'ephemeral':
       return injectEphemeralExperience(payload);
     case 'idea':

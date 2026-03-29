@@ -174,6 +174,13 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
   const lastVisitThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const newKnowledgeUnitsCount = knowledgeUnits.filter(u => u.created_at > lastVisitThreshold).length;
 
+  // 5. Calculate pending ephemerals (last 24h, injected status)
+  const pendingEphemerals = allInstances.filter(e => 
+    e.instance_type === 'ephemeral' && 
+    e.status === 'injected' &&
+    e.created_at > lastVisitThreshold
+  );
+
   return {
     activeGoal,
     skillDomains,
@@ -186,6 +193,7 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     },
     proposedExperiences,
     activeExperiences,
+    pendingEphemerals,
     knowledgeSummary,
     newKnowledgeUnitsCount,
     outlines: outlines.filter(o => o.status === 'active' || o.status === 'planning'),

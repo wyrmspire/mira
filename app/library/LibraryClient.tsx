@@ -28,6 +28,14 @@ export default function LibraryClient({
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
+  // Build a map of experience IDs to titles for chain links
+  const experienceMap = new Map<string, string>([
+    ...active.map(e => [e.id, e.title] as [string, string]),
+    ...completed.map(e => [e.id, e.title] as [string, string]),
+    ...moments.map(e => [e.id, e.title] as [string, string]),
+    ...proposed.map(e => [e.id, e.title] as [string, string]),
+  ]);
+
   const handleAcceptAndStart = async (id: string) => {
     setLoadingId(id);
     try {
@@ -121,16 +129,44 @@ export default function LibraryClient({
         empty={COPY.library.emptyActive} 
         items={active}
       >
-        {(instance) => (
-          <ExperienceCard key={instance.id} instance={instance}>
-            <Link 
-              href={ROUTES.workspace(instance.id)}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500/10 text-indigo-400 rounded-xl font-bold hover:bg-indigo-500/20 transition-all border border-indigo-500/20"
-            >
-              {COPY.library.enter}
-            </Link>
-          </ExperienceCard>
-        )}
+        {(instance) => {
+          const nextId = instance.next_suggested_ids?.[0]; // Show the first suggestion for now
+          const nextTitle = nextId ? experienceMap.get(nextId) : null;
+          const prevId = instance.previous_experience_id;
+          const prevTitle = prevId ? experienceMap.get(prevId) : null;
+
+          return (
+            <ExperienceCard key={instance.id} instance={instance}>
+              <Link 
+                href={ROUTES.workspace(instance.id)}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500/10 text-indigo-400 rounded-xl font-bold hover:bg-indigo-500/20 transition-all border border-indigo-500/20"
+              >
+                {COPY.library.enter}
+              </Link>
+
+              {(nextTitle || prevTitle) && (
+                <div className="mt-4 pt-4 border-t border-[#1e1e2e] flex flex-wrap gap-2">
+                  {prevTitle && (
+                    <Link 
+                      href={ROUTES.workspace(prevId!)}
+                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                    >
+                      ← Previous: {prevTitle}
+                    </Link>
+                  )}
+                  {nextTitle && (
+                    <Link 
+                      href={ROUTES.workspace(nextId!)}
+                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                    >
+                      Continue: {nextTitle} →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </ExperienceCard>
+          );
+        }}
       </Section>
 
       {/* Completed Experiences */}
@@ -139,9 +175,37 @@ export default function LibraryClient({
         empty={COPY.library.emptyCompleted} 
         items={completed}
       >
-        {(instance) => (
-          <ExperienceCard key={instance.id} instance={instance} />
-        )}
+        {(instance) => {
+          const nextId = instance.next_suggested_ids?.[0];
+          const nextTitle = nextId ? experienceMap.get(nextId) : null;
+          const prevId = instance.previous_experience_id;
+          const prevTitle = prevId ? experienceMap.get(prevId) : null;
+
+          return (
+            <ExperienceCard key={instance.id} instance={instance}>
+              {(nextTitle || prevTitle) && (
+                <div className="flex flex-wrap gap-2">
+                  {prevTitle && (
+                    <Link 
+                      href={ROUTES.workspace(prevId!)}
+                      className="px-2 py-1 rounded bg-[#0d0d14] text-[#4a4a6a] text-[10px] font-bold hover:text-indigo-400 transition-all border border-[#1e1e2e] whitespace-nowrap"
+                    >
+                      ← Previous: {prevTitle}
+                    </Link>
+                  )}
+                  {nextTitle && (
+                    <Link 
+                      href={ROUTES.workspace(nextId!)}
+                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                    >
+                      Continue: {nextTitle} →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </ExperienceCard>
+          );
+        }}
       </Section>
 
       {/* Moments (Ephemeral) */}

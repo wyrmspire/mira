@@ -14,8 +14,8 @@ export default async function TimelinePage() {
 
   return (
     <AppShell>
-      <div className="max-w-4xl mx-auto py-8 px-4">
-        <header className="mb-10">
+      <div className="max-w-4xl mx-auto px-4 py-12 md:py-20">
+        <header className="mb-12">
           <h1 className="text-3xl font-bold text-[#e2e8f0] mb-2">
             {COPY.experience.timelinePage.heading}
           </h1>

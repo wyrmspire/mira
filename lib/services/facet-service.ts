@@ -1,7 +1,7 @@
 import { ProfileFacet, FacetType, FacetUpdate, UserProfile } from '@/types/profile'
 import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
-import { getExperienceInstances, getExperienceInstanceById, getExperienceSteps } from './experience-service'
+import { getExperienceInstances, getExperienceInstanceById, getExperienceSteps, getExperienceTemplates } from './experience-service'
 import { getInteractionsByInstance } from './interaction-service'
 import { runFlowSafe } from '@/lib/ai/safe-flow'
 import { extractFacetsFlow } from '@/lib/ai/flows/extract-facets'
@@ -36,7 +36,7 @@ export async function upsertFacet(userId: string, update: FacetUpdate): Promise<
       source_snapshot_id: update.source_snapshot_id || existing.source_snapshot_id,
       updated_at: new Date().toISOString()
     }
-    return adapter.saveItem<ProfileFacet>('profile_facets', updated)
+    return adapter.updateItem<ProfileFacet>('profile_facets', existing.id, updated)
   }
 
   const newFacet: ProfileFacet = {
@@ -131,10 +131,10 @@ export async function extractFacetsFromExperience(userId: string, instanceId: st
 export async function buildUserProfile(userId: string): Promise<UserProfile> {
   const facets = await getFacetsForUser(userId)
   const experiences = await getExperienceInstances({ userId })
-  
+  const templates = await getExperienceTemplates()
+  const templateMap = new Map(templates.map(t => [t.id, t]))
+
   // Get user info (mocking display name if users table is not easily accessible via adapter yet)
-  // But SOP-9 says go through services.
-  // I'll try to query users table directly via adapter as a fallback.
   const adapter = getStorageAdapter()
   let displayName = 'Studio User'
   let memberSince = new Date().toISOString()
@@ -149,11 +149,38 @@ export async function buildUserProfile(userId: string): Promise<UserProfile> {
     console.warn('Failed to fetch user details, using defaults')
   }
 
+  const completedExperiences = experiences.filter(e => e.status === 'completed')
+  
+  // Most active class
+  const classCounts: Record<string, number> = {}
+  let mostActiveClass: string | null = null
+  let maxCount = 0
+
+  for (const exp of completedExperiences) {
+    const template = templateMap.get(exp.template_id)
+    if (template) {
+      const cls = template.class
+      classCounts[cls] = (classCounts[cls] || 0) + 1
+      if (classCounts[cls] > maxCount) {
+        maxCount = classCounts[cls]
+        mostActiveClass = cls
+      }
+    }
+  }
+
+  // Average friction
+  const frictionMap: Record<string, number> = { 'low': 1, 'medium': 2, 'high': 3 }
+  const completedWithFriction = completedExperiences.filter(e => e.friction_level)
+  const totalFriction = completedWithFriction.reduce((sum, e) => sum + (frictionMap[e.friction_level!] || 0), 0)
+  
   const experienceCount = {
     total: experiences.length,
-    completed: experiences.filter(e => e.status === 'completed').length,
+    completed: completedExperiences.length,
     active: experiences.filter(e => e.status === 'active').length,
-    ephemeral: experiences.filter(e => e.instance_type === 'ephemeral').length
+    ephemeral: experiences.filter(e => e.instance_type === 'ephemeral').length,
+    completionRate: experiences.length > 0 ? (completedExperiences.length / experiences.length) * 100 : 0,
+    mostActiveClass,
+    averageFriction: completedWithFriction.length > 0 ? totalFriction / completedWithFriction.length : 0
   }
 
   const topInterests = facets

@@ -87,6 +87,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
         userId: 'UUID',
         title: 'string',
         goal: 'string',
+        urgency: 'low | medium | high (controls notification toast duration)',
         resolution: '{...}',
         steps: '[...]'
       }
@@ -97,20 +98,21 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
         templateId: DEFAULT_TEMPLATE_IDS.challenge,
         userId: 'a0000000-0000-0000-0000-000000000001',
         title: 'Quick LTV Check',
+        goal: 'Verify understanding of Unit Economics',
+        urgency: 'medium',
         resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
         steps: [
           {
             type: 'checkpoint',
-            title: 'Check',
+            title: 'Refresher Check',
             payload: {
-              knowledge_unit_id: '...',
-              questions: [{ id: '1', question: 'Define LTV', expected_answer: '...', difficulty: 'easy', format: 'free_text' }]
+              questions: [{ id: '1', question: 'What does LTV stand for?', expected_answer: 'Lifetime Value', difficulty: 'easy', format: 'free_text' }]
             }
           }
         ]
       }
     },
-    when_to_use: 'For micro-learning moments or "homework" between planning phases.',
+    when_to_use: 'Drop micro-challenges, trend alerts, or quick daily reflections. Fire-and-forget. User sees a toast and can choose to engage.',
     relatedCapabilities: ['create_experience', 'step_payload']
   }),
 

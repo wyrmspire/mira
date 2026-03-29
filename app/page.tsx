@@ -13,6 +13,9 @@ import { ResearchStatusBadge } from '@/components/common/ResearchStatusBadge'
 import TrackSection from '@/components/experience/TrackSection'
 import type { Project } from '@/types/project'
 import type { InboxEvent } from '@/types/inbox'
+import { EphemeralToast } from '@/components/experience/EphemeralToast'
+import { evaluateReentryContracts } from '@/lib/experience/reentry-engine'
+import { ReentryPromptCard } from '@/components/common/ReentryPromptCard'
 
 function HealthDot({ health }: { health: Project['health'] }) {
   const colorMap = {
@@ -56,7 +59,10 @@ export default async function HomePage() {
     arenaProjects,
     recentEvents,
     capturedIdeas,
+    pendingEphemerals,
   } = summary
+
+  const reentryPrompts = await evaluateReentryContracts(userId)
 
   // Calculate session days for welcome back context
   let lastSessionDays = 0
@@ -74,6 +80,20 @@ export default async function HomePage() {
 
   return (
     <AppShell>
+      {pendingEphemerals.length > 0 && (() => {
+        const eph = pendingEphemerals[0];
+        const intensityToUrgency = { low: 'low' as const, moderate: 'medium' as const, high: 'high' as const };
+        const urgency = intensityToUrgency[eph.resolution?.intensity as keyof typeof intensityToUrgency] || 'low';
+        return (
+          <EphemeralToast 
+            title={eph.title}
+            goal={eph.goal}
+            experienceClass={eph.resolution.mode as any}
+            instanceId={eph.id}
+            urgency={urgency}
+          />
+        );
+      })()}
       <div className="max-w-2xl mx-auto space-y-10 pb-20">
         {/* Page title */}
         <div className="flex flex-col gap-1 mt-6">
@@ -137,6 +157,64 @@ export default async function HomePage() {
             focusReason={focusExperience.focusReason}
           />
         </section>
+
+        {/* ── Section: Spontaneous ── */}
+        {pendingEphemerals.length > 0 && (
+          <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+            <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+              Just Dropped
+            </h2>
+            <div className="grid grid-cols-1 gap-3">
+              {pendingEphemerals.map((exp) => (
+                <Link
+                  key={exp.id}
+                  href={ROUTES.workspace(exp.id)}
+                  className="group relative flex items-center justify-between gap-4 p-5 bg-indigo-500/5 border border-indigo-500/20 rounded-2xl hover:bg-indigo-500/10 transition-all overflow-hidden"
+                >
+                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500/50" />
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-indigo-500/10 rounded-xl text-xl">
+                      ⚡
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-[#f1f5f9] truncate group-hover:text-indigo-300 transition-colors">
+                        {exp.title}
+                      </h3>
+                      <p className="text-xs text-[#94a3b8] truncate">
+                        {exp.goal}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-400 uppercase tracking-wider group-hover:translate-x-1 transition-transform whitespace-nowrap">
+                    Jump In →
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Section: Re-entry ── */}
+        {reentryPrompts.length > 0 && (
+          <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <h2 className="text-xs font-bold text-amber-500 uppercase tracking-widest">
+              Pick Up Where You Left Off
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {reentryPrompts.slice(0, 3).map((prompt) => (
+                <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
+              ))}
+              {reentryPrompts.length > 3 && (
+                <Link 
+                  href={`${ROUTES.library}?filter=reentry`}
+                  className="text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors"
+                >
+                  View {reentryPrompts.length - 3} more re-entry points →
+                </Link>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* ── Section: Your Path ── */}
         <section>

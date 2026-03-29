@@ -82,8 +82,11 @@ Replaced naive string summaries and keyword-splitting with AI-powered intelligen
 | Sprint 10 | ✅ Complete | Curriculum-aware experience engine: curriculum outlines (table + service + types), GPT gateway (5 endpoints: state/plan/create/update/discover), discover registry (9 capabilities), coach API (3 routes), Genkit tutor + grading flows, step-knowledge-link service, OpenAPI rewrite, migration 007 |
 | Sprint 11 | ✅ Complete | MiraK enrichment loop: enrichment webhook mode (experience_id), flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance. |
 | Sprint 12 | ✅ Complete | Learning Loop Productization: Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge. The "three emotional moments" are fully functional. |
+| Sprint 13 | ✅ Complete | Goal OS + Skill Map: Goal entity, skill domains array, mastery computation engine, deep intake protocol mapping. |
+| Sprint 14 | ✅ Complete | Mastery Visibility & Intelligence Wiring: Skill Tree UI completion, Profile synthesis integration, Coach contextual triggers. |
+| Sprint 15 | ✅ Complete | Chained Experiences + Spontaneity: Experience graph wiring, ephemeral injection, Re-entry hardening, Timeline feed upgrades. |
 
-### 🔄 Current Phase — Goal OS (Sprint 13)
+### 🔄 Current Phase — Coder Pipeline (Sprint 16+)
 
 The curriculum infrastructure and learning loops are now fully productized, visible, and functioning. The system can plan a curriculum, link knowledge, render checkpoints, provide coaching, and celebrate synthesis natively in the browser.
 
@@ -725,7 +728,7 @@ The user must never wonder "did my research request go anywhere?" This eliminate
 
 ---
 
-### 🔲 Sprint 13 — Goal OS + Skill Map
+### ✅ Sprint 13 — Goal OS + Skill Map
 
 > **Goal:** Give the user a persistent Goal and a visual Skill Tree that makes their position and trajectory visible. Turn "a pile of experiences in a track" into "a growth system with a destination."
 >
@@ -761,7 +764,32 @@ The user must never wonder "did my research request go anywhere?" This eliminate
 
 ---
 
-### 🔲 Sprint 14 — Proposal → Realization → Coder Pipeline (Deferred)
+### ✅ Sprint 14 — Mastery Visibility & Intelligence Wiring
+
+> **Goal:** Surface the mastery engine and ensure the system reacts intelligently to user progress.
+
+- **Skill Tree Upgrades:** Mastery badges, progress bars, and linked experience/knowledge statistics.
+- **Coach Triggers:** Contextual AI surfacing when a user fails a checkpoint or dwells too long.
+- **Completion Retrospective:** Goal trajectory updates, "What Moved" mastery changes, and domain-linked path suggestions.
+- **Intelligent Focus:** Home priority heuristic based on leverage rather than strict recency.
+- **Schema Truth Pass:** Aligned validators, discovery registries, and step payload definitions.
+
+---
+
+### ✅ Sprint 15 — Chained Experiences + Spontaneity
+
+> **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
+
+- **Experience Chaining UI:** Workspace banners for context, "Start Next" post-completion, and dynamic graph wiring.
+- **Ephemeral Injection System:** Real-time urgency toasts forcing low-friction micro-challenges or checks to break linear rigidity. 
+- **Re-Entry Engine Hardening:** Support for interval/manual triggers and high-priority surfacing of "unfinished business" on the home page.
+- **Friction + Weekly Loops:** Automated multi-pass iteration (creating a `loop_record`) when user encounters high friction.
+- **Timeline Evolution:** Event categorization (system, user, knowledge, ephemeral) for full observability. 
+- **Profile Redesign:** Facet cards displaying confidence/evidence linked directly to synthesis snapshots, acting as a clear system-state dashboard.
+
+---
+
+### 🔲 Sprint 16 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
@@ -879,7 +907,7 @@ GPT calls propose endpoint
 5. **The coder can have its own "schema."** Just like the GPT has an OpenAPI schema for API calls, the coder can have a structured spec schema for what it reads from issues. Both are typed contracts.
 6. **The issue is working memory.** The coder can write progress back to it. The GPT and user can read it. The issue becomes the shared context for the entire realization.
 
-#### Sprint 14 Verification
+#### Sprint 16 Verification
 - GPT can POST a proposal that creates both an experience instance AND a GitHub Issue with structured spec
 - User can view and edit the coder spec from the frontend review UI
 - GPT can update the issue body via API when the user refines their request
@@ -889,36 +917,7 @@ GPT calls propose endpoint
 - Legacy PR merge flow still works
 - Ephemeral experiences are confirmed to NOT appear in review queue
 
----
-
-### 🔲 Sprint 15 — Chained Experiences + Spontaneity
-
-> **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
-
-| # | Work Item | Detail |
-|---|-----------|--------|
-| 1 | Experience graph wiring | Use `previous_experience_id` and `next_suggested_ids` on instances to build chains. Library shows "continue" and "related" links. |
-| 2 | Progression rules | `lib/experience/progression-rules.ts` — defines chains: Questionnaire → Plan Builder → Challenge. Resolution carries forward or escalates. |
-| 3 | Ephemeral injection system | GPT can inject ephemeral experiences at any time: trend alerts, micro-challenges, quick prompts. These appear as interruptive cards in the workspace or as toast-like prompts. |
-| 4 | Re-entry engine hardening | `lib/experience/reentry-engine.ts` already exists. Harden: add time-based triggers, manual triggers, better inactivity detection. |
-| 5 | Weekly loops | Recurring experience instances (e.g., weekly reflection). Same template, new instance, linked via graph. |
-| 6 | Friction synthesis | Compute `friction_level` during synthesis snapshot creation. GPT uses this to adjust future proposals. |
-| 7 | Follow-up prompts | After experience completion, re-entry contract surfaces in next GPT session as prioritized suggestion. |
-| 8 | Timeline page | `app/timeline/page.tsx` — chronological view of GPT proposals, realizations, completions, ephemerals, suggestions. |
-| 9 | Profile page | `app/profile/page.tsx` — compiled view of interests, goals, efforts, patterns, skill trajectory. Read-only, derived from facets. |
-
-#### Sprint 15 Verification
-- Completing a Questionnaire surfaces a Plan Builder suggestion via graph
-- GPT can inject an ephemeral challenge that renders instantly
-- Re-entry contract fires after completion and shows in GPT state
-- Weekly reflection creates a new linked instance
-- Timeline shows full event history including ephemerals
-- Profile reflects accumulated facets from interactions
-- Friction level is computed and returned in synthesis packet
-
----
-
-### 🔲 Sprint 16 — GitHub Hardening + GitHub App
+### 🔲 Sprint 17 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 

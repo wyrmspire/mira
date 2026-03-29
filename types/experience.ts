@@ -31,6 +31,7 @@ export interface ReentryContract {
   trigger: 'time' | 'completion' | 'inactivity' | 'manual';
   prompt: string;
   contextScope: 'minimal' | 'full' | 'focused';
+  timeAfterCompletion?: string; // e.g. '24h', '7d'
 }
 
 export interface ExperienceTemplate {

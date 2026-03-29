@@ -7,7 +7,7 @@ export interface TimelineEntry {
   title: string;
   body?: string;
   entityId?: string;
-  entityType?: 'experience' | 'idea' | 'project' | 'pr';
+  entityType?: 'experience' | 'idea' | 'project' | 'pr' | 'knowledge';
   actionUrl?: string;
   metadata?: Record<string, any>;
 }
@@ -22,5 +22,7 @@ export interface TimelineStats {
   totalEvents: number;
   experienceEvents: number;
   ideaEvents: number;
+  systemEvents: number;
+  githubEvents: number;
   thisWeek: number;
 }

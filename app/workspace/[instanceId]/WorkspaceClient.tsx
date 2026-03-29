@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ExperienceRenderer from '@/components/experience/ExperienceRenderer';
 import StepNavigator, { type StepStatus } from '@/components/experience/StepNavigator';
 import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
+import type { ExperienceChainContext } from '@/types/graph';
 import { ROUTES } from '@/lib/routes';
 import { COPY } from '@/lib/studio-copy';
 import Link from 'next/link';
@@ -14,17 +15,18 @@ import { DraftIndicator } from '@/components/common/DraftIndicator';
 interface WorkspaceClientProps {
   instance: ExperienceInstance;
   steps: ExperienceStep[];
+  chainContext?: ExperienceChainContext;
 }
 
-export default function WorkspaceClient({ instance, steps }: WorkspaceClientProps) {
+export default function WorkspaceClient({ instance, steps, chainContext }: WorkspaceClientProps) {
   return (
     <DraftProvider instanceId={instance.id}>
-      <WorkspaceClientInner instance={instance} steps={steps} />
+      <WorkspaceClientInner instance={instance} steps={steps} chainContext={chainContext} />
     </DraftProvider>
   );
 }
 
-function WorkspaceClientInner({ instance, steps }: WorkspaceClientProps) {
+function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClientProps) {
   const [currentStepId, setCurrentStepId] = useState<string | null>(null);
   const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>({});
   const [showOverview, setShowOverview] = useState(instance.resolution.depth !== 'light');
@@ -207,6 +209,7 @@ function WorkspaceClientInner({ instance, steps }: WorkspaceClientProps) {
 
   // Determine if the current step is completed (for readOnly mode on revisit renderers)
   const isCurrentStepCompleted = currentStepId ? stepStatuses[currentStepId] === 'completed' : false;
+  const allStepsDone = steps.every(s => stepStatuses[s.id] === 'completed');
 
   // Get draft for the current step to pass as initial data
   const currentDraft = currentStepId ? draftCtx.getDraft(currentStepId) : null;
@@ -316,7 +319,22 @@ function WorkspaceClientInner({ instance, steps }: WorkspaceClientProps) {
           </div>
         )}
 
-        <main className="flex-grow overflow-y-auto no-scrollbar relative">
+        <main className="flex-grow overflow-y-auto no-scrollbar pb-20 relative">
+          {/* Chain Context: Upstream Breadcrumb */}
+          {chainContext?.previousExperience && (
+            <div className="w-full max-w-2xl mx-auto px-6 pt-8 animate-in fade-in slide-in-from-top-4 duration-700">
+              <Link 
+                href={ROUTES.workspace(chainContext.previousExperience.id)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/50 border border-indigo-500/20 text-[#6366f1] text-[10px] font-bold uppercase tracking-wider hover:bg-slate-800 transition-all group"
+              >
+                <svg className="w-3 h-3 group-hover:-translate-x-1 transition-transform font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+                </svg>
+                {chainContext.previousExperience.title}
+              </Link>
+            </div>
+          )}
+
           <ExperienceRenderer 
             instance={instance} 
             steps={steps}
@@ -333,6 +351,27 @@ function WorkspaceClientInner({ instance, steps }: WorkspaceClientProps) {
             readOnly={isCurrentStepCompleted}
             initialDraft={currentDraft}
           />
+
+          {/* Chain Context: Downstream Link (only shown if current instance is complete) */}
+          {(isCompleted || allStepsDone) && chainContext?.suggestedNext && chainContext.suggestedNext.length > 0 && (
+            <div className="w-full max-w-2xl mx-auto px-6 py-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+               <div className="p-8 rounded-3xl bg-indigo-500/5 border border-indigo-500/20 backdrop-blur-sm group hover:border-indigo-500/40 transition-all text-center">
+                 <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Next in Chain</div>
+                 <h4 className="text-xl font-bold text-white mb-6 italic tracking-tight leading-tight">
+                   {chainContext.suggestedNext[0].title}
+                 </h4>
+                 <Link 
+                   href={ROUTES.workspace(chainContext.suggestedNext[0].id)}
+                   className="inline-flex items-center gap-2 px-8 py-3 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+                 >
+                   Continue Your Journey
+                   <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                   </svg>
+                 </Link>
+               </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

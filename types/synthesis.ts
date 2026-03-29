@@ -30,4 +30,5 @@ export interface GPTStatePacket {
     prioritySignals: string[];
     suggestedOpeningTopic: string;
   };
+  reentryCount?: number;
 }

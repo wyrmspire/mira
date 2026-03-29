@@ -17,7 +17,9 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
   const [goalContext, setGoalContext] = useState<any>(null);
   const [skillDomains, setSkillDomains] = useState<SkillDomain[]>([]);
   const [steps, setSteps] = useState<any[]>([]);
+  const [chainSuggestions, setChainSuggestions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStartingNext, setIsStartingNext] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,6 +52,12 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
         if (stepsRes.ok) {
            const stepsData = await stepsRes.json();
            if (isMounted) setSteps(stepsData);
+        }
+
+        const suggestionsRes = await fetch(`/api/experiences/${experienceId}/suggestions?userId=${userId}`);
+        if (suggestionsRes.ok) {
+           const suggestionsData = await suggestionsRes.json();
+           if (isMounted) setChainSuggestions(suggestionsData);
         }
       } catch (err) {
         console.error('Failed to fetch completion data:', err);
@@ -175,6 +183,56 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
   const proficientCount = skillDomains.filter((d: any) => 
     ['proficient', 'expert'].includes(d.masteryLevel)
   ).length;
+
+  const handleStartNext = async (suggestion: any) => {
+    setIsStartingNext(suggestion.templateClass);
+    try {
+      const res = await fetch('/api/gpt/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'experience',
+          payload: {
+            template_id: suggestion.templateId || suggestion.templateClass,
+            user_id: userId,
+            title: suggestion.title || `Follow-up: ${suggestion.templateClass}`,
+            goal: suggestion.reason || '',
+            instance_type: 'persistent',
+            status: 'proposed',
+            resolution: suggestion.resolution || { depth: 'medium', mode: 'guided', timeScope: 'session', intensity: 'moderate' },
+            previous_experience_id: experienceId,
+            reentry: null,
+            next_suggested_ids: [],
+            friction_level: null,
+          }
+        })
+      });
+
+      if (res.ok) {
+        // Redirect to library to see the newly proposed experience
+        window.location.href = ROUTES.library;
+      } else {
+        const errData = await res.json();
+        console.error('Failed to create next experience:', errData.error);
+        setIsStartingNext(null);
+      }
+    } catch (err) {
+      console.error('Failed to start next experience:', err);
+      setIsStartingNext(null);
+    }
+  };
+
+  const getClassIcon = (templateClass: string) => {
+    switch (templateClass) {
+      case 'questionnaire': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>;
+      case 'lesson': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>;
+      case 'challenge': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>;
+      case 'plan_builder': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>;
+      case 'reflection': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>;
+      case 'essay_tasks': return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>;
+      default: return <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>;
+    }
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto py-12 px-6 animate-in zoom-in-95 duration-700">
@@ -362,7 +420,41 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
                )}
              </ul>
            </section>
-        </div>
+
+           {chainSuggestions.length > 0 && (
+             <section className="bg-violet-600/10 border border-violet-500/20 rounded-3xl p-8 backdrop-blur-sm mt-8">
+               <h3 className="text-lg font-bold text-violet-300 mb-6 flex items-center gap-2">
+                 Continue Your Chain
+               </h3>
+               <div className="space-y-4">
+                 {chainSuggestions.map((suggestion, i) => (
+                   <div key={i} className="flex flex-col p-4 rounded-2xl bg-slate-950/40 border border-violet-500/20 group hover:border-violet-500/50 transition-all">
+                     <div className="flex items-center gap-3 mb-2">
+                       <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
+                         {getClassIcon(suggestion.templateClass)}
+                       </div>
+                       <div className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">
+                         {(COPY.workspace.stepTypes as any)[suggestion.templateClass] || suggestion.templateClass}
+                       </div>
+                     </div>
+                     <p className="text-sm text-slate-300 mb-4 italic">"{suggestion.reason}"</p>
+                     <button
+                       onClick={() => handleStartNext(suggestion)}
+                       disabled={!!isStartingNext}
+                       className="w-full py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                     >
+                       {isStartingNext === suggestion.templateClass ? (
+                         <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
+                       ) : (
+                         <span>Start Next →</span>
+                       )}
+                     </button>
+                   </div>
+                 ))}
+               </div>
+             </section>
+           )}
+         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-center justify-center gap-4 py-8">

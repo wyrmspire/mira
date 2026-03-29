@@ -236,14 +236,22 @@ import { SynthesisSnapshot } from '@/types/synthesis'
  * Orchestrates post-completion processing: synthesis, facet extraction, and friction update.
  */
 export async function completeExperienceWithAI(instanceId: string, userId: string): Promise<SynthesisSnapshot> {
-  // 1. Create synthesis snapshot (now AI-powered via Lane 4's changes)
+  // 1. Update friction level first so it's available for synthesis
+  await updateInstanceFriction(instanceId);
+
+  // 2. Create synthesis snapshot (now AI-powered via Lane 4's changes)
   const snapshot = await createSynthesisSnapshot(userId, 'experience', instanceId);
   
-  // 2. Extract facets with AI (now linking to the snapshot)
+  // 3. Extract facets with AI (now linking to the snapshot)
   await extractFacetsWithAI(userId, instanceId, snapshot.id);
-  
-  // 3. Update friction level
-  await updateInstanceFriction(instanceId);
+
+  // 4. Handle weekly loops (Sprint 15 Lane 4)
+  const instance = await getExperienceInstanceById(instanceId);
+  if (instance?.reentry?.trigger === 'time' && instance.resolution.timeScope === 'ongoing') {
+    const { createLoopInstance, linkExperiences } = await import('./graph-service');
+    const newInstance = await createLoopInstance(userId, instance.template_id, instanceId);
+    await linkExperiences(instanceId, newInstance.id, 'loop');
+  }
 
   return snapshot;
 }
