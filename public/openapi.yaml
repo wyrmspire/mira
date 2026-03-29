@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Mira Studio API
   description: Gateway for the Mira experience engine. All GPT operations go through 5 endpoints.
-  version: 2.0.0
+  version: 2.1.0
 servers:
   - url: https://mira-maddyup.vercel.app/  
     description: Mira Studio Backend
@@ -82,14 +82,40 @@ paths:
           application/json:
             schema:
               type: object
-              required: [action, payload]
+              required: [action]
               properties:
                 action:
                   type: string
                   enum: [create_outline, dispatch_research, assess_gaps]
-                payload:
-                  type: object
-                  additionalProperties: true
+                  description: The planning action to perform.
+                topic:
+                  type: string
+                  description: The learning topic (required for create_outline and dispatch_research).
+                domain:
+                  type: string
+                  description: Optional broad domain grouping.
+                subtopics:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      order:
+                        type: integer
+                  description: Optional subtopic breakdown for create_outline.
+                pedagogicalIntent:
+                  type: string
+                  enum: [build_understanding, develop_skill, explore_concept, problem_solve]
+                  description: The learning intent.
+                outlineId:
+                  type: string
+                  description: Required for assess_gaps. The outline to analyze.
+                userId:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
       responses:
         '200':
           description: Success
@@ -102,21 +128,89 @@ paths:
     post:
       operationId: createEntity
       summary: Create experiences, ideas, or steps
-      description: Discriminated by `type`. Call discover first to learn the exact schema for each type.
+      description: |
+        Discriminated by `type`. Call GET /api/gpt/discover?capability=create_experience for full payload schema.
+        All fields except `type` are the creation payload.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [type, payload]
+              required: [type]
               properties:
                 type:
                   type: string
                   enum: [experience, ephemeral, idea, step]
-                payload:
+                  description: The entity type to create.
+                templateId:
+                  type: string
+                  description: UUID of the experience template. Call discover?capability=templates for valid IDs.
+                userId:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
+                title:
+                  type: string
+                  description: Title of the experience, idea, or step.
+                goal:
+                  type: string
+                  description: Goal or purpose of the experience.
+                resolution:
                   type: object
-                  additionalProperties: true
+                  properties:
+                    depth:
+                      type: string
+                      enum: [light, medium, heavy]
+                    mode:
+                      type: string
+                      enum: [illuminate, practice, challenge, build, reflect, study]
+                    timeScope:
+                      type: string
+                      enum: [immediate, session, multi_day, ongoing]
+                    intensity:
+                      type: string
+                      enum: [low, medium, high]
+                reentry:
+                  type: object
+                  properties:
+                    trigger:
+                      type: string
+                      enum: [completion, inactivity, explicit]
+                    prompt:
+                      type: string
+                    contextScope:
+                      type: string
+                      enum: [interaction_only, full_synthesis, interaction_and_synthesis]
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [lesson, challenge, reflection, questionnaire, essay_tasks, plan_builder, checkpoint]
+                      title:
+                        type: string
+                      payload:
+                        type: object
+                        additionalProperties: true
+                        description: Step-specific payload. Call discover?capability=step_payload&step_type=X for the exact shape.
+                  description: Array of steps for the experience.
+                curriculum_outline_id:
+                  type: string
+                  description: Optional. Links to a curriculum outline.
+                previousExperienceId:
+                  type: string
+                  description: Optional. Links to a prior experience for chaining.
+                rawPrompt:
+                  type: string
+                  description: For ideas — the raw user prompt.
+                gptSummary:
+                  type: string
+                  description: For ideas — GPT's summary of the concept.
+                instanceId:
+                  type: string
+                  description: For steps — the experience instance to add the step to.
       responses:
         '201':
           description: Created
@@ -127,24 +221,51 @@ paths:
     post:
       operationId: updateEntity
       summary: Edit steps, transition status, link knowledge
-      description: Discriminated by `action`. Use for step mutations, lifecycle transitions, and knowledge linking.
+      description: |
+        Discriminated by `action`. All fields except `action` are the mutation payload.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [action, payload]
+              required: [action]
               properties:
                 action:
                   type: string
                   enum: [update_step, reorder_steps, delete_step, transition, link_knowledge]
-                payload:
+                  description: The mutation action to perform.
+                experienceId:
+                  type: string
+                  description: The experience instance ID (required for transition, reorder, delete).
+                transitionAction:
+                  type: string
+                  enum: [approve, publish, activate, start, complete, archive]
+                  description: For action=transition — the lifecycle transition to apply.
+                stepId:
+                  type: string
+                  description: For action=update_step or delete_step — the step to modify.
+                stepPayload:
                   type: object
                   additionalProperties: true
+                  description: For action=update_step — the updated step payload.
+                stepOrder:
+                  type: array
+                  items:
+                    type: string
+                  description: For action=reorder_steps — array of step IDs in desired order.
+                knowledgeUnitId:
+                  type: string
+                  description: For action=link_knowledge — the knowledge unit to link.
+                linkType:
+                  type: string
+                  enum: [teaches, tests, deepens, pre_support, enrichment]
+                  description: For action=link_knowledge — the type of link.
       responses:
         '200':
           description: Updated
+        '400':
+          description: Validation error
 
   /api/gpt/discover:
     get:
@@ -157,7 +278,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline"
+          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research"
         - name: step_type
           in: query
           required: false
