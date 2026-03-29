@@ -60,11 +60,11 @@ Custom GPT → POST /generate_knowledge (Cloud Run)
   ↓ On completion: webhook delivery
   ↓
   ├── Primary: https://mira.mytsapi.us/api/webhook/mirak (local tunnel)
-  └── Fallback: https://mira-mocha-kappa.vercel.app/api/webhook/mirak (production)
+  └── Fallback: https://mira-maddyup.vercel.app/api/webhook/mirak (production)
   ↓
 Mira Studio webhook receiver validates + persists to Supabase:
   ├── knowledge_units table (the research content)
-  └── experience_instances table (auto-proposed experience from research)
+  └── experience_instances table (enriches existing if experience_id present)
 ```
 
 **Key files in `c:/mirak`:**
@@ -82,6 +82,11 @@ Mira Studio webhook receiver validates + persists to Supabase:
 
 **Environment variables (both repos must share):**
 - `MIRAK_WEBHOOK_SECRET` in `c:/mira/.env.local` AND `c:/mirak/.env`
+
+**MiraK-specific env (in `c:/mirak/.env` only):**
+- `GEMINI_SEARCH` — Dedicated API key for MiraK's ADK agents. Do NOT rename this var. See `c:/mirak/AGENTS.md` for full context.
+
+**Cloud Run deployment requires `--set-env-vars` to inject secrets and `--no-cpu-throttling` for background tasks.** See `c:/mirak/AGENTS.md` for deploy commands.
 
 ---
 
@@ -565,3 +570,4 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-27**: MiraK async webhook integration. Added MiraK microservice section to tech stack (FastAPI, Cloud Run, webhook routing). Rewrote `gpt-instructions.md` with fire-and-forget MiraK semantics. Added `knowledge.md` disclaimers (writing guide ≠ schema constraint). Updated `printcode.sh` to dump MiraK source code.
 - **2026-03-27**: Major roadmap restructuring. Replaced Sprint 8B pondering with concrete Sprint 9 (Content Density & Agent Thinking Rails — 6 lanes). Added Sprint 10 placeholder (Voice & Gamification). Renumbered downstream sprints (old 9→11, 10→12, 11→13, 12→14, 13→15). Updated architecture snapshot to include MiraK + Knowledge + full Supabase table list. Added "Target Architecture (next 3 sprints)" diagram. Preserved all sprint history and open decisions.
 - **2026-03-27**: Sprint 10 boardinit — Curriculum-Aware Experience Engine. Added SOP-25 (gateway pattern), SOP-26 (outline before experience). Updated repo map with gateway routes, gateway types, checkpoint renderer, tutor flows, curriculum types. 7 lanes: DB+Types, Gateway, Curriculum Service, Checkpoint+Knowledge Link, Tutor+Genkit, GPT Rewrite+OpenAPI, Integration+Browser.
+- **2026-03-28**: Sprint 11 — MiraK Gateway Stabilization. Fixed GPT Actions `UnrecognizedKwargsError` by flattening OpenAPI schemas (no nested `payload` objects). Fixed MiraK webhook URL (`mira-mocha-kappa` → `mira-maddyup`). Fixed MiraK Cloud Run: added `--no-cpu-throttling` (background tasks were CPU-starved), fixed empty `GEMINI_SEARCH` env var (agent renamed it, deploy grep returned empty), added `.dockerignore`. Made webhook validator lenient (strips incomplete `experience_proposal` instead of rejecting entire payload). Added `readKnowledge` endpoint so GPT can read full research content. Created `c:/mirak/AGENTS.md` — standalone context for MiraK repo. Key lesson: always test locally before deploying, MiraK must be developed from its own repo context.
