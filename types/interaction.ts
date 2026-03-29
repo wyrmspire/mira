@@ -8,7 +8,8 @@ export type InteractionEventType =
   | 'time_on_step'
   | 'experience_started'
   | 'experience_completed'
-  | 'draft_saved';
+  | 'draft_saved'
+  | 'checkpoint_graded';
 
 export interface InteractionEvent {
   id: string;

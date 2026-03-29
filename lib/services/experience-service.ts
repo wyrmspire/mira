@@ -239,8 +239,8 @@ export async function completeExperienceWithAI(instanceId: string, userId: strin
   // 1. Create synthesis snapshot (now AI-powered via Lane 4's changes)
   const snapshot = await createSynthesisSnapshot(userId, 'experience', instanceId);
   
-  // 2. Extract facets with AI (Lane 3's function)
-  await extractFacetsWithAI(userId, instanceId);
+  // 2. Extract facets with AI (now linking to the snapshot)
+  await extractFacetsWithAI(userId, instanceId, snapshot.id);
   
   // 3. Update friction level
   await updateInstanceFriction(instanceId);

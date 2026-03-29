@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KnowledgeUnit } from '@/types/knowledge';
+import { StepKnowledgeLink } from '@/types/curriculum';
 import { COPY } from '@/lib/studio-copy';
 
 interface ConversationTurn {
@@ -15,18 +16,30 @@ interface KnowledgeCompanionProps {
   knowledgeUnitId?: string;
   /** stepId is required when mode === 'tutor' so the coach API has context */
   stepId?: string;
+  /** Explicitly linked units (Lane 5) */
+  initialLinks?: StepKnowledgeLink[];
   /** Controls whether the companion shows read-only content or an interactive tutor chat */
   mode?: 'read' | 'tutor';
+  forceExpanded?: boolean;
 }
 
 export function KnowledgeCompanion({
   domain,
   knowledgeUnitId,
   stepId,
+  initialLinks = [],
   mode = 'read',
+  forceExpanded,
 }: KnowledgeCompanionProps) {
   const [units, setUnits] = useState<KnowledgeUnit[]>([]);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  useEffect(() => {
+    if (forceExpanded) {
+      setIsExpanded(true);
+    }
+  }, [forceExpanded]);
+
   const [loading, setLoading] = useState(false);
 
   // TutorChat state
@@ -42,28 +55,39 @@ export function KnowledgeCompanion({
     async function fetchKnowledge() {
       setLoading(true);
       try {
-        let url = '/api/knowledge';
-        if (domain) {
-          url += `?domain=${encodeURIComponent(domain)}`;
-        } else if (knowledgeUnitId) {
-          // If we have a single ID, we still might want to fetch all in that same domain 
-          // or just that single unit depending on the instruction.
-          // For now, let's stick to domain-based fetching per Lane 5 requirement.
+        // Lane 5: Prioritize initialLinks
+        if (initialLinks && initialLinks.length > 0) {
+          const fetchedUnits: KnowledgeUnit[] = [];
+          for (const link of initialLinks) {
+            try {
+              const res = await fetch(`/api/knowledge/${link.knowledgeUnitId}`);
+              if (res.ok) {
+                const data = await res.json();
+                fetchedUnits.push(data);
+              }
+            } catch (e) {
+              console.error(`Failed to fetch linked unit ${link.knowledgeUnitId}:`, e);
+            }
+          }
+          if (fetchedUnits.length > 0) {
+            setUnits(fetchedUnits);
+            setLoading(false);
+            return;
+          }
         }
-        
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          // API returns units grouped by domain or flat depending on implementation.
-          // Lane 2 W2 says "Groups results by domain in response", so we extract them.
-          if (Array.isArray(data)) {
-            setUnits(data);
-          } else if (data.domains && typeof data.domains === 'object') {
-            // If grouped, flatten for this specific domain
-            const domainUnits = domain ? data.domains[domain] : Object.values(data.domains).flat();
-            setUnits((domainUnits as KnowledgeUnit[]) || []);
-          } else {
-            setUnits([]);
+
+        // Fallback: Domain-based fetching
+        if (domain) {
+          const res = await fetch(`/api/knowledge?domain=${encodeURIComponent(domain)}`);
+          if (res.ok) {
+            const data = await res.json();
+            // Grouped response: extract domain units
+            if (data.units && typeof data.units === 'object') {
+              const domainUnits = data.units[domain] || [];
+              setUnits(domainUnits);
+            } else if (Array.isArray(data)) {
+              setUnits(data);
+            }
           }
         }
       } catch (err) {
@@ -74,7 +98,7 @@ export function KnowledgeCompanion({
     }
 
     fetchKnowledge();
-  }, [isExpanded, domain, knowledgeUnitId]);
+  }, [isExpanded, domain, knowledgeUnitId, initialLinks]);
 
   // Scroll chat to bottom on new messages
   useEffect(() => {
@@ -83,7 +107,7 @@ export function KnowledgeCompanion({
     }
   }, [conversation]);
 
-  if (!domain && !knowledgeUnitId) return null;
+  if (!domain && !knowledgeUnitId && initialLinks.length === 0) return null;
 
   const isTutorMode = mode === 'tutor';
 

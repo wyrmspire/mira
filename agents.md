@@ -564,6 +564,14 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ One experience = one subtopic from a curriculum outline. 3-6 steps. 1-2 sessions to complete.
 - Why: Oversized experiences create false completion drag, break the Kolb rhythm (primer → practice → checkpoint → reflection), and make progress invisible. Chain small experiences instead of building one monolith.
 
+### SOP-29: The Async Research UX Rule — Fire and Forget
+**Learned from**: Sprint 12 Productization UX Audit
+
+- ❌ Telling the user to wait a few minutes while research generates.
+- ❌ Building a spinner or loading UI that blocks the user from continuing.
+- ✅ Tell the user: "I've dispatched my agent to research this. You can start the experience now — it will get richer later." Let the async webhook gracefully append steps and links in the background.
+- Why: MiraK executes in 1-2 minutes. The user shouldn't be blocked. They should step into the scaffolding immediately, and the app should feel magical when it dynamically enriches their active workspace.
+
 ---
 
 ## Lessons Learned (Changelog)

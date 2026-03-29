@@ -2,13 +2,7 @@
 import { ExperienceInstance } from './experience';
 import { ActiveReentryPrompt } from '@/lib/experience/reentry-engine';
 
-export type FacetType =
-  | 'interest'
-  | 'skill'
-  | 'goal'
-  | 'effort_area'
-  | 'preference'
-  | 'social_direction';
+import { ProfileFacet, FacetType } from './profile';
 
 export type FrictionLevel = 'low' | 'medium' | 'high';
 
@@ -20,17 +14,8 @@ export interface SynthesisSnapshot {
   summary: string;
   key_signals: any; // JSONB
   next_candidates: string[]; // JSONB
+  facets?: ProfileFacet[]; // Joined in for UI
   created_at: string;
-}
-
-export interface ProfileFacet {
-  id: string;
-  user_id: string;
-  facet_type: FacetType;
-  value: string;
-  confidence: number;
-  source_snapshot_id: string | null;
-  updated_at: string;
 }
 
 export interface GPTStatePacket {

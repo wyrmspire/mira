@@ -1,4 +1,5 @@
-import { SynthesisSnapshot, ProfileFacet, GPTStatePacket, FrictionLevel } from '@/types/synthesis'
+import { SynthesisSnapshot, GPTStatePacket, FrictionLevel } from '@/types/synthesis'
+import { ProfileFacet } from '@/types/profile'
 import { ExperienceInstance, ReentryContract } from '@/types/experience'
 import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
@@ -8,6 +9,7 @@ import { compressGPTStateFlow } from '@/lib/ai/flows/compress-gpt-state'
 import { runFlowSafe } from '@/lib/ai/safe-flow'
 import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
 import { getKnowledgeSummaryForGPT } from './knowledge-service'
+import { getFacetsBySnapshot } from './facet-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -51,6 +53,23 @@ export async function getLatestSnapshot(userId: string): Promise<SynthesisSnapsh
   const snapshots = await adapter.query<SynthesisSnapshot>('synthesis_snapshots', { user_id: userId })
   if (snapshots.length === 0) return null
   return snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+}
+
+export async function getSynthesisForSource(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot | null> {
+  const adapter = getStorageAdapter()
+  const snapshots = await adapter.query<SynthesisSnapshot>('synthesis_snapshots', { 
+    user_id: userId,
+    source_type: sourceType,
+    source_id: sourceId
+  })
+  if (snapshots.length === 0) return null
+  // Return the most recent one for this specific source
+  const snapshot = snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+  
+  // Attach facets linked to this snapshot
+  snapshot.facets = await getFacetsBySnapshot(snapshot.id)
+  
+  return snapshot
 }
 
 import { evaluateReentryContracts } from '@/lib/experience/reentry-engine'

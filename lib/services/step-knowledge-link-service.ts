@@ -49,3 +49,39 @@ export async function getLinksForStep(stepId: string): Promise<StepKnowledgeLink
   const rows = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { step_id: stepId });
   return rows.map(fromDB);
 }
+/**
+ * Fetches all knowledge links for all steps in an experience.
+ */
+export async function getLinksForExperience(instanceId: string): Promise<StepKnowledgeLink[]> {
+  const adapter = getStorageAdapter();
+  // We need to find all steps first, then their links
+  const { getExperienceSteps } = await import('./experience-service');
+  const steps = await getExperienceSteps(instanceId);
+  const stepIds = steps.map(s => s.id);
+  
+  if (stepIds.length === 0) return [];
+  
+  const allLinks: StepKnowledgeLink[] = [];
+  for (const stepId of stepIds) {
+    const links = await getLinksForStep(stepId);
+    allLinks.push(...links);
+  }
+  
+  return allLinks;
+}
+
+/**
+ * Removes a specific link between a step and a knowledge unit.
+ */
+export async function unlinkStepFromKnowledge(stepId: string, knowledgeUnitId: string): Promise<void> {
+  const adapter = getStorageAdapter();
+  // Find the lid first
+  const links = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { 
+    step_id: stepId,
+    knowledge_unit_id: knowledgeUnitId 
+  });
+  
+  if (links.length > 0) {
+    await adapter.deleteItem('step_knowledge_links', links[0].id);
+  }
+}

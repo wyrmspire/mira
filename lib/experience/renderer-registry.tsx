@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import CheckpointStep from '@/components/experience/steps/CheckpointStep';
 
 export type StepRenderer = React.ComponentType<{
   step: ExperienceStep;

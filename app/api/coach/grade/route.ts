@@ -44,18 +44,63 @@ export async function POST(request: Request) {
       fallback: true,
     };
 
-    const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
+    const { result } = await (async () => {
+      const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
+      const result = await runFlowSafe(
+        () =>
+          gradeCheckpointFlow({
+            question,
+            expectedAnswer,
+            userAnswer: answer,
+            unitContext,
+          }),
+        fallback
+      );
+      return { result };
+    })();
 
-    const result = await runFlowSafe(
-      () =>
-        gradeCheckpointFlow({
-          question,
-          expectedAnswer,
-          userAnswer: answer,
-          unitContext,
-        }),
-      fallback
-    );
+    // Mastery strategy & Interactions: Lane 6
+    // Fetch step to get instanceInfo for progress & interactions
+    const adapter = (await import('@/lib/storage-adapter')).getStorageAdapter();
+    const steps = await adapter.query<any>('experience_steps', { id: stepId });
+    const step = steps[0];
+    const instanceId = step?.instance_id;
+
+    if (instanceId) {
+      const { promoteKnowledgeProgress } = await import('@/lib/services/knowledge-service');
+      const { recordInteraction } = await import('@/lib/services/interaction-service');
+      const { getLinksForStep } = await import('@/lib/services/step-knowledge-link-service');
+      const { DEFAULT_USER_ID } = await import('@/lib/constants');
+
+      // 1. Promote mastery if passing (confidence check handles ambiguity)
+      if (result.correct && result.confidence > 0.7) {
+        const links = await getLinksForStep(stepId);
+        // Promote units linked with type 'tests'
+        const testLinks = links.filter(l => l.linkType === 'tests');
+        
+        for (const link of testLinks) {
+          await promoteKnowledgeProgress(DEFAULT_USER_ID, link.knowledgeUnitId);
+        }
+        
+        // Fallback to knowledgeUnitId from body if no link-table entry exists (backward comp)
+        if (testLinks.length === 0 && knowledgeUnitId) {
+          await promoteKnowledgeProgress(DEFAULT_USER_ID, knowledgeUnitId);
+        }
+      }
+
+      // 2. Log interaction for synthesis
+      await recordInteraction({
+        instanceId,
+        stepId,
+        eventType: 'checkpoint_graded',
+        eventPayload: {
+          questionId,
+          correct: result.correct,
+          confidence: result.confidence,
+          knowledgeUnitId
+        }
+      });
+    }
 
     return NextResponse.json({ ...result, questionId, stepId });
   } catch (error) {

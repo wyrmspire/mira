@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import { StepKnowledgeCard } from '../StepKnowledgeCard';
 
 interface LessonPayload {
   sections: Array<{
@@ -90,6 +91,16 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
         </div>
       </div>
 
+      {/* Lane 5: Pre-support Knowledge */}
+      {step.knowledge_links?.filter(l => l.linkType === 'pre_support').map(link => (
+        <StepKnowledgeCard 
+          key={link.id} 
+          knowledgeUnitId={link.knowledgeUnitId} 
+          linkType={link.linkType} 
+          timing="pre" 
+        />
+      ))}
+
       <div className="space-y-16">
         {sections.length === 0 && (
           <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
@@ -161,7 +172,26 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
                   )}
                 </div>
               </div>
-            ) : (
+            ) : null}
+
+            {/* Lane 5: In-step Knowledge (teaches/enrichment) */}
+            {step.knowledge_links?.filter(l => 
+              (l.linkType === 'teaches' || l.linkType === 'enrichment') && 
+              // This is a simple heuristic: if it's placed near this section
+              // In this case, we'll just render it after the section if it exists
+              // Ideally the links would be indexed to sections, but for now we render them all
+              // at the first section for visibility.
+              idx === 0
+            ).map(link => (
+              <StepKnowledgeCard 
+                key={link.id} 
+                knowledgeUnitId={link.knowledgeUnitId} 
+                linkType={link.linkType} 
+                timing="in" 
+              />
+            ))}
+
+            {section.type !== 'callout' && section.type !== 'checkpoint' && (
               <div className="space-y-4">
                 {section.heading && (
                   <h3 className="text-2xl font-bold text-[#e2e8f0] tracking-tight">{section.heading}</h3>
@@ -172,6 +202,16 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
               </div>
             )}
           </div>
+        ))}
+
+        {/* Lane 5: Post-step Knowledge (deepens) */}
+        {isComplete && step.knowledge_links?.filter(l => l.linkType === 'deepens').map(link => (
+          <StepKnowledgeCard 
+            key={link.id} 
+            knowledgeUnitId={link.knowledgeUnitId} 
+            linkType={link.linkType} 
+            timing="post" 
+          />
         ))}
 
         <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">

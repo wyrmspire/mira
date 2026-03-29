@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // These mirror the exact interfaces consumed by each step renderer.
 // If a renderer changes its contract, the corresponding validator MUST change.
 
-type StepType = 'questionnaire' | 'lesson' | 'reflection' | 'challenge' | 'plan_builder' | 'essay_tasks'
+type StepType = 'questionnaire' | 'lesson' | 'reflection' | 'challenge' | 'plan_builder' | 'essay_tasks' | 'checkpoint'
 
 interface ValidationResult {
   valid: boolean
@@ -77,6 +77,19 @@ const VALIDATORS: Record<StepType, (payload: any) => ValidationResult> = {
     else p.tasks.forEach((t: any, i: number) => {
       if (!t.id) errors.push(`tasks[${i}] missing \`id\``)
       if (!t.description) errors.push(`tasks[${i}] missing \`description\``)
+    })
+    return { valid: errors.length === 0, errors }
+  },
+
+  checkpoint: (p) => {
+    const errors: string[] = []
+    if (!Array.isArray(p?.questions)) errors.push('missing `questions` array')
+    else p.questions.forEach((q: any, i: number) => {
+      if (!q.id) errors.push(`questions[${i}] missing \`id\``)
+      if (!q.question) errors.push(`questions[${i}] missing \`question\``)
+      if (!q.expected_answer) errors.push(`questions[${i}] missing \`expected_answer\``)
+      if (!['free_text', 'choice'].includes(q.format)) errors.push(`questions[${i}] invalid \`format\` (must be free_text|choice)`)
+      if (q.format === 'choice' && !Array.isArray(q.options)) errors.push(`questions[${i}] choice format requires \`options\` array`)
     })
     return { valid: errors.length === 0, errors }
   },
@@ -295,6 +308,35 @@ export async function POST() {
           { id: 't1', description: 'Read the essay thoroughly' },
           { id: 't2', description: 'Review your focus ritual' }
         ]
+      },
+      completion_rule: null,
+    })
+
+    // Step 6: Checkpoint
+    await createValidatedStep({
+      instance_id: persistent.id,
+      step_order: 6,
+      step_type: 'checkpoint',
+      title: 'Knowledge Check',
+      payload: {
+        questions: [
+          { 
+            id: 'chk1', 
+            question: 'What is the most critical component of deep work?', 
+            expected_answer: 'Uninterrupted focus',
+            format: 'choice',
+            options: ['Multitasking', 'Uninterrupted focus', 'Checking email frequently', 'Listening to music'],
+            difficulty: 'easy'
+          },
+          { 
+            id: 'chk2', 
+            question: 'Describe an effective routine that helps you enter a state of deep work.', 
+            expected_answer: 'Removing all distractions, dedicating a specific time block, and committing to a single task without interruption.',
+            format: 'free_text',
+            difficulty: 'medium'
+          }
+        ],
+        on_fail: 'tutor_redirect' // to verify CoachTrigger
       },
       completion_rule: null,
     })

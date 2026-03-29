@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server'
-import { createSynthesisSnapshot, getLatestSnapshot } from '@/lib/services/synthesis-service'
+import { createSynthesisSnapshot, getLatestSnapshot, getSynthesisForSource } from '@/lib/services/synthesis-service'
 import { completeExperienceWithAI } from '@/lib/services/experience-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('userId') || DEFAULT_USER_ID
+  const sourceType = searchParams.get('sourceType')
+  const sourceId = searchParams.get('sourceId')
 
   try {
-    const snapshot = await getLatestSnapshot(userId)
+    let snapshot;
+    if (sourceType && sourceId) {
+      snapshot = await getSynthesisForSource(userId, sourceType, sourceId)
+    } else {
+      snapshot = await getLatestSnapshot(userId)
+    }
+    
     if (!snapshot) {
       return NextResponse.json({ message: 'No synthesis snapshot found' }, { status: 404 })
     }

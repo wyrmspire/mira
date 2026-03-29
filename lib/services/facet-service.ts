@@ -12,6 +12,11 @@ export async function getFacetsForUser(userId: string): Promise<ProfileFacet[]> 
   return adapter.query<ProfileFacet>('profile_facets', { user_id: userId })
 }
 
+export async function getFacetsBySnapshot(snapshotId: string): Promise<ProfileFacet[]> {
+  const adapter = getStorageAdapter()
+  return adapter.query<ProfileFacet>('profile_facets', { source_snapshot_id: snapshotId })
+}
+
 export async function upsertFacet(userId: string, update: FacetUpdate): Promise<ProfileFacet> {
   const adapter = getStorageAdapter()
   
@@ -196,7 +201,7 @@ export async function buildUserProfile(userId: string): Promise<UserProfile> {
  * 3. Upsert extracted facets to the user's profile.
  * 4. Fall back to mechanical extraction if AI is unavailable.
  */
-export async function extractFacetsWithAI(userId: string, instanceId: string): Promise<ProfileFacet[]> {
+export async function extractFacetsWithAI(userId: string, instanceId: string, sourceSnapshotId?: string): Promise<ProfileFacet[]> {
   const context = await buildFacetContext(instanceId, userId);
   
   const result = await runFlowSafe(
@@ -218,7 +223,8 @@ export async function extractFacetsWithAI(userId: string, instanceId: string): P
       facet_type: facet.facetType as FacetType,
       value: facet.value,
       confidence: facet.confidence,
-      evidence: facet.evidence
+      evidence: facet.evidence,
+      source_snapshot_id: sourceSnapshotId
     });
     upsertedFacets.push(upserted);
   }

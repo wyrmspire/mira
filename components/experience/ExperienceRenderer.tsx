@@ -15,6 +15,7 @@ import PlanBuilderStep from './steps/PlanBuilderStep';
 import ReflectionStep from './steps/ReflectionStep';
 import EssayTasksStep from './steps/EssayTasksStep';
 import CheckpointStep from './steps/CheckpointStep';
+import CompletionScreen from './CompletionScreen';
 
 // Register all built-in renderers
 registerRenderer('questionnaire', QuestionnaireStep as any);
@@ -43,6 +44,7 @@ interface ExperienceRendererProps {
 }
 
 import { KnowledgeCompanion } from './KnowledgeCompanion';
+import { CoachTrigger } from './CoachTrigger';
 
 export default function ExperienceRenderer({
   instance,
@@ -60,7 +62,27 @@ export default function ExperienceRenderer({
   readOnly,
   initialDraft
 }: ExperienceRendererProps) {
-  
+  const [failedCheckpoint, setFailedCheckpoint] = React.useState(false);
+  const [coachForceExpanded, setCoachForceExpanded] = React.useState(false);
+  const [coachMode, setCoachMode] = React.useState<'read' | 'tutor'>('read');
+
+  // Reset trigger state on step change
+  React.useEffect(() => {
+    setFailedCheckpoint(false);
+    setCoachForceExpanded(false);
+    setCoachMode('read');
+  }, [currentStepId]);
+
+  const handleGradeComplete = (results: Record<string, any>) => {
+    const hasFail = Object.values(results).some((r: any) => !r.correct);
+    if (hasFail) setFailedCheckpoint(true);
+  };
+
+  const handleOpenCoach = () => {
+    setCoachMode('tutor');
+    setCoachForceExpanded(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[50vh]">
@@ -70,22 +92,7 @@ export default function ExperienceRenderer({
   }
 
   if (isCompleted) {
-    return (
-      <div className="flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-700 max-w-xl mx-auto py-20 text-center px-6">
-        <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <div>
-          <h2 className="text-4xl font-bold text-[#f1f5f9] mb-4">{COPY.completion.heading}</h2>
-          <p className="text-[#94a3b8] text-lg leading-relaxed">{COPY.completion.body}</p>
-        </div>
-        <div className="bg-[#12121a] p-4 rounded-xl border border-[#1e1e2e] text-[#4a4a6a] text-sm font-medium">
-          {COPY.completion.returnToChat}
-        </div>
-      </div>
-    );
+    return <CompletionScreen experienceId={instance.id} userId={instance.user_id} />;
   }
 
   if (showOverview) {
@@ -119,6 +126,11 @@ export default function ExperienceRenderer({
     }
   }
 
+  // Lane 6: Wire checkpoint results back to renderer for CoachTrigger
+  if (currentStep?.step_type === 'checkpoint') {
+    extraProps.onGradeComplete = handleGradeComplete;
+  }
+
   return (
     <div className={`w-full max-w-2xl mx-auto px-6 py-12 ${depth === 'light' ? 'flex items-center justify-center min-h-[80vh]' : ''}`}>
       {currentStep && StepComponent ? (
@@ -132,9 +144,22 @@ export default function ExperienceRenderer({
           />
           
           {/* Lane 5: Knowledge Companion */}
-          {(currentStep.payload as any)?.knowledge_domain && (
-            <KnowledgeCompanion domain={(currentStep.payload as any).knowledge_domain} />
-          )}
+          <KnowledgeCompanion 
+            domain={(currentStep.payload as any)?.knowledge_domain} 
+            stepId={currentStep.id}
+            initialLinks={currentStep.knowledge_links}
+            mode={coachMode}
+            forceExpanded={coachForceExpanded}
+          />
+
+          {/* Lane 6: Coach Triggers */}
+          <CoachTrigger 
+            stepId={currentStep.id}
+            userId={instance.user_id}
+            onOpenCoach={handleOpenCoach}
+            failedCheckpoint={failedCheckpoint}
+            knowledgeLinks={currentStep.knowledge_links}
+          />
         </div>
       ) : (
         <div className="text-[#94a3b8] italic text-center animate-pulse">Waking up Step Renderer...</div>

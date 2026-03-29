@@ -1,5 +1,8 @@
 import { AppShell } from '@/components/shell/app-shell';
 import { 
+  getCurriculumOutlinesForUser 
+} from '@/lib/services/curriculum-outline-service';
+import { 
   getActiveExperiences, 
   getCompletedExperiences, 
   getEphemeralExperiences, 
@@ -20,22 +23,23 @@ export default async function LibraryPage() {
   console.log('[Library] Storage adapter:', adapter.constructor.name);
 
   // Parallel fetch for all sections
-  const [active, completed, moments, proposed] = await Promise.all([
+  const [active, completed, moments, proposed, outlines] = await Promise.all([
     getActiveExperiences(userId),
     getCompletedExperiences(userId),
     getEphemeralExperiences(userId),
     getProposedExperiences(userId),
+    getCurriculumOutlinesForUser(userId),
   ]);
 
-  console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length}`);
+  console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length} outlines=${outlines.length}`);
   active.forEach(e => console.log(`  [ACTIVE] ${e.title}`));
   proposed.forEach(e => console.log(`  [PROPOSED] ${e.title}`));
 
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto pb-20 px-4 md:px-8">
-        <header className="mb-12">
-          <h1 className="text-4xl font-bold text-[#f1f5f9] mb-2">{COPY.library.heading}</h1>
+        <header className="mb-20 space-y-2">
+          <h1 className="text-5xl font-extrabold text-[#f1f5f9] tracking-tighter leading-none">{COPY.library.heading}</h1>
           <p className="text-[#94a3b8] tracking-tight">{COPY.library.subheading}</p>
         </header>
 
@@ -44,6 +48,7 @@ export default async function LibraryPage() {
           completed={completed}
           moments={moments}
           proposed={proposed}
+          outlines={outlines}
         />
       </div>
     </AppShell>

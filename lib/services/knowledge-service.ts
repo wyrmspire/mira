@@ -289,3 +289,54 @@ export async function runKnowledgeEnrichment(unitId: string, userId: string): Pr
     // Swallowing error as per W4 requirement: the webhook must NEVER fail because enrichment failed.
   }
 }
+/**
+ * promoteKnowledgeProgress - Lane 6
+ * Advancements mastery status by one level: unseen -> read -> practiced -> confident.
+ */
+export async function promoteKnowledgeProgress(userId: string, unitId: string): Promise<void> {
+  const adapter = getStorageAdapter();
+  const PROGRESS_ORDER: MasteryStatus[] = ['unseen', 'read', 'practiced', 'confident'];
+  
+  // 1. Get current status
+  const existing = await adapter.query<any>('knowledge_progress', { 
+    user_id: userId, 
+    unit_id: unitId 
+  });
+
+  let currentStatus: MasteryStatus = 'unseen';
+  if (existing.length > 0) {
+    currentStatus = existing[0].mastery_status as MasteryStatus;
+  }
+
+  // 2. Determine next status
+  const currentIndex = PROGRESS_ORDER.indexOf(currentStatus);
+  if (currentIndex === -1 || currentIndex === PROGRESS_ORDER.length - 1) {
+    return; // Already at max or unknown
+  }
+
+  const nextStatus = PROGRESS_ORDER[currentIndex + 1];
+
+  // 3. Update or create progress record
+  const now = new Date().toISOString();
+  if (existing.length > 0) {
+    await adapter.updateItem<any>('knowledge_progress', existing[0].id, {
+      mastery_status: nextStatus,
+      last_studied_at: now
+    });
+  } else {
+    await adapter.saveItem<any>('knowledge_progress', {
+      id: generateId(),
+      user_id: userId,
+      unit_id: unitId,
+      mastery_status: nextStatus,
+      last_studied_at: now,
+      created_at: now
+    });
+  }
+
+  // 4. Also update the unit's mastery status for consistency
+  await adapter.updateItem<any>('knowledge_units', unitId, {
+    mastery_status: nextStatus,
+    updated_at: now
+  });
+}

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import { StepKnowledgeCard } from '../StepKnowledgeCard';
 
 interface ChallengePayload {
   objectives: Array<{
@@ -63,6 +64,26 @@ export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: Cha
           style={{ width: `${percent}%` }}
         />
       </div>
+      
+      {/* Lane 5: Pre-support Knowledge */}
+      {step.knowledge_links?.filter(l => l.linkType === 'pre_support').map(link => (
+        <StepKnowledgeCard 
+          key={link.id} 
+          knowledgeUnitId={link.knowledgeUnitId} 
+          linkType={link.linkType} 
+          timing="pre" 
+        />
+      ))}
+
+      {/* Lane 5: In-step Knowledge (teaches/enrichment) */}
+      {step.knowledge_links?.filter(l => l.linkType === 'teaches' || l.linkType === 'enrichment').map(link => (
+        <StepKnowledgeCard 
+          key={link.id} 
+          knowledgeUnitId={link.knowledgeUnitId} 
+          linkType={link.linkType} 
+          timing="in" 
+        />
+      ))}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {objectives.length === 0 && (
@@ -138,6 +159,16 @@ export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: Cha
             </div>
           );
         })}
+
+        {/* Lane 5: Post-step Knowledge (deepens) */}
+        {canComplete && step.knowledge_links?.filter(l => l.linkType === 'deepens').map(link => (
+          <StepKnowledgeCard 
+            key={link.id} 
+            knowledgeUnitId={link.knowledgeUnitId} 
+            linkType={link.linkType} 
+            timing="post" 
+          />
+        ))}
 
         <div className="flex items-center justify-between pt-8 border-t border-[#1e1e2e]">
           <button

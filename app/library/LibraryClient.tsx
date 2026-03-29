@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { ExperienceInstance } from '@/types/experience';
+import type { CurriculumOutline } from '@/types/curriculum';
 import ExperienceCard from '@/components/experience/ExperienceCard';
+import TrackSection from '@/components/experience/TrackSection';
 import { COPY } from '@/lib/studio-copy';
 import { ROUTES } from '@/lib/routes';
 
@@ -13,13 +15,15 @@ interface LibraryClientProps {
   completed: ExperienceInstance[];
   moments: ExperienceInstance[];
   proposed: ExperienceInstance[];
+  outlines: CurriculumOutline[];
 }
 
 export default function LibraryClient({ 
   active, 
   completed, 
   moments, 
-  proposed 
+  proposed,
+  outlines
 }: LibraryClientProps) {
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -83,6 +87,11 @@ export default function LibraryClient({
 
   return (
     <div>
+      {/* Track Visualization (New in Sprint 12) */}
+      <div className="mb-20">
+        <TrackSection outlines={outlines} />
+      </div>
+
       {/* Suggestions (Pending Review) */}
       <Section 
         title={COPY.library.reviewSection} 
@@ -94,7 +103,7 @@ export default function LibraryClient({
             <button 
               onClick={() => handleAcceptAndStart(instance.id)}
               disabled={!!loadingId}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98] disabled:opacity-50"
             >
               {loadingId === instance.id ? (
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />

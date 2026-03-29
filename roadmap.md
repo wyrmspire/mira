@@ -80,11 +80,14 @@ Replaced naive string summaries and keyword-splitting with AI-powered intelligen
 |--------|--------|------|
 | Sprints 1–9 | ✅ Complete | Local control plane, GitHub factory, Supabase foundation, experience renderer + library, workspace hardening (R1-R10), genkit intelligence (4 flows), knowledge tab + MiraK integration, content density + agent thinking rails |
 | Sprint 10 | ✅ Complete | Curriculum-aware experience engine: curriculum outlines (table + service + types), GPT gateway (5 endpoints: state/plan/create/update/discover), discover registry (9 capabilities), coach API (3 routes), Genkit tutor + grading flows, step-knowledge-link service, OpenAPI rewrite, migration 007 |
-| Sprint 11 | ✅ Code Complete | MiraK enrichment loop: enrichment webhook mode (experience_id), flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance. **Operational close pending**: MiraK Cloud Run redeploy, Vercel push, GPT Action schema update. |
+| Sprint 11 | ✅ Complete | MiraK enrichment loop: enrichment webhook mode (experience_id), flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance. |
+| Sprint 12 | ✅ Complete | Learning Loop Productization: Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge. The "three emotional moments" are fully functional. |
 
-### 🔄 Current Phase — Curriculum Infrastructure Built, Productization Next
+### 🔄 Current Phase — Goal OS (Sprint 13)
 
-The system can now plan learning domains, create right-sized experiences, link knowledge to steps, grade checkpoints semantically, and dispatch asynchronous research that enriches existing experiences. **But almost none of this intelligence is visible to the user.**
+The curriculum infrastructure and learning loops are now fully productized, visible, and functioning. The system can plan a curriculum, link knowledge, render checkpoints, provide coaching, and celebrate synthesis natively in the browser.
+
+The next structural challenge is **Containerization**: Users need a top-level anchor for their multi-week journeys. Right now, curricula float freely. The **Goal OS** will introduce the "Goal" entity as the highest-level object, grouping curriculum tracks, knowledge domains, and timeline events into coherent, long-term operating systems.
 
 The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT has 6 endpoints:
 
@@ -123,19 +126,18 @@ Additionally, MiraK is a separate GPT Action (`POST /generate_knowledge`) for fi
 - GPT Action schema update in ChatGPT settings
 - End-to-end production enrichment verification
 
-**What is NOT visible to the user (the product gap):**
-- No visible curriculum tracks or outline UI
-- No "Your Path" or "Focus Today" on the home page
-- No research status visibility (pending/in-progress/landed)
-- No synthesis or growth feedback on experience completion
-- No visible knowledge timing inside steps (pre-support, in-step, post-step)
-- No checkpoint step renderer (component not built)
-- No coach surfacing triggers (coach is opt-in only)
-- No mastery earned through checkpoints (self-reported only)
-- No welcome-back context reconstruction
-- Navigation still prioritizes legacy idea-management surfaces
+**Newly Productized (Sprint 12):**
+- Visible curriculum tracks and outline UI (`/library` and home page)
+- "Your Path" and "Focus Today" on the home page
+- Research status visibility (pending/in-progress/landed)
+- Synthesis and growth feedback on experience completion (CompletionScreen)
+- Visible knowledge timing inside steps (pre-support, in-step, post-step cards)
+- Checkpoint step renderer with semantic grading
+- Proactive coach surfacing triggers on failed checkpoints or high dwell time
+- Mastery automatically earned/promoted through semantic checkpoint grading
+- Welcome-back session reconstruction context on the home page
 
-This is the core product risk: **the app surfaces none of the intelligence it has built.**
+This successfully bridges the intelligence layer into the felt UX. The next gap is containerization (Goal OS).
 
 ### Current Architecture
 

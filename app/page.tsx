@@ -3,8 +3,10 @@ export const dynamic = 'force-dynamic'
 import { getIdeasByStatus } from '@/lib/services/ideas-service'
 import { getArenaProjects } from '@/lib/services/projects-service'
 import { getInboxEvents } from '@/lib/services/inbox-service'
-import { getActiveExperiences, getProposedExperiences } from '@/lib/services/experience-service'
-import { getKnowledgeDomains } from '@/lib/services/knowledge-service'
+import { getActiveExperiences, getProposedExperiences, getExperienceInstances, getExperienceSteps, getResumeStepIndex } from '@/lib/services/experience-service'
+import { getKnowledgeDomains, getKnowledgeUnits } from '@/lib/services/knowledge-service'
+import { getCurriculumOutlinesForUser } from '@/lib/services/curriculum-outline-service'
+import { getInteractionsByInstance } from '@/lib/services/interaction-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
@@ -12,8 +14,12 @@ import { ROUTES } from '@/lib/routes'
 import { formatRelativeTime } from '@/lib/date'
 import { COPY } from '@/lib/studio-copy'
 import HomeExperienceAction from '@/components/experience/HomeExperienceAction'
+import { FocusTodayCard } from '@/components/common/FocusTodayCard'
+import { ResearchStatusBadge } from '@/components/common/ResearchStatusBadge'
+import TrackSection from '@/components/experience/TrackSection'
 import type { Project } from '@/types/project'
 import type { InboxEvent } from '@/types/inbox'
+import type { ExperienceInstance, ExperienceStep } from '@/types/experience'
 
 function HealthDot({ health }: { health: Project['health'] }) {
   const colorMap = {
@@ -41,14 +47,57 @@ function SeverityIcon({ severity }: { severity: InboxEvent['severity'] }) {
 }
 
 export default async function HomePage() {
+  const userId = DEFAULT_USER_ID
   const captured = await getIdeasByStatus('captured')
   const arenaProjects = await getArenaProjects()
   const allEvents = await getInboxEvents()
   const recentEvents = allEvents.slice(0, 3)
 
-  const proposedExperiences = await getProposedExperiences(DEFAULT_USER_ID)
-  const activeExperiences = await getActiveExperiences(DEFAULT_USER_ID)
-  const knowledgeSummary = await getKnowledgeDomains(DEFAULT_USER_ID)
+  const proposedExperiences = await getProposedExperiences(userId)
+  const activeExperiences = await getActiveExperiences(userId)
+  const allInstances = await getExperienceInstances({ userId })
+  const knowledgeUnits = await getKnowledgeUnits(userId)
+  const knowledgeSummary = await getKnowledgeDomains(userId)
+  const outlines = await getCurriculumOutlinesForUser(userId)
+
+  // 1. Find the most recently active experience
+  let focusExperience: ExperienceInstance | null = null
+  let focusLastActivity: string | null = null
+  let focusNextStep: ExperienceStep | null = null
+  let focusTotalSteps = 0
+
+  // Filter to just active-ish ones
+  const activeish = allInstances.filter(e => ['active', 'published', 'injected'].includes(e.status))
+  
+  for (const exp of activeish) {
+    const interactions = await getInteractionsByInstance(exp.id)
+    const latestInteraction = interactions.length > 0
+      ? interactions.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b).created_at
+      : exp.created_at
+
+    if (!focusLastActivity || new Date(latestInteraction) > new Date(focusLastActivity)) {
+      focusExperience = exp
+      focusLastActivity = latestInteraction
+    }
+  }
+
+  if (focusExperience) {
+    const steps = await getExperienceSteps(focusExperience.id)
+    const resumeIndex = await getResumeStepIndex(focusExperience.id)
+    focusNextStep = steps[resumeIndex] || null
+    focusTotalSteps = steps.length
+  }
+
+  // 2. Research status
+  const lastVisitThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 24h heuristic
+  const newUnitsCount = knowledgeUnits.filter(u => u.created_at > lastVisitThreshold).length
+  
+  // 3. Welcome back context
+  let lastSessionDays = 0
+  if (focusLastActivity) {
+    const diffMs = Date.now() - new Date(focusLastActivity).getTime()
+    lastSessionDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  }
 
   const needsAttentionProjects = arenaProjects.filter(
     (p) => p.health === 'red' || p.health === 'yellow'
@@ -59,10 +108,43 @@ export default async function HomePage() {
     <AppShell>
       <div className="max-w-2xl mx-auto space-y-10">
         {/* Page title */}
-        <div>
-          <h1 className="text-3xl font-bold text-[#e2e8f0] mb-1">Studio</h1>
-          <p className="text-[#64748b] text-sm">Your attention cockpit.</p>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-[#e2e8f0] mb-0.5">Studio</h1>
+              <p className="text-[#64748b] text-sm">Your attention cockpit.</p>
+            </div>
+            {lastSessionDays > 1 && (
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block">Welcome back</span>
+                <span className="text-xs text-[#94a3b8]">{lastSessionDays} days since your last session</span>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* ── Section: Focus Today ── */}
+        <section>
+          <FocusTodayCard 
+            experience={focusExperience}
+            nextStep={focusNextStep}
+            totalSteps={focusTotalSteps}
+            lastActivityAt={focusLastActivity}
+          />
+        </section>
+
+        {/* ── Section: Your Path ── */}
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest">
+              Your Path
+            </h2>
+            <Link href={ROUTES.library} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+              Explore Library →
+            </Link>
+          </div>
+          <TrackSection outlines={outlines.filter(o => o.status === 'active' || o.status === 'planning')} />
+        </section>
 
         {/* ── Section 0: Suggested Experiences ── */}
         {proposedExperiences.length > 0 && (
@@ -113,10 +195,14 @@ export default async function HomePage() {
         {/* ── Section 1.5: Knowledge Summary ── */}
         {knowledgeSummary.length > 0 && (
           <section>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3 mb-4">
               <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
                 {COPY.knowledge.heading}
               </h2>
+              <ResearchStatusBadge newUnitsCount={newUnitsCount} />
+            </div>
+            <div className="flex items-center justify-between mb-4 -mt-2">
+              <span className="text-xs text-[#64748b]">Your recently mapped terrain.</span>
               <Link href={ROUTES.knowledge} className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
                 {COPY.knowledge.actions.viewAll}
               </Link>
