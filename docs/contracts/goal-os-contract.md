@@ -11,7 +11,7 @@ Goal
 ├── SkillDomain (1:N — each goal has multiple competency areas)
 │   ├── KnowledgeUnit (M:N — via linked_unit_ids)
 │   └── ExperienceInstance (M:N — via linked_experience_ids)
-└── CurriculumOutline (1:N — via goal_id FK + outline_ids denorm)
+└── CurriculumOutline (1:N — via goal_id FK)
     └── CurriculumSubtopic (1:N — embedded JSONB)
         └── ExperienceInstance (1:1 — via experienceId)
 ```

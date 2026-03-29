@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS goals (
   description TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'intake',
   domains JSONB DEFAULT '[]'::jsonb,
-  outline_ids JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

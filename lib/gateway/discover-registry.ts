@@ -144,7 +144,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     const schemas: Record<string, any> = {
       lesson: {
         sections: [
-          { heading: 'string', body: 'markdown', type: 'text | callout | example' }
+          { heading: 'string', body: 'markdown', type: 'text | callout | checkpoint' }
         ]
       },
       challenge: {
@@ -155,6 +155,11 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       },
       questionnaire: {
         questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }]
+      },
+      plan_builder: {
+        sections: [
+          { type: 'goals | milestones | resources', items: [{ id: 'string', text: 'string' }] }
+        ]
       },
       essay_tasks: {
         content: 'string',
@@ -176,7 +181,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       description: `Payload schema for the ${stepType || 'specified'} step type.`,
       schema: stepType ? (schemas[stepType] || { error: 'Unknown step type' }) : schemas,
       example: null,
-      when_to_use: 'Before authroing steps for /create or /update actions.'
+      when_to_use: 'Before authoring steps for /create or /update actions.'
     };
   },
 

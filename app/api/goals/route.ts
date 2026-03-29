@@ -31,7 +31,6 @@ export async function POST(request: Request) {
       title: body.title,
       description: body.description ?? '',
       domains: body.domains ?? [],
-      outlineIds: body.outlineIds ?? [],
       status: body.status ?? 'intake',
     };
 

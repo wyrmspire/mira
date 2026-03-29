@@ -122,6 +122,9 @@ paths:
                 outlineId:
                   type: string
                   description: Required for assess_gaps. The outline to analyze.
+                goalId:
+                  type: string
+                  description: Optional. Links the outline to a goal. If provided, auto-activates the goal.
                 userId:
                   type: string
                   default: "a0000000-0000-0000-0000-000000000001"
@@ -287,7 +290,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research"
+          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal"
         - name: step_type
           in: query
           required: false

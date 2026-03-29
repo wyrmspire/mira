@@ -66,7 +66,8 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 
 > Fix the contract drift so GPT can actually create valid payloads and the OpenAPI spec matches runtime.
 
-**W1 — Fix discover registry → validator alignment** ⬜
+**W1 — Fix discover registry → validator alignment** ✅
+- **Done (Lane 7)**: Fixed lesson type `example` → `checkpoint` to match validator. Added missing `plan_builder` schema. Fixed typo in `when_to_use`. All 7 step types now match `step-payload-validator.ts`.
 - In `lib/gateway/discover-registry.ts`, update the step payload examples for:
   - `reflection`: Change `{ prompt, guide }` → `{ prompts: [{ id, text }] }` to match validator
   - `questionnaire`: Change `questions[].text` → `questions[].label` to match validator
@@ -75,32 +76,36 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 - Cross-reference `lib/validators/step-payload-validator.ts` for each type's required fields
 - Verify `lesson` and `checkpoint` still match (they should already)
 
-**W2 — Update OpenAPI schema** ⬜
+**W2 — Update OpenAPI schema** ✅
+- **Done (Lane 7)**: `goal` already in create enum, `goal`+`skill_domains` already in state schema. Added `goalId` to plan endpoint. Added `goal` to discover capability examples.
 - In `public/openapi.yaml`:
   - Add `goal` to the `createEntity` type enum (alongside experience, ephemeral, idea, step)
   - Add `goal` and `skill_domains` fields to `getGPTState` response schema
   - Update description to mention Goal OS
   - Verify all 6 endpoints are listed with accurate request/response schemas
 
-**W3 — Fix goal service contract gap** ⬜
+**W3 — Fix goal service contract gap** ✅
+- **Done (Lane 7)**: `outlineIds` was already absent from `Goal` type and `GoalRow`. Removed the last vestige from `api/goals/route.ts` POST handler. The relationship lives in `curriculum_outlines.goal_id`, not denormalized on Goal.
 - Decision: Remove `outlineIds` from `Goal` type (the relationship lives in `curriculum_outlines.goal_id`, not denormalized on Goal). OR implement `addOutlineToGoal`/`removeOutlineFromGoal` in `goal-service.ts`.
 - Recommended: Remove `outlineIds` from `types/goal.ts` and `GoalRow`. Simplify — the join is through `curriculum_outlines.goal_id`.
 - Update `docs/contracts/goal-os-contract.md` to reflect this decision.
 
-**W4 — Fix mastery recompute action mismatch** ⬜
+**W4 — Fix mastery recompute action mismatch** ✅
+- **Done (Lane 4, verified Lane 7)**: ExperienceRenderer L129 already sends `action: 'recompute_mastery'` with `goalId` from outline. Also fixed N+1 pattern in `computeSkillMastery()` (SOP-30: single instance fetch + batch knowledge units).
 - In `components/experience/ExperienceRenderer.tsx` (L105): Change `action: 'recompute'` → `action: 'recompute_mastery'`
 - Also pass `goalId` in the PATCH body (resolve from outline.goalId which is already fetched)
 - Verify the fix by tracing: ExperienceRenderer → PATCH /api/skills/:id → `updateDomainMastery(goalId, id)`
 
-**W5 — Update GPT instructions** ⬜
+**W5 — Update GPT instructions** ✅
+- **Done (Lane 7)**: Verified `gpt-instructions.md` already contains the correct step payload field naming warnings (`reflection` prompts vs prompt, `questionnaire` label vs text) and accurate Goal Intake Protocol (using `goalId` on `create_outline`).
 - In `gpt-instructions.md`: Add a note about step payload field naming for `reflection` (uses `prompts[]` not `prompt`) and `questionnaire` (uses `label` not `text`)
 - Ensure the goal intake protocol section is accurate
 
 **Done when:**
-- All 6 step types' discover examples pass `validateStepPayload()` without errors
-- `openapi.yaml` documents `goal` in create and `goal`+`skill_domains` in state
-- ExperienceRenderer sends correct `recompute_mastery` action with `goalId`
-- TSC clean
+- ✅ All 7 step types' discover examples pass `validateStepPayload()` without errors
+- ✅ `openapi.yaml` documents `goal` in create and `goal`+`skill_domains` in state
+- ✅ ExperienceRenderer sends correct `recompute_mastery` action with `goalId`
+- ✅ TSC clean
 
 ---
 
@@ -322,10 +327,10 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 
 | Lane | TSC | Notes |
 |------|-----|-------|
-| Lane 1 | ⬜ | |
+| Lane 1 | ✅ | W1-W5 verified during Lane 7 integration pass. Lane fully complete. |
 | Lane 2 | ✅ | TSC Clean |
 | Lane 3 | ✅ | Heuristics and reason badge added cleanly. |
 | Lane 4 | ✅ | |
-| Lane 5 | ✅ | Clean for Lane 5 files, error in Lane 2's SkillTreeCard |
+| Lane 5 | ✅ | TSC Clean |
 | Lane 6 | ✅ | TSC Clean |
-| Lane 7 | ⬜ | |
+| Lane 7 | ✅ | TSC + build clean. Registry/validator aligned. Mastery N+1 fixed. OpenAPI synced. Goal outlineIds removed. |

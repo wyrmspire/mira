@@ -1,6 +1,6 @@
 import { SkillDomain } from '@/types/skill';
 import { updateSkillDomain, getSkillDomain } from '@/lib/services/skill-domain-service';
-import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+import { getKnowledgeUnitsByIds } from '@/lib/services/knowledge-service';
 import { getExperienceInstances } from '@/lib/services/experience-service';
 import { SkillMasteryLevel } from '@/lib/constants';
 
@@ -24,22 +24,21 @@ export async function computeSkillMastery(domain: SkillDomain): Promise<{
   let confidentUnits = 0;
   const hasAnyLink = domain.linkedUnitIds.length > 0 || domain.linkedExperienceIds.length > 0;
   
-  // 1. Fetch linked experiences to count completions
-  for (const eid of domain.linkedExperienceIds) {
-    // getExperienceInstances supports query. We pass id to fetch the specific one.
-    const instances = await getExperienceInstances({ userId: domain.userId } as any);
-    const instance = instances.find(i => i.id === eid);
-    if (instance && instance.status === 'completed') {
-      completedExperiences++;
+  // 1. Fetch ALL user instances once, then filter locally (SOP-30: no N+1)
+  if (domain.linkedExperienceIds.length > 0) {
+    const allInstances = await getExperienceInstances({ userId: domain.userId });
+    const linkedSet = new Set(domain.linkedExperienceIds);
+    for (const inst of allInstances) {
+      if (linkedSet.has(inst.id) && inst.status === 'completed') {
+        completedExperiences++;
+      }
     }
   }
   
-  // 2. Fetch linked knowledge units to count confidence
-  for (const uid of domain.linkedUnitIds) {
-    const unit = await getKnowledgeUnitById(uid);
-    if (unit && unit.mastery_status === 'confident') {
-      confidentUnits++;
-    }
+  // 2. Batch-fetch linked knowledge units (SOP-30: one query, not N)
+  if (domain.linkedUnitIds.length > 0) {
+    const units = await getKnowledgeUnitsByIds(domain.linkedUnitIds);
+    confidentUnits = units.filter(u => u.mastery_status === 'confident').length;
   }
   
   const evidenceCount = completedExperiences + confidentUnits;
