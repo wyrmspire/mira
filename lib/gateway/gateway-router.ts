@@ -23,6 +23,28 @@ export async function dispatchCreate(type: string, payload: any) {
       return injectEphemeralExperience(payload);
     case 'idea':
       return createIdea(payload);
+    case 'goal':
+      const { createGoal } = await import('@/lib/services/goal-service');
+      // Lane 2 owns skill-domain-service. We use a dynamic import to tolerate its absence during initial pass.
+      const goal = await createGoal(payload);
+      if (payload.domains && Array.isArray(payload.domains)) {
+        try {
+          const { createSkillDomain } = await import('@/lib/services/skill-domain-service');
+          for (const domainName of payload.domains) {
+            await createSkillDomain({
+              userId: goal.userId,
+              goalId: goal.id,
+              name: domainName,
+              description: '',
+              linkedUnitIds: [],
+              linkedExperienceIds: []
+            });
+          }
+        } catch (err) {
+          console.warn('[gateway/create] Skill domains not created (service may be missing):', err);
+        }
+      }
+      return goal;
     case 'step':
       if (!payload.experienceId) {
         throw new Error('Missing experienceId for step creation');

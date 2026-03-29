@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { KnowledgeUnit } from '@/types/knowledge';
 import { StepKnowledgeLink } from '@/types/curriculum';
 
@@ -11,6 +12,7 @@ interface CoachTriggerProps {
   // External triggers
   failedCheckpoint?: boolean;
   knowledgeLinks?: StepKnowledgeLink[];
+  missedQuestions?: string[];
 }
 
 /**
@@ -22,12 +24,14 @@ export function CoachTrigger({
   userId,
   onOpenCoach,
   failedCheckpoint = false,
-  knowledgeLinks = []
+  knowledgeLinks = [],
+  missedQuestions = []
 }: CoachTriggerProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [triggerType, setTriggerType] = useState<'failed_checkpoint' | 'dwell' | 'unread_knowledge' | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const [unseenUnitTitle, setUnseenUnitTitle] = useState<string | null>(null);
+  const [unseenUnitId, setUnseenUnitId] = useState<string | null>(null);
 
   // Reset visibility when step changes
   useEffect(() => {
@@ -35,6 +39,7 @@ export function CoachTrigger({
     setTriggerType(null);
     setDismissed(false);
     setUnseenUnitTitle(null);
+    setUnseenUnitId(null);
   }, [stepId]);
 
   // 1. failed_checkpoint trigger
@@ -64,6 +69,7 @@ export function CoachTrigger({
 
             if (unit.mastery_status === 'unseen') {
               setUnseenUnitTitle(unit.title);
+              setUnseenUnitId(unit.id);
               setTriggerType('unread_knowledge');
               setIsVisible(true);
               return;
@@ -92,21 +98,40 @@ export function CoachTrigger({
 
   if (!isVisible || dismissed) return null;
 
-  const labels = {
-    failed_checkpoint: "Need help with this? 💬",
-    dwell: "Taking your time? The coach can help 💬",
-    unread_knowledge: unseenUnitTitle 
-      ? `📖 Reviewing "${unseenUnitTitle}" first?`
-      : "📖 Reviewing some material might help first"
+  const getLabelContent = () => {
+    if (triggerType === 'unread_knowledge' && unseenUnitTitle && unseenUnitId) {
+      return (
+        <span>
+          📖 Review '{unseenUnitTitle}' before starting{' '}
+          <Link href={`/knowledge/${unseenUnitId}`} className="text-amber-400 hover:text-amber-300 font-bold ml-1 transition-colors">
+            → Review now
+          </Link>
+        </span>
+      );
+    }
+    
+    if (triggerType === 'failed_checkpoint' && missedQuestions && missedQuestions.length > 0) {
+      const q = missedQuestions[0];
+      const topic = q.length > 40 ? q.substring(0, 40) + '...' : q;
+      return `You missed a few points. Want to review "${topic}"? 💬`;
+    }
+
+    const labels = {
+      failed_checkpoint: "Need help with this? 💬",
+      dwell: "Taking your time? The coach can help 💬",
+      unread_knowledge: "📖 Reviewing some material might help first"
+    };
+
+    return labels[triggerType || 'dwell'];
   };
 
   return (
     <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out">
       <div className="bg-[#1e1e2e] border border-amber-500/30 rounded-2xl p-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] flex items-center gap-4 max-w-sm backdrop-blur-xl transition-all hover:border-amber-500/50 group">
         <div className="flex-1 min-w-[200px]">
-          <p className="text-slate-200 text-sm font-medium leading-relaxed">
-            {labels[triggerType || 'dwell']}
-          </p>
+          <div className="text-slate-200 text-sm font-medium leading-relaxed">
+            {getLabelContent()}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button

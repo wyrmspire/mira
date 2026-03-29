@@ -11,6 +11,8 @@ export const INTERACTION_EVENTS = {
   EXPERIENCE_STARTED: 'experience_started',
   EXPERIENCE_COMPLETED: 'experience_completed',
   DRAFT_SAVED: 'draft_saved',
+  CHECKPOINT_GRADED: 'checkpoint_graded',
+  CHECKPOINT_GRADED_BATCH: 'checkpoint_graded_batch',
 } as const;
 
 export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];

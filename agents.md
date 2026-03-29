@@ -131,7 +131,18 @@ app/
     coach/               ← Coach API (frontend-facing inline tutor — Sprint 10)
       chat/route.ts      ← POST: contextual tutor Q&A within active step (Genkit tutorChatFlow)
       grade/route.ts     ← POST: semantic checkpoint grading (Genkit gradeCheckpointFlow)
+      grade-batch/route.ts ← POST: batch checkpoint grading (multiple questions)
       mastery/route.ts   ← POST: evidence-based mastery assessment
+    goals/               ← Goal CRUD (Sprint 13)
+      route.ts           ← GET (list) / POST (create goal)
+      [id]/route.ts      ← GET/PATCH single goal
+    skills/              ← Skill Domain CRUD (Sprint 13)
+      route.ts           ← GET (list) / POST (create domain)
+      [id]/route.ts      ← GET/PATCH single domain (link_unit, link_experience, recompute_mastery)
+    knowledge/           ← Knowledge CRUD
+      route.ts           ← GET (list)
+      [id]/route.ts      ← GET single unit
+      batch/route.ts     ← GET batch units by IDs
     ideas/route.ts       ← GET/POST ideas
     ideas/materialize/   ← POST convert idea→project
     drill/route.ts       ← POST save drill session
@@ -181,10 +192,17 @@ components/
   experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
                            StepNavigator, ExperienceOverview, DraftProvider,
                            step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
-                           Reflection, EssayTasks, CheckpointStep [NEW])
+                           Reflection, EssayTasks, CheckpointStep)
                            KnowledgeCompanion (evolves → TutorChat mode)
+                           CompletionScreen (synthesis-driven completion UI)
+                           CoachTrigger (proactive coaching: failed checkpoint, dwell, unread)
+                           StepKnowledgeCard (pre/in/post timing knowledge delivery)
+                           TrackCard, TrackSection (curriculum outline UI)
   knowledge/             ← KnowledgeUnitCard, KnowledgeUnitView, MasteryBadge, DomainCard
-  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator
+  skills/                ← SkillTreeCard, SkillTreeGrid (Sprint 13)
+  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
+                           FocusTodayCard (home page resume link),
+                           ResearchStatusBadge (MiraK research arrival indicator)
   timeline/              ← TimelineEventCard, TimelineFilterBar
   profile/               ← FacetCard, DirectionSummary
   dev/                   ← GPT send form, dev tools
@@ -231,6 +249,7 @@ lib/
     progression-rules.ts ← Canonical experience chain map + suggestion logic
     step-state-machine.ts← Step status transitions (pending → in_progress → completed)
     step-scheduling.ts   ← Pacing utilities (daily/weekly/custom scheduling)
+    skill-mastery-engine.ts ← Mastery computation (evidence thresholds for 6 levels)
     CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
   hooks/
     useInteractionCapture.ts ← Fire-and-forget telemetry hook
@@ -248,10 +267,11 @@ lib/
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
                            experience, interaction, synthesis, graph, timeline, facet,
-                           draft, knowledge, curriculum-outline [NEW] services
+                           draft, knowledge, curriculum-outline, goal, skill-domain,
+                           home-summary services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
-  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge validators
+  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal validators
   view-models/           ← arena, icebox, inbox, review VMs
 
 types/
@@ -260,7 +280,9 @@ types/
   experience.ts, interaction.ts, synthesis.ts,
   graph.ts, timeline.ts, profile.ts,
   knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
-  curriculum.ts          ← CurriculumOutline, StepKnowledgeLink [NEW]
+  curriculum.ts          ← CurriculumOutline, StepKnowledgeLink
+  goal.ts                ← Goal, GoalRow, GoalStatus (Sprint 13)
+  skill.ts               ← SkillDomain, SkillDomainRow, SkillMasteryLevel (Sprint 13)
 
 content/                 ← Product copy markdown
 docs/
@@ -572,6 +594,37 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - ✅ Tell the user: "I've dispatched my agent to research this. You can start the experience now — it will get richer later." Let the async webhook gracefully append steps and links in the background.
 - Why: MiraK executes in 1-2 minutes. The user shouldn't be blocked. They should step into the scaffolding immediately, and the app should feel magical when it dynamically enriches their active workspace.
 
+### SOP-30: Batch chatty service fetches — never loop individual queries
+**Learned from**: Sprint 12 productization — N+1 patterns in home page, checkpoint grading, KnowledgeCompanion
+
+- ❌ `for (const exp of activeExps) { await getInteractions(exp.id) }` (sequential N+1)
+- ❌ `for (const q of questions) { await fetch('/api/coach/grade', { body: q }) }` (sequential HTTP)
+- ❌ `for (const link of links) { await fetch('/api/knowledge/' + link.id) }` (per-unit fetches)
+- ✅ Create batch endpoints: `/api/coach/grade-batch`, `/api/knowledge/batch?ids=a,b,c`
+- ✅ Create composed service functions: `getHomeSummary(userId)` that runs one query with joins.
+- Why: Sequential per-item fetches in server components or client loops create visible latency and waste DB connections. One query that returns N items is always better than N queries that each return 1.
+
+### SOP-31: Mastery promotion must use the experience instance's user_id
+**Learned from**: Sprint 12 verification — grade route used DEFAULT_USER_ID
+
+- ❌ `promoteKnowledgeProgress(DEFAULT_USER_ID, unitId)` (hardcoded user)
+- ✅ `promoteKnowledgeProgress(instance.user_id, unitId)` (from the experience instance)
+- Why: When auth is eventually added, mastery must belong to the correct user. Even in single-user dev mode, always propagate the user_id from the data source, not from constants.
+
+### SOP-32: Discover registry examples must match step-payload-validator — not renderer
+**Learned from**: Sprint 13 truth audit — 4/6 step types had validation-breaking examples
+
+- ❌ Writing discover registry examples based on what the renderer reads (e.g., `prompt: string` for reflection).
+- ✅ Write discover registry examples that pass `validateStepPayload()`. Cross-reference `lib/validators/step-payload-validator.ts` for exact field names.
+- Why: GPT reads the discover registry to learn how to build step payloads. If the example uses `questions[].text` but the validator requires `questions[].label`, GPT generates payloads that fail creation. The discover registry is a GPT-facing contract — it must match the runtime validator, not the renderer's incidental read pattern.
+
+### SOP-33: Mastery recompute action must be `recompute_mastery` with `goalId`
+**Learned from**: Sprint 13 truth audit — ExperienceRenderer sent `action: 'recompute'` (wrong)
+
+- ❌ `body: JSON.stringify({ action: 'recompute' })` (wrong action name, missing goalId)
+- ✅ `body: JSON.stringify({ action: 'recompute_mastery', goalId: outline.goalId })` (matches route handler)
+- Why: The skills PATCH route handler checks `action === 'recompute_mastery' && goalId`. If either is wrong, the request silently falls through to the standard update path and mastery is never recomputed. This was causing mastery to not update on experience completion.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -594,3 +647,5 @@ All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, 
 - **2026-03-27**: Sprint 10 boardinit — Curriculum-Aware Experience Engine. Added SOP-25 (gateway pattern), SOP-26 (outline before experience). Updated repo map with gateway routes, gateway types, checkpoint renderer, tutor flows, curriculum types. 7 lanes: DB+Types, Gateway, Curriculum Service, Checkpoint+Knowledge Link, Tutor+Genkit, GPT Rewrite+OpenAPI, Integration+Browser.
 - **2026-03-28**: Sprint 11 — MiraK Gateway Stabilization. Fixed GPT Actions `UnrecognizedKwargsError` by flattening OpenAPI schemas (no nested `payload` objects). Fixed MiraK webhook URL (`mira-mocha-kappa` → `mira-maddyup`). Fixed MiraK Cloud Run: added `--no-cpu-throttling` (background tasks were CPU-starved), fixed empty `GEMINI_SEARCH` env var (agent renamed it, deploy grep returned empty), added `.dockerignore`. Made webhook validator lenient (strips incomplete `experience_proposal` instead of rejecting entire payload). Added `readKnowledge` endpoint so GPT can read full research content. Created `c:/mirak/AGENTS.md` — standalone context for MiraK repo. Key lesson: always test locally before deploying, MiraK must be developed from its own repo context.
 - **2026-03-29**: Roadmap rebase — Sprints 1–10 marked ✅ Complete, Sprint 11 ✅ Code Complete. Roadmap rebased off board truth. Sprint numbers shifted: old 11 (Goal OS) → 13, old 12 (Coder Pipeline) → 14, old 13 → 15, old 14 → 16, old 15 → 17, old 16 → 18. Sprint 12 is now Learning Loop Productization (surface existing intelligence). Added SOP-27 (Genkit dynamic imports), SOP-28 (experience sizing). Updated architecture diagram to show 7 Genkit flows, 6 GPT endpoints, enrichment mode. Removed stale "Target Architecture" section and "What is still stubbed" section — replaced with accurate "What is NOT visible to the user" gap analysis.
+- **2026-03-29**: Sprint 13 completed (Goal OS + Skill Map). Gate 0 + 7 lanes. Migration 008 (goals + skill_domains tables). Goal service, skill domain service, skill mastery engine, GPT gateway goal capability, Skills page + SkillTreeGrid, batch grade + knowledge endpoints, home-summary-service (N+1 elimination). Added SOP-32 (discover-registry-validator sync), SOP-33 (mastery recompute action naming). Sprint 13 debt carried forward: discover-registry lies to GPT for 4/6 step types, stale OpenAPI, mastery recompute action mismatch in ExperienceRenderer.
+- **2026-03-29**: Sprint 14 boardinit (Surface the Intelligence). 7 lanes: Schema Truth Pass, Skill Tree Upgrade, Intelligent Focus Today, Mastery Visibility + Checkpoint Feedback, Proactive Coach Surfacing, Completion Retrospective, Integration + Browser QA. Incorporates UX feedback items #1 (skill cards as micro-roadmaps), #2 (intelligent Focus Today), #5 (mastery changes inline), #6 (proactive coach with context), #7 (completion retrospective). Deferred: #9 (fog-of-war), #10 (MiraK depth control), #12 (user agency), #8 (GPT session history), #11 (nav restructure), #14 (MiraK gap analyst).

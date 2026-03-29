@@ -10,6 +10,7 @@ import {
 } from '@/lib/services/experience-service'
 import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'
 import { createInboxEvent } from '@/lib/services/inbox-service'
+import { getOutlinesForGoal } from '@/lib/services/curriculum-outline-service'
 import { generateId } from '@/lib/utils'
 
 /**
@@ -43,6 +44,20 @@ export async function POST(request: NextRequest) {
     const userId = DEFAULT_USER_ID
     const sessionId = data.session_id || generateId()
     const experienceId = data.experience_id
+    const goalId = (data as any).goal_id
+    const incomingOutlineId = (data as any).curriculum_outline_id
+
+    // 0. Resolve curriculum outline if goal_id is present
+    let curriculumOutlineId: string | null = incomingOutlineId || null
+    
+    // Only fall back to goal guessing if NO specific outline was passed
+    if (!curriculumOutlineId && goalId) {
+      const goalOutlines = await getOutlinesForGoal(goalId)
+      const targetOutline = goalOutlines.find(o => o.status === 'active' || o.status === 'planning')
+      if (targetOutline) {
+        curriculumOutlineId = targetOutline.id
+      }
+    }
 
     // 1. Create Knowledge Units
     const createdUnits = await Promise.all(
@@ -60,6 +75,7 @@ export async function POST(request: NextRequest) {
           retrieval_questions: unit.retrieval_questions || [],
           citations: unit.citations || [],
           subtopic_seeds: unit.subtopic_seeds || [],
+          curriculum_outline_id: curriculumOutlineId,
         })
       )
     )

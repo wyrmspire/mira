@@ -20,6 +20,12 @@ export async function getInteractionsByInstance(instanceId: string): Promise<Int
   return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
 }
 
+export async function getInteractionsForInstances(instanceIds: string[]): Promise<InteractionEvent[]> {
+  if (!instanceIds || instanceIds.length === 0) return []
+  const adapter = getStorageAdapter()
+  return adapter.queryIn<InteractionEvent>('interaction_events', 'instance_id', instanceIds)
+}
+
 export async function createArtifact(data: { instanceId: string; artifactType: string; title: string; content: string; metadata: any }): Promise<Artifact> {
   const adapter = getStorageAdapter()
   const artifact: Artifact = {

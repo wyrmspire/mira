@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     // Action: create_outline
     // ------------------------------------------------------------------
     if (action === 'create_outline') {
-      const { topic, subtopics, domain, pedagogicalIntent, discoverySignals } = payload;
+      const { topic, subtopics, domain, pedagogicalIntent, discoverySignals, goalId } = payload;
 
       if (!topic || typeof topic !== 'string') {
         return NextResponse.json(
@@ -75,6 +75,9 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+
+      // Use dynamic imports to ensure we have the latest service additions
+      const { getGoal, transitionGoalStatus } = await import('@/lib/services/goal-service');
 
       const outline = await createCurriculumOutline({
         userId,
@@ -86,7 +89,22 @@ export async function POST(request: Request) {
         existingUnitIds: [],
         researchNeeded: [],
         status: 'planning',
+        goalId: goalId ?? null,
       });
+
+      if (goalId) {
+
+        
+        // Transition goal to active if it's still in intake
+        try {
+          const goal = await getGoal(goalId);
+          if (goal && goal.status === 'intake') {
+            await transitionGoalStatus(goalId, 'activate');
+          }
+        } catch (err) {
+          console.warn('[plan/route] Could not transition goal:', err);
+        }
+      }
 
       return NextResponse.json(
         {

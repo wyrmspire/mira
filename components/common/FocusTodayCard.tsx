@@ -8,13 +8,15 @@ interface FocusTodayCardProps {
   nextStep?: ExperienceStep | null
   totalSteps?: number
   lastActivityAt?: string | null
+  focusReason?: string
 }
 
 export function FocusTodayCard({ 
   experience, 
   nextStep, 
   totalSteps,
-  lastActivityAt 
+  lastActivityAt,
+  focusReason
 }: FocusTodayCardProps) {
   if (!experience) {
     return (
@@ -41,9 +43,16 @@ export function FocusTodayCard({
       <div className="p-6 relative">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="space-y-1">
-            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
-              Focus Today
-            </h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                Focus Today
+              </h3>
+              {focusReason && (
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                  {focusReason}
+                </span>
+              )}
+            </div>
             <h2 className="text-xl font-bold text-[#f1f5f9] leading-tight group-hover:text-white transition-colors">
               {experience.title}
             </h2>

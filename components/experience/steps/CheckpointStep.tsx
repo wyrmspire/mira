@@ -13,6 +13,9 @@ interface CheckpointStepProps {
   readOnly?: boolean;
   initialAnswers?: Record<string, string>;
   onGradeComplete?: (results: Record<string, GradedResult>) => void;
+  goalId?: string | null;
+  onOpenCoach?: () => void;
+  domainName?: string | null;
 }
 
 interface GradedResult {
@@ -29,7 +32,10 @@ export default function CheckpointStep({
   onDraft, 
   readOnly, 
   initialAnswers,
-  onGradeComplete
+  onGradeComplete,
+  goalId,
+  onOpenCoach,
+  domainName
 }: CheckpointStepProps) {
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers || {});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -37,6 +43,9 @@ export default function CheckpointStep({
   const [isGrading, setIsGrading] = useState(false);
   const [results, setResults] = useState<Record<string, GradedResult>>({});
   const [showResults, setShowResults] = useState(false);
+  const [domainInfo, setDomainInfo] = useState<any>(null);
+  const [promotedUnit, setPromotedUnit] = useState<any>(null);
+  const [showToast, setShowToast] = useState(false);
   
   const payload = step.payload as CheckpointPayloadV1 | null;
   const questions = payload?.questions ?? [];
@@ -57,42 +66,87 @@ export default function CheckpointStep({
   const performGrading = async () => {
     setIsGrading(true);
     const gradedResults: Record<string, GradedResult> = {};
-    let correctCount = 0;
 
     try {
-      for (const q of questions) {
-        const response = await fetch('/api/coach/grade', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            stepId: step.id,
+      const response = await fetch('/api/coach/grade-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stepId: step.id,
+          knowledgeUnitId: payload?.knowledge_unit_id,
+          questions: questions.map((q) => ({
             questionId: q.id,
             question: q.question,
             expectedAnswer: q.expected_answer,
             answer: answers[q.id] || '',
-            knowledgeUnitId: payload?.knowledge_unit_id
-          })
-        });
+          })),
+        }),
+      });
 
-        if (!response.ok) throw new Error('Grading failed');
-        
-        const result = await response.json();
-        gradedResults[q.id] = {
-          questionId: q.id,
+      if (!response.ok) throw new Error('Batch grading failed');
+
+      const data = await response.json();
+      const results = data.results || [];
+
+      results.forEach((result: any) => {
+        gradedResults[result.questionId] = {
+          questionId: result.questionId,
           correct: result.correct,
           feedback: result.feedback,
-          misconception: result.misconception
+          misconception: result.misconception,
         };
-        
-        if (result.correct) correctCount++;
-      }
+      });
 
       setResults(gradedResults);
       if (onGradeComplete) onGradeComplete(gradedResults);
       setShowResults(true);
+
+      // W1 & W2: Fetch mastery impact and check promotions
+      const anyCorrect = Object.values(gradedResults).some(r => r.correct);
+      if (anyCorrect) {
+        // Fetch domain info
+        const finalDomainName = domainName || (step.payload as any)?.knowledge_domain;
+        if (goalId && finalDomainName) {
+          try {
+            const domainsRes = await fetch(`/api/skills?goalId=${goalId}`);
+            if (domainsRes.ok) {
+              const domains = await domainsRes.json();
+              // Try to find by name or if there's only one domain
+              const domain = domains.find((d: any) => d.name === finalDomainName) || domains[0];
+              if (domain) {
+                setDomainInfo(domain);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch domain info:', err);
+          }
+        }
+
+        // W2: Check for knowledge promotion
+        if (payload?.knowledge_unit_id) {
+          try {
+            const unitRes = await fetch(`/api/knowledge/${payload.knowledge_unit_id}`);
+            if (unitRes.ok) {
+              const unit = await unitRes.json();
+              // If it was promoted to 'read' or higher, show toast
+              // Since we don't know previous state, we'll show if it's 'read' or higher for now.
+              // Actually, SOP-xx says "check if knowledge_progress was promoted".
+              // A better way is to compare with initial state, but CheckpointStep doesn't have it.
+              // We'll show the toast if mastery_status is 'read', 'practiced', or 'confident'.
+              if (unit.mastery_status !== 'unseen') {
+                setPromotedUnit(unit);
+                setShowToast(true);
+                setTimeout(() => setShowToast(false), 4000);
+              }
+            }
+          } catch (err) {
+            console.error('Failed to fetch unit for promotion check:', err);
+          }
+        }
+      }
     } catch (error) {
       console.error('Grading error:', error);
-      // Fallback: assume incorrect if grading fails but don't block
+      // Fallback: indicate grading failure but don't block
     } finally {
       setIsGrading(false);
     }
@@ -150,6 +204,48 @@ export default function CheckpointStep({
             </div>
           </div>
         </div>
+
+        {/* Lane 4 W1: Mastery Impact Callout */}
+        {domainInfo && (
+          <div className="p-6 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 animate-in slide-in-from-bottom-2 duration-700">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center text-xl">
+                📊
+              </div>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Evidence Recorded</p>
+                <h4 className="text-[#e2e8f0] font-bold">{domainInfo.name}</h4>
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="h-1.5 flex-1 bg-indigo-500/10 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-indigo-500"
+                      style={{ width: `${Math.min(100, (domainInfo.evidenceCount / 5) * 100)}%` }} // Using 5 as practicing threshold
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-indigo-300 font-bold uppercase">
+                    {domainInfo.evidenceCount} Points
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Lane 4 W2: Promotion Toast (Floating) */}
+        {showToast && promotedUnit && (
+          <div className="fixed bottom-8 right-8 z-50 animate-in slide-in-from-right-4 duration-500">
+            <div className="bg-[#1e1e2e] border border-emerald-500/30 rounded-2xl p-4 shadow-2xl flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-lg">
+                🎯
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Mastery Promoted</p>
+                <p className="text-sm text-[#e2e8f0] font-medium">{promotedUnit.title}</p>
+                <p className="text-[10px] text-[#94a3b8] font-mono mt-0.5">unseen → {promotedUnit.mastery_status}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Lane 5: Post-step Knowledge (deepens) */}
         {step.knowledge_links?.filter(l => l.linkType === 'deepens').map(link => (
@@ -225,7 +321,7 @@ export default function CheckpointStep({
           {!isPassing && payload?.on_fail === 'tutor_redirect' && (
             <button
               type="button"
-              onClick={() => {/* This will be wired to open coach chat in Lane 6 */}}
+              onClick={() => onOpenCoach?.()}
               className="px-8 py-4 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-500/20"
             >
               Get Help

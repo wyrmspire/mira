@@ -4,12 +4,12 @@ import { dispatchCreate } from '@/lib/gateway/gateway-router';
 export const dynamic = 'force-dynamic';
 
 /**
- * Combined entry point for creation operations (experiences, ideas, steps, outlines).
+ * Combined entry point for creation operations (experiences, ideas, steps, goals).
  * GPT calls this endpoint to create anything in the system.
  *
  * Tolerates both nested and flat payload shapes:
- *   Nested: { type: "ephemeral", payload: { userId: "...", title: "..." } }
- *   Flat:   { type: "ephemeral", userId: "...", title: "..." }
+ *   Nested: { type: "goal", payload: { userId: "...", title: "..." } }
+ *   Flat:   { type: "goal", userId: "...", title: "..." }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: 'Missing `type` parameter',
         expected: {
-          type: 'experience | ephemeral | idea | step',
-          payload: '{ ... } — call GET /api/gpt/discover?capability=create_experience for schema',
+          type: 'experience | ephemeral | idea | step | goal',
+          payload: '{ ... } — call GET /api/gpt/discover?capability=goal for schema',
         },
       }, { status: 400 });
     }
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
         error: 'Missing `payload` object',
         expected: {
           type,
-          payload: '{ ... } — call GET /api/gpt/discover?capability=create_experience for schema',
+          payload: '{ ... } — call GET /api/gpt/discover?capability=goal for schema',
         },
       }, { status: 400 });
     }

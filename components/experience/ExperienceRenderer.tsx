@@ -63,25 +63,80 @@ export default function ExperienceRenderer({
   initialDraft
 }: ExperienceRendererProps) {
   const [failedCheckpoint, setFailedCheckpoint] = React.useState(false);
+  const [missedQuestions, setMissedQuestions] = React.useState<string[]>([]);
   const [coachForceExpanded, setCoachForceExpanded] = React.useState(false);
   const [coachMode, setCoachMode] = React.useState<'read' | 'tutor'>('read');
+  const [outline, setOutline] = React.useState<any>(null);
 
   // Reset trigger state on step change
   React.useEffect(() => {
     setFailedCheckpoint(false);
+    setMissedQuestions([]);
     setCoachForceExpanded(false);
     setCoachMode('read');
   }, [currentStepId]);
 
+  // Fetch outline if curriculum_outline_id is present
+  React.useEffect(() => {
+    if (instance.curriculum_outline_id) {
+      fetch(`/api/curriculum-outlines/${instance.curriculum_outline_id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(setOutline)
+        .catch(err => console.error('[ExperienceRenderer] Failed to fetch outline:', err));
+    }
+  }, [instance.curriculum_outline_id]);
+
+  const currentStepInfo = steps.find(s => s.id === currentStepId);
+
   const handleGradeComplete = (results: Record<string, any>) => {
-    const hasFail = Object.values(results).some((r: any) => !r.correct);
-    if (hasFail) setFailedCheckpoint(true);
+    const failedKeys = Object.keys(results).filter(key => !results[key].correct);
+    if (failedKeys.length > 0) {
+      setFailedCheckpoint(true);
+      const payload = currentStepInfo?.payload as any;
+      const questions = payload?.questions || [];
+      const missed = failedKeys.map(key => {
+        const q = questions.find((q: any) => q.id === key);
+        return q?.question || 'this topic';
+      });
+      setMissedQuestions(missed);
+    }
   };
 
   const handleOpenCoach = () => {
     setCoachMode('tutor');
     setCoachForceExpanded(true);
   };
+
+  // Trigger mastery recomputation when an experience linked to a goal is completed
+  React.useEffect(() => {
+    if (isCompleted && instance.curriculum_outline_id) {
+      const triggerMasteryUpdate = async () => {
+        try {
+          const outlineRes = await fetch(`/api/curriculum-outlines/${instance.curriculum_outline_id}`);
+          if (!outlineRes.ok) return;
+          const outline = await outlineRes.json();
+          
+          if (outline.goalId && outline.domain) {
+            const skillsRes = await fetch(`/api/skills?goalId=${outline.goalId}`);
+            if (!skillsRes.ok) return;
+            const skills = await skillsRes.json();
+            
+            const domain = skills.find((s: any) => s.name === outline.domain);
+            if (domain) {
+              await fetch(`/api/skills/${domain.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'recompute_mastery', goalId: outline.goalId })
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[ExperienceRenderer] Failed to update mastery:', err);
+        }
+      };
+      triggerMasteryUpdate();
+    }
+  }, [isCompleted, instance.curriculum_outline_id, instance.id]);
 
   if (isLoading) {
     return (
@@ -129,6 +184,9 @@ export default function ExperienceRenderer({
   // Lane 6: Wire checkpoint results back to renderer for CoachTrigger
   if (currentStep?.step_type === 'checkpoint') {
     extraProps.onGradeComplete = handleGradeComplete;
+    extraProps.goalId = outline?.goalId;
+    extraProps.onOpenCoach = handleOpenCoach;
+    extraProps.domainName = outline?.domain;
   }
 
   return (
@@ -152,13 +210,14 @@ export default function ExperienceRenderer({
             forceExpanded={coachForceExpanded}
           />
 
-          {/* Lane 6: Coach Triggers */}
+          {/* Lane 6 / Lane 5: Coach Triggers */}
           <CoachTrigger 
             stepId={currentStep.id}
             userId={instance.user_id}
             onOpenCoach={handleOpenCoach}
             failedCheckpoint={failedCheckpoint}
             knowledgeLinks={currentStep.knowledge_links}
+            missedQuestions={missedQuestions}
           />
         </div>
       ) : (

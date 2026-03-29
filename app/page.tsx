@@ -1,12 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import { getIdeasByStatus } from '@/lib/services/ideas-service'
-import { getArenaProjects } from '@/lib/services/projects-service'
-import { getInboxEvents } from '@/lib/services/inbox-service'
-import { getActiveExperiences, getProposedExperiences, getExperienceInstances, getExperienceSteps, getResumeStepIndex } from '@/lib/services/experience-service'
-import { getKnowledgeDomains, getKnowledgeUnits } from '@/lib/services/knowledge-service'
-import { getCurriculumOutlinesForUser } from '@/lib/services/curriculum-outline-service'
-import { getInteractionsByInstance } from '@/lib/services/interaction-service'
+import { getHomeSummary } from '@/lib/services/home-summary-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { AppShell } from '@/components/shell/app-shell'
 import Link from 'next/link'
@@ -19,7 +13,6 @@ import { ResearchStatusBadge } from '@/components/common/ResearchStatusBadge'
 import TrackSection from '@/components/experience/TrackSection'
 import type { Project } from '@/types/project'
 import type { InboxEvent } from '@/types/inbox'
-import type { ExperienceInstance, ExperienceStep } from '@/types/experience'
 
 function HealthDot({ health }: { health: Project['health'] }) {
   const colorMap = {
@@ -48,67 +41,42 @@ function SeverityIcon({ severity }: { severity: InboxEvent['severity'] }) {
 
 export default async function HomePage() {
   const userId = DEFAULT_USER_ID
-  const captured = await getIdeasByStatus('captured')
-  const arenaProjects = await getArenaProjects()
-  const allEvents = await getInboxEvents()
-  const recentEvents = allEvents.slice(0, 3)
+  const summary = await getHomeSummary(userId)
 
-  const proposedExperiences = await getProposedExperiences(userId)
-  const activeExperiences = await getActiveExperiences(userId)
-  const allInstances = await getExperienceInstances({ userId })
-  const knowledgeUnits = await getKnowledgeUnits(userId)
-  const knowledgeSummary = await getKnowledgeDomains(userId)
-  const outlines = await getCurriculumOutlinesForUser(userId)
+  const {
+    activeGoal,
+    skillDomains,
+    focusExperience,
+    proposedExperiences,
+    activeExperiences,
+    knowledgeSummary,
+    newKnowledgeUnitsCount,
+    outlines,
+    unhealthyProjects,
+    arenaProjects,
+    recentEvents,
+    capturedIdeas,
+  } = summary
 
-  // 1. Find the most recently active experience
-  let focusExperience: ExperienceInstance | null = null
-  let focusLastActivity: string | null = null
-  let focusNextStep: ExperienceStep | null = null
-  let focusTotalSteps = 0
-
-  // Filter to just active-ish ones
-  const activeish = allInstances.filter(e => ['active', 'published', 'injected'].includes(e.status))
-  
-  for (const exp of activeish) {
-    const interactions = await getInteractionsByInstance(exp.id)
-    const latestInteraction = interactions.length > 0
-      ? interactions.reduce((a, b) => new Date(a.created_at) > new Date(b.created_at) ? a : b).created_at
-      : exp.created_at
-
-    if (!focusLastActivity || new Date(latestInteraction) > new Date(focusLastActivity)) {
-      focusExperience = exp
-      focusLastActivity = latestInteraction
-    }
-  }
-
-  if (focusExperience) {
-    const steps = await getExperienceSteps(focusExperience.id)
-    const resumeIndex = await getResumeStepIndex(focusExperience.id)
-    focusNextStep = steps[resumeIndex] || null
-    focusTotalSteps = steps.length
-  }
-
-  // 2. Research status
-  const lastVisitThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 24h heuristic
-  const newUnitsCount = knowledgeUnits.filter(u => u.created_at > lastVisitThreshold).length
-  
-  // 3. Welcome back context
+  // Calculate session days for welcome back context
   let lastSessionDays = 0
-  if (focusLastActivity) {
-    const diffMs = Date.now() - new Date(focusLastActivity).getTime()
+  if (focusExperience.lastActivityAt) {
+    const diffMs = Date.now() - new Date(focusExperience.lastActivityAt).getTime()
     lastSessionDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
   }
 
-  const needsAttentionProjects = arenaProjects.filter(
-    (p) => p.health === 'red' || p.health === 'yellow'
-  )
-  const nothingNeedsAttention = captured.length === 0 && needsAttentionProjects.length === 0
+  const nothingNeedsAttention = capturedIdeas.length === 0 && unhealthyProjects.length === 0
+
+  // Calculate goal mastery summary
+  const proficientCount = skillDomains.filter(d => 
+    ['proficient', 'expert'].includes(d.masteryLevel)
+  ).length;
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto space-y-10">
+      <div className="max-w-2xl mx-auto space-y-10 pb-20">
         {/* Page title */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 mt-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-[#e2e8f0] mb-0.5">Studio</h1>
@@ -123,13 +91,50 @@ export default async function HomePage() {
           </div>
         </div>
 
+        {/* ── Section: Active Goal ── */}
+        <section className="bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="text-6xl italic font-black">⌬</span>
+          </div>
+          <div className="relative z-10 flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                {COPY.goals.heading}
+              </h2>
+              <Link href={ROUTES.skills} className="text-[10px] font-bold text-[#4a4a6a] hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                {COPY.skills.actions.viewTree} →
+              </Link>
+            </div>
+            
+            {activeGoal ? (
+              <div className="flex flex-col gap-1">
+                <h3 className="text-2xl font-bold text-white tracking-tight italic">
+                  {activeGoal.title}
+                </h3>
+                <div className="flex items-center gap-3 text-xs text-[#94a3b8]">
+                  <span>{COPY.goals.summary.domains.replace('{count}', String(skillDomains.length))}</span>
+                  <span className="w-1 h-1 rounded-full bg-[#1e1e2e]" />
+                  <span>{COPY.goals.summary.mastery.replace('{count}', String(proficientCount)).replace('{level}', 'Proficient')}</span>
+                </div>
+              </div>
+            ) : (
+              <Link href={ROUTES.send} className="flex flex-col gap-1 group/link">
+                <h3 className="text-xl font-bold text-[#4a4a6a] group-hover/link:text-indigo-400/70 transition-colors">
+                  {COPY.goals.emptyState}
+                </h3>
+              </Link>
+            )}
+          </div>
+        </section>
+
         {/* ── Section: Focus Today ── */}
         <section>
           <FocusTodayCard 
-            experience={focusExperience}
-            nextStep={focusNextStep}
-            totalSteps={focusTotalSteps}
-            lastActivityAt={focusLastActivity}
+            experience={focusExperience.instance}
+            nextStep={focusExperience.nextStep}
+            totalSteps={focusExperience.totalSteps}
+            lastActivityAt={focusExperience.lastActivityAt}
+            focusReason={focusExperience.focusReason}
           />
         </section>
 
@@ -143,7 +148,7 @@ export default async function HomePage() {
               Explore Library →
             </Link>
           </div>
-          <TrackSection outlines={outlines.filter(o => o.status === 'active' || o.status === 'planning')} />
+          <TrackSection outlines={outlines} />
         </section>
 
         {/* ── Section 0: Suggested Experiences ── */}
@@ -199,7 +204,7 @@ export default async function HomePage() {
               <h2 className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
                 {COPY.knowledge.heading}
               </h2>
-              <ResearchStatusBadge newUnitsCount={newUnitsCount} />
+              <ResearchStatusBadge newUnitsCount={newKnowledgeUnitsCount} />
             </div>
             <div className="flex items-center justify-between mb-4 -mt-2">
               <span className="text-xs text-[#64748b]">Your recently mapped terrain.</span>
@@ -243,7 +248,7 @@ export default async function HomePage() {
           ) : (
             <div className="space-y-3">
               {/* Captured ideas */}
-              {captured.map((idea) => (
+              {capturedIdeas.map((idea) => (
                 <Link
                   key={idea.id}
                   href={ROUTES.send}
@@ -259,7 +264,7 @@ export default async function HomePage() {
               ))}
 
               {/* Unhealthy projects */}
-              {needsAttentionProjects.map((project) => (
+              {unhealthyProjects.map((project) => (
                 <Link
                   key={project.id}
                   href={ROUTES.arenaProject(project.id)}

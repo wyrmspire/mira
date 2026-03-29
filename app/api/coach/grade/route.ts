@@ -74,17 +74,22 @@ export async function POST(request: Request) {
 
       // 1. Promote mastery if passing (confidence check handles ambiguity)
       if (result.correct && result.confidence > 0.7) {
+        // Fetch instance to get owner user_id (SOP-31)
+        const instances = await adapter.query<any>('experience_instances', { id: instanceId });
+        const instance = instances[0];
+        const ownerId = instance?.user_id || DEFAULT_USER_ID;
+
         const links = await getLinksForStep(stepId);
         // Promote units linked with type 'tests'
         const testLinks = links.filter(l => l.linkType === 'tests');
         
         for (const link of testLinks) {
-          await promoteKnowledgeProgress(DEFAULT_USER_ID, link.knowledgeUnitId);
+          await promoteKnowledgeProgress(ownerId, link.knowledgeUnitId);
         }
         
         // Fallback to knowledgeUnitId from body if no link-table entry exists (backward comp)
         if (testLinks.length === 0 && knowledgeUnitId) {
-          await promoteKnowledgeProgress(DEFAULT_USER_ID, knowledgeUnitId);
+          await promoteKnowledgeProgress(ownerId, knowledgeUnitId);
         }
       }
 

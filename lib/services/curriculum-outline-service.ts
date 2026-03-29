@@ -23,6 +23,7 @@ function fromDB(row: any): CurriculumOutline {
     pedagogicalIntent: row.pedagogical_intent ?? 'build_understanding',
     estimatedExperienceCount: row.estimated_experience_count ?? null,
     status: row.status as CurriculumStatus,
+    goalId: row.goal_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -45,6 +46,7 @@ function toDB(outline: Partial<CurriculumOutline>): Record<string, any> {
   if (outline.pedagogicalIntent !== undefined) row.pedagogical_intent = outline.pedagogicalIntent;
   if (outline.estimatedExperienceCount !== undefined) row.estimated_experience_count = outline.estimatedExperienceCount;
   if (outline.status !== undefined) row.status = outline.status;
+  if (outline.goalId !== undefined) row.goal_id = outline.goalId;
   if (outline.createdAt !== undefined) row.created_at = outline.createdAt;
   if (outline.updatedAt !== undefined) row.updated_at = outline.updatedAt;
   return row;
@@ -94,6 +96,15 @@ export async function createCurriculumOutline(
   const row = toDB(outline);
   const saved = await adapter.saveItem<CurriculumOutlineRow>('curriculum_outlines', row as CurriculumOutlineRow);
   return fromDB(saved);
+}
+
+/**
+ * List all curriculum outlines for a goal.
+ */
+export async function getOutlinesForGoal(goalId: string): Promise<CurriculumOutline[]> {
+  const adapter = getStorageAdapter();
+  const rows = await adapter.query<CurriculumOutlineRow>('curriculum_outlines', { goal_id: goalId });
+  return rows.map(fromDB);
 }
 
 /**

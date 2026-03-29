@@ -8,6 +8,7 @@ export interface StorageAdapter {
   updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T>
   deleteItem(collection: string, id: string): Promise<void>
   query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]>
+  queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]>
 }
 
 /**
@@ -92,6 +93,19 @@ export class SupabaseStorageAdapter implements StorageAdapter {
     if (error) throw error
     return data as T[]
   }
+
+  async queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]> {
+    if (!this.client) throw new Error('Supabase client not configured')
+    if (!values || values.length === 0) return []
+    
+    const { data, error } = await this.client
+      .from(this.getTableName(collection))
+      .select('*')
+      .in(column, values)
+      
+    if (error) throw error
+    return data as T[]
+  }
 }
 
 /**
@@ -132,6 +146,12 @@ export class JsonFileStorageAdapter implements StorageAdapter {
     return list.filter((item) => {
       return Object.entries(filters).every(([key, value]) => item[key] === value)
     }) as T[]
+  }
+
+  async queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]> {
+    if (!values || values.length === 0) return []
+    const list = jsonStorage.getCollection(collection as any) as unknown as any[]
+    return list.filter((item) => values.includes(item[column])) as T[]
   }
 }
 

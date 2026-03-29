@@ -87,6 +87,19 @@ export async function getKnowledgeUnitById(id: string): Promise<KnowledgeUnit | 
   return raw.length > 0 ? fromDB(raw[0]) : null;
 }
 
+export async function getKnowledgeUnitsByIds(ids: string[]): Promise<KnowledgeUnit[]> {
+  if (!ids || ids.length === 0) return [];
+  const adapter = getStorageAdapter();
+  
+  // Parallel fetch to avoid N+1 sequential latency
+  const promises = ids.map(id => adapter.query<any>('knowledge_units', { id }));
+  const results = await Promise.all(promises);
+  
+  return results
+    .filter(rows => rows.length > 0)
+    .map(rows => fromDB(rows[0]));
+}
+
 export async function createKnowledgeUnit(unit: any): Promise<KnowledgeUnit> {
   const adapter = getStorageAdapter();
   const now = new Date().toISOString();

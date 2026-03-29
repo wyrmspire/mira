@@ -12,6 +12,7 @@ export type DiscoverCapability =
   | 'resolution'
   | 'create_outline'
   | 'dispatch_research'
+  | 'goal'
   | 'tutor_chat'
   | 'grade_checkpoint';
 

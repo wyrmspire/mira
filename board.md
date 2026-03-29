@@ -13,408 +13,319 @@
 | Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
 | Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, MiraK webhook, companion integration. All 6 lanes done. |
 | Sprint 9 | Content Density & Agent Thinking Rails — Real MiraK pipeline, Genkit enrichment, GPT thinking protocol, Knowledge UI polish | TSC ✅ Build ✅ | ✅ Complete — Real 3-stage agent pipeline, enrichment flow, thinking rails, multi-unit UI. All 6 lanes done. |
-| Sprint 10 | Curriculum-Aware Experience Engine — Curriculum outlines, GPT gateway, discover registry, coach API, tutor flows, OpenAPI rewrite | TSC ✅ Build ✅ | ✅ Complete — 7 lanes done. Migration 007, 5 gateway endpoints, 3 coach routes, curriculum service, Genkit tutor + grading flows, rewritten GPT instructions. |
+| Sprint 10 | Curriculum-Aware Experience Engine — Curriculum outlines, GPT gateway, discover registry, coach API, tutor flows, OpenAPI rewrite | TSC ✅ Build ✅ | ✅ Complete — 7 lanes done. Migration 007, 5 gateway endpoints, 3 coach routes, curriculum service, Genkit tutor + grading flows. |
 | Sprint 11 | MiraK Gateway Stabilization + Enrichment Loop — Flat OpenAPI, Cloud Run fixes, enrichment webhook, discover registry | TSC ✅ Build ✅ | ✅ Complete — All lanes done. |
-| Sprint 12 | Learning Loop Productization — Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes done. The "three emotional moments" are fully functional. |
+| Sprint 12 | Learning Loop Productization — Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes done. Three emotional moments fully functional. |
+| Sprint 13 | Goal OS + Skill Map — Goal entity, Skill domains, mastery engine, GPT goal intake, Skill Tree UI, batch endpoints, home summary optimization | TSC ✅ Build ✅ | ✅ Complete — Gate 0 + 7 lanes. Migration 008, Goal CRUD, Skill domains, mastery engine, GPT gateway goal capability, Skills page + SkillTreeGrid, batch grade/knowledge endpoints, home-summary-service. Known debt: discover-registry-to-validator drift (4/6 step types), stale OpenAPI, mastery recompute action mismatch. |
 
 ---
 
-# Sprint 12 — Learning Loop Productization
+# Sprint 14 — Surface the Intelligence
 
-> **Goal:** Make the already-built curriculum/coach/knowledge infrastructure visible and coherent in the UI.
+> **Goal:** Close the gap between what the system **computes** and what the user **sees**. Fix the schema drift from Sprint 13, make skill domains feel like a map (not a scoreboard), make mastery changes visible at checkpoint time, and give the coach teeth.
 >
-> **The test:** Three emotional moments work — (1) **Opening the app** → user sees their path and what to focus on, (2) **Stuck in a step** → coach surfaces proactively, (3) **Finishing an experience** → user sees synthesis, growth, and what's next.
+> **The test:** (1) GPT can create payloads for all 6 step types that pass validation. (2) Skill domain card shows "2 more experiences to reach practicing." (3) After a checkpoint, the user sees "Evidence recorded — Marketing: 3/5 toward practicing." (4) Coach surfaces proactively after failed checkpoints with context. (5) Focus Today ranks by leverage, not recency. (6) OpenAPI schema matches runtime truth.
 >
-> **Core principle:** The app surfaces stored intelligence; GPT and Coach deepen it. No new backend infrastructure — surface what already exists.
+> **Core principle:** This sprint ships zero new backend entities. Everything it surfaces already exists in computed form. The work is wiring → UI → polish.
 >
-> **Carried forward:** Sprint 10 Lane 4 items W1–W4 (CheckpointStep renderer + registration + step-knowledge API wiring) were not built and are now Lane 1 of this sprint.
+> **UX feedback incorporated:** Items #1 (skill cards as micro-roadmaps), #2 (intelligent Focus Today), #5 (mastery changes inline), #6 (proactive coach), #7 (completion retrospective with specific mastery changes). Items #9 (fog-of-war), #10 (MiraK depth control), #12 (user agency) deferred to Sprint 15+.
 
 ---
 
 ## Dependency Graph
 
 ```
-Lane 1:  [W1–W4 CHECKPOINT + KNOWLEDGE WIRING]  ←── must complete first (Lane 6 depends on it)
-              │
-              ↓
-Lane 2:  [W1–W3 TRACK/OUTLINE UI]         Lane 3:  [W1–W3 HOME CONTEXT]
-  (independent of other lanes)               (independent of other lanes)
-
-Lane 4:  [W1–W3 COMPLETION SYNTHESIS]      Lane 5:  [W1–W3 KNOWLEDGE TIMING]
-  (independent of other lanes)               (requires Lane 1 for step_knowledge_links API)
-
-Lane 1 ──→ Lane 6:  [W1–W3 COACH TRIGGERS + MASTERY WIRING]
-              │           (requires checkpoint rendering from Lane 1)
-              ↓
+Lane 1:  [W1–W5 SCHEMA TRUTH PASS]                (independent — no UI)
+Lane 2:  [W1–W4 SKILL TREE UPGRADE]                (independent — Skills page + card only)
+Lane 3:  [W1–W3 INTELLIGENT FOCUS TODAY]            (independent — home page section)
+Lane 4:  [W1–W4 MASTERY VISIBILITY + CHECKPOINT]    (independent — checkpoint renderer + completion)
+Lane 5:  [W1–W3 PROACTIVE COACH SURFACING]          (independent — CoachTrigger + ExperienceRenderer)
+Lane 6:  [W1–W4 COMPLETION RETROSPECTIVE]            (independent — CompletionScreen only)
+                                    │
+                                    ↓
 ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 ```
 
-**Lanes 2, 3, 4 are fully parallel** — zero file conflicts.
-**Lane 5** can start in parallel but needs Lane 1's step-knowledge API wiring for full testing.
-**Lane 6** depends on Lane 1 (checkpoint renderer must exist to wire mastery).
-**Lane 7 runs AFTER** all other lanes. Browser testing, cross-lane wiring, final QA.
-
 ---
 
-## Sprint 12 Ownership Zones
+## Sprint 14 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| Checkpoint renderer | `components/experience/CheckpointStep.tsx` [NEW] | Lane 1 |
-| Renderer registry | `lib/experience/renderer-registry.tsx` [MODIFY] | Lane 1 |
-| Step knowledge API | `app/api/experiences/[id]/steps/route.ts` [MODIFY] | Lane 1 |
-| Step knowledge link service | `lib/services/step-knowledge-link-service.ts` [VERIFY — exists] | Lane 1 |
-| Track/outline UI | `components/experience/TrackCard.tsx` [NEW], `components/experience/TrackSection.tsx` [NEW] | Lane 2 |
-| Library page | `app/library/page.tsx` [MODIFY — add Tracks section] | Lane 2 |
-| Library client | `app/library/LibraryClient.tsx` [MODIFY — add track rendering] | Lane 2 |
-| Home page | `app/page.tsx` [MODIFY — add Your Path, Focus Today, Research Status] | Lane 3 |
-| Home components | `components/common/FocusTodayCard.tsx` [NEW], `components/common/ResearchStatusBadge.tsx` [NEW] | Lane 3 |
-| Completion screen | `components/experience/CompletionScreen.tsx` [NEW] | Lane 4 |
-| Experience renderer | `components/experience/ExperienceRenderer.tsx` [MODIFY — use CompletionScreen] | Lane 4 |
-| Synthesis service read | `lib/services/synthesis-service.ts` [READ ONLY — fetch synthesis data] | Lane 4 |
-| Step knowledge display | `components/experience/StepKnowledgeCard.tsx` [NEW] | Lane 5 |
-| Step renderers | All step renderers in `components/experience/` [MODIFY — add knowledge card slots] | Lane 5 |
-| Knowledge companion | `components/experience/KnowledgeCompanion.tsx` [MODIFY — use link table not domain] | Lane 5 |
-| Coach triggers | `components/experience/CoachTrigger.tsx` [NEW] | Lane 6 |
-| Knowledge progress service | `lib/services/knowledge-service.ts` [MODIFY — add mastery promotion] | Lane 6 |
-| Coach grade integration | `app/api/coach/grade/route.ts` [MODIFY — update knowledge_progress after grading] | Lane 6 |
-| Studio copy | `lib/studio-copy.ts` [MODIFY — add new section copy] | Shared (coordinate) |
-| Routes | `lib/routes.ts` [MODIFY if new routes needed] | Shared (coordinate) |
-| Integration + browser | All files (read + targeted fixes) | Lane 7 |
+| Schema/contracts | `lib/gateway/discover-registry.ts`, `lib/validators/step-payload-validator.ts`, `public/openapi.yaml`, `gpt-instructions.md`, `lib/services/goal-service.ts` | Lane 1 |
+| Skill Tree UI | `components/skills/SkillTreeCard.tsx`, `components/skills/SkillTreeGrid.tsx`, `components/skills/SkillDomainDetail.tsx` (NEW), `app/skills/page.tsx`, `app/skills/[domainId]/page.tsx` (NEW), `lib/studio-copy.ts` (skills section only) | Lane 2 |
+| Focus Today | `components/common/FocusTodayCard.tsx`, `lib/services/home-summary-service.ts`, `app/page.tsx` (Focus Today section only) | Lane 3 |
+| Mastery visibility | `components/experience/steps/CheckpointStep.tsx`, `components/experience/ExperienceRenderer.tsx` (mastery recompute fix only) | Lane 4 |
+| Coach surfacing | `components/experience/CoachTrigger.tsx`, `components/experience/ExperienceRenderer.tsx` (coach wiring only) | Lane 5 |
+| Completion screen | `components/experience/CompletionScreen.tsx` | Lane 6 |
+| Integration | All pages (read-only browser QA), `lib/routes.ts`, `lib/studio-copy.ts` (final pass) | Lane 7 |
 
 ---
 
-### Lane 1 — CheckpointStep Renderer + Knowledge Wiring
+## Lane 1 — Schema Truth Pass
 
-**Owns: `components/experience/CheckpointStep.tsx` [NEW], `lib/experience/renderer-registry.tsx` [MODIFY], `app/api/experiences/[id]/steps/route.ts` [MODIFY]**
+> Fix the contract drift so GPT can actually create valid payloads and the OpenAPI spec matches runtime.
 
-**Reading list:** `lib/contracts/step-contracts.ts` (CheckpointPayloadV1 — the contract this renderer implements), `components/experience/Lesson.tsx` (renderer pattern — props: `step, onComplete, onSkip, onDraft`), `lib/experience/renderer-registry.tsx` (registration pattern), `lib/services/step-knowledge-link-service.ts` (existing link service — verify it compiles), `app/api/experiences/[id]/steps/route.ts` (current step CRUD — you'll add knowledge_unit_id support)
+**W1 — Fix discover registry → validator alignment** ⬜
+- In `lib/gateway/discover-registry.ts`, update the step payload examples for:
+  - `reflection`: Change `{ prompt, guide }` → `{ prompts: [{ id, text }] }` to match validator
+  - `questionnaire`: Change `questions[].text` → `questions[].label` to match validator
+  - `challenge`: Change `{ problem, constraints[], hints[] }` → `{ objectives: [{ id, description }] }` to match validator
+  - `essay_tasks`: Change `{ prompt, requirements[] }` → `{ content, tasks: [{ id, description }] }` to match validator
+- Cross-reference `lib/validators/step-payload-validator.ts` for each type's required fields
+- Verify `lesson` and `checkpoint` still match (they should already)
 
-**W1 — Create CheckpointStep renderer** ✅
-- **Done**: Fully implemented with grading integration, results view, and support for on_fail behaviors.
+**W2 — Update OpenAPI schema** ⬜
+- In `public/openapi.yaml`:
+  - Add `goal` to the `createEntity` type enum (alongside experience, ephemeral, idea, step)
+  - Add `goal` and `skill_domains` fields to `getGPTState` response schema
+  - Update description to mention Goal OS
+  - Verify all 6 endpoints are listed with accurate request/response schemas
 
-**W2 — Register checkpoint in renderer-registry** ✅
-- **Done**: Registered CheckpointStep in both registry and experience renderer.
+**W3 — Fix goal service contract gap** ⬜
+- Decision: Remove `outlineIds` from `Goal` type (the relationship lives in `curriculum_outlines.goal_id`, not denormalized on Goal). OR implement `addOutlineToGoal`/`removeOutlineFromGoal` in `goal-service.ts`.
+- Recommended: Remove `outlineIds` from `types/goal.ts` and `GoalRow`. Simplify — the join is through `curriculum_outlines.goal_id`.
+- Update `docs/contracts/goal-os-contract.md` to reflect this decision.
 
-**W3 — Update step API for knowledge linking** ✅
-- **Done**: API handles knowledge_unit_id in POST and enriches GET with links.
+**W4 — Fix mastery recompute action mismatch** ⬜
+- In `components/experience/ExperienceRenderer.tsx` (L105): Change `action: 'recompute'` → `action: 'recompute_mastery'`
+- Also pass `goalId` in the PATCH body (resolve from outline.goalId which is already fetched)
+- Verify the fix by tracing: ExperienceRenderer → PATCH /api/skills/:id → `updateDomainMastery(goalId, id)`
 
-**W4 — Verify step-knowledge-link service compilation** ✅
-- **Done**: Service expanded with getLinksForExperience and unlinkStepFromKnowledge.
+**W5 — Update GPT instructions** ⬜
+- In `gpt-instructions.md`: Add a note about step payload field naming for `reflection` (uses `prompts[]` not `prompt`) and `questionnaire` (uses `label` not `text`)
+- Ensure the goal intake protocol section is accurate
 
----
-
-### Lane 2 — Visible Track/Outline UI
-
-**Owns: `components/experience/TrackCard.tsx` [NEW], `components/experience/TrackSection.tsx` [NEW], `app/library/page.tsx` [MODIFY], `app/library/LibraryClient.tsx` [MODIFY]**
-
-**Reading list:** `lib/services/curriculum-outline-service.ts` (CRUD functions — `getCurriculumOutlinesForUser`, `getOutlineWithExperiences`), `types/curriculum.ts` (CurriculumOutline, CurriculumSubtopic interfaces), `app/library/page.tsx` (current server component — you'll add outline fetching), `app/library/LibraryClient.tsx` (current client component — you'll add track rendering), `lib/studio-copy.ts` (copy pattern), `app/globals.css` (design tokens)
-
-**W1 — Create TrackCard component** ✅
-- `components/experience/TrackCard.tsx`
-- Displays a single curriculum outline as a visual card:
-  - Track title (outline.topic)
-  - Domain badge
-  - Subtopic list with status indicators (pending/active/completed)
-  - Progress bar: % of subtopics that have linked experiences in 'completed' status
-  - "Continue" button → links to the next incomplete subtopic's experience
-- Dark theme, consistent with existing card components (see `components/experience/ExperienceCard.tsx`)
-- **Done**: Implemented a responsive track card with progress tracking and subtopic status indicators.
-- Done when: component renders an outline with progress
-
-**W2 — Create TrackSection component** ✅
-- `components/experience/TrackSection.tsx`
-- Groups multiple TrackCards under a "Your Tracks" heading
-- Shows empty state if no outlines exist (use EmptyState component pattern)
-- **Done**: Created a grouping component that renders track cards in a grid and handles empty states.
-- Done when: component renders a list of track cards or empty state
-
-**W3 — Integrate tracks into Library page** ✅
-- Modify `app/library/page.tsx` (server component):
-  - Fetch user's curriculum outlines via `getCurriculumOutlinesForUser(userId)`
-  - Pass outlines to `LibraryClient` as a new prop
-- Modify `app/library/LibraryClient.tsx` (client component):
-  - Add a "Tracks" tab/section above the existing experience sections
-  - Render `TrackSection` with the outlines
-  - If an outline has no linked experiences yet, show it as "Planning" state
-- **Done**: Connected the server-side curriculum service to the library UI, enabling visible learning tracks.
-- Done when: Library page shows tracks section with outline cards
+**Done when:**
+- All 6 step types' discover examples pass `validateStepPayload()` without errors
+- `openapi.yaml` documents `goal` in create and `goal`+`skill_domains` in state
+- ExperienceRenderer sends correct `recompute_mastery` action with `goalId`
+- TSC clean
 
 ---
 
-### Lane 3 — Home Page Context Reconstruction
+## Lane 2 — Skill Tree Upgrade
 
-**Owns: `app/page.tsx` [MODIFY], `components/common/FocusTodayCard.tsx` [NEW], `components/common/ResearchStatusBadge.tsx` [NEW]**
+> Turn domain cards from scoreboards into micro-roadmaps. Add a domain detail view.
 
-**Reading list:** `app/page.tsx` (current home page — understand existing sections: "Suggested for You", "Active Journeys"), `lib/services/experience-service.ts` (fetching active experiences), `lib/services/curriculum-outline-service.ts` (fetching outlines), `lib/services/knowledge-service.ts` (fetching recent knowledge units), `types/experience.ts` (ExperienceInstance, ExperienceStep), `lib/studio-copy.ts` (copy pattern), `lib/routes.ts` (workspace routes), `lib/constants.ts` (DEFAULT_USER_ID)
+**W1 — Domain card shows "what's needed for next level"** ✅
+- **Done**: Added `evidenceNeeded` metric based on `MASTERY_THRESHOLDS` and formatted the display, along with completed vs total experiences. Added associated copy strings.
+- In `components/skills/SkillTreeCard.tsx`:
+  - Import mastery thresholds from `docs/contracts/goal-os-contract.md` or define constants in `lib/constants.ts` if not already there (e.g., `MASTERY_THRESHOLDS = { aware: 1, beginner: 2, practicing: 5, proficient: 10, expert: 20 }`)
+  - Calculate `evidenceNeeded = threshold[nextLevel] - domain.evidenceCount`
+  - Display below progress bar: "2 more experiences to reach practicing" (or "Max level reached" for expert)
+  - Show count of linked experiences: completed vs total (e.g., "3 of 5 experiences done")
+- Add copy strings to `lib/studio-copy.ts` skills section
 
-**W1 — Create FocusTodayCard component** ✅
-- `components/common/FocusTodayCard.tsx`
-- Shows the most recently active experience + the next uncompleted step:
-  - Experience title
-  - Step title + step number (e.g., "Step 3 of 6")
-  - Time since last activity (e.g., "3 days ago")
-  - Direct "Resume Step N →" link to `/workspace/[instanceId]`
-- If no active experience: show "No active experience. Visit Library to find one."
-- Dark theme, prominent placement styling
-- **Done**: Created `FocusTodayCard` to show the most recently active experience with a resume link and progress bar.
+**W2 — Domain card shows next uncompleted experience** ✅
+- **Done**: Enhanced payload processing in `app/skills/page.tsx` to compute status distribution and correctly evaluate `_nextExperienceId`. Overhauled `SkillTreeCard` to display uncompleted links and fallback text dynamically.
+- Currently `nextExperienceId = domain.linkedExperienceIds[0]` (always first, regardless of completion)
+- Fetch experience statuses and show the first non-completed one as the "What's next" link
+- If all linked experiences are completed, show "All experiences completed — explore more →" linking to library
 
-**W2 — Create ResearchStatusBadge component** ✅
-- `components/common/ResearchStatusBadge.tsx`
-- Displays research status for MiraK dispatches:
-  - Check `knowledge_units` created_at for units that arrived since user's last visit
-  - If new units exist: "🔬 New research arrived" with count badge
-  - If experience has `enrichment` step_knowledge_links, show "enriched" indicator
-- This is a simple data-driven badge, not a real-time system — reads existing DB state
-- **Done**: Created `ResearchStatusBadge` to display "New Research" count and "Enriched" status for experiences.
+**W3 — Domain detail page** ✅
+- **Done**: Created the server component `app/skills/[domainId]/page.tsx` tracking specific domain metadata, lists of mapped experiences via status checks, and fetched knowledge structures directly mapped out nicely with specific matching UI themes. Added the corresponding route to `routes.ts`.
+- Shows: domain name, description, mastery level + badge, progress to next level
+- List of all linked experiences (with status badges: completed/active/proposed)
+- List of all linked knowledge units (with mastery status)
+- Back link to `/skills`
+- Add route to `lib/routes.ts`: `skillDomain: (id: string) => `/skills/${id}``
 
-**W3 — Upgrade home page with Focus Today + Your Path** ✅
-- Modify `app/page.tsx`:
-  - Add "Focus Today" section at top: render `FocusTodayCard` with most recent active experience
-  - Add "Your Path" section: render `TrackSection` (from Lane 2) with active curriculum outlines — if Lane 2 isn't done yet, add a stub section with a TODO comment. Use `getCurriculumOutlinesForUser(userId)` to fetch.
-  - Add `ResearchStatusBadge` near the knowledge/suggested section
-  - Replace or supplement "Suggested for You" with curriculum-driven context
-  - Add "Welcome back" context: calculate days since last interaction event, show "X days since your last session" if > 1 day
-- **Done**: Upgraded home page with "Focus Today", "Your Path" (using Lane 2's components), and a "Welcome back" session summary.
+**W4 — Wire card links to detail page** ✅
+- **Done**: Transformed `<SkillTreeCard>` header wrapper to a `<Link>` block routing back into the newly registered destination and passed strictly formatted metadata objects within `SkillTreeGrid.tsx`.
+- In `SkillTreeCard.tsx`: Make the card title clickable, linking to the detail page
+- In `SkillTreeGrid.tsx`: Ensure the grid passes through domain IDs correctly
 
----
-
-### Lane 4 — Completion Synthesis Surfacing ✅
-
-**Owns: `components/experience/CompletionScreen.tsx` [NEW], `components/experience/ExperienceRenderer.tsx` [MODIFY]**
-
-**Reading list:** `components/experience/ExperienceRenderer.tsx` (current completion handling — look for the congratulations/completion UI section), `lib/services/synthesis-service.ts` (how to fetch synthesis snapshots — `getSynthesisForExperience`), `types/synthesis.ts` (SynthesisSnapshot — fields: summary, key_signals, next_candidates), `types/profile.ts` (ProfileFacet — what a facet looks like), `lib/services/facet-service.ts` (how to fetch facets for a user), `app/globals.css` (design tokens)
-
-**W1 — Create CompletionScreen component** ✅
-- `components/experience/CompletionScreen.tsx`
-- Props: `experienceId: string, userId: string`
-- Fetches synthesis snapshot via `GET /api/synthesis?sourceType=experience&sourceId={experienceId}`
-- Displays:
-  - 🎉 Completion celebration (animated icon/confetti, not just a checkmark)
-  - 2-3 sentence summary from `synthesis_snapshots.summary`
-  - Key signals rendered as badges/chips (from `key_signals` array)
-  - Growth indicators: "Skills observed: [facet values]" — fetch recently created facets for this experience
-  - Next suggestions: top 1-2 items from `next_candidates` with clickable links
-  - "Back to Library" and "Start Next →" buttons
-- If synthesis hasn't run yet (no snapshot): show a loading state with "Generating insights..." then fall back to basic congratulations after 3s timeout
-- Dark theme, celebratory feel — gradient background, animated elements
-- Done when: completion screen fetches and displays synthesis data
-- **Done**: Created dynamic synthesis-driven completion screen with celebration, narrative summary, behavioral signals, growth facets, and next suggestions.
-
-**W2 — Wire CompletionScreen into ExperienceRenderer** ✅
-- Modify `components/experience/ExperienceRenderer.tsx`:
-  - When experience status transitions to `completed`, render `CompletionScreen` instead of the current static congratulations card
-  - Pass `experienceId` and `userId` to CompletionScreen
-  - Keep the existing synthesis API call (`POST /api/synthesis`) that fires on completion — this ensures data exists for CompletionScreen to fetch
-- Done when: completing an experience shows the new synthesis-driven completion screen
-- **Done**: Replaced static completion card in ExperienceRenderer with the new CompletionScreen component.
-
-**W3 — Ensure synthesis API returns data for CompletionScreen** ✅
-- Verify `app/api/synthesis/route.ts` supports `GET ?sourceType=experience&sourceId={id}`
-- If GET is not supported, add it (the POST that creates synthesis already exists)
-- Verify the response shape matches what CompletionScreen expects: `{ summary, key_signals, next_candidates }`
-- Done when: GET synthesis returns snapshot data or 404 (not an error)
-- **Done**: Updated synthesis service and API to support source-specific retrieval and linked facet extraction.
+**Done when:**
+- Card shows evidence needed for next level
+- Card links to first uncompleted experience (not always first)
+- Detail page renders with linked experiences + knowledge units
+- Route in `lib/routes.ts`
+- TSC clean
 
 ---
 
-### Lane 5 — Knowledge Timing Inside Steps
+## Lane 3 — Intelligent Focus Today
 
-**Owns: `components/experience/StepKnowledgeCard.tsx` [NEW], step renderer modifications, `components/experience/KnowledgeCompanion.tsx` [MODIFY]**
+> Rank the focus card by leverage, not recency. Show a priority reason.
 
-**Reading list:** `lib/services/step-knowledge-link-service.ts` (getLinksForStep — how to fetch links), `types/curriculum.ts` (StepKnowledgeLink interface), `lib/services/knowledge-service.ts` (how to fetch knowledge unit details), `components/experience/KnowledgeCompanion.tsx` (current companion — uses domain string matching, you'll switch to link table), `components/experience/Lesson.tsx` (example step renderer — you'll add knowledge card slots), `lib/constants.ts` (STEP_KNOWLEDGE_LINK_TYPES — teaches, tests, deepens, pre_support, enrichment)
+**W1 — Priority heuristic in home-summary-service** ✅
+- **Done**: Replaced recency sort with a comprehensive heuristic prioritizing scheduled dates, proximity to mastery, and failed checkpoints in `home-summary-service`.
+- In `lib/services/home-summary-service.ts`, replace the current "most recent activity" sort with a priority ranking:
+  1. Experiences with `scheduled_date` today or overdue → highest priority
+  2. Experiences in domains closest to mastery threshold (e.g., 1 experience away from next level)
+  3. Experiences with failed checkpoints (user should retry)
+  4. Recency fallback (current behavior)
+- Return `focusReason: string` alongside the focus experience (e.g., "This domain is 1 experience away from practicing")
+- Compute domain proximity using skill_domains data already fetched in the summary
 
-**W1 — Create StepKnowledgeCard component** ✅
-- `components/experience/StepKnowledgeCard.tsx`
-- Props: `knowledgeUnitId: string, linkType: string, timing: 'pre' | 'in' | 'post'`
-- Fetches knowledge unit title and summary from the knowledge service
-- Three visual modes based on `timing`:
-  - `pre`: "📖 Before you start: review [Unit Title]" — shown above step content, collapsible, links to knowledge page
-  - `in`: Compact inline reference card — shown in sidebar or below step content
-  - `post`: "🔍 Go deeper: [Unit Title]" — revealed after step completion, expandable
-- Link type indicator: teaches (📚), tests (✅), deepens (🔬), pre_support (📖), enrichment (✨)
-- **Done**: Fully implemented with 3 timing modes and iconography for each link type.
-- Done when: card renders in all three timing modes with correct styling
+**W2 — FocusTodayCard shows priority reason** ✅
+- **Done**: Added `focusReason` optional string prop and rendered a compact, styled tag above the experience title.
+  - Accept `focusReason?: string` prop
+  - Show the reason as a small tag/badge above the experience title: e.g., "📈 Closest to leveling up" or "📅 Scheduled for today"
+  - Style consistently with the existing indigo accent palette
 
-**W2 — Add knowledge timing to step renderers** ✅
-- Modify step renderers to accept and display `StepKnowledgeCard`:
-  - Each step renderer component gets knowledge links passed as props (or fetches them from API)
-  - Before step content: render `StepKnowledgeCard` with `timing='pre'` for links of type `pre_support`
-  - After step content: render `StepKnowledgeCard` with `timing='post'` for links of type `deepens`
-  - Alongside step content: render `StepKnowledgeCard` with `timing='in'` for links of type `teaches` or `enrichment`
-- Target renderers (minimum): `Lesson.tsx`, `ChallengeStep.tsx`, and `CheckpointStep.tsx` (Lane 1)
-- **Done**: Added knowledge card slots to LessonStep, ChallengeStep, and CheckpointStep renderers.
-- Done when: at least 3 step renderers show knowledge cards based on link type
+**W3 — Wire focus reason through page** ✅
+- **Done**: Passed the computed `focusReason` from `summary.focusExperience.focusReason` directly into `<FocusTodayCard>` in `app/page.tsx`.
 
-**W3 — Upgrade KnowledgeCompanion to use link table** ✅
-- Modify `components/experience/KnowledgeCompanion.tsx`:
-  - Currently matches knowledge units by `knowledge_domain` string — switch to using `step_knowledge_links` table
-  - Call `getLinksForStep(stepId)` to get linked knowledge unit IDs
-  - Fetch full units by ID instead of domain string matching
-  - Fall back to domain matching if no step_knowledge_links exist (backward compatibility)
-- **Done**: Refactored to prioritize specifically linked units from the link table; maintained domain fallback.
-- Done when: companion shows linked units from the link table; domain fallback still works
+**Done when:**
+- Focus Today shows the highest-leverage experience, not just most recent
+- A reason tag appears explaining why this experience is recommended
+- Fallback to recency when no heuristic applies
+- TSC clean
 
 ---
 
-### Lane 6 — Coach Surfacing Triggers + Mastery Wiring
+## Lane 4 — Mastery Visibility & Checkpoint Feedback
 
-**Depends on Lane 1 (CheckpointStep must exist for mastery wiring to work)**
+> After a checkpoint, show the user what moved. Don't let mastery changes be silent.
 
-**Owns: `components/experience/CoachTrigger.tsx` [NEW], `lib/services/knowledge-service.ts` [MODIFY], `app/api/coach/grade/route.ts` [MODIFY]**
+**W1 — Checkpoint results show mastery impact inline** ✅
+- **Done**: Added a mastery impact callout in the CheckpointStep results view that fetches and displays evidence count and progress for the relevant skill domain.
 
-**Reading list:** `components/experience/KnowledgeCompanion.tsx` (current coach — understand TutorChat mode), `app/api/coach/grade/route.ts` (current grading route — you'll add mastery update), `lib/services/knowledge-service.ts` (knowledge_progress table access — you'll add mastery promotion), `types/knowledge.ts` (KnowledgeProgress interface — fields: `status: unseen|read|practiced|confident`), `lib/ai/flows/grade-checkpoint-flow.ts` (grading output — `correct: boolean, confidence: number`), `lib/services/step-knowledge-link-service.ts` (getLinksForStep — to find which units are tested by checkpoints)
+**W2 — Mastery toast on knowledge progress promotion** ✅
+- **Done**: Implemented a floating toast notification that appears when a knowledge unit's mastery status is promoted following successful grading.
 
-**W1 — Create CoachTrigger component** ✅
-- `components/experience/CoachTrigger.tsx`
-- Non-intrusive, conditional UI element that surfaces the coach at the right moment:
-  - **After failed checkpoint**: If `gradeCheckpointFlow` returns `correct: false`, show a gentle prompt: "Need help with this? 💬" — clicking opens coach chat in KnowledgeCompanion
-  - **After extended dwell**: If user has been on a step for > 5 minutes without any interaction event, show: "Taking your time? The coach can help 💬"
-  - **Before unread knowledge**: If the step has `pre_support` knowledge links and the user's `knowledge_progress` for that unit is `unseen`, show: "📖 You might want to review [Unit Title] first"
-- Uses a subtle slide-in animation (not a modal, not intrusive)
-- Dismissable — user can close it and it doesn't reappear for that step/session
-- Props: `stepId: string, userId: string, onOpenCoach: () => void`
-- **Done**: Created CoachTrigger with 3 reactive triggers and slide-in UI.
-- Done when: trigger renders conditionally based on checkpoint failure, dwell time, and unread knowledge
+**W3 — Fix ExperienceRenderer mastery recompute call** ✅
+- **Done**: Verified that the mastery recompute action is correctly set to 'recompute_mastery' and passes the required goalId.
 
-**W2 — Wire checkpoint grades into knowledge_progress** ✅
-- Modify `app/api/coach/grade/route.ts`:
-  - After grading a checkpoint question, check if the step has `step_knowledge_links` of type `tests`
-  - If the linked knowledge unit exists and grading returned `correct: true` with `confidence > 0.7`:
-    - Update `knowledge_progress` for that unit: promote from current status to next level (unseen→read, read→practiced, practiced→confident)
-  - If grading returned `correct: false`:
-    - Do NOT demote — just leave the level unchanged (keep mastery honest but not punitive)
-  - Log the grading result as an interaction event for synthesis
-- Modify `lib/services/knowledge-service.ts`:
-  - Add `promoteKnowledgeProgress(userId: string, knowledgeUnitId: string)` function
-  - This reads current progress status and advances it one level
-  - If already `confident`, no-op
-- **Done**: Linked grading success to mastery promotion and logged interactions for synthesis.
-- Done when: passing a checkpoint auto-promotes mastery for linked knowledge units
+**W4 — Add domain name to checkpoint grading context** ✅
+- **Done**: Updated ExperienceRenderer to pass the domain name from the outline to CheckpointStep, which now uses it to fetch and display accurate mastery impact.
 
-**W3 — Integrate CoachTrigger into step renderers** ✅
-- Add `CoachTrigger` component to the `ExperienceRenderer` or individual step renderers:
-  - Render below the active step content
-  - Pass the current `stepId`, `userId`, and a callback to open KnowledgeCompanion in tutor mode
-  - CoachTrigger internally manages its visibility state (shown/dismissed)
-- **Done**: Integrated CoachTrigger into ExperienceRenderer and wired it to CheckpointStep results.
-- Done when: coach trigger appears after checkpoint failure in browser
+**Done when:**
+- After checkpoint grading, a callout shows evidence count / threshold for the relevant domain
+- Knowledge progress promotions produce a visible toast
+- Mastery recompute actually fires correctly (action name + goalId)
+- TSC clean
+
+> ⚠️ **Coordination note:** Lane 4 W3 and Lane 1 W4 both touch `ExperienceRenderer.tsx` mastery effect. Lane 1 owns the fix. Lane 4 should verify it works after Lane 1 completes, or stub with correct action name if working in parallel. The ownership zone for ExperienceRenderer is split: Lane 4 owns the mastery recompute block (L86-115), Lane 5 owns coach wiring.
 
 ---
 
-### Lane 7 — Integration + Browser QA
+## Lane 5 — Proactive Coach Surfacing
 
-**Runs AFTER Lanes 1–6 are completed.**
+> Make the coach surface at the right moments with context, not just wait at the bottom.
 
-**W1 — TSC + build fix pass** ✅
-- Run `npx tsc --noEmit` — fix any cross-lane type errors  
-- Run `npm run build` — fix any build errors
-- Common fix areas: missing imports, prop type mismatches between components from different lanes
+**W1 — Coach surfaces with context after failed checkpoint** ✅
+- In `components/experience/CoachTrigger.tsx`:
+  - When `failedCheckpoint` is true, enhance the trigger label to include the missed question context
+  - Accept optional `missedQuestions?: string[]` prop from ExperienceRenderer
+  - Label becomes: "You missed a few points. Want to review [topic]? 💬" instead of generic "Need help?"
+- In `ExperienceRenderer.tsx`: Pass missed question text to CoachTrigger when `handleGradeComplete` fires with failures
+- **Done**: Added `missedQuestions` mapping from failed questions in ExperienceRenderer and updated CoachTrigger text.
 
-**W2 — Three-moment browser verification** ✅
-- **Moment 1: Opening the app**
-  - Navigate to home (`/`)
-  - Verify "Focus Today" shows most recent active experience or empty state
-  - Verify "Your Path" shows curriculum outlines (if any exist) or stub
-  - Verify "Research Status" badge works (if knowledge units exist)
-  - Verify "Welcome back" context shows time since last session
-- **Moment 2: Stuck in a step**
-  - Navigate to workspace with a checkpoint step
-  - Submit wrong answers
-  - Verify CoachTrigger appears with "Need help?" prompt
-  - Click through to coach chat — verify it opens in tutor mode
-  - Stay on a step for > 5 minutes (or simulate via devtools) — verify dwell trigger
-- **Moment 3: Completing an experience**
-  - Complete all steps in a test experience
-  - Verify CompletionScreen renders (not the old static congratulations)
-  - Verify synthesis summary, key signals, and next suggestions appear
-  - Verify "Start Next →" links to a valid experience
+**W2 — Pre-step knowledge primer callout** ✅
+- In `components/experience/CoachTrigger.tsx`:
+  - For the `unread_knowledge` trigger type: enhance the message to include a direct "Review now →" link that navigates to the knowledge unit
+  - Add a `knowledgeUnitLink` field derived from the pre_support link's `knowledgeUnitId`
+  - Format: "📖 Review '[Unit Title]' before starting → [link to /knowledge/:id]"
+- **Done**: Enhanced unread_knowledge trigger dynamically generate a visible Next.js Link instead of a text prompt.
 
-**W3 — Track UI browser test** ✅
-- Navigate to `/library`
-- Verify "Tracks" section appears with curriculum outline cards
-- Verify progress bars reflect actual completion state
-- Verify "Continue" links navigate to the correct workspace
+**W3 — Tutor redirect wiring on checkpoint fail** ✅
+- In `CheckpointStep.tsx` L226-234: The "Get Help" button for `on_fail === 'tutor_redirect'` currently has `onClick={() => {}}` (noop)
+- Wire it to call `onOpenCoach()` — pass through a new `onOpenCoach` prop from ExperienceRenderer
+- OR fire a custom event that CoachTrigger listens for
+- **Done**: Added `onOpenCoach` to CheckpointStep props, passed it down from ExperienceRenderer, and wired the Get Help button to invoke it.
 
-**W4 — Knowledge timing browser test** ✅
-- Open a step that has `step_knowledge_links`
-- Verify pre-support card appears above step content for `pre_support` links
-- Verify post-step card appears after step completion for `deepens` links
-- Verify in-step companion uses link table (not domain matching)
-- Verify KnowledgeCompanion falls back to domain matching when no links exist
-
-**W5 — Checkpoint end-to-end test** ✅
-- Create a test experience with a checkpoint step (use dev harness or curl)
-- Navigate to workspace
-- Verify checkpoint renders: questions display, textarea/radio inputs work
-- Submit answers
-- Verify grading feedback appears (correct/incorrect per question)
-- Verify `knowledge_progress` updated in Supabase for linked units
-- Verify CoachTrigger appears on wrong answers
-
-**W6 — Regression check** ✅
-- Existing Knowledge Tab (`/knowledge`) still works
-- Existing Library (`/library`) shows experiences correctly (no broken sections)
-- Existing workspace navigation (sidebar/topbar) works
-- Draft persistence still works
-- No console errors on any page
-- `getGPTState` response still includes all expected fields
+**Done when:**
+- Failed checkpoint coach trigger includes question-level context
+- Unread knowledge trigger shows unit title and link
+- "Get Help" button on checkpoint fail opens the tutor chat
+- TSC clean
 
 ---
 
-## GPT Instructions / Schema Updates
+## Lane 6 — Completion Retrospective
 
-**After Sprint 12 is code-complete, update:**
-- `gpt-instructions.md`: Add experience sizing rule (3-6 steps, one subtopic per experience)
-- `gpt-instructions.md`: Add SOP for always linking knowledge to checkpoint steps
-- No OpenAPI schema changes needed (all new features are frontend-facing, not GPT-facing)
+> Make the completion screen a mini-retrospective that shows what specifically changed.
+
+**W1 — Show specific mastery domain changes** ✅
+- **Done**: Added "What Moved" section that compares current evidence against thresholds to dynamically determine prior state and clearly displays transitions, utilizing a color-coded interface mirroring the SkillTreeCard.
+
+**W2 — Show step-level summary** ✅
+- **Done**: Implemented "What You Did" section that aggregates total step counts, checkpoint pass rates, and drafts saved from the active session's tracking payload.
+
+**W3 — Improve "Next Suggested Paths" with domain context** ✅
+- **Done**: Enhanced candidates rendering to cross-reference with domain names, automatically converting matched names into clickable links with their respective mastery badges.
+
+**W4 — Loading state polish** ✅
+- **Done**: Added skeleton outlines below the synthesizing spinner to reduce visual jumping when data hydration completes.
+
+**Done when:**
+- "What Moved" section shows domain mastery changes from this experience
+- "What You Did" section shows step/checkpoint/draft counts
+- Next paths link to skill domains when applicable
+- Loading → complete transition is smooth
+- TSC clean
+
+---
+
+## Lane 7 — Integration + Browser QA
+
+> Cross-lane wiring, regression checks, browser testing, documentation sync.
+
+**W1 — Cross-lane type verification** ⬜
+- Run `npx tsc --noEmit` — must pass with all 6 lanes merged
+- Run `npm run build` — must succeed
+
+**W2 — Browser QA: Skills page** ⬜
+- Verify SkillTreeCard shows "X more to reach [level]"
+- Verify card title links to domain detail page
+- Verify domain detail page renders with linked experiences + knowledge
+
+**W3 — Browser QA: Home page** ⬜
+- Verify Focus Today shows priority reason tag
+- Verify it picks the highest-leverage experience (not just most recent)
+
+**W4 — Browser QA: Checkpoint flow** ⬜
+- Complete a checkpoint with mixed correct/incorrect answers
+- Verify mastery impact callout appears after grading
+- Verify coach trigger surfaces with question-level context
+- Verify "Get Help" button opens tutor chat
+
+**W5 — Browser QA: Completion screen** ⬜
+- Complete an experience fully
+- Verify "What Moved" section shows domain mastery changes
+- Verify "What You Did" section shows accurate counts
+- Verify next paths link to skill domains
+
+**W6 — Documentation sync** ⬜
+- Update `roadmap.md`: Mark Sprint 13 ✅, write Sprint 14 completion notes
+- Update `board.md` final status markers for all lanes
+- Update `agents.md` Lessons Learned with Sprint 13 debt + Sprint 14 SOPs
+- Verify `gpt-instructions.md` is accurate
+
+**Done when:**
+- TSC clean, build clean
+- All browser QA items verified
+- Documentation synced
+- No console errors in browser during QA flow
 
 ---
 
 ## Pre-Flight Checklist
 
-- [x] `npm install` succeeds (c:/mira)
-- [x] `npx tsc --noEmit` passes (c:/mira)
-- [x] `npm run build` passes (c:/mira)
-- [x] Dev server starts (`npm run dev` in c:/mira)
-- [x] Supabase is configured and all migrations applied
-- [x] `roadmap.md` reflects Sprint 12 as the active productization sprint
+- [ ] TSC clean (`npx tsc --noEmit`)
+- [ ] Build clean (`npm run build`)
+- [ ] Dev server confirmed running (`npm run dev`)
 
 ## Handoff Protocol
 
 1. Mark W items ⬜→🟡→✅ as you go
-2. Run `npx tsc --noEmit` before marking ✅ on your final W item
-3. **DO NOT open the browser or perform visual checks** in Lanes 1–6. Lane 7 handles all browser QA.
-4. Never touch files owned by other lanes (see Ownership Zones above)
-5. Never push/pull from git
+2. Run tsc before marking ✅
+3. **DO NOT perform visual browser checks**. Lane 7 handles all browser QA.
+4. If a visual check is needed, mark as "✅ (Pending Visual Verification)" and the coordinator will check at the end.
+5. Never touch files owned by other lanes
+6. Never push/pull from git
 
 ## Test Summary
 
-| Lane | TSC | Build | Notes |
-|------|-----|-------|-------|
-| Lane 1 | ✅ | ✅ | Checkpoint renderer, registry, step-knowledge API |
-| Lane 2 | ✅ | ✅ | Track/outline UI, library integration |
-| Lane 3 | ✅ | ✅ | Home page context (Focus Today, Your Path, Research) |
-| Lane 4 | ✅ | ✅ | Completion synthesis screen |
-| Lane 5 | ✅ | ✅ | Knowledge timing inside steps, renderer slots, companion upgrade |
-| Lane 6 | ✅ | ✅ | Coach triggers + mastery wiring |
-| Lane 7 | ✅ | ✅ | Integration + browser QA (3-moment verification) |
-
----
-
-## Acceptance
-
-- [ ] Checkpoint step renders with questions, collects answers, displays grading feedback
-- [ ] `getRenderer('checkpoint')` returns CheckpointStep (not FallbackStep)
-- [ ] Library page has "Tracks" section with curriculum outline cards + progress bars
-- [ ] Home page has "Focus Today" with resume link to last active step
-- [ ] Home page has "Your Path" with active curriculum outlines
-- [ ] Research status badge shows new knowledge unit arrivals
-- [ ] Completion screen shows synthesis summary, key signals, growth indicators, next suggestions
-- [ ] Pre-support knowledge card appears above step content for linked units
-- [ ] Post-step "Go deeper" card appears after step completion
-- [ ] KnowledgeCompanion uses step_knowledge_links table (not domain string matching)
-- [ ] Coach trigger surfaces after checkpoint failure without user action
-- [ ] Passing checkpoint auto-promotes knowledge_progress for linked units
-- [ ] Three-moment browser verification passes (Opening / Stuck / Completion)
-- [ ] No regressions on existing Knowledge Tab, Library, or Workspace
+| Lane | TSC | Notes |
+|------|-----|-------|
+| Lane 1 | ⬜ | |
+| Lane 2 | ✅ | TSC Clean |
+| Lane 3 | ✅ | Heuristics and reason badge added cleanly. |
+| Lane 4 | ✅ | |
+| Lane 5 | ✅ | Clean for Lane 5 files, error in Lane 2's SkillTreeCard |
+| Lane 6 | ✅ | TSC Clean |
+| Lane 7 | ⬜ | |

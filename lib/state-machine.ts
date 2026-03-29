@@ -2,6 +2,7 @@ import type { IdeaStatus } from '@/types/idea'
 import type { ProjectState } from '@/types/project'
 import type { ReviewStatus } from '@/types/pr'
 import type { ExperienceStatus } from '@/types/experience'
+import type { GoalStatus } from '@/types/goal'
 
 type IdeaTransition = {
   from: IdeaStatus
@@ -164,3 +165,40 @@ export function getNextExperienceState(
   )
   return transition ? transition.to : null
 }
+
+// ---------------------------------------------------------------------------
+// Goal State Machine (Sprint 13)
+// ---------------------------------------------------------------------------
+
+export type GoalTransitionAction =
+  | 'activate'
+  | 'pause'
+  | 'resume'
+  | 'complete'
+  | 'archive'
+
+type GoalTransition = {
+  from: GoalStatus
+  to: GoalStatus
+  action: GoalTransitionAction
+}
+
+export const GOAL_TRANSITIONS: GoalTransition[] = [
+  { from: 'intake', to: 'active', action: 'activate' },
+  { from: 'active', to: 'paused', action: 'pause' },
+  { from: 'paused', to: 'active', action: 'resume' },
+  { from: 'active', to: 'completed', action: 'complete' },
+  { from: 'completed', to: 'archived', action: 'archive' },
+]
+
+export function canTransitionGoal(from: GoalStatus, action: GoalTransitionAction): boolean {
+  return GOAL_TRANSITIONS.some((t) => t.from === from && t.action === action)
+}
+
+export function getNextGoalState(from: GoalStatus, action: GoalTransitionAction): GoalStatus | null {
+  const transition = GOAL_TRANSITIONS.find(
+    (t) => t.from === from && t.action === action
+  )
+  return transition ? transition.to : null
+}
+

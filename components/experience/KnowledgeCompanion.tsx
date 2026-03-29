@@ -55,24 +55,21 @@ export function KnowledgeCompanion({
     async function fetchKnowledge() {
       setLoading(true);
       try {
-        // Lane 5: Prioritize initialLinks
+        // Lane 5: Prioritize initialLinks (using batch fetch)
         if (initialLinks && initialLinks.length > 0) {
-          const fetchedUnits: KnowledgeUnit[] = [];
-          for (const link of initialLinks) {
-            try {
-              const res = await fetch(`/api/knowledge/${link.knowledgeUnitId}`);
-              if (res.ok) {
-                const data = await res.json();
-                fetchedUnits.push(data);
+          const ids = initialLinks.map(l => l.knowledgeUnitId).join(',');
+          try {
+            const res = await fetch(`/api/knowledge/batch?ids=${ids}`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.units && data.units.length > 0) {
+                setUnits(data.units);
+                setLoading(false);
+                return;
               }
-            } catch (e) {
-              console.error(`Failed to fetch linked unit ${link.knowledgeUnitId}:`, e);
             }
-          }
-          if (fetchedUnits.length > 0) {
-            setUnits(fetchedUnits);
-            setLoading(false);
-            return;
+          } catch (e) {
+            console.error('Failed to fetch batch linked units:', e);
           }
         }
 

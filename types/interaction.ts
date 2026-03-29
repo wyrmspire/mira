@@ -9,7 +9,8 @@ export type InteractionEventType =
   | 'experience_started'
   | 'experience_completed'
   | 'draft_saved'
-  | 'checkpoint_graded';
+  | 'checkpoint_graded'
+  | 'checkpoint_graded_batch';
 
 export interface InteractionEvent {
   id: string;

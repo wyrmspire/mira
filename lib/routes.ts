@@ -31,4 +31,7 @@ export const ROUTES = {
   // --- Sprint 8: Knowledge Tab ---
   knowledge: '/knowledge',
   knowledgeUnit: (id: string) => `/knowledge/${id}`,
+  // --- Sprint 13: Goal OS + Skill Map ---
+  skills: '/skills',
+  skillDomain: (id: string) => `/skills/${id}`,
 } as const

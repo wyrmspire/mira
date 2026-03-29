@@ -125,3 +125,20 @@ export type StepKnowledgeLinkType = (typeof STEP_KNOWLEDGE_LINK_TYPES)[number]
 export const CHECKPOINT_ON_FAIL = ['retry', 'continue', 'tutor_redirect'] as const
 export type CheckpointOnFail = (typeof CHECKPOINT_ON_FAIL)[number]
 
+// --- Sprint 13: Goal OS ---
+
+export const GOAL_STATUSES = ['intake', 'active', 'paused', 'completed', 'archived'] as const
+export type GoalStatus = (typeof GOAL_STATUSES)[number]
+
+export const SKILL_MASTERY_LEVELS = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert'] as const
+export type SkillMasteryLevel = (typeof SKILL_MASTERY_LEVELS)[number]
+
+export const MASTERY_THRESHOLDS: Record<SkillMasteryLevel, number> = {
+  undiscovered: 0,
+  aware: 1,
+  beginner: 2,
+  practicing: 5,
+  proficient: 10,
+  expert: 20,
+}
+

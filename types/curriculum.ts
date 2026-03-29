@@ -20,6 +20,7 @@ export interface CurriculumOutline {
   pedagogicalIntent: string;
   estimatedExperienceCount?: number | null;
   status: CurriculumStatus;
+  goalId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +64,7 @@ export interface CurriculumOutlineRow {
   pedagogical_intent: string;
   estimated_experience_count: number | null;
   status: CurriculumStatus;
+  goal_id: string | null;
   created_at: string;
   updated_at: string;
 }

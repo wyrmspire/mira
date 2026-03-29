@@ -148,20 +148,17 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
         ]
       },
       challenge: {
-        problem: 'markdown',
-        constraints: ['string'],
-        hints: ['string']
+        objectives: [{ id: 'string', description: 'string' }]
       },
       reflection: {
-        prompt: 'string',
-        guide: 'string'
+        prompts: [{ id: 'string', text: 'string' }]
       },
       questionnaire: {
-        questions: [{ id: 'string', text: 'string', type: 'text | choice', options: ['string'] }]
+        questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }]
       },
       essay_tasks: {
-        prompt: 'markdown',
-        requirements: ['string']
+        content: 'string',
+        tasks: [{ id: 'string', description: 'string' }]
       },
       checkpoint: {
         knowledge_unit_id: 'UUID',
@@ -242,6 +239,33 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     when_to_use: 'After creating an experience. Pass experience_id so MiraK enriches it with deep research. Do NOT wait for results — tell the user research is underway and they can start the experience now.',
     relatedCapabilities: ['create_experience', 'create_outline']
   }),
+ 
+  goal: () => ({
+    capability: 'goal',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a long-term goal to provide a persistent container for your learning journey.',
+    schema: {
+      type: 'goal',
+      payload: {
+        userId: 'UUID from state',
+        title: 'string (max 200) — e.g. "Master Backend Engineering"',
+        description: 'string (max 1000) — what you want to achieve',
+        domains: 'string[] — e.g. ["Databases", "API Design", "Security"]'
+      }
+    },
+    example: {
+      type: 'goal',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        title: 'Learn Systems Programming',
+        description: 'Deep dive into low-level systems, memory management, and performance optimization.',
+        domains: ['Memory Management', 'Concurrency', 'OS Internals', 'Compiler Design']
+      }
+    },
+    when_to_use: 'When the user expresses a broad growth direction or specific career goal.',
+    relatedCapabilities: ['create_outline', 'templates', 'dispatch_research']
+  }),
+ 
   tutor_chat: () => ({
     capability: 'tutor_chat',
     endpoint: 'POST /api/coach/chat',

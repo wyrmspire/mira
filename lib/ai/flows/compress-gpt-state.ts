@@ -17,12 +17,12 @@ export const compressGPTStateFlow = ai.defineFlow(
     const { output } = await ai.generate({
       model: 'googleai/gemini-2.5-flash',
       system: `You are a state compression specialist for Mira Studio.
-        Identify the most important recent events and overall progress.
+        Identify the user's active Goal, overall domain mastery, and recent progress.
         Maintain technical accuracy for IDs and counts.
-        Focus on user intent, engagement level (friction), and next steps.
+        Focus on user intent, engagement level (friction), and alignment with their Goal.
         Compress the narrative to fit within ${tokenBudget} tokens.
         Highlight 3-5 priority signals.
-        Suggest a single opening topic for the GPT's next message.`,
+        Suggest a single opening topic for the GPT's next message that advances the current Goal.`,
       prompt: `Compress this raw mirror state into a high-signal narrative for the user's workspace: ${rawStateJSON}`,
       output: {
         schema: CompressedStateOutputSchema

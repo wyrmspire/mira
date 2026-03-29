@@ -219,4 +219,40 @@ export const COPY = {
       viewAll: 'View All →',
     },
   },
+  // --- Sprint 13: Goal OS + Skill Map ---
+  skills: {
+    heading: 'Skill Tree',
+    subheading: 'Your trajectory through the domain map.',
+    emptyState: 'Define a goal to map your skill terrain.',
+    masteryBadge: 'Level',
+    evidenceTitle: 'Evidence',
+    domainProgress: 'Domain Mastery',
+    neededForNext: '{count} more experiences to reach {level}',
+    maxLevel: 'Max level reached',
+    experiencesDone: '{completed} of {total} experiences done',
+    allCompleted: 'All experiences completed — explore more →',
+    actions: {
+      viewTree: 'View Skill Tree',
+      whatNext: 'What\'s next →',
+    },
+    detail: {
+      experiencesTitle: 'Experiences',
+      knowledgeTitle: 'Knowledge',
+      emptyExperiences: 'No experiences linked to this domain.',
+      emptyKnowledge: 'No knowledge units linked to this domain.',
+      backLink: '← Back to Skill Tree',
+    }
+  },
+  goals: {
+    heading: 'Active Goal',
+    emptyState: 'Set a goal to personalize your path →',
+    actions: {
+      createGoal: 'Set New Goal',
+      editGoal: 'Refine Goal',
+    },
+    summary: {
+      domains: '{count} domains mapped',
+      mastery: '{count} at {level}+',
+    },
+  },
 }
