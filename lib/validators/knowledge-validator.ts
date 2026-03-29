@@ -39,7 +39,12 @@ export function validateMiraKPayload(body: any): { valid: boolean; error?: strin
   if (body.experience_proposal) {
     const prop = body.experience_proposal;
     if (!prop.title || !prop.goal || !prop.template_id || !prop.resolution || !Array.isArray(prop.steps)) {
-      return { valid: false, error: 'Incomplete experience proposal' };
+      // Don't reject the whole payload — strip the incomplete proposal and log
+      console.warn('[knowledge-validator] Incomplete experience_proposal — stripping it. Missing fields:', {
+        title: !!prop.title, goal: !!prop.goal, template_id: !!prop.template_id,
+        resolution: !!prop.resolution, steps: Array.isArray(prop.steps)
+      });
+      delete body.experience_proposal;
     }
   }
 
