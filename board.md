@@ -13,302 +13,298 @@
 | Sprint 7 | Genkit Intelligence Layer — AI synthesis, facet extraction, smart suggestions, GPT state compression | TSC ✅ Build ✅ | ✅ Complete — 4 Genkit flows, graceful degradation, completion wiring, migration 005. All 6 lanes done. |
 | Sprint 8 | Knowledge Integration — Knowledge units, domains, mastery, MiraK webhook, 3-tab unit view, Home dashboard | TSC ✅ Build ✅ | ✅ Complete — Migration 006, Knowledge Tab, domain grid, MiraK webhook, companion integration. All 6 lanes done. |
 | Sprint 9 | Content Density & Agent Thinking Rails — Real MiraK pipeline, Genkit enrichment, GPT thinking protocol, Knowledge UI polish | TSC ✅ Build ✅ | ✅ Complete — Real 3-stage agent pipeline, enrichment flow, thinking rails, multi-unit UI. All 6 lanes done. |
-> **What ships:** Curriculum outlines entity + service, 5 GPT gateway endpoints + 3 coach API endpoints, checkpoint step type + renderer, Genkit tutor chat + grading flows, rewritten GPT instructions (~50 lines → discover-based), and consolidated OpenAPI schema.
-
-### Gate 0 — Types, Constants, and Contracts (Coordinator)
-
-Update shared types before lanes start:
-
-**G1 — Create `types/curriculum.ts`** ✅
-- `CurriculumOutline` interface: `id, user_id, topic, domain, discovery_signals, subtopics, existing_unit_ids, research_needed, pedagogical_intent, estimated_experience_count, status, created_at, updated_at`
-- `CurriculumSubtopic`: `title, description, experience_id?, knowledge_unit_ids?, order, status`
-- `StepKnowledgeLink`: `id, step_id, knowledge_unit_id, link_type, created_at`
-
-**G2 — Update `lib/constants.ts`** ✅
-- Add `'checkpoint'` to `EXPERIENCE_CLASSES`
-- Add `'study'` to `RESOLUTION_MODES`
-- Add `CURRICULUM_STATUSES = ['planning', 'active', 'completed', 'archived'] as const`
-- Add `STEP_KNOWLEDGE_LINK_TYPES = ['teaches', 'tests', 'deepens', 'pre_support'] as const`
-- Add `CHECKPOINT_ON_FAIL = ['retry', 'continue', 'tutor_redirect'] as const`
-
-**G3 — Update `lib/contracts/step-contracts.ts`** ✅
-- Add `CheckpointPayloadV1` interface with `knowledge_unit_id`, `questions[]`, `passing_threshold`, `on_fail`
-- Add `CheckpointQuestion` interface with `id, question, expected_answer, difficulty, format, options?`
-- Add `checkpoint` to `ContractedStepType` union
-
-**G4 — Create `lib/gateway/gateway-types.ts`** ✅
-- `GatewayRequest`: `{ type | action: string, payload: Record<string, any> }`
-- `DiscoverResponse`: `{ capability, endpoint, description, schema, example, when_to_use?, relatedCapabilities? }`
-- `DiscoverCapability`: union type of all discoverable capabilities
+| Sprint 10 | Curriculum-Aware Experience Engine — Curriculum outlines, GPT gateway, discover registry, coach API, tutor flows, OpenAPI rewrite | TSC ✅ Build ✅ | ✅ Complete — 7 lanes done. Migration 007, 5 gateway endpoints, 3 coach routes, curriculum service, Genkit tutor + grading flows, rewritten GPT instructions. |
+| Sprint 11 | MiraK Gateway Stabilization + Enrichment Loop — Flat OpenAPI, Cloud Run fixes, enrichment webhook, discover registry | TSC ✅ Build ✅ | ✅ Code Complete — All lanes done. Awaiting MiraK Cloud Run deploy + Vercel push + GPT Action schema update. |
 
 ---
 
-### Dependency Graph
+# Sprint 12 — Learning Loop Productization
 
-```
-Gate 0: [G1–G4 TYPES+CONSTANTS+CONTRACTS] ── must complete first ──→
-
-Lane 1: [W1–W4]           Lane 2: [W1–W4]          Lane 3: [W1–W4]
-  DB MIGRATION +             GATEWAY ENDPOINTS        CURRICULUM OUTLINE
-  TYPE WIRING                + DISCOVER REGISTRY       SERVICE + PLAN API
-  (migration 007,            (lib/gateway/,            (lib/services/,
-   types/, validators/)      app/api/gpt/)              app/api/gpt/plan/)
-
-Lane 4: [W1–W4]           Lane 5: [W1–W5]          Lane 6: [W1–W3]
-  CHECKPOINT STEP +          GENKIT TUTOR +            GPT INSTRUCTIONS
-  KNOWLEDGE LINKS            GRADING FLOWS +           + OPENAPI REWRITE
-  (components/experience/,   COACH API                 (gpt-instructions.md,
-   lib/experience/,          (lib/ai/flows/,            public/openapi.yaml)
-   app/api/experiences/)     app/api/coach/,
-                             components/experience/
-                             KnowledgeCompanion)
-
-ALL 6 ──→ Lane 7: [W1–W6] INTEGRATION + BROWSER QA
-```
-
-**Lanes 1–6 are fully parallel** — zero file conflicts.
-**Lane 7 runs AFTER** Lanes 1–6. Browser testing, cross-lane wiring, final QA.
+> **Goal:** Make the already-built curriculum/coach/knowledge infrastructure visible and coherent in the UI.
+>
+> **The test:** Three emotional moments work — (1) **Opening the app** → user sees their path and what to focus on, (2) **Stuck in a step** → coach surfaces proactively, (3) **Finishing an experience** → user sees synthesis, growth, and what's next.
+>
+> **Core principle:** The app surfaces stored intelligence; GPT and Coach deepen it. No new backend infrastructure — surface what already exists.
+>
+> **Carried forward:** Sprint 10 Lane 4 items W1–W4 (CheckpointStep renderer + registration + step-knowledge API wiring) were not built and are now Lane 1 of this sprint.
 
 ---
 
-### Sprint 10 Ownership Zones
+## Dependency Graph
+
+```
+Lane 1:  [W1–W4 CHECKPOINT + KNOWLEDGE WIRING]  ←── must complete first (Lane 6 depends on it)
+              │
+              ↓
+Lane 2:  [W1–W3 TRACK/OUTLINE UI]         Lane 3:  [W1–W3 HOME CONTEXT]
+  (independent of other lanes)               (independent of other lanes)
+
+Lane 4:  [W1–W3 COMPLETION SYNTHESIS]      Lane 5:  [W1–W3 KNOWLEDGE TIMING]
+  (independent of other lanes)               (requires Lane 1 for step_knowledge_links API)
+
+Lane 1 ──→ Lane 6:  [W1–W3 COACH TRIGGERS + MASTERY WIRING]
+              │           (requires checkpoint rendering from Lane 1)
+              ↓
+ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
+```
+
+**Lanes 2, 3, 4 are fully parallel** — zero file conflicts.
+**Lane 5** can start in parallel but needs Lane 1's step-knowledge API wiring for full testing.
+**Lane 6** depends on Lane 1 (checkpoint renderer must exist to wire mastery).
+**Lane 7 runs AFTER** all other lanes. Browser testing, cross-lane wiring, final QA.
+
+---
+
+## Sprint 12 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| DB migration | `lib/supabase/migrations/007-curriculum-engine.sql` [NEW] | Lane 1 |
-| Curriculum types | `types/curriculum.ts` (Gate 0 creates, Lane 1 extends if needed) | Lane 1 |
-| Curriculum validator | `lib/validators/curriculum-validator.ts` [NEW] | Lane 1 |
-| Gateway types | `lib/gateway/gateway-types.ts` (Gate 0 creates) | Lane 2 |
-| Gateway router | `lib/gateway/gateway-router.ts` [NEW] | Lane 2 |
-| Discover registry | `lib/gateway/discover-registry.ts` [NEW] | Lane 2 |
-| Gateway API routes | `app/api/gpt/create/route.ts`, `update/route.ts`, `discover/route.ts` [ALL NEW] | Lane 2 |
-| Curriculum service | `lib/services/curriculum-outline-service.ts` [NEW] | Lane 3 |
-| Plan API route | `app/api/gpt/plan/route.ts` [NEW] | Lane 3 |
-| State route upgrade | `app/api/gpt/state/route.ts` [MODIFY — add curriculum context] | Lane 3 |
-| Checkpoint renderer | `components/experience/CheckpointStep.tsx` [NEW] | Lane 4 |
-| Knowledge link service | `lib/services/step-knowledge-link-service.ts` [NEW] | Lane 4 |
-| Renderer registry update | `lib/experience/renderer-registry.tsx` [MODIFY — register checkpoint] | Lane 4 |
-| Step knowledge API | `app/api/experiences/[id]/steps/route.ts` [MODIFY — add knowledge_unit_id support] | Lane 4 |
-| Tutor chat flow | `lib/ai/flows/tutor-chat-flow.ts` [NEW] | Lane 5 |
-| Grade checkpoint flow | `lib/ai/flows/grade-checkpoint-flow.ts` [NEW] | Lane 5 |
-| AI schemas update | `lib/ai/schemas.ts` [MODIFY — tutor + checkpoint schemas] | Lane 5 |
-| Coach API routes | `app/api/coach/chat/route.ts`, `grade/route.ts`, `mastery/route.ts` [ALL NEW] | Lane 5 |
-| KnowledgeCompanion upgrade | `components/experience/KnowledgeCompanion.tsx` [MODIFY — add TutorChat mode] | Lane 5 |
-| GPT instructions | `gpt-instructions.md` [REWRITE] | Lane 6 |
-| OpenAPI schema | `public/openapi.yaml` [REWRITE — consolidate to gateway schema] | Lane 6 |
+| Checkpoint renderer | `components/experience/CheckpointStep.tsx` [NEW] | Lane 1 |
+| Renderer registry | `lib/experience/renderer-registry.tsx` [MODIFY] | Lane 1 |
+| Step knowledge API | `app/api/experiences/[id]/steps/route.ts` [MODIFY] | Lane 1 |
+| Step knowledge link service | `lib/services/step-knowledge-link-service.ts` [VERIFY — exists] | Lane 1 |
+| Track/outline UI | `components/experience/TrackCard.tsx` [NEW], `components/experience/TrackSection.tsx` [NEW] | Lane 2 |
+| Library page | `app/library/page.tsx` [MODIFY — add Tracks section] | Lane 2 |
+| Library client | `app/library/LibraryClient.tsx` [MODIFY — add track rendering] | Lane 2 |
+| Home page | `app/page.tsx` [MODIFY — add Your Path, Focus Today, Research Status] | Lane 3 |
+| Home components | `components/common/FocusTodayCard.tsx` [NEW], `components/common/ResearchStatusBadge.tsx` [NEW] | Lane 3 |
+| Completion screen | `components/experience/CompletionScreen.tsx` [NEW] | Lane 4 |
+| Experience renderer | `components/experience/ExperienceRenderer.tsx` [MODIFY — use CompletionScreen] | Lane 4 |
+| Synthesis service read | `lib/services/synthesis-service.ts` [READ ONLY — fetch synthesis data] | Lane 4 |
+| Step knowledge display | `components/experience/StepKnowledgeCard.tsx` [NEW] | Lane 5 |
+| Step renderers | All step renderers in `components/experience/` [MODIFY — add knowledge card slots] | Lane 5 |
+| Knowledge companion | `components/experience/KnowledgeCompanion.tsx` [MODIFY — use link table not domain] | Lane 5 |
+| Coach triggers | `components/experience/CoachTrigger.tsx` [NEW] | Lane 6 |
+| Knowledge progress service | `lib/services/knowledge-service.ts` [MODIFY — add mastery promotion] | Lane 6 |
+| Coach grade integration | `app/api/coach/grade/route.ts` [MODIFY — update knowledge_progress after grading] | Lane 6 |
+| Studio copy | `lib/studio-copy.ts` [MODIFY — add new section copy] | Shared (coordinate) |
+| Routes | `lib/routes.ts` [MODIFY if new routes needed] | Shared (coordinate) |
 | Integration + browser | All files (read + targeted fixes) | Lane 7 |
 
 ---
 
-### Lane 1 — DB Migration + Type Wiring
+### Lane 1 — CheckpointStep Renderer + Knowledge Wiring
 
-**Owns: `lib/supabase/migrations/007-curriculum-engine.sql` [NEW], `types/curriculum.ts` [EXTEND], `lib/validators/curriculum-validator.ts` [NEW]**
+**Owns: `components/experience/CheckpointStep.tsx` [NEW], `lib/experience/renderer-registry.tsx` [MODIFY], `app/api/experiences/[id]/steps/route.ts` [MODIFY]**
 
-**Reading list:** `lib/supabase/migrations/` (existing migration pattern — read any one file), `types/experience.ts` (experience instance shape — you'll add `curriculum_outline_id`), `types/knowledge.ts` (knowledge unit shape — you'll add `curriculum_outline_id`), `lib/validators/knowledge-validator.ts` (validator pattern to follow), `enrichment.md` (§ "New Entities" for exact table schemas)
-
-**W1 — Create migration 007-curriculum-engine.sql** ✅
-- **Done**: SQL migration created with curriculum_outlines and step_knowledge_links tables.
-- Create `curriculum_outlines` table (schema from enrichment.md)
-- Create `step_knowledge_links` table (schema from enrichment.md)
-- Add `curriculum_outline_id UUID REFERENCES curriculum_outlines(id)` to `experience_instances` (nullable, ALTER TABLE)
-- Add `curriculum_outline_id UUID REFERENCES curriculum_outlines(id)` to `knowledge_units` (nullable, ALTER TABLE)
-- Done when: migration SQL is clean and follows existing migration patterns
-
-**W2 — Extend `types/curriculum.ts`** ✅
-- **Done**: Added CurriculumOutlineRow and StepKnowledgeLinkRow for snake_case mapping. Normalized CurriculumSubtopic to camelCase.
-- Gate 0 creates the core interfaces. Add any DB-facing helpers (e.g., `CurriculumOutlineRow` for snake_case DB mapping if needed)
-- Ensure `CurriculumSubtopic` has all fields from enrichment.md
-- Done when: types compile
-
-**W3 — Create curriculum validator** ✅
-- **Done**: Created validateCurriculumOutline and validateStepKnowledgeLink with camelCase/snake_case flexibility.
-- `lib/validators/curriculum-validator.ts`
-- `validateCurriculumOutline(data: unknown)`: validates topic (required string), subtopics (array of valid shape), pedagogical_intent (valid enum)
-- Follow pattern from `knowledge-validator.ts`
-- Done when: validator correctly rejects bad input, accepts good input
-
-**W4 — Update experience + knowledge types** ✅
-- **Done**: Added curriculum_outline_id to ExperienceInstance and KnowledgeUnit.
-- Add `curriculum_outline_id?: string` to `ExperienceInstance` in `types/experience.ts`
-- Add `curriculum_outline_id?: string` to `KnowledgeUnit` in `types/knowledge.ts`
-- Done when: TSC clean
-
----
-
-### Lane 2 — Gateway Endpoints + Discover Registry
-
-**Owns: `lib/gateway/gateway-router.ts` [NEW], `lib/gateway/discover-registry.ts` [NEW], `app/api/gpt/create/route.ts` [NEW], `app/api/gpt/update/route.ts` [NEW], `app/api/gpt/discover/route.ts` [NEW]**
-
-**Reading list:** `enrichment.md` (§ "The 5 Gateway Endpoints" and § "How Each Gateway Works Internally" for exact API shapes), `app/api/experiences/route.ts` (existing creation logic — create endpoint will delegate to this), `app/api/experiences/inject/route.ts` (ephemeral creation — create endpoint wraps this), `app/api/experiences/[id]/steps/route.ts` (step CRUD — update endpoint wraps this), `lib/gateway/gateway-types.ts` (Gate 0 output), `lib/constants.ts` (template IDs, step types, resolution values — discover must serve these)
-
-**W1 — Build the discover registry** ✅
-- **Done**: Created `lib/gateway/discover-registry.ts` with 9 capabilities (templates, create_experience, create_ephemeral, create_idea, step_payload, resolution, create_outline, tutor_chat, grade_checkpoint), schemas, and examples.
-- Done when: registry exports a `getCapability(name, params?)` function
-
-**W2 — Create `GET /api/gpt/discover` route** ✅
-- **Done**: Created `app/api/gpt/discover/route.ts` which provides progressive disclosure for GPT.
-- Done when: `GET /api/gpt/discover?capability=templates` returns valid JSON
-
-**W3 — Create `POST /api/gpt/create` route** ✅
-- **Done**: Created `app/api/gpt/create/route.ts` which handles creation of experiences, ephemeral modules, ideas, and steps.
-- Done when: creating an experience through `POST /api/gpt/create { type: "experience", payload: {...} }` works
-
-**W4 — Create `POST /api/gpt/update` route** ✅
-- **Done**: Created `app/api/gpt/update/route.ts` which dispatches step updates, reordering, deletion, and status transitions through a central gateway router.
-- Done when: updating a step through the gateway works
-
----
-
-### Lane 3 — Curriculum Outline Service + Plan API
-
-**Owns: `lib/services/curriculum-outline-service.ts` [NEW], `app/api/gpt/plan/route.ts` [NEW], `app/api/gpt/state/route.ts` [MODIFY]**
-
-**Reading list:** `lib/services/experience-service.ts` (service pattern to follow — Supabase CRUD, snake_case DB columns), `lib/services/knowledge-service.ts` (another service pattern), `app/api/gpt/state/route.ts` (current state endpoint — you'll add curriculum context), `types/curriculum.ts` (Gate 0 types), `lib/validators/curriculum-validator.ts` (Lane 1 builds this), `enrichment.md` (§ "The Planning Layer" for logic)
-
-**W1 — Create curriculum outline service** ✅
-- **Done**: Created `lib/services/curriculum-outline-service.ts` with full CRUD (`createCurriculumOutline`, `getCurriculumOutline`, `getCurriculumOutlinesForUser`, `updateCurriculumOutline`, `getOutlineWithExperiences`), correct `fromDB`/`toDB` normalization using `CurriculumOutlineRow`, plus active/completed filter helpers.
-- `lib/services/curriculum-outline-service.ts`
-- CRUD functions:
-  - `createCurriculumOutline(data)` — insert into `curriculum_outlines`, validate via curriculum-validator
-  - `getCurriculumOutline(id)` — fetch by ID
-  - `getCurriculumOutlinesForUser(userId)` — list all outlines for a user
-  - `updateCurriculumOutline(id, updates)` — partial update (subtopics, status, etc.)
-  - `getOutlineWithExperiences(id)` — fetch outline + linked experience_instances
-- All functions use Supabase client from `lib/supabase/client.ts`
-- Include `fromDB()`/`toDB()` normalization (snake_case → camelCase) following inbox-service pattern
-- Done when: all CRUD functions compile
-
-**W2 — Create `POST /api/gpt/plan` route** ✅
-- **Done**: Created `app/api/gpt/plan/route.ts` with three discriminated actions: `create_outline` (creates + returns outline), `dispatch_research` (logs + returns stub `dispatched`), `assess_gaps` (returns structural coverage analysis from subtopic statuses).
-- Discriminated by `action`: `create_outline`, `dispatch_research`, `assess_gaps`
-- `create_outline` → validate + call `createCurriculumOutline()`
-- `dispatch_research` → stub (logs intent, returns `{ status: 'dispatched' }`) — real MiraK dispatch can come later
-- `assess_gaps` → stub (returns outline with missing coverage) — real gap analysis can use Genkit later
-- Done when: `POST /api/gpt/plan { action: "create_outline", payload: { topic: "business fundamentals", subtopics: [...] } }` creates a row in DB
-
-**W3 — Upgrade state endpoint with curriculum context** ✅
-- **Done**: Modified `app/api/gpt/state/route.ts` to call `getCurriculumSummaryForGPT(userId)` in parallel with existing calls and include the result as `curriculum: { active_outlines, recent_completions }` in the response.
-- Modify `app/api/gpt/state/route.ts`:
-  - Fetch user's active curriculum outlines (status = 'active' or 'planning')
-  - Include in response: `{ ...existing, curriculum: { active_outlines: [...], recent_completions: [...] } }`
-- Done when: state response includes curriculum data
-
-**W4 — Add outline-experience linking logic** ✅
-- **Done**: Implemented `linkExperienceToOutline(experienceId, outlineId, subtopicIndex)` and `markSubtopicCompleted(outlineId, subtopicIndex)` in the curriculum service; linking sets `subtopic.experienceId` and advances status, auto-advancing the outline to `completed` when all subtopics are done.
-- When an experience is created with `curriculum_outline_id`, update the outline's subtopic status
-- Add `linkExperienceToOutline(experienceId, outlineId, subtopicIndex)` to curriculum-outline-service
-- Done when: creating an experience with `curriculum_outline_id` correctly links it
-
----
-
-### Lane 4 — Checkpoint Step + Knowledge Links
-
-**Owns: `components/experience/CheckpointStep.tsx` [NEW], `lib/services/step-knowledge-link-service.ts` [NEW], `lib/experience/renderer-registry.tsx` [MODIFY], `app/api/experiences/[id]/steps/route.ts` [MODIFY]**
-
-**Reading list:** `components/experience/Lesson.tsx` or any step renderer (renderer pattern — props: `step, onComplete, onSkip, onDraft`), `lib/experience/renderer-registry.tsx` (registration pattern), `lib/contracts/step-contracts.ts` (Gate 0 adds CheckpointPayloadV1), `app/api/experiences/[id]/steps/route.ts` (current step CRUD — you'll add knowledge_unit_id support), `enrichment.md` (§ "checkpoint" step type details)
+**Reading list:** `lib/contracts/step-contracts.ts` (CheckpointPayloadV1 — the contract this renderer implements), `components/experience/Lesson.tsx` (renderer pattern — props: `step, onComplete, onSkip, onDraft`), `lib/experience/renderer-registry.tsx` (registration pattern), `lib/services/step-knowledge-link-service.ts` (existing link service — verify it compiles), `app/api/experiences/[id]/steps/route.ts` (current step CRUD — you'll add knowledge_unit_id support)
 
 **W1 — Create CheckpointStep renderer** ⬜
 - `components/experience/CheckpointStep.tsx`
 - Renders a list of checkpoint questions from `step.payload.questions[]`
-- For `format: 'free_text'` → textarea input
+- For `format: 'free_text'` → textarea input with character count
 - For `format: 'choice'` → radio buttons from `question.options[]`
+- Difficulty badge per question: easy (green), medium (amber), hard (red)
 - Submit button calls `onComplete()` with answers payload
-- Visual style: Test/quiz feel — amber accent border, numbered questions, progress indicator
-- Difficulty badge: easy (green), medium (amber), hard (red)
-- Done when: component renders checkpoint questions and collects answers
+- After submission: display grading feedback (calls `POST /api/coach/grade` per question)
+- Show per-question result: ✅ correct (green) / ❌ incorrect (red) with AI feedback text
+- Overall score display: "You got N/M correct"
+- If `on_fail === 'retry'`: show "Try Again" button that resets answers
+- If `on_fail === 'tutor_redirect'`: show "Get Help" button that opens coach chat
+- Visual style: Quiz feel — amber accent border, numbered questions, progress indicator
+- Done when: component renders, collects answers, displays grading feedback
 
 **W2 — Register checkpoint in renderer-registry** ⬜
-- Import `CheckpointStep` and call `registerRenderer('checkpoint', CheckpointStep)` in appropriate location
-- Done when: `getRenderer('checkpoint')` returns the CheckpointStep component
+- Modify `lib/experience/renderer-registry.tsx`
+- Import `CheckpointStep` and add `registerRenderer('checkpoint', CheckpointStep)` 
+- Done when: `getRenderer('checkpoint')` returns the CheckpointStep component instead of FallbackStep
 
-**W3 — Create step-knowledge-link service** ⬜
-- `lib/services/step-knowledge-link-service.ts`
-- `linkStepToKnowledge(stepId, knowledgeUnitId, linkType)` — insert into `step_knowledge_links`
-- `getLinksForStep(stepId)` — fetch all knowledge links for a step
-- `getLinksForExperience(experienceId)` — fetch all step→knowledge links for an experience
-- `unlinkStepFromKnowledge(linkId)` — delete link
-- Done when: CRUD functions compile
-
-**W4 — Update step API for knowledge linking** ⬜
+**W3 — Update step API for knowledge linking** ⬜
 - Modify `app/api/experiences/[id]/steps/route.ts`:
-  - POST: if body includes `knowledge_unit_id`, create a step_knowledge_link after creating the step
-  - GET: include `knowledge_links` in step response (join step_knowledge_links)
-- Done when: creating a step with `knowledge_unit_id` creates both the step and the link
+  - POST: if body includes `knowledge_unit_id`, create a `step_knowledge_link` after creating the step (call `linkStepToKnowledge` from step-knowledge-link-service)
+  - GET: include `knowledge_links` in step response (call `getLinksForStep` and attach to each step)
+- Done when: creating a step with `knowledge_unit_id` creates both the step and the link; GET returns links
+
+**W4 — Verify step-knowledge-link service compilation** ⬜
+- Read `lib/services/step-knowledge-link-service.ts` — confirm all functions compile
+- Test that `linkStepToKnowledge`, `getLinksForStep`, `getLinksForExperience`, `unlinkStepFromKnowledge` are exported
+- Done when: service compiles and exports are correct
 
 ---
 
-### Lane 5 — Genkit Tutor + Grading Flows
+### Lane 2 — Visible Track/Outline UI
 
-**Owns: `lib/ai/flows/tutor-chat-flow.ts` [NEW], `lib/ai/flows/grade-checkpoint-flow.ts` [NEW], `lib/ai/schemas.ts` [MODIFY], `app/api/coach/chat/route.ts` [NEW], `app/api/coach/grade/route.ts` [NEW], `app/api/coach/mastery/route.ts` [NEW], `components/experience/KnowledgeCompanion.tsx` [MODIFY]**
+**Owns: `components/experience/TrackCard.tsx` [NEW], `components/experience/TrackSection.tsx` [NEW], `app/library/page.tsx` [MODIFY], `app/library/LibraryClient.tsx` [MODIFY]**
 
-**Reading list:** `lib/ai/flows/refine-knowledge-flow.ts` (Genkit flow pattern — follow exactly), `lib/ai/safe-flow.ts` (runFlowSafe wrapper — use this), `lib/ai/genkit.ts` (Genkit initialization), `lib/ai/schemas.ts` (existing schemas — you'll add new ones), `components/experience/KnowledgeCompanion.tsx` (current companion — you'll add TutorChat mode), `enrichment.md` (§ "The Coach API", § "TutorChat Pattern", § "KnowledgeCompanion Evolution")
+**Reading list:** `lib/services/curriculum-outline-service.ts` (CRUD functions — `getCurriculumOutlinesForUser`, `getOutlineWithExperiences`), `types/curriculum.ts` (CurriculumOutline, CurriculumSubtopic interfaces), `app/library/page.tsx` (current server component — you'll add outline fetching), `app/library/LibraryClient.tsx` (current client component — you'll add track rendering), `lib/studio-copy.ts` (copy pattern), `app/globals.css` (design tokens)
 
-**W1 — Add Zod schemas for tutor + checkpoint flows** ✅
-- **Done**: Added TutorChatInputSchema, TutorChatOutputSchema, GradeCheckpointInputSchema, GradeCheckpointOutputSchema to lib/ai/schemas.ts.
-- Add to `lib/ai/schemas.ts`:
-  - `TutorChatInputSchema`: `{ stepId, knowledgeUnitContent, conversationHistory[], userMessage }`
-  - `TutorChatOutputSchema`: `{ response, masterySignal?: 'struggling' | 'progressing' | 'confident', suggestedFollowup? }`
-  - `GradeCheckpointInputSchema`: `{ question, expectedAnswer, userAnswer, unitContext }`
-  - `GradeCheckpointOutputSchema`: `{ correct: boolean, feedback, misconception?, confidence: number }`
-- Done when: schemas compile
+**W1 — Create TrackCard component** ⬜
+- `components/experience/TrackCard.tsx`
+- Displays a single curriculum outline as a visual card:
+  - Track title (outline.topic)
+  - Domain badge
+  - Subtopic list with status indicators (pending/active/completed)
+  - Progress bar: % of subtopics that have linked experiences in 'completed' status
+  - "Continue" button → links to the next incomplete subtopic's experience
+- Dark theme, consistent with existing card components (see `components/experience/ExperienceCard.tsx`)
+- Done when: component renders an outline with progress
 
-**W2 — Create tutorChatFlow** ✅
-- **Done**: Created lib/ai/flows/tutor-chat-flow.ts following the refine-knowledge-flow pattern exactly, with scoped tutoring prompt and mastery signal output.
-- `lib/ai/flows/tutor-chat-flow.ts`
-- Follow exact pattern from `refine-knowledge-flow.ts`
-- Input: `TutorChatInputSchema` output, Output: `TutorChatOutputSchema`
-- Prompt: "You are a focused tutor helping a learner understand [topic]. The current step covers [step context]. The relevant knowledge is: [unit content]. Answer the learner's question concisely. Signal if they seem confused, progressing, or confident."
-- Use `googleai/gemini-2.5-flash`
-- Done when: flow compiles and follows pattern
+**W2 — Create TrackSection component** ⬜
+- `components/experience/TrackSection.tsx`
+- Groups multiple TrackCards under a "Your Tracks" heading
+- Shows empty state if no outlines exist (use EmptyState component pattern)
+- Done when: component renders a list of track cards or empty state
 
-**W3 — Create gradeCheckpointFlow** ✅
-- **Done**: Created lib/ai/flows/grade-checkpoint-flow.ts with semantic grading prompt, fetches optional unit context for richer grading.
-- `lib/ai/flows/grade-checkpoint-flow.ts`
-- Input: `GradeCheckpointInputSchema`, Output: `GradeCheckpointOutputSchema`
-- Prompt: "Grade this answer semantically. The question was [Q]. The expected answer is [A]. The learner wrote [user answer]. Is this substantially correct? Provide brief feedback. If wrong, identify the specific misconception."
-- Use `googleai/gemini-2.5-flash`
-- Done when: flow compiles
+**W3 — Integrate tracks into Library page** ⬜
+- Modify `app/library/page.tsx` (server component):
+  - Fetch user's curriculum outlines via `getCurriculumOutlinesForUser(userId)`
+  - Pass outlines to `LibraryClient` as a new prop
+- Modify `app/library/LibraryClient.tsx` (client component):
+  - Add a "Tracks" tab/section above the existing experience sections
+  - Render `TrackSection` with the outlines
+  - If an outline has no linked experiences yet, show it as "Planning" state
+- Done when: Library page shows tracks section with outline cards
 
-**W4 — Create Coach API routes** ✅
-- **Done**: Created all 3 coach routes — chat calls tutorChatFlow via runFlowSafe, grade calls gradeCheckpointFlow, mastery returns documented stub.
-- Create `app/api/coach/chat/route.ts`:
-  - POST: accepts `{ stepId, message, knowledgeUnitId }`, calls `runFlowSafe(tutorChatFlow, ...)`, returns response
-  - Fetch step + knowledge unit content internally for context
-  - If Genkit unavailable: return `{ response: "AI tutor is currently unavailable.", fallback: true }`
-- Create `app/api/coach/grade/route.ts`:
-  - POST: accepts `{ stepId, questionId, answer }`, calls `runFlowSafe(gradeCheckpointFlow, ...)`, returns grading result
-  - If Genkit unavailable: return `{ correct: null, feedback: "Grading unavailable — answer recorded." }`
-- Create `app/api/coach/mastery/route.ts`:
-  - POST: stub for now — accepts `{ experienceId }`, returns `{ status: 'not_implemented' }`
-- Done when: all 3 routes compile and handle Genkit unavailability gracefully
+---
 
-**W5 — Upgrade KnowledgeCompanion with TutorChat mode** ✅
-- **Done**: Added mode prop (read|tutor), tutor mode appends scrollable chat panel + textarea input that calls /api/coach/chat, mastery signals displayed as color-coded badge in header.
+### Lane 3 — Home Page Context Reconstruction
+
+**Owns: `app/page.tsx` [MODIFY], `components/common/FocusTodayCard.tsx` [NEW], `components/common/ResearchStatusBadge.tsx` [NEW]**
+
+**Reading list:** `app/page.tsx` (current home page — understand existing sections: "Suggested for You", "Active Journeys"), `lib/services/experience-service.ts` (fetching active experiences), `lib/services/curriculum-outline-service.ts` (fetching outlines), `lib/services/knowledge-service.ts` (fetching recent knowledge units), `types/experience.ts` (ExperienceInstance, ExperienceStep), `lib/studio-copy.ts` (copy pattern), `lib/routes.ts` (workspace routes), `lib/constants.ts` (DEFAULT_USER_ID)
+
+**W1 — Create FocusTodayCard component** ⬜
+- `components/common/FocusTodayCard.tsx`
+- Shows the most recently active experience + the next uncompleted step:
+  - Experience title
+  - Step title + step number (e.g., "Step 3 of 6")
+  - Time since last activity (e.g., "3 days ago")
+  - Direct "Resume Step N →" link to `/workspace/[instanceId]`
+- If no active experience: show "No active experience. Visit Library to find one."
+- Dark theme, prominent placement styling
+- Done when: component renders last-active experience with resume link
+
+**W2 — Create ResearchStatusBadge component** ⬜
+- `components/common/ResearchStatusBadge.tsx`
+- Displays research status for MiraK dispatches:
+  - Check `knowledge_units` created_at for units that arrived since user's last visit
+  - If new units exist: "🔬 New research arrived" with count badge
+  - If experience has `enrichment` step_knowledge_links, show "enriched" indicator
+- This is a simple data-driven badge, not a real-time system — reads existing DB state
+- Done when: badge shows new knowledge count or empty state
+
+**W3 — Upgrade home page with Focus Today + Your Path** ⬜
+- Modify `app/page.tsx`:
+  - Add "Focus Today" section at top: render `FocusTodayCard` with most recent active experience
+  - Add "Your Path" section: render `TrackSection` (from Lane 2) with active curriculum outlines — if Lane 2 isn't done yet, add a stub section with a TODO comment. Use `getCurriculumOutlinesForUser(userId)` to fetch.
+  - Add `ResearchStatusBadge` near the knowledge/suggested section
+  - Replace or supplement "Suggested for You" with curriculum-driven context
+  - Add "Welcome back" context: calculate days since last interaction event, show "X days since your last session" if > 1 day
+- Done when: home page shows Focus Today, Your Path (or stub), and research status
+
+---
+
+### Lane 4 — Completion Synthesis Surfacing
+
+**Owns: `components/experience/CompletionScreen.tsx` [NEW], `components/experience/ExperienceRenderer.tsx` [MODIFY]**
+
+**Reading list:** `components/experience/ExperienceRenderer.tsx` (current completion handling — look for the congratulations/completion UI section), `lib/services/synthesis-service.ts` (how to fetch synthesis snapshots — `getSynthesisForExperience`), `types/synthesis.ts` (SynthesisSnapshot — fields: summary, key_signals, next_candidates), `types/profile.ts` (ProfileFacet — what a facet looks like), `lib/services/facet-service.ts` (how to fetch facets for a user), `app/globals.css` (design tokens)
+
+**W1 — Create CompletionScreen component** ⬜
+- `components/experience/CompletionScreen.tsx`
+- Props: `experienceId: string, userId: string`
+- Fetches synthesis snapshot via `GET /api/synthesis?sourceType=experience&sourceId={experienceId}`
+- Displays:
+  - 🎉 Completion celebration (animated icon/confetti, not just a checkmark)
+  - 2-3 sentence summary from `synthesis_snapshots.summary`
+  - Key signals rendered as badges/chips (from `key_signals` array)
+  - Growth indicators: "Skills observed: [facet values]" — fetch recently created facets for this experience
+  - Next suggestions: top 1-2 items from `next_candidates` with clickable links
+  - "Back to Library" and "Start Next →" buttons
+- If synthesis hasn't run yet (no snapshot): show a loading state with "Generating insights..." then fall back to basic congratulations after 3s timeout
+- Dark theme, celebratory feel — gradient background, animated elements
+- Done when: completion screen fetches and displays synthesis data
+
+**W2 — Wire CompletionScreen into ExperienceRenderer** ⬜
+- Modify `components/experience/ExperienceRenderer.tsx`:
+  - When experience status transitions to `completed`, render `CompletionScreen` instead of the current static congratulations card
+  - Pass `experienceId` and `userId` to CompletionScreen
+  - Keep the existing synthesis API call (`POST /api/synthesis`) that fires on completion — this ensures data exists for CompletionScreen to fetch
+- Done when: completing an experience shows the new synthesis-driven completion screen
+
+**W3 — Ensure synthesis API returns data for CompletionScreen** ⬜
+- Verify `app/api/synthesis/route.ts` supports `GET ?sourceType=experience&sourceId={id}`
+- If GET is not supported, add it (the POST that creates synthesis already exists)
+- Verify the response shape matches what CompletionScreen expects: `{ summary, key_signals, next_candidates }`
+- Done when: GET synthesis returns snapshot data or 404 (not an error)
+
+---
+
+### Lane 5 — Knowledge Timing Inside Steps
+
+**Owns: `components/experience/StepKnowledgeCard.tsx` [NEW], step renderer modifications, `components/experience/KnowledgeCompanion.tsx` [MODIFY]**
+
+**Reading list:** `lib/services/step-knowledge-link-service.ts` (getLinksForStep — how to fetch links), `types/curriculum.ts` (StepKnowledgeLink interface), `lib/services/knowledge-service.ts` (how to fetch knowledge unit details), `components/experience/KnowledgeCompanion.tsx` (current companion — uses domain string matching, you'll switch to link table), `components/experience/Lesson.tsx` (example step renderer — you'll add knowledge card slots), `lib/constants.ts` (STEP_KNOWLEDGE_LINK_TYPES — teaches, tests, deepens, pre_support, enrichment)
+
+**W1 — Create StepKnowledgeCard component** ⬜
+- `components/experience/StepKnowledgeCard.tsx`
+- Props: `knowledgeUnitId: string, linkType: string, timing: 'pre' | 'in' | 'post'`
+- Fetches knowledge unit title and summary from the knowledge service
+- Three visual modes based on `timing`:
+  - `pre`: "📖 Before you start: review [Unit Title]" — shown above step content, collapsible, links to knowledge page
+  - `in`: Compact inline reference card — shown in sidebar or below step content
+  - `post`: "🔍 Go deeper: [Unit Title]" — revealed after step completion, expandable
+- Link type indicator: teaches (📚), tests (✅), deepens (🔬), pre_support (📖), enrichment (✨)
+- Done when: card renders in all three timing modes with correct styling
+
+**W2 — Add knowledge timing to step renderers** ⬜
+- Modify step renderers to accept and display `StepKnowledgeCard`:
+  - Each step renderer component gets knowledge links passed as props (or fetches them from API)
+  - Before step content: render `StepKnowledgeCard` with `timing='pre'` for links of type `pre_support`
+  - After step content: render `StepKnowledgeCard` with `timing='post'` for links of type `deepens`
+  - Alongside step content: render `StepKnowledgeCard` with `timing='in'` for links of type `teaches` or `enrichment`
+- Target renderers (minimum): `Lesson.tsx`, `ChallengeStep.tsx`, and `CheckpointStep.tsx` (Lane 1)
+- Done when: at least 3 step renderers show knowledge cards based on link type
+
+**W3 — Upgrade KnowledgeCompanion to use link table** ⬜
 - Modify `components/experience/KnowledgeCompanion.tsx`:
-  - Add a `mode` prop: `'read' | 'tutor'` (default: `'read'` — backward compatible)
-  - In `'tutor'` mode: add a chat input at the bottom of the companion panel
-  - Chat messages display in a scrollable area above the input
-  - Send button calls `POST /api/coach/chat { stepId, message, knowledgeUnitId }`
-  - Display AI response in the chat area
-  - Conversation stored in local state (persist to interaction_events is a later enhancement)
-- Done when: companion renders in both modes, tutor chat sends and displays messages
+  - Currently matches knowledge units by `knowledge_domain` string — switch to using `step_knowledge_links` table
+  - Call `getLinksForStep(stepId)` to get linked knowledge unit IDs
+  - Fetch full units by ID instead of domain string matching
+  - Fall back to domain matching if no step_knowledge_links exist (backward compatibility)
+- Done when: companion shows linked units from the link table; domain fallback still works
 
 ---
 
-### Lane 6 — GPT Instructions + OpenAPI Rewrite
+### Lane 6 — Coach Surfacing Triggers + Mastery Wiring
 
-**Owns: `gpt-instructions.md` [REWRITE], `public/openapi.yaml` [REWRITE]**
+**Depends on Lane 1 (CheckpointStep must exist for mastery wiring to work)**
 
-**Reading list:** `gpt-instructions.md` (current instructions — understand what to preserve), `enrichment.md` (§ "What The GPT Instructions Become" for target shape), `public/openapi.yaml` (current schema — understand what to consolidate), `lib/gateway/discover-registry.ts` (Lane 2 builds this — understand what discover serves so instructions don't duplicate it)
+**Owns: `components/experience/CoachTrigger.tsx` [NEW], `lib/services/knowledge-service.ts` [MODIFY], `app/api/coach/grade/route.ts` [MODIFY]**
 
-**W1 — Rewrite GPT instructions** ✅
-- **Done**: Condense to ~40 lines using 5-endpoint gateway and discovery pattern.
+**Reading list:** `components/experience/KnowledgeCompanion.tsx` (current coach — understand TutorChat mode), `app/api/coach/grade/route.ts` (current grading route — you'll add mastery update), `lib/services/knowledge-service.ts` (knowledge_progress table access — you'll add mastery promotion), `types/knowledge.ts` (KnowledgeProgress interface — fields: `status: unseen|read|practiced|confident`), `lib/ai/flows/grade-checkpoint-flow.ts` (grading output — `correct: boolean, confidence: number`), `lib/services/step-knowledge-link-service.ts` (getLinksForStep — to find which units are tested by checkpoints)
 
-**W2 — Rewrite OpenAPI schema** ✅
-- **Done**: Consolidated to 5 gateway endpoints + MiraK research. Removed fine-grained endpoints from GPT's schema.
+**W1 — Create CoachTrigger component** ⬜
+- `components/experience/CoachTrigger.tsx`
+- Non-intrusive, conditional UI element that surfaces the coach at the right moment:
+  - **After failed checkpoint**: If `gradeCheckpointFlow` returns `correct: false`, show a gentle prompt: "Need help with this? 💬" — clicking opens coach chat in KnowledgeCompanion
+  - **After extended dwell**: If user has been on a step for > 5 minutes without any interaction event, show: "Taking your time? The coach can help 💬"
+  - **Before unread knowledge**: If the step has `pre_support` knowledge links and the user's `knowledge_progress` for that unit is `unseen`, show: "📖 You might want to review [Unit Title] first"
+- Uses a subtle slide-in animation (not a modal, not intrusive)
+- Dismissable — user can close it and it doesn't reappear for that step/session
+- Props: `stepId: string, userId: string, onOpenCoach: () => void`
+- Done when: trigger renders conditionally based on checkpoint failure, dwell time, and unread knowledge
 
-**W3 — Verify instruction coherence** ✅
-- **Done**: Verified 5-phase protocol, discovery logic, MiraK semantics, and GPT/Coach separation.
+**W2 — Wire checkpoint grades into knowledge_progress** ⬜
+- Modify `app/api/coach/grade/route.ts`:
+  - After grading a checkpoint question, check if the step has `step_knowledge_links` of type `tests`
+  - If the linked knowledge unit exists and grading returned `correct: true` with `confidence > 0.7`:
+    - Update `knowledge_progress` for that unit: promote from current status to next level (unseen→read, read→practiced, practiced→confident)
+  - If grading returned `correct: false`:
+    - Do NOT demote — just leave the level unchanged (keep mastery honest but not punitive)
+  - Log the grading result as an interaction event for synthesis
+- Modify `lib/services/knowledge-service.ts`:
+  - Add `promoteKnowledgeProgress(userId: string, knowledgeUnitId: string)` function
+  - This reads current progress status and advances it one level
+  - If already `confident`, no-op
+- Done when: passing a checkpoint auto-promotes mastery for linked knowledge units
+
+**W3 — Integrate CoachTrigger into step renderers** ⬜
+- Add `CoachTrigger` component to the `ExperienceRenderer` or individual step renderers:
+  - Render below the active step content
+  - Pass the current `stepId`, `userId`, and a callback to open KnowledgeCompanion in tutor mode
+  - CoachTrigger internally manages its visibility state (shown/dismissed)
+- Done when: coach trigger appears after checkpoint failure in browser
 
 ---
 
@@ -316,60 +312,79 @@ ALL 6 ──→ Lane 7: [W1–W6] INTEGRATION + BROWSER QA
 
 **Runs AFTER Lanes 1–6 are completed.**
 
-**W1 — Apply migration + verify DB** ✅
-- **Done**: Migration 007 applied via Supabase MCP. Tables `curriculum_outlines` and `step_knowledge_links` confirmed. Columns `curriculum_outline_id` added to both `experience_instances` and `knowledge_units`.
-- Apply migration 007 via Supabase dashboard or MCP
-- Verify tables exist: `curriculum_outlines`, `step_knowledge_links`
-- Verify columns added: `experience_instances.curriculum_outline_id`, `knowledge_units.curriculum_outline_id`
-- Run `npx tsc --noEmit` — fix any cross-lane type errors
-
-**W2 — TSC + build fix pass** ✅
-- **Done**: TSC clean (exit 0). Build clean (exit 0). Fixed coach/chat and coach/grade routes — Genkit flows must use dynamic `await import()` to avoid module-load-time initialization during Next.js build (same pattern as `runKnowledgeEnrichment` in knowledge-service). All 5 gateway endpoints and 3 coach routes appear in build output.
-- Run `npx tsc --noEmit` — fix any cross-lane type errors
+**W1 — TSC + build fix pass** ⬜
+- Run `npx tsc --noEmit` — fix any cross-lane type errors  
 - Run `npm run build` — fix any build errors
-- Common fix areas: missing imports between gateway types and routes, service function signatures
+- Common fix areas: missing imports, prop type mismatches between components from different lanes
 
-**W3 — Test gateway endpoints via curl** ✅
-- **Done**: All discover endpoints return correct JSON. Templates show 6 seeded IDs. Checkpoint schema shows questions/passing_threshold/on_fail. Resolution shows valid enums. Unknown capabilities return 400 with available_capabilities list.
-- `GET /api/gpt/discover?capability=templates` → verify returns template list
-- `GET /api/gpt/discover?capability=step_payload&step_type=checkpoint` → verify returns checkpoint schema
-- `POST /api/gpt/plan { action: "create_outline", payload: { topic: "Unit Economics" } }` → verify creates outline
-- `POST /api/gpt/create { type: "experience", payload: { ... } }` → verify creates experience
-- `POST /api/coach/chat { stepId: "...", message: "...", knowledgeUnitId: "..." }` → verify returns response (or graceful fallback)
+**W2 — Three-moment browser verification** ⬜
+- **Moment 1: Opening the app**
+  - Navigate to home (`/`)
+  - Verify "Focus Today" shows most recent active experience or empty state
+  - Verify "Your Path" shows curriculum outlines (if any exist) or stub
+  - Verify "Research Status" badge works (if knowledge units exist)
+  - Verify "Welcome back" context shows time since last session
+- **Moment 2: Stuck in a step**
+  - Navigate to workspace with a checkpoint step
+  - Submit wrong answers
+  - Verify CoachTrigger appears with "Need help?" prompt
+  - Click through to coach chat — verify it opens in tutor mode
+  - Stay on a step for > 5 minutes (or simulate via devtools) — verify dwell trigger
+- **Moment 3: Completing an experience**
+  - Complete all steps in a test experience
+  - Verify CompletionScreen renders (not the old static congratulations)
+  - Verify synthesis summary, key signals, and next suggestions appear
+  - Verify "Start Next →" links to a valid experience
 
-**W4 — Test checkpoint flow via dev harness** ⬜
-- Create a test experience with a checkpoint step (use test-experience endpoint or curl)
+**W3 — Track UI browser test** ⬜
+- Navigate to `/library`
+- Verify "Tracks" section appears with curriculum outline cards
+- Verify progress bars reflect actual completion state
+- Verify "Continue" links navigate to the correct workspace
+
+**W4 — Knowledge timing browser test** ⬜
+- Open a step that has `step_knowledge_links`
+- Verify pre-support card appears above step content for `pre_support` links
+- Verify post-step card appears after step completion for `deepens` links
+- Verify in-step companion uses link table (not domain matching)
+- Verify KnowledgeCompanion falls back to domain matching when no links exist
+
+**W5 — Checkpoint end-to-end test** ⬜
+- Create a test experience with a checkpoint step (use dev harness or curl)
 - Navigate to workspace
-- Verify checkpoint renders: questions display, textarea/radio inputs work, submit collects answers
-- Verify knowledge companion shows linked unit in tutor mode (if knowledge link exists)
+- Verify checkpoint renders: questions display, textarea/radio inputs work
+- Submit answers
+- Verify grading feedback appears (correct/incorrect per question)
+- Verify `knowledge_progress` updated in Supabase for linked units
+- Verify CoachTrigger appears on wrong answers
 
-**W5 — Browser test: Full curriculum flow** ✅
-- **Done**: Home page renders with Suggested for You and Active Journeys. Library renders experience cards. Knowledge tab shows playbooks and recently added. GPT state endpoint returns `curriculum: { active_outlines: [], recent_completions: [] }`. No regressions.
-- Navigate to `/library` — verify experiences render correctly
-- Navigate to workspace with a checkpoint step — verify step renders
-- Open KnowledgeCompanion in tutor mode — verify chat input appears
-- Send a tutor question — verify response appears (if GEMINI_API_KEY set) or graceful empty state
-- Navigate to `/knowledge` — verify existing knowledge tab still works
-- Check home dashboard — verify no regressions
+**W6 — Regression check** ⬜
+- Existing Knowledge Tab (`/knowledge`) still works
+- Existing Library (`/library`) shows experiences correctly (no broken sections)
+- Existing workspace navigation (sidebar/topbar) works
+- Draft persistence still works
+- No console errors on any page
+- `getGPTState` response still includes all expected fields
 
-**W6 — Test GPT instructions + OpenAPI** ✅
-- **Done**: GPT instructions are 44 lines (<60 target), no inline schemas. OpenAPI is 182 lines (<350 target), covers 5 GPT endpoints + MiraK. Coach API is NOT in OpenAPI. Discover examples match registry capabilities.
-- Review rewritten `gpt-instructions.md` — verify under 60 lines, no inline schemas
-- Review rewritten `public/openapi.yaml` — verify under 350 lines, covers all 5 GPT endpoints
-- Verify discover examples in instructions match actual discover registry
-- Verify Coach API is NOT in the OpenAPI schema
-- Final TSC + build check
+---
+
+## GPT Instructions / Schema Updates
+
+**After Sprint 12 is code-complete, update:**
+- `gpt-instructions.md`: Add experience sizing rule (3-6 steps, one subtopic per experience)
+- `gpt-instructions.md`: Add SOP for always linking knowledge to checkpoint steps
+- No OpenAPI schema changes needed (all new features are frontend-facing, not GPT-facing)
 
 ---
 
 ## Pre-Flight Checklist
 
-- [x] `npm install` succeeds (c:/mira)
-- [x] `npx tsc --noEmit` passes (c:/mira)
-- [x] `npm run build` passes (c:/mira)
-- [x] Dev server starts (`npm run dev` in c:/mira)
-- [x] Supabase is configured and migration 007 applied
-- [x] `enrichment.md` is the source of truth for all design questions
+- [ ] `npm install` succeeds (c:/mira)
+- [ ] `npx tsc --noEmit` passes (c:/mira)
+- [ ] `npm run build` passes (c:/mira)
+- [ ] Dev server starts (`npm run dev` in c:/mira)
+- [ ] Supabase is configured and all migrations applied
+- [ ] `roadmap.md` reflects Sprint 12 as the active productization sprint
 
 ## Handoff Protocol
 
@@ -383,151 +398,29 @@ ALL 6 ──→ Lane 7: [W1–W6] INTEGRATION + BROWSER QA
 
 | Lane | TSC | Build | Notes |
 |------|-----|-------|-------|
-| Gate 0 | ✅ | ✅ | Types, constants, contracts, gateway types |
-| Lane 1 | ✅ | ✅ | Migration SQL, curriculum types, validator |
-| Lane 2 | ✅ | ✅ | Discovery registry and 3 API routes |
-| Lane 3 | ✅ | ✅ | Curriculum service, plan route, state upgrade |
-| Lane 4 | ✅ | ✅ | Checkpoint renderer, knowledge link service |
-| Lane 5 | ✅ | ✅ | Genkit flows, Coach API routes, KnowledgeCompanion upgrade |
-| Lane 6 | N/A | N/A | Documentation only — no TSC |
-| Lane 7 | ✅ | ✅ | Integration + browser testing. Dynamic import fix for Genkit. Migration 007 applied. |
-
----
-
-# Sprint 11 — MiraK Enrichment Loop + Gateway Fixes
-
-## Thesis
-
-GPT creates the experience skeleton. MiraK enriches it asynchronously. Today MiraK only creates knowledge units and proposes a NEW experience. It should instead receive the `experience_id` of something GPT already built, then enrich THAT experience — adding depth to existing steps, appending new steps, and linking knowledge units to steps. This makes the first pass richer instead of creating parallel duplicate experiences.
-
-Additionally, the GPT gateway endpoints failed in production testing. The plan endpoint rejected valid payloads, the create endpoint errors weren't surfaced cleanly, and MiraK's separate Action failed to connect. These need to be fixed.
-
-## What broke in the GPT test
-
-1. **Plan endpoint** — GPT sent payload but got rejected (validation or GPT malforming the nested `{ action, payload: { ... } }` structure)
-2. **Create endpoint** — GPT failed to create experiences (same payload structuring issue — GPT may flatten the payload)
-3. **MiraK Action** — Two consecutive failures calling the separate Action (GPT tool wrapper issue with Cloud Run URL)
-4. **Result**: GPT fell back to dumping a massive text wall in chat — the worst possible outcome
-
-## Architecture Change: MiraK Enrichment
-
-**Current flow:**
-```
-GPT → creates experience (or fails)
-GPT → calls MiraK separately (fire-and-forget)
-MiraK → researches → creates knowledge units + proposes NEW experience via webhook
-Result: Two parallel experiences, knowledge disconnected from what user is doing
-```
-
-**New flow:**
-```
-GPT → creates experience with skeleton steps → gets back experience_id
-GPT → calls MiraK with { topic, experience_id } (fire-and-forget)
-MiraK → researches → webhook delivers to Mira with experience_id
-Mira webhook → creates knowledge units + enriches the EXISTING experience:
-  - Updates lesson step payloads with deeper content
-  - Appends additional steps (checkpoint, challenge)
-  - Links knowledge units to steps via step_knowledge_links
-  - Bumps a notification so user sees the experience got richer
-Result: One experience that starts thin and gets deeper over time
-```
-
----
-
-## Lane 1 — Fix Gateway Endpoints (Bug Fixes)
-
-**Goal**: Make the 5 gateway endpoints actually work when GPT calls them.
-
-### W1: Add error-tolerant payload handling to create route
-The GPT tool wrapper sometimes sends `{ type, payload }` and sometimes `{ type, ...flatPayload }`. The create route should handle both shapes.
-
-**File**: `app/api/gpt/create/route.ts`
-- If `body.payload` exists, use it
-- If not, treat everything except `type` as the payload
-- Log what shape was received for debugging
-
-### W2: Add error-tolerant payload handling to plan route
-Same issue — GPT may flatten `{ action, payload: { topic } }` into `{ action, topic }`.
-
-**File**: `app/api/gpt/plan/route.ts`
-- If `body.payload` exists, use it
-- If not, treat everything except `action` as the payload
-
-### W3: Add error-tolerant payload handling to update route
-Same pattern.
-
-**File**: `app/api/gpt/update/route.ts`
-
-### W4: Better error messages on all gateway routes
-When validation fails, return the expected schema in the error response so GPT can self-correct.
-
-### W5: Verify on production
-Push, wait for Vercel deploy, test all 5 endpoints with curl against production.
-
----
-
-## Lane 2 — MiraK Enrichment Loop
-
-**Goal**: MiraK enriches an existing experience instead of creating a parallel one.
-
-### W1: Add `experience_id` to MiraK request model
-**File**: `c:\mirak\main.py`
-- Add `experience_id: Optional[str] = None` to `GenerateKnowledgeRequest`
-- Pass it through to the webhook payload
-
-### W2: Update MiraK webhook to support enrichment mode
-**File**: `app/api/webhook/mirak/route.ts`
-- If `experience_id` is present in the payload:
-  - SKIP creating a new experience from `experience_proposal`
-  - Instead, enrich the existing experience:
-    1. Update existing lesson steps with richer content from foundation/playbook
-    2. Append new steps (checkpoint for knowledge testing, challenge for application)
-    3. Create `step_knowledge_links` between steps and the new knowledge units
-  - Create a timeline event: "Your [topic] experience has been enriched with research"
-- If `experience_id` is NOT present, fall back to current behavior (create new experience from proposal)
-
-### W3: Update MiraK OpenAPI schema
-**File**: `c:\mirak\mirak_gpt_action.yaml`
-- Add `experience_id` as optional parameter to the `generateKnowledge` operation
-
-### W4: Update GPT instructions
-**File**: `c:\mira\gpt-instructions.md`
-- Clarify the workflow: GPT creates experience FIRST, then passes `experience_id` to MiraK
-- Remove any implication that GPT should wait for MiraK results
-
-### W5: Deploy MiraK to Cloud Run
-```bash
-cd c:\mirak
-gcloud run deploy mirak --source . --region us-central1 --allow-unauthenticated
-```
-
----
-
-## Lane 3 (Polish) — Improve Discover Registry + Instructions
-
-### W1: Add `create_outline` example to discover registry
-GPT couldn't figure out the payload shape. The discover registry should return a complete working example.
-
-**File**: `lib/gateway/discover-registry.ts`
-- Ensure `create_outline` capability returns a copy-pasteable example
-
-### W2: Add `dispatch_research` capability to discover registry
-GPT should be able to learn MiraK dispatch format from discover.
-
-### W3: Update instructions to emphasize the enrichment workflow
-The test showed GPT trying to do too many things at once. Instructions should give a clear 3-step protocol:
-1. Create experience (skeleton)
-2. Dispatch MiraK research with `experience_id`
-3. Move on — MiraK will enrich automatically
+| Lane 1 | ⬜ | ⬜ | Checkpoint renderer, registry, step-knowledge API |
+| Lane 2 | ⬜ | ⬜ | Track/outline UI, library integration |
+| Lane 3 | ⬜ | ⬜ | Home page context (Focus Today, Your Path, Research) |
+| Lane 4 | ⬜ | ⬜ | Completion synthesis screen |
+| Lane 5 | ⬜ | ⬜ | Knowledge timing inside steps |
+| Lane 6 | ⬜ | ⬜ | Coach triggers + mastery wiring |
+| Lane 7 | ⬜ | ⬜ | Integration + browser QA (3-moment verification) |
 
 ---
 
 ## Acceptance
 
-- [ ] GPT can successfully create an ephemeral experience via gateway (no text dump fallback)
-- [ ] GPT can successfully create a curriculum outline via plan endpoint
-- [ ] GPT can dispatch MiraK research with `experience_id`
-- [ ] MiraK webhook enriches the existing experience instead of creating a new one
-- [ ] Knowledge units are linked to experience steps after enrichment
-- [ ] User sees notification when experience is enriched
-
+- [ ] Checkpoint step renders with questions, collects answers, displays grading feedback
+- [ ] `getRenderer('checkpoint')` returns CheckpointStep (not FallbackStep)
+- [ ] Library page has "Tracks" section with curriculum outline cards + progress bars
+- [ ] Home page has "Focus Today" with resume link to last active step
+- [ ] Home page has "Your Path" with active curriculum outlines
+- [ ] Research status badge shows new knowledge unit arrivals
+- [ ] Completion screen shows synthesis summary, key signals, growth indicators, next suggestions
+- [ ] Pre-support knowledge card appears above step content for linked units
+- [ ] Post-step "Go deeper" card appears after step completion
+- [ ] KnowledgeCompanion uses step_knowledge_links table (not domain string matching)
+- [ ] Coach trigger surfaces after checkpoint failure without user action
+- [ ] Passing checkpoint auto-promotes knowledge_progress for linked units
+- [ ] Three-moment browser verification passes (Opening / Stuck / Completion)
+- [ ] No regressions on existing Knowledge Tab, Library, or Workspace

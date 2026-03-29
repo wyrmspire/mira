@@ -74,51 +74,107 @@ Replaced naive string summaries and keyword-splitting with AI-powered intelligen
 - **Graceful Degradation** — `runFlowSafe()` wrapper ensures all AI flows fall back to existing mechanical behavior when `GEMINI_API_KEY` is unavailable
 - **Migration 005** — `evidence` column added to `profile_facets` for AI-generated extraction justification
 
-### 🔄 Current Phase — Multi-Agent Experience Engine Live
+### 🟢 Board Truth — Sprint Completion Status
 
-The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT can:
-- Fetch user state (`getGPTState`) — **now includes AI-compressed narrative + priority signals**
-- Create ephemeral experiences (`injectEphemeral`) — including 20-question intake pages
-- Propose persistent experiences (`createPersistentExperience`) — including 18-step multi-day curricula
-- Capture raw ideas (`captureIdea`)
-- List existing experiences (`listExperiences`)
-- Update individual steps (`updateExperienceStep`) — multi-pass enrichment
-- Add/remove/reorder steps (`addExperienceStep`, `deleteExperienceStep`, `reorderExperienceSteps`)
-- Check progress (`getExperienceProgress`)
-- Read/write drafts (`getDraft`, `saveDraft`)
-- Get AI-enriched next-experience suggestions (`getSuggestions`)
-- **Trigger deep research** (`generateKnowledge` via MiraK — fire-and-forget, 202 Accepted)
+| Sprint | Status | What Shipped |
+|--------|--------|------|
+| Sprints 1–9 | ✅ Complete | Local control plane, GitHub factory, Supabase foundation, experience renderer + library, workspace hardening (R1-R10), genkit intelligence (4 flows), knowledge tab + MiraK integration, content density + agent thinking rails |
+| Sprint 10 | ✅ Complete | Curriculum-aware experience engine: curriculum outlines (table + service + types), GPT gateway (5 endpoints: state/plan/create/update/discover), discover registry (9 capabilities), coach API (3 routes), Genkit tutor + grading flows, step-knowledge-link service, OpenAPI rewrite, migration 007 |
+| Sprint 11 | ✅ Code Complete | MiraK enrichment loop: enrichment webhook mode (experience_id), flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance. **Operational close pending**: MiraK Cloud Run redeploy, Vercel push, GPT Action schema update. |
 
-### Current Architecture Snapshot
+### 🔄 Current Phase — Curriculum Infrastructure Built, Productization Next
+
+The system can now plan learning domains, create right-sized experiences, link knowledge to steps, grade checkpoints semantically, and dispatch asynchronous research that enriches existing experiences. **But almost none of this intelligence is visible to the user.**
+
+The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT has 6 endpoints:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/gpt/state` | GET | User state, active experiences, curriculum progress, friction signals, re-entry prompts |
+| `/api/gpt/plan` | POST | Curriculum outlines, research dispatch, gap assessment |
+| `/api/gpt/create` | POST | Experiences (persistent/ephemeral), ideas, steps |
+| `/api/gpt/update` | POST | Step edits, reorder, transitions, knowledge linking |
+| `/api/gpt/discover` | GET | Progressive disclosure — schemas, examples, valid values |
+| `/api/knowledge` | GET | Read full knowledge base content |
+
+Additionally, MiraK is a separate GPT Action (`POST /generate_knowledge`) for fire-and-forget deep research.
+
+### What the product can actually do today
+
+**Already built and functional:**
+- Curriculum-aware planning (outlines → subtopics → linked experiences)
+- GPT gateway with progressive discovery (9 capabilities, flat payloads)
+- Coach/tutor API (contextual Q&A, semantic checkpoint grading)
+- Knowledge enrichment into existing experiences (MiraK → webhook → step appending + knowledge linking)
+- Knowledge reading via GPT (`readKnowledge` endpoint)
+- Experience enrichment via `experience_id` passthrough
+- Step-knowledge links (teaches/tests/deepens/pre_support/enrichment types)
+- Curriculum outline service with gap assessment
+- 4 Genkit intelligence flows (synthesis, facets, suggestions, GPT compression)
+- 2 Genkit tutor flows (tutor chat, checkpoint grading)
+- Knowledge enrichment flow (refine-knowledge-flow)
+- Non-linear workspace navigation, draft persistence, step scheduling
+- 6 step renderers (lesson, challenge, reflection, questionnaire, plan_builder, essay_tasks)
+- MiraK 3-stage research pipeline (strategist + 3 readers + synthesizer + playbook builder)
+
+**Operational close pending (Sprint 11):**
+- MiraK Cloud Run redeploy with enrichment code
+- Vercel deploy (git push)
+- GPT Action schema update in ChatGPT settings
+- End-to-end production enrichment verification
+
+**What is NOT visible to the user (the product gap):**
+- No visible curriculum tracks or outline UI
+- No "Your Path" or "Focus Today" on the home page
+- No research status visibility (pending/in-progress/landed)
+- No synthesis or growth feedback on experience completion
+- No visible knowledge timing inside steps (pre-support, in-step, post-step)
+- No checkpoint step renderer (component not built)
+- No coach surfacing triggers (coach is opt-in only)
+- No mastery earned through checkpoints (self-reported only)
+- No welcome-back context reconstruction
+- Navigation still prioritizes legacy idea-management surfaces
+
+This is the core product risk: **the app surfaces none of the intelligence it has built.**
+
+### Current Architecture
 
 ```
-Custom GPT ("Mira" — high-token brain)
-  ↓ OpenAPI actions (16+ endpoints) + "Thinking Rails" protocol
-  ↓ via Cloudflare tunnel (mira.mytsapi.us) or Vercel (mira-mocha-kappa.vercel.app)
+Custom GPT ("Mira" — persona + 6 endpoints + MiraK action)
+  ↓ Flat OpenAPI (gateway + progressive discovery)
+  ↓ via Cloudflare tunnel (mira.mytsapi.us) or Vercel (mira-maddyup.vercel.app)
 Mira Studio (Next.js 14, App Router)
   ├── workspace/    ← navigable experience workspace (overview + step grid + sidebar/topbar)
   ├── knowledge/    ← durable reference + mastery (3-tab: Learn | Practice | Links)
   ├── library/      ← all experiences: active, completed, proposed
   ├── timeline/     ← chronological event feed
   ├── profile/      ← compiled user direction (AI-powered facets)
-  └── api/          ← same contract GPT hits
+  └── api/
+        ├── gpt/     ← 5 gateway endpoints (state/plan/create/update/discover)
+        ├── coach/   ← 3 frontend-facing routes (chat/grade/mastery)
+        ├── webhook/ ← GPT, GitHub, Vercel, MiraK receivers
+        └── */*      ← existing CRUD routes (experiences, knowledge, etc.)
         ↕
-Genkit Intelligence Layer
+Genkit Intelligence Layer (7 flows)
   ├── synthesize-experience-flow     → narrative + behavioral signals on completion
   ├── suggest-next-experience-flow   → personalized recommendations
   ├── extract-facets-flow            → semantic profile facet mining
   ├── compress-gpt-state-flow       → token-efficient GPT state packets
-  └── refine-knowledge-flow (Sprint 9) → polish + cross-pollinate MiraK output
+  ├── refine-knowledge-flow          → polish + cross-pollinate MiraK output
+  ├── tutor-chat-flow               → contextual Q&A within active step
+  └── grade-checkpoint-flow          → semantic grading of checkpoint answers
         ↕
-MiraK (Python/FastAPI on Cloud Run — separate repo: c:/mirak)
+MiraK (Python/FastAPI on Cloud Run — c:/mirak)
   ├── POST /generate_knowledge → 202 Accepted immediately
-  ├── BackgroundTasks: 3-stage agent pipeline (strategist + 3 readers + synthesizer)
+  ├── 3-stage pipeline: strategist (search+scrape) → 3 readers → synthesizer + playbook
   ├── Webhook delivery: local tunnel primary → Vercel fallback
-  └── Currently stubbed (dummy data) — real agents ship in Sprint 9
+  └── Enrichment mode: experience_id → enrich existing experience
         ↕
-Supabase (runtime truth)
-  ├── experience_instances  (20 columns, lifecycle state machine)
+Supabase (runtime truth — 18+ tables)
+  ├── experience_instances  (lifecycle state machine, curriculum_outline_id)
   ├── experience_steps      (per-step payload + status + scheduling)
+  ├── curriculum_outlines   (topic scoping, subtopic tracking)
+  ├── step_knowledge_links  (step ↔ knowledge unit connections)
   ├── knowledge_units       (research content from MiraK)
   ├── knowledge_progress    (mastery tracking per user per unit)
   ├── interaction_events    (telemetry: 7 event types)
@@ -131,34 +187,6 @@ Supabase (runtime truth)
 GitHub (realization substrate — deferred)
   ├── webhook at /api/webhook/github
   └── factory services ready but not in active use
-```
-
-**What works today:**
-- GPT can create rich multi-step experiences (18+ steps, mixed types)
-- Knowledge Tab is live and populated via MiraK webhook
-- Multi-pass enrichment APIs are wired (update/add/reorder steps)
-- Draft persistence, non-linear navigation, step scheduling all ship
-- Genkit flows run safely with graceful degradation
-- Experience completion triggers: AI synthesis → semantic facet extraction → context-aware suggestions
-
-**What is still stubbed:**
-- MiraK only produces 1 dummy unit (real agent pipeline commented out)
-- Custom GPT still chats freely instead of using endpoints as structured artifacts
-- No progressive disclosure or deterministic multi-pass thinking protocol yet
-
-### Target Architecture (next 3 sprints)
-
-```
-Custom GPT
-  ↓ Thinking Rails (multi-pass + artifact IDs)
-Mira Studio
-  ├── Genkit flows (refine, enrich, TTS skeletons)
-  ├── Knowledge (multi-unit, audio-ready scripts)
-  └── Experiences (Kolb + deliberate practice loops)
-        ↕
-MiraK (expanded content factory)
-  ├── 3–5 specialized Content Builders per call
-  └── webhook delivers raw → Genkit polishes
 ```
 
 ### Two Parallel Truths
@@ -575,149 +603,163 @@ The coder gets involved when:
 
 ---
 
-### 🔲 Sprint 7 — Genkit Intelligence Layer (Backend Brain)
+### ✅ Sprint 7 — Genkit Intelligence Layer (Complete)
 
-> **Goal:** Based on AI Coach analysis, embed intelligence *inside* the backend using Genkit to process data mutations into insight, decoupling deep analysis from the conversational GPT.
-
-| # | Work Item | Detail |
-|---|-----------|--------|
-| 1 | Genkit Infrastructure | Install `genkit` and initialize Google AI plugin. Create `lib/ai/genkit.ts`. |
-| 2 | Intelligent Synthesis Flow | Build `synthesizeExperienceFlow` (`gemini-2.5-flash`). Replace naive string summaries in `synthesis_snapshots` with AI-extracted narrative, actual signals, and next-step candidates running automatically at the end of an experience. |
-| 3 | AI Profile Facet Extraction | Build `extractFacetsFlow`. Replace mechanical comma-split extraction `facet-service.ts` with semantic reading of user reflections to pull high-confidence interests and friction signatures. |
-| 4 | Smart Next Suggestions | Build `suggestNextExperienceFlow`. Move beyond static progression chains to context-aware templated recommendations based on actual facet states. |
+Replaced naive string summaries with AI-powered intelligence via Genkit + Gemini 2.5 Flash: `synthesizeExperienceFlow`, `extractFacetsFlow`, `suggestNextExperienceFlow`, `compressGPTStateFlow`. Graceful degradation via `runFlowSafe()`. Completion wiring. Migration 005.
 
 ---
 
 ### ✅ Sprint 8 — Knowledge Tab + MiraK Integration (Complete)
 
-> **Goal:** Give Mira a dedicated Knowledge surface where users study, practice, and track mastery — powered by MiraK research agents running on Cloud Run.
->
-> **Results:** Implemented the "Option B" Webhook Handoff architecture. Built a 3-tab study workspace (Learn/Practice/Links), domain-organized grid, and home page "Continue Learning" dashboard. Integrated knowledge metadata into Genkit synthesis and suggestion flows. All 6 lanes verified.
+Option B Webhook Handoff architecture. 3-tab study workspace (Learn/Practice/Links), domain-organized grid, home page "Continue Learning" dashboard. Knowledge metadata integrated into Genkit synthesis and suggestion flows. All 6 lanes verified.
 
 ---
 
-### 🔲 Sprint 9 — Content Density & Agent Thinking Rails
+### ✅ Sprint 9 — Content Density & Agent Thinking Rails (Complete)
 
-> **Goal:** Make MiraK a true high-density educational content factory and force the Custom GPT to use endpoints as persistent thinking artifacts instead of free-form chat. This sprint ships the richer knowledge base and the deterministic educational cycles.
->
-> **Context:** Sprint 8 proved the wiring works (webhook → validate → persist → display). But the content is thin: MiraK sends 1 dummy unit, experiences proposed from research are skeleton single-step lessons, and the GPT chats freely instead of using endpoints as external long-term memory. The bottleneck is clear: 3 fetcher agents → 1 synthesizer → 1 monolithic report. We need specialized Content Builder agents, a proper "receptacle" architecture, and the GPT to use deterministic thinking rails.
->
-> **Architecture:** Option C (hybrid). MiraK delivers structured-but-raw units → webhook persists immediately (user sees content fast) → background Genkit flow enriches over the next few minutes (retrieval questions, cross-links, richer experience proposals).
->
-> **Duration:** One focused week — 6 parallel lanes (same ownership discipline as Sprints 5–8). MiraK and Mira can be worked on simultaneously.
+Real 3-stage MiraK agent pipeline (strategist + 3 readers + synthesizer + playbook builder). Genkit enrichment flow (refine-knowledge-flow). GPT thinking rails protocol. Multi-unit Knowledge Tab UI. Full pipeline: ~247s, 3-5 units per call.
 
-#### Gate 0 (done before lanes start)
-
-- Update `types/knowledge.ts` with `KnowledgeAudioVariant` and `CONTENT_BUILDER_TYPES`
-- Update `lib/constants.ts` with new constants
-- Update `gpt-instructions.md` with the new "Thinking Rails" protocol
-
-```ts
-// New constants (lib/constants.ts)
-export const CONTENT_BUILDER_TYPES = ['foundation', 'playbook', 'deep_dive', 'example', 'audio_script'] as const;
-export type ContentBuilderType = (typeof CONTENT_BUILDER_TYPES)[number];
-```
-
-#### Lane 1 — MiraK Research Agent Upgrade (c:/mirak)
-
-**Owner:** MiraK repo (Python/FastAPI + Google ADK)
-- Restore real agent pipeline (currently `time.sleep(3)` + dummy payload)
-- Add two specialized Content Builder agents:
-  - `PlaybookBuilder` — turns raw research into actionable, profitability-focused playbooks with deliberate-practice micro-tasks
-  - `AudioScriptSkeletonBuilder` — generates 10–15 min conversational script outlines (text only, no TTS yet — audio generation deferred to Sprint 10)
-- Output 3–5 units per `/generate_knowledge` call (foundation + playbook + deep_dive + example + 1–2 audio script skeletons)
-- Experience proposal becomes rich: 4–6 step Kolb-style chain (Lesson → Challenge → Reflection → Practice) that references the new units
-- Webhook payload stays backward-compatible (just bigger `units[]` array)
-
-#### Lane 2 — Genkit Enrichment Flow (c:/mira)
-
-**Owner:** `lib/ai/flows/refine-knowledge-flow.ts` (new file)
-- Background `runFlowSafe` flow triggered after webhook persist (Option C)
-- Takes raw MiraK units → adds:
-  - Retrieval questions (Practice tab ready)
-  - Cross-pollination links (e.g., "this customer-interaction playbook connects to your life-balance experience")
-  - Skill-tree metadata (maps to future gamified roadmap)
-- Fleshes out experience proposal if MiraK's version is too skeletal
-- All enrichment is additive — never overwrites original MiraK content
-
-#### Lane 3 — Webhook + Knowledge Service Upgrade (c:/mira)
-
-**Owner:** `app/api/webhook/mirak/route.ts` + `lib/services/knowledge-service.ts`
-- Handle multi-unit payloads (persist all units from one research run)
-- Group units under a "research run" parent ID (new `research_run_id` field or shared `session_id`)
-- Knowledge Tab UI gets a tiny grouping header ("Research Run — March 27")
-- All additive — existing single-unit flow untouched
-
-#### Lane 4 — Custom GPT Thinking Rails (c:/mira + GPT config)
-
-**Owner:** `gpt-instructions.md` + `mirak_gpt_action.yaml`
-- New "Multi-Pass Artifact Thinking Protocol" section in GPT instructions:
-  1. Assess user goal (profitability + education + life balance)
-  2. Decide research depth → call `/generate_knowledge` with progressive strategy
-  3. Treat returned units as persistent artifacts (reference by ID in follow-up messages)
-  4. Pass 2+: enrich or propose experiences based on what landed
-  5. Always return progressive disclosure (teaser first → full unit → experience proposal)
-- This is the behavioral change: endpoints become external long-term memory, not just data fetchers
-- This is a documentation/instructions change — no code changes in Mira
-
-#### Lane 5 — Frontend Polish & Knowledge Companion Upgrade (c:/mira)
-
-**Owner:** Knowledge UI + ExperienceRenderer
-- `KnowledgeCompanion` now shows research-run grouping when multiple related units exist
-- "Continue Learning" dashboard shows latest research-run units with richer previews
-- All additive — existing 3-tab view untouched
-
-#### Lane 6 — Integration + End-to-End Testing
-
-**Owner:** Everyone (post-lane work)
-- Seed richer test data via `/api/dev/test-knowledge`
-- Test full loop: GPT → MiraK (multi-unit) → webhook → Genkit refine → KB shows 4–5 units + rich experience proposal
-- Verify GPT references artifact IDs in follow-up messages (multi-pass visible)
-- Verify no breaking changes to existing single-unit or experience flows
-- Browser + phone test
-
-#### Sprint 9 Verification
-- One GPT message can trigger MiraK → 4+ rich units land in Knowledge Tab
-- GPT references artifact IDs in follow-up messages (multi-pass visible)
-- Experience proposal from MiraK is a real 4–6 step Kolb-style chain
-- Genkit enrichment adds retrieval questions and cross-links after persist
-- No breaking changes to existing single-unit or experience flows
-- Custom GPT instructions updated and tested in the real Custom GPT
-
-#### Sprint 9 Lane 6 Integration Notes & Bug Log (Agent Handoff)
-> **Note to Builder Agent:** I (the troubleshooting agent) attempted to resolve the `400 Invalid unit type: audio_script` error and the "3-sentence truncation" issue in `c:/mirak/main.py`. The user has requested that I document my findings here and cease making code changes so you can restore the file and resolve this properly through the established architectural patterns (hitting endpoints via the tunnel only).
-
-**1. The "Invalid unit type: audio_script" 400 Error & Webhook Misunderstanding:**
-- **What Happened:** The webhook payload failed validation with a 400 error. I incorrectly assumed the webhook delivery targeting system and timeout logic in `c:/mirak/main.py` were flawed.
-- **My Misunderstanding:** The webhooks were working perfectly fine in Lane 6. The script's logic to ping the Cloudflare tunnel (`mira.mytsapi.us`) with a `timeout=2` was correct. When it timed out, it gracefully degraded to Vercel (which resulted in the 400 error because the Vercel validator lacks the Sprint 9 `audio_script` constant). 
-- **The Core Issue to Trace:** Instead of investigating *what caused the tunnel to take longer than 2 seconds to respond* (the actual root cause), I dismantled the webhook targeting by pointing it to `localhost` and inflating the timeout. This was a mistake that obscured the real issue. 
-- **Note to Builder Agent:** You will need to trace back to what actually caused the timeout on `mira.mytsapi.us` rather than changing the delivery logic, as the logic itself was behaving exactly as architected. Please investigate the tunnel latency or Next.js response time that triggered the fallback.
-
-**2. The "3-Sentence Content Truncation" Issue:**
-- **What Happened:** The generated content arriving at the Knowledge Tab was only 3 sentences long, instead of the massive rich content output by the Synthesizer and Playbook agents.
-- **Why It Happened:** The `webhook_packager` LLM agent was tasked with embedding thousands of tokens of content deeply within a JSON array. LLMs commonly summarize and truncate text when forced to wrap massive blocks inside JSON.
-- **My Attempted Fix:** I modified `c:/mirak/main.py` so the `webhook_packager` only generated the JSON metadata (thesis, title, key ideas). Then, I programmatically extracted the full string outputs from the Synthesizer and injected them directly into the JSON payload in Python before sending the request. 
-
-Please review my changes to `c:/mirak/main.py` and revert/fix them in accordance with the Lane 6 work you've already completed. I will make no further code changes.
+**Sprint 9 Bug Log (Historical Reference):**
+- `audio_script` 400 error: webhook timeout caused Vercel fallback, which lacked the new constant. Root cause was tunnel latency, not webhook logic.
+- Content truncation: Fixed by having `webhook_packager` produce metadata only, then programmatically injecting full synthesizer/playbook output into the webhook payload.
 
 ---
 
-### 🔲 Sprint 10 — Voice & Gamification Layer (Deferred until content is rich)
+### ✅ Sprint 10 — Curriculum-Aware Experience Engine (Complete)
 
-> **Goal:** Add audio playback (TTS button on any >200-word knowledge block) + light skill-tree / calendar nudges once we have real data to build on. This sprint only starts after Sprint 9 has proven we have dense, high-quality educational content flowing.
->
-> **Prerequisite:** Sprint 9 must be complete with real multi-unit content in the Knowledge Tab.
->
-> **Scope (tentative):**
-> - TTS button on knowledge unit content (Gemini Voice Kit or equivalent — see `c:/gemlink` for existing audio patterns)
-> - Audio URL storage in `knowledge_units` table (`audio_urls` JSONB column)
-> - Mini skill-tree / learning roadmap teaser on `/knowledge` page
-> - Calendar nudge: next deliberate-practice reminder (spaced repetition from mastery_status)
-> - Cross-pollination chips in Links tab ("This connects to your [experience name]")
+> **What shipped:** The full curriculum infrastructure. 7 parallel lanes completed.
+
+| Component | Status |
+|---|---|
+| Curriculum outlines table + service + types + validator | ✅ Migration 007 applied |
+| GPT gateway (5 endpoints: state/plan/create/update/discover) | ✅ All routes live |
+| Discover registry (9 capabilities, progressive disclosure) | ✅ Functional |
+| Gateway router (discriminated dispatch to services) | ✅ Functional |
+| Coach API (chat/grade/mastery routes) | ✅ All 3 routes live |
+| Genkit flows (tutorChatFlow + gradeCheckpointFlow) | ✅ Compiled, graceful degradation |
+| Step-knowledge-link service (linkStepToKnowledge, getLinksForStep) | ✅ Functional |
+| KnowledgeCompanion TutorChat mode | ✅ Dual-mode (read/tutor) |
+| GPT instructions rewrite (44 lines, flat payloads) | ✅ |  
+| OpenAPI schema consolidation (5 gateway + MiraK) | ✅ |
+| Curriculum outline service (CRUD + linking + gap assessment) | ✅ |
+
+**Still unbuilt from Sprint 10 backlog (carries to Sprint 12):**
+- `CheckpointStep.tsx` renderer (component NOT created — W1/W2 in Lane 4)
+- Checkpoint registration in renderer-registry (no `checkpoint` entry)
+- Step API knowledge linking (steps route doesn't handle `knowledge_unit_id` on create/GET)
 
 ---
 
-### 🔲 Sprint 11 — Proposal → Realization → Coder Pipeline (Deferred)
+### ✅ Sprint 11 — MiraK Enrichment Loop + Gateway Fixes (Code Complete)
+
+> **What shipped (code complete):** MiraK enrichment webhook mode, flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance.
+
+| Component | Status |
+|---|---|
+| Flat OpenAPI schemas (no nested `payload` objects) | ✅ |
+| Gateway payload tolerance (all 3 routes handle flat + nested) | ✅ |
+| MiraK `experience_id` in request model + webhook | ✅ |
+| Enrichment webhook mode (append steps + link knowledge) | ✅ |
+| `readKnowledge` endpoint for GPT | ✅ |
+| Discover `dispatch_research` capability | ✅ |
+| GPT instructions enrichment workflow (3-step protocol) | ✅ |
+| MiraK Cloud Run CPU throttling fix | ✅ |
+| MiraK `.dockerignore` + env var mapping | ✅ |
+
+**Operational close (deployment only — no code changes needed):**
+- [ ] MiraK Cloud Run redeploy with enrichment code
+- [ ] Vercel deploy (git push)
+- [ ] GPT Action schema update in ChatGPT settings
+- [ ] End-to-end production enrichment verification
+
+---
+
+### 🔲 Sprint 12 — Learning Loop Productization
+
+> **Goal:** Make the already-built curriculum/coach/knowledge infrastructure visible and coherent in the UI. The test: the three emotional moments work — **Opening the app** (user sees their path and what to focus on), **Stuck in a step** (coach surfaces proactively), **Finishing an experience** (user sees synthesis, growth, and what's next).
+>
+> **Core principle:** The app surfaces stored intelligence; GPT and Coach deepen it. No new backend capability — surface what exists.
+
+#### What Sprint 12 must deliver
+
+| # | Lane | Work |
+|---|---|---|
+| 1 | **CheckpointStep renderer + registration** | Build `CheckpointStep.tsx` (free text + choice inputs, difficulty badges, submit → grade). Register in renderer-registry. Wire step API to handle `knowledge_unit_id` on step create/GET. This is the missing Sprint 10 Lane 4 work. |
+| 2 | **Visible track/outline UI** | Promote curriculum outlines to a first-class UI surface. Home page "Your Path" section: active outlines with subtopics, linked experiences, and `% complete` indicator. Library gets a "Tracks" section. This replaces the generic "Suggested for You." |
+| 3 | **Home page context reconstruction** | "Focus Today" section: most recently active experience + next uncompleted step + direct "Resume Step N →" link. "Research Status" badges: pending/in-progress/landed states for MiraK dispatches. "Welcome back" context: time since last visit, new knowledge units since then. |
+| 4 | **Completion synthesis surfacing** | Experience completion screen shows synthesis results: 2-3 sentence summary (from `synthesis_snapshots.summary`), key signals, growth indicators (facets created/strengthened), and top 1-2 next suggestions (from `next_candidates`). Replace the static congratulations card. |
+| 5 | **Knowledge timing inside steps** | Step renderers use `step_knowledge_links` to show: (1) pre-support card above step content — "Before you start: review [Unit Title]", (2) in-step companion using actual link table (not domain string matching), (3) post-step reveal — "Go deeper: [Unit Title]." |
+| 6 | **Coach surfacing triggers + mastery wiring** | Non-intrusive coach triggers: after failed checkpoint ("Need help? →"), after extended dwell without interaction, after opening a step linked to unread knowledge ("Review [Unit] first →"). Wire checkpoint grades into `knowledge_progress` — auto-promote mastery on good scores, keep honest on struggles. |
+| 7 | **Integration + Browser QA** | Three-moment verification: (1) Open app → see path + focus + research status, (2) Get stuck on a step → coach surfaces, (3) Complete an experience → see synthesis + growth + next step. Full browser walkthrough. |
+
+#### Default Experience Rhythm (Kolb + Deliberate Practice)
+
+Every serious experience should default to this step shape:
+1. **Primer** — short teaching step (lesson, light resolution)
+2. **Workbook / Practice** — applied exercise (challenge or questionnaire)
+3. **Checkpoint** — test understanding (graded checkpoint step)
+4. **Reflection / Synthesis** — consolidate what was done
+5. *(optional)* **Deep dive knowledge** — extended reading or linked unit
+
+#### Async Research UX Rule (Mandatory)
+
+Research dispatch must be visible immediately in the UI:
+- **Pending**: MiraK dispatch acknowledged, research not started yet
+- **In-progress**: Research pipeline running (show on home page)
+- **Landed**: Knowledge units arrived, experience enriched (show badge/notification)
+
+The user must never wonder "did my research request go anywhere?" This eliminates "spinner psychology."
+
+#### Sprint 12 Verification
+
+- User opens the app and sees "Your Path" with active curriculum outlines + progress
+- Home page shows "Focus Today" with resume link to last active step
+- At least one step shows pre-support knowledge card from `step_knowledge_links`
+- Checkpoint step renders, grades answers via Genkit, updates `knowledge_progress`
+- Coach surfaces after checkpoint failure without user action
+- Completion screen shows synthesis summary, growth signals, and next suggestions
+- Research dispatch shows visible status on home page
+- Navigation re-prioritized for learning-first identity
+
+---
+
+### 🔲 Sprint 13 — Goal OS + Skill Map
+
+> **Goal:** Give the user a persistent Goal and a visual Skill Tree that makes their position and trajectory visible. Turn "a pile of experiences in a track" into "a growth system with a destination."
+>
+> **Prerequisite:** Sprint 12 must prove the productized learning loop works. The skill map is only useful once experiences visibly track progress.
+
+#### Lanes
+
+| # | Lane | Work |
+|---|---|---|
+| 1 | **Goal entity** | Lightweight `goals` table. Curriculum outlines become children of a goal. |
+| 2 | **Skill domains** | `skill_domains` table with mastery scale: `undiscovered → aware → beginner → practicing → proficient → expert`. Progress computed from linked experience completions. |
+| 3 | **Goal intake protocol** | GPT deep interview → `createGoal` endpoint → dispatch MiraK for domain research. |
+| 4 | **Skill Tree UI** | Visual domain cards with mastery level and progress bar. "What's next" per domain. |
+| 5 | **MiraK goal research pass** | Dispatch MiraK with full goal description. Webhook delivers domain-organized knowledge units. |
+| 6 | **Integration** | Outlines belong to goals. Experiences belong to outlines. `getGPTState` returns goal + domain mastery. |
+
+#### Explicit Deferrals from Sprint 13
+
+- Gamification animations, XP, streaks, level-up effects
+- "Fog of war" / progressive domain discovery UI
+- Mentor archetypes / coach stances
+- Leaderboards or social features
+- Audio/TTS rendering
+
+#### Sprint 11 Verification
+
+- User can create a Goal through GPT intake conversation
+- App shows the Skill Tree with all domains at `undiscovered` on creation
+- Completing an experience updates domain mastery level
+- MiraK research for a goal delivers domain-organized knowledge units
+- `getGPTState` includes active goal + domain mastery levels
+- GPT uses goal context in re-entry and suggests the highest-leverage next domain
+
+---
+
+### 🔲 Sprint 14 — Proposal → Realization → Coder Pipeline (Deferred)
 
 > **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
 >
@@ -835,7 +877,7 @@ GPT calls propose endpoint
 5. **The coder can have its own "schema."** Just like the GPT has an OpenAPI schema for API calls, the coder can have a structured spec schema for what it reads from issues. Both are typed contracts.
 6. **The issue is working memory.** The coder can write progress back to it. The GPT and user can read it. The issue becomes the shared context for the entire realization.
 
-#### Sprint 6 Verification
+#### Sprint 14 Verification
 - GPT can POST a proposal that creates both an experience instance AND a GitHub Issue with structured spec
 - User can view and edit the coder spec from the frontend review UI
 - GPT can update the issue body via API when the user refines their request
@@ -847,7 +889,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 12 — Chained Experiences + Spontaneity
+### 🔲 Sprint 15 — Chained Experiences + Spontaneity
 
 > **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
 
@@ -863,7 +905,7 @@ GPT calls propose endpoint
 | 8 | Timeline page | `app/timeline/page.tsx` — chronological view of GPT proposals, realizations, completions, ephemerals, suggestions. |
 | 9 | Profile page | `app/profile/page.tsx` — compiled view of interests, goals, efforts, patterns, skill trajectory. Read-only, derived from facets. |
 
-#### Sprint 7 Verification
+#### Sprint 15 Verification
 - Completing a Questionnaire surfaces a Plan Builder suggestion via graph
 - GPT can inject an ephemeral challenge that renders instantly
 - Re-entry contract fires after completion and shows in GPT state
@@ -874,7 +916,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 13 — GitHub Hardening + GitHub App
+### 🔲 Sprint 16 — GitHub Hardening + GitHub App
 
 > **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
 
@@ -889,7 +931,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 14 — Personalization + Coder Knowledge
+### 🔲 Sprint 17 — Personalization + Coder Knowledge
 
 > **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
 
@@ -905,7 +947,7 @@ GPT calls propose endpoint
 
 ---
 
-### 🔲 Sprint 15 — Production Deployment
+### 🔲 Sprint 18 — Production Deployment
 
 > **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
 >
@@ -926,18 +968,18 @@ GPT calls propose endpoint
 | 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
 | 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
 
-#### Key decisions to make before Sprint 15
+#### Key decisions to make before Sprint 18
 
 | Question | Options | Impact |
 |----------|---------|--------|
 | Edge functions: Vercel or Supabase? | Vercel Edge (fast, limited runtime) vs Supabase Edge (Deno, can be longer-running) vs plain serverless (slower, full Node.js) | Affects which routes can run where |
 | GPT auth in production? | Shared secret header, OAuth, or Supabase Auth token | Affects OpenAPI schema `security` section |
-| Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects Sprint 6 + 8 architecture |
+| Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects architecture |
 | Custom domain? | `mira.mytsapi.us` via Vercel, or new domain | Affects GPT config + webhook registration |
 
-#### Sprint 15 Verification
+#### Sprint 18 Verification
 - App is live on Vercel at a permanent URL
-- GPT Actions point at production URL and all 10 endpoints work
+- GPT Actions point at production URL and all endpoints work
 - GitHub webhooks deliver to production without tunnel dependency
 - Local dev mode still works with tunnel for testing
 - No hardcoded `DEFAULT_USER_ID` in production paths
@@ -1243,3 +1285,115 @@ The GPT authored a genuinely excellent curriculum. The *content design* beat the
 8. **The app stays dumb and clean.** Intelligence lives in GPT and the coder. The app renders and records.
 9. **Friction is observed, not acted on.** The app computes friction. GPT interprets it. The app never reacts to its own friction signal.
 10. **Sometimes explain. Sometimes immerse.** The resolution object decides. The system never defaults to one mode.
+
+---
+
+## UX Blind Spots & Suggestions (March 2026 Audit)
+
+> Based on a full read of the roadmap + the actual codebase. These are the things that will feel weird, broken, or hollow to a user who is trying to use Mira as a mastery platform — even if the backend is technically capable.
+
+### 1. The "Why Am I Here" Problem — No Visible Goal Spine
+
+**What's happening:** The user sees experiences, knowledge units, and profile facets — but nothing that ties them into a story. There's no visible thread from "I want to become X" → "these are the skill domains" → "these experiences build those skills" → "here's your progress." Curriculum outlines exist in the backend (service, table, GPT state endpoint), but **users literally cannot see them**. The app feels like a collection of things to do rather than a system pulling you toward something.
+
+**Why it matters:** This is the single biggest gap between what the system *knows* and what the user *feels*. The GPT understands the user's trajectory. The backend tracks curriculum outlines. But the app itself can't tell the user their own story.
+
+**Suggestion:** Sprint 10 Lane 1 (visible track/outline UI) is the right fix. But it needs to be more than a list — it needs to be the **first thing the user sees** on the home page. Replace or supplement the current "Suggested Experiences" section with a "Your Path" section: the active curriculum outline(s) with subtopics, linked experiences, and a real progress bar. The user should open the app and immediately see: "You're 35% through AI Operator Brand. Next up: Marketing Fundamentals."
+
+---
+
+### 2. Knowledge Is a Library, Not a Living Part of the Loop
+
+**What's happening:** Knowledge lives in `/knowledge`. Experiences live in `/workspace`. The two feel like separate apps. Step-knowledge links exist in the database (`step_knowledge_links` table) but are **not rendered in the step UI**. The `KnowledgeCompanion` at the bottom of steps fetches by `knowledge_domain` string match — it doesn't use the actual link table. A user completes a lesson step and doesn't see "this connects to Knowledge Unit X that you studied yesterday." They study a knowledge unit and don't see "this is relevant to Step 4 of your active experience."
+
+**Why it matters:** The whole thesis is that knowledge from external research (MiraK) becomes fuel for experiences and mastery. Right now they're two parallel tracks that don't visibly cross-pollinate. The user has to manually notice the connection.
+
+**Suggestion:** Sprint 10 Lane 3 (knowledge timing as product contract) is the right fix. But push further: when a user opens a step that has `step_knowledge_links`, show a small "Primer" card **above** the step content — "Before you start: review [Unit Title]" with a direct link. After step completion, show "Go deeper: [Unit Title]" as a post-step reveal. Make the link table the driver, not domain string matching.
+
+---
+
+### 3. Mastery Feels Self-Reported, Not Earned
+
+**What's happening:** The knowledge mastery progression (unseen → read → practiced → confident) is driven by the user clicking buttons: "Mark as Read," "Mark as Practiced," "Mark as Confident." The practice tab has retrieval questions, but they're self-graded (click to expand the answer, honor system). The `coach/mastery` endpoint is a stub (`{ status: 'not_implemented' }`). Checkpoint steps exist and `gradeCheckpointFlow` is built, but checkpoint results **don't flow back to `knowledge_progress`**.
+
+**Why it matters:** If mastery is self-reported, it's meaningless. The user can click "confident" on everything and the system believes them. The whole mastery-tracking UX becomes a checkbox chore, not evidence of growth. This will feel hollow fast.
+
+**Suggestion:** Wire checkpoint grades into `knowledge_progress`. When a user scores well on a checkpoint linked to a knowledge unit, auto-promote mastery. When they struggle, the system should note it (not punish — just keep the mastery level honest). The practice tab retrieval questions should also have a "Check Answer" flow (even a simple text-match or Genkit grading call) rather than pure self-assessment. Mastery should be *demonstrated*, not *declared*.
+
+---
+
+### 4. Experience Completion Is an Anticlimax
+
+**What's happening:** The user finishes an experience and sees a green checkmark, a "Congratulations!" message, and a "Back to Library" link. Behind the scenes, synthesis runs (narrative, facets, suggestions). But the user **doesn't see any of that**. They don't see "Here's what you learned." They don't see "Your marketing skills moved from beginner to practicing." They don't see "Here's what to do next." They just see... a congratulations screen.
+
+**Why it matters:** Completion is the single most motivating moment in a learning loop. It's where the user should feel growth. Right now the system computes growth (synthesis snapshots, facet extraction, suggestions) but keeps it all hidden. The user's reward is a static card.
+
+**Suggestion:** The completion screen should surface synthesis results: a 2-3 sentence summary of what was accomplished, any facets that were created or strengthened, and the top 1-2 next suggestions. This data already exists — `synthesis_snapshots` has `summary`, `key_signals`, and `next_candidates`. Just render them. Make completion feel like a level-up, not an exit.
+
+---
+
+### 5. The Two-App Problem — GPT Knows, App Doesn't Speak
+
+**What's happening:** The GPT (in ChatGPT) is the only entity that understands the user's journey holistically. The app itself has no voice. When you're in the workspace doing a challenge, the only intelligence is the tutor chat (which requires the user to actively ask). The app doesn't guide, nudge, or contextualize. It renders and records. If the user opens the app without talking to GPT first, they see a dashboard of separate things but nothing that says "here's what you should focus on today."
+
+**Why it matters:** The user shouldn't need to leave the app and go talk to ChatGPT to get coherence about their own learning journey. The app should have enough embedded intelligence (via Genkit, via pre-computed suggestions, via synthesis data) to give direction on its own.
+
+**Suggestion:** Add a lightweight "Focus" or "Today" section to the home page that uses already-computed data: the most recently active experience, the next uncompleted step, any pending suggestions from `synthesis_snapshots.next_candidates`, and the most recent knowledge domain with incomplete mastery. No new AI calls needed — just surface what the system already knows. The home page should answer: "What should I do right now?" without requiring a GPT conversation.
+
+---
+
+### 6. No "Welcome Back" Moment
+
+**What's happening:** When a user returns after days away, the home page shows the same static sections. There's no "Welcome back — you left off on Step 7 of Marketing Fundamentals" or "While you were away, 3 new knowledge units landed from your research request." The re-entry engine exists conceptually (re-entry contracts on experiences) but the app itself doesn't express temporal awareness.
+
+**Why it matters:** Returning users are the most fragile. If they open the app and have to figure out where they were, they'll close it. The system should reconstruct their context instantly.
+
+**Suggestion:** The "Active Journeys" section on home already shows active experiences. Enhance it: show the last-touched step title, time since last activity ("3 days ago"), and a direct "Resume Step 7 →" link. For knowledge, if new units arrived via MiraK webhook since last visit, show a "New research arrived" badge. This is all data that already exists — `experience_steps.completed_at` timestamps, `knowledge_units.created_at`, interaction event timestamps.
+
+---
+
+### 7. Navigation Is Cluttered with Legacy Plumbing
+
+**What's happening:** The sidebar has 9 items: Inbox, Library, Knowledge, Timeline, Profile, Arena, Icebox, Shipped, Killed. Several of these are from the original idea-management paradigm (Arena, Icebox, Shipped, Killed, Send, Drill). For a user who comes to Mira as a **mastery and learning platform**, most of these are noise. They want: Home, their Track/Goal, their Workspace, Knowledge, and Profile.
+
+**Why it matters:** Navigation signals what the product is. If the sidebar says "Icebox / Shipped / Killed," the product feels like a project tracker. If it says "Goals / Tracks / Knowledge / Profile," it feels like a growth platform. The current nav tells the story of how the product was built, not what it is.
+
+**Suggestion:** Consider a nav restructure for the learning-first identity. Primary nav: **Home, Tracks** (curriculum outlines / goal view), **Knowledge**, **Profile**. Secondary/collapsed: Library (all experiences), Timeline. Legacy surfaces (Arena, Icebox, Shipped, Killed, Inbox) move to a "Studio" or "Ideas" sub-section — or are accessed via the command bar (Cmd+K) only. This doesn't delete anything; it just re-prioritizes the navigation for the mastery use case.
+
+---
+
+### 8. The Coach Is Hidden Behind an Opt-In Gesture
+
+**What's happening:** The TutorChat is embedded in the `KnowledgeCompanion` component at the bottom of step renderers. But it only activates when the step has a `knowledge_domain` AND the user chooses to interact. It doesn't proactively offer help. If the user is struggling on a checkpoint (low score, multiple attempts), the coach doesn't surface. If the user has been on a step for 10 minutes without progress, nothing happens.
+
+**Why it matters:** A coach that only speaks when spoken to isn't a coach — it's a help desk. The Sprint 10 vision ("Coach as inline step tutor") is right, but the current implementation requires the user to know the coach exists and actively seek it out.
+
+**Suggestion:** Add gentle, non-intrusive coach surfacing triggers: after a failed checkpoint attempt ("Need help with this? →"), after extended dwell time on a step without interaction, or after the user opens a step linked to knowledge they haven't read yet ("You might want to review [Unit] first →"). These can be simple conditional UI elements — no new AI calls needed for the trigger, just for the actual coaching conversation.
+
+---
+
+### 9. Practice Tab Retrieval Questions Feel Like Flashcards, Not Growth
+
+**What's happening:** The Practice tab on knowledge units shows retrieval questions as expandable accordions. Click the question, the answer reveals. It's a self-test with no tracking, no scoring, no progression. The questions are Genkit-generated and often good, but the interaction model is passive.
+
+**Why it matters:** For mastery to feel real, practice needs stakes. Even small ones — "You got 4/5 right" or "You've practiced this unit 3 times, improving each time." Without any feedback loop, the Practice tab feels like a feature demo, not a learning tool.
+
+**Suggestion:** Add lightweight practice tracking: count how many times the user has attempted the practice questions, optionally add a simple "Did you get this right?" yes/no per question (still honor system, but now tracked), and show a micro-progress indicator on the Practice tab badge ("Practiced 2x"). This feeds into knowledge_progress and makes the practiced → confident transition feel earned.
+
+---
+
+### 10. Experiences Arrive Fully Formed — No User Agency in Shaping Them
+
+**What's happening:** The GPT creates an experience, it lands in the library as "Proposed," the user clicks "Accept & Start," and the experience activates as-is. The multi-pass enrichment APIs exist (update/add/remove/reorder steps), but they're GPT-facing. The user has no way to say "I want to skip this step" or "Can you make this challenge easier" or "I already know this — let me test out" from inside the app.
+
+**Why it matters:** If the user can't shape their own learning, the system feels imposed rather than collaborative. The GPT is making all the decisions about what to learn and how. The user is just a consumer of experiences.
+
+**Suggestion:** Add lightweight user agency: a "Skip" or "I already know this" option on steps (fires a skip interaction event that the GPT can read during re-entry), a "Make this harder/easier" button that queues a GPT enrichment pass, or a simple "Suggest changes" textarea on the experience overview. Even symbolic agency ("I chose to skip this") changes the dynamic from "I'm being taught" to "I'm directing my learning."
+
+---
+
+### Summary: The Core UX Risk
+
+The system is technically impressive — the backend tracks curriculum, mastery, facets, synthesis, knowledge links, and re-entry contracts. But **almost none of that intelligence is visible to the user**. The app renders experiences and records telemetry, but it doesn't reflect the user's growth back to them. The danger is that Mira feels like "a place where I do assignments" rather than "a system that's helping me master something."
+
+The fix isn't more backend capability — it's **surfacing what already exists**. Synthesis results on completion screens. Curriculum outlines on the home page. Knowledge links inside steps. Mastery earned through checkpoints. A coach that notices when you're stuck. A home page that says "focus here today." Most of this data is already computed and stored. The UX just needs to let it breathe.
