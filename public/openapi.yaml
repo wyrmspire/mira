@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Mira Studio API
-  description: Gateway for the Mira experience engine. All GPT operations go through 5 endpoints.
+  description: Gateway for the Mira experience engine. GPT operations go through 6 endpoints.
   version: 2.1.0
 servers:
   - url: https://mira-maddyup.vercel.app/  
@@ -311,3 +311,64 @@ paths:
                     type: string
         '400':
           description: Unknown capability (returns list of valid capabilities)
+
+  /api/knowledge:
+    get:
+      operationId: readKnowledge
+      summary: Read knowledge base content
+      description: Returns full knowledge units with content, thesis, key ideas, and metadata. Use this to read research results and reference them when building experiences.
+      parameters:
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by domain (e.g. "AI Business Strategy", "SaaS Strategy")
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by topic
+      responses:
+        '200':
+          description: Knowledge units grouped by domain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: object
+                    description: Units grouped by domain
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          title:
+                            type: string
+                          thesis:
+                            type: string
+                          content:
+                            type: string
+                            description: Full research content — read this to understand the topic deeply
+                          key_ideas:
+                            type: array
+                            items:
+                              type: string
+                          unit_type:
+                            type: string
+                            enum: [foundation, playbook]
+                          topic:
+                            type: string
+                          domain:
+                            type: string
+                  total:
+                    type: integer
+                  domains:
+                    type: object
+                    additionalProperties:
+                      type: integer
