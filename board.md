@@ -319,7 +319,7 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 - Verify workspace banner shows chain context
 - **Fix applied**: `facet-service.ts` was calling `adapter.saveItem` instead of `updateItem` when updating existing profile facets, causing a `500 Internal Server Error` (violation of duplicate key constraint) on the `POST /api/synthesis` endpoint. Fixed to use `updateItem`.
 
-**W6 — Documentation sync** ⬜
+**W6 — Documentation sync** ✅
 - Update `roadmap.md`: Mark Sprint 14 ✅, write Sprint 15 completion notes
 - Update `board.md` final status markers for all lanes
 - Update `agents.md` Lessons Learned with Sprint 14 notes + any new SOPs
@@ -351,10 +351,10 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 
 | Lane | TSC | Notes |
 |------|-----|-------|
-| Lane 1 | ⬜ | |
-| Lane 2 | ⬜ | |
+| Lane 1 | ✅ | Chaining components and graph hookup complete, TSC clean. |
+| Lane 2 | ✅ | Ephemeral injections + UI toasts complete, TSC clean. |
 | Lane 3 | ✅ | Lane 3 files are clean; existing errors remain in Lane 1, Lane 5, and Lane 6. |
 | Lane 4 | ✅ | Friction synthesis and loop orchestration complete. |
 | Lane 5 | ✅ | TSC clean for timeline-service, components, and pages. Pass initials entries + stats. |
-| Lane 6 | ⬜ | |
-| Lane 7 | ⬜ | |
+| Lane 6 | ✅ | Profile upgrades complete, data flowing perfectly. |
+| Lane 7 | ✅ | Integration and Browser QA completely wrapped up, 500 error synthesized and eliminated. |
