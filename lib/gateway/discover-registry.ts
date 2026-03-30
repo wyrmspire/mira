@@ -363,7 +363,8 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
         userId: 'UUID from state',
         boardId: 'optional UUID of the think board',
         label: 'string (max 100)',
-        description: 'optional string (max 500)',
+        description: 'optional string (short hover summary)',
+        content: 'optional string (long-form elaboration — can be paragraphs)',
         color: 'optional string (hex or tailwind color name)',
         position_x: 'number',
         position_y: 'number'
@@ -417,6 +418,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
         nodeId: 'UUID of the node to update',
         label: 'optional string',
         description: 'optional string',
+        content: 'optional string',
         color: 'optional string'
       }
     },
@@ -467,8 +469,77 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       }
     },
     when_to_use: 'When pruning connections on a mind map.'
+  }),
+ 
+  create_map_cluster: () => ({
+    capability: 'create_map_cluster',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a central hub node and multiple child nodes connected to it in one operation. Radius-based layout is handled automatically.',
+    schema: {
+      type: 'map_cluster',
+      payload: {
+        userId: 'UUID from state',
+        boardId: 'optional UUID of the think board',
+        centerNode: {
+          label: 'string (max 100)',
+          description: 'optional string',
+          content: 'optional string',
+          color: 'optional string',
+          position_x: 'number (center X)',
+          position_y: 'number (center Y)'
+        },
+        childNodes: [
+          {
+            label: 'string',
+            description: 'optional string',
+            content: 'optional string',
+            color: 'optional string'
+          }
+        ]
+      }
+    },
+    example: {
+      type: 'map_cluster',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        centerNode: {
+          label: 'SaaS Business Model',
+          description: 'High level components of a SaaS company.',
+          color: '#3b82f6',
+          position_x: 0,
+          position_y: 0
+        },
+        childNodes: [
+          { label: 'Unit Economics', description: 'LTV, CAC, Churn' },
+          { label: 'Product Development', description: 'Roadmap, Tech Stack' },
+          { label: 'Go-To-Market', description: 'Sales, Marketing' }
+        ]
+      }
+    },
+    when_to_use: 'When you want to expand a concept into multiple sub-topics at once. Highly efficient for building trees.'
+  }),
+ 
+  read_map: () => ({
+    capability: 'read_map',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Fetch the full content (nodes and edges) of a mind map. Use this before updating or expanding a map if you dont have the full context.',
+    schema: {
+      action: 'read_map',
+      payload: {
+        boardId: 'UUID of the think board to read'
+      }
+    },
+    example: {
+      action: 'read_map',
+      payload: {
+        boardId: 'board-uuid-123'
+      }
+    },
+    when_to_use: 'When you need to see the current state of a mind map to decide where to add new nodes or how to restructure it.',
+    relatedCapabilities: ['create_map_node', 'create_map_cluster', 'update_map_node']
   })
 };
+
 
 /**
  * Returns capability details from the registry.

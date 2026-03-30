@@ -10,6 +10,7 @@ interface ThinkNodeDrawerProps {
       description?: string;
       color?: string;
       nodeType?: string;
+      metadata?: Record<string, any>;
     }
   }
   onClose: () => void
@@ -49,11 +50,9 @@ export function ThinkNodeDrawer({ node, onClose }: ThinkNodeDrawerProps) {
     const DEFAULT_USER_ID = 'a0000000-0000-0000-0000-000000000001';
     
     try {
-      let endpoint = '';
       let payload = {};
 
       if (type === 'idea') {
-        endpoint = '/api/ideas';
         payload = {
           userId: DEFAULT_USER_ID,
           title: label,
@@ -61,7 +60,6 @@ export function ThinkNodeDrawer({ node, onClose }: ThinkNodeDrawerProps) {
           gptSummary: description || label
         };
       } else if (type === 'goal') {
-        endpoint = '/api/goals';
         payload = {
           userId: DEFAULT_USER_ID,
           title: label,
@@ -69,20 +67,50 @@ export function ThinkNodeDrawer({ node, onClose }: ThinkNodeDrawerProps) {
           status: 'proposed'
         };
       } else if (type === 'knowledge') {
-        // Simple bridge for now
-        alert('Refinement flow triggered for Knowledge Unit creation.');
-        return;
+        payload = {
+          userId: DEFAULT_USER_ID,
+          title: label,
+          content: description || `Knowledge unit extracted from mind map: ${label}`,
+          topic: label,
+          domain: 'Mind Map',
+          unit_type: 'guide',
+          thesis: description ? description.split('.')[0] : label
+        };
       }
 
-      const resp = await fetch(endpoint, {
+      // 1. CREATE Entity via Gateway
+      const createResp = await fetch('/api/gpt/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ type, payload })
       });
       
-      if (!resp.ok) throw new Error(`Export failed for ${type}`);
+      if (!createResp.ok) throw new Error(`Export failed for ${type}`);
+      const createdEntity = await createResp.json();
+      const entityId = createdEntity.id;
+
+      // 2. TWO-WAY BINDING: Update the node with metadata
+      const updateResp = await fetch('/api/gpt/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update_map_node',
+          payload: {
+            nodeId: node.id,
+            nodeType: 'exported',
+            metadata: {
+              ...node.data.metadata,
+              linkedEntityId: entityId,
+              linkedEntityType: type
+            }
+          }
+        })
+      });
+
+      if (!updateResp.ok) throw new Error(`Metadata update failed for node ${node.id}`);
       
-      alert(`${type.charAt(0).toUpperCase() + type.slice(1)} created successfully!`);
+      alert(`${type.charAt(0).toUpperCase() + type.slice(1)} created successfully! Node linked.`);
+      window.location.reload(); 
     } catch (err) {
       console.error(`Export failed for ${type}:`, err);
       alert(`Export failed for ${type}.`);
@@ -146,13 +174,41 @@ export function ThinkNodeDrawer({ node, onClose }: ThinkNodeDrawerProps) {
       </div>
 
       <div className="mt-8 pt-6 border-t border-[#1e1e2e] space-y-6">
-        <button 
-          onClick={handleSave}
-          disabled={isSaving}
-          className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
-        >
-          {isSaving ? 'Processing...' : 'Save Changes'}
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl transition-all shadow-lg active:scale-[0.98] disabled:opacity-50"
+          >
+            {isSaving ? 'Processing...' : 'Save Changes'}
+          </button>
+          <button 
+            onClick={async () => {
+              if (confirm('Delete this node and its connections?')) {
+                try {
+                  const resp = await fetch('/api/gpt/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      action: 'delete_map_node',
+                      payload: { nodeId: node.id }
+                    })
+                  })
+                  if (resp.ok) {
+                    onClose()
+                    window.location.reload()
+                  }
+                } catch (err) {
+                  console.error('Delete failed:', err)
+                }
+              }
+            }}
+            className="w-14 h-14 bg-[#1e1e2e] hover:bg-red-900/30 text-[#64748b] hover:text-red-400 border border-[#2e2e3e] hover:border-red-900/50 rounded-2xl flex items-center justify-center transition-all"
+            title="Delete Node"
+          >
+            🗑
+          </button>
+        </div>
 
         <div className="space-y-3">
           <h3 className="text-[10px] font-bold text-[#4a4a6a] uppercase tracking-widest pl-1">Bridge to Studio</h3>

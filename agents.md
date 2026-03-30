@@ -203,6 +203,9 @@ components/
   common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
                            FocusTodayCard (home page resume link),
                            ResearchStatusBadge (MiraK research arrival indicator)
+  think/                 ← ThinkNode, ThinkCanvas (React Flow mind map)
+  drawers/               ← ThinkNodeDrawer (node detail editor)
+  layout/                ← SlideOutDrawer (global drawer system)
   timeline/              ← TimelineEventCard, TimelineFilterBar
   profile/               ← FacetCard, DirectionSummary
   dev/                   ← GPT send form, dev tools
@@ -268,7 +271,7 @@ lib/
                            agent-runs, external-refs, github-factory, github-sync,
                            experience, interaction, synthesis, graph, timeline, facet,
                            draft, knowledge, curriculum-outline, goal, skill-domain,
-                           home-summary services
+                           home-summary, mind-map services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
   validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal validators
@@ -283,6 +286,7 @@ types/
   curriculum.ts          ← CurriculumOutline, StepKnowledgeLink
   goal.ts                ← Goal, GoalRow, GoalStatus (Sprint 13)
   skill.ts               ← SkillDomain, SkillDomainRow, SkillMasteryLevel (Sprint 13)
+  mind-map.ts            ← ThinkBoard, ThinkNode, ThinkEdge
 
 content/                 ← Product copy markdown
 docs/
@@ -635,6 +639,20 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - ✅ GPT instructions must explain the reality of Mira's use: it is an experience engine, a goal-driven learning/operating system with skill domains, curriculum outlines, and experiences. Ensure the GPT understands the *purpose* of the app, not just the function signatures.
 - Why: When instructions are reduced to pure mechanical tool execution, the Custom GPT treats the API like a database wrapper rather than orchestrating a cohesive user experience. Context matters.
 
+### SOP-36: React Flow event handlers — use named props, not `event.detail` hacks
+**Learned from**: Sprint 18 — double-click to create node was silently broken
+
+- ❌ `onPaneClick={(e) => { if (e.detail === 2) ... }}` (checking click count manually)
+- ✅ `onDoubleClick={handler}` or `onNodeDoubleClick={handler}` (dedicated React Flow props)
+- Why: React Flow's internal event handling can interfere with `event.detail` counts. The library exposes dedicated props for double-click, context menu, etc. Always use the named prop, never detect double-click imperatively.
+
+### SOP-37: OpenAPI enum values must match gateway-router switch cases
+**Learned from**: Sprint 18 — GPT couldn't discover mind map update actions
+
+- ❌ Gateway router handles `update_map_node`, `delete_map_node`, `delete_map_edge` but OpenAPI `action` enum doesn't list them.
+- ✅ Every `case` in `gateway-router.ts` `dispatchCreate` and `dispatchUpdate` must appear in the corresponding `enum` in `public/openapi.yaml`.
+- Why: Custom GPT reads the OpenAPI schema to learn what actions are valid. Missing enum values = invisible capabilities. This is the inverse of SOP-34 — the schema must also match the router, not just the contracts.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -662,4 +680,5 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - **2026-03-29**: Sprint 14 completed (Surface the Intelligence). All 7 lanes done. Fixed discover-registry/validator alignment for all 7 step types (SOP-32). Fixed mastery N+1 pattern in `computeSkillMastery()` (SOP-30). Removed dead `outlineIds` from goal creation + migration 008. Updated OpenAPI with goalId on plan endpoint. Added `plan_builder` to discover registry. Skill Tree cards upgraded to micro-roadmaps with evidence-needed and next-experience links. Focus Today uses priority heuristic (scheduled > mastery proximity > failed checkpoints > recency). Checkpoint shows mastery impact callout + toast. Coach surfaces with question-level context after failed checkpoints. Completion screen shows "What Moved" mastery transitions and "What You Did" activity summary. No new SOPs — this was a pure wiring/polish sprint.
 - **2026-03-29**: Sprint 15 completed (Chained Experiences + Spontaneity). All 7 lanes done. Fixed 500 error on synthesis endpoint (duplicate key constraint in `facet-service` upsert). Updated `storage.ts` with Sprint 10+ collections to immunize JSON fallback users against crashes. Clarified roadmap numbering going forward: Sprint 16 is definitively the Coder Pipeline (Proposal → Realization — formerly Sprint 14). Sprint 17 is GitHub Hardening.
 - **2026-03-30**: Sprint 16 completed (GPT Alignment). Fixed reentry trigger enum drift (`explicit` → `manual`, added `time`). Fixed contextScope enum drift. Added `study` to resolution mode contract. Wired knowledge write + skill domain CRUD through GPT gateway. Rewrote GPT instructions with 5-mode structure from Mira's self-audit. Added SOP-34 (GPT Contract Alignment).
-- **2026-03-30**: Sprint 17 boardinit (System Fixes & Mind Map Station). Added SOP-35 (GPT Instructions Must Preserve Product Reality). 6 lanes structured for schema fixes and porting the Think Tank module (React Flow) from the Workcoms architecture into Mira's existing `think_` tables.
+- **2026-03-30 (Sprint 17)**: Addressed critical persistence normalization issues (camelCase vs snake_case). Added SOP-35 (GPT Instructions Must Preserve Product Reality) meaning GPT must act as an Operating System orchestrator instead of functionally blindly creating items. Ported 'Think Tank' to Mira's 'Mind Map Station' for node-based visual orchestration.
+- **2026-03-30 (Sprint 18)**: Refined Mind Map logic to cluster large batch operations and minimize UI lag. Fixed double-click node creation (SOP-36). Fixed OpenAPI enum drift for mind map actions (SOP-37). Added two-way metadata binding on node export. Added entity badge rendering on exported nodes. Updated GPT instructions with spatial layout rails and `read_map` protocol. Added mind-map components to repo map.

@@ -10,6 +10,7 @@ import { runFlowSafe } from '@/lib/ai/safe-flow'
 import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
 import { getKnowledgeSummaryForGPT } from './knowledge-service'
 import { getFacetsBySnapshot } from './facet-service'
+import { getBoardSummaries } from './mind-map-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -138,6 +139,13 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
     (packet as any).knowledgeSummary = await getKnowledgeSummaryForGPT(userId)
   } catch (error) {
     (packet as any).knowledgeSummary = null
+  }
+
+  // W1: Injected for Lane 2 - Mind Map summaries
+  try {
+    packet.activeMaps = await getBoardSummaries(userId)
+  } catch (error) {
+    packet.activeMaps = []
   }
 
   return packet

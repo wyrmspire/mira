@@ -1,11 +1,16 @@
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { getBoards, createBoard, getBoardGraph } from '@/lib/services/mind-map-service'
 import { ThinkCanvas } from '@/components/think/think-canvas'
+import { ThinkBoardSwitcher } from '@/components/think/think-board-switcher'
 import { COPY } from '@/lib/studio-copy'
 
 export const dynamic = 'force-dynamic'
 
-export default async function MapPage() {
+interface MapPageProps {
+  searchParams: { boardId?: string }
+}
+
+export default async function MapPage({ searchParams }: MapPageProps) {
   const userId = DEFAULT_USER_ID
   let boards = await getBoards(userId)
 
@@ -15,7 +20,8 @@ export default async function MapPage() {
     boards = [newBoard]
   }
 
-  const activeBoard = boards[0]
+  const activeBoardId = searchParams.boardId || boards[0].id
+  const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0]
   const { nodes, edges } = await getBoardGraph(activeBoard.id)
 
   return (
@@ -26,9 +32,7 @@ export default async function MapPage() {
           <p className="text-sm text-[#94a3b8]">{COPY.mindMap.subheading}</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="px-3 py-1 text-xs font-semibold rounded-full bg-[#312e81]/30 text-[#818cf8] border border-[#4338ca]/30">
-            {activeBoard.name}
-          </span>
+          <ThinkBoardSwitcher boards={boards} activeBoardId={activeBoard.id} />
         </div>
       </div>
       

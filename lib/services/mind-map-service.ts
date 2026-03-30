@@ -1,43 +1,7 @@
 import { generateId } from '@/lib/utils';
 import { getStorageAdapter } from '@/lib/storage-adapter';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface ThinkBoard {
-  id: string;
-  workspaceId: string;
-  name: string;
-  isArchived: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ThinkNode {
-  id: string;
-  boardId: string;
-  parentNodeId?: string | null;
-  label: string;
-  description: string;
-  color: string;
-  positionX: number;
-  positionY: number;
-  nodeType: 'root' | 'manual' | 'ai_generated' | 'exported';
-  metadata: Record<string, any>;
-  createdBy?: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ThinkEdge {
-  id: string;
-  boardId: string;
-  sourceNodeId: string;
-  targetNodeId: string;
-  edgeType: 'manual' | 'ai_generated';
-  createdAt: string;
-}
+import { ThinkBoard, ThinkNode, ThinkEdge } from '@/types/mind-map';
+import { MapSummary } from '@/types/synthesis';
 
 // ---------------------------------------------------------------------------
 // DB ↔ TS normalization
@@ -72,6 +36,7 @@ function nodeFromDB(row: any): ThinkNode {
     parentNodeId: row.parent_node_id,
     label: row.label,
     description: row.description ?? '',
+    content: row.content ?? '',
     color: row.color ?? '#3f3f46',
     positionX: Number(row.position_x ?? 0),
     positionY: Number(row.position_y ?? 0),
@@ -90,6 +55,7 @@ function nodeToDB(node: Partial<ThinkNode>): Record<string, any> {
   if (node.parentNodeId !== undefined) row.parent_node_id = node.parentNodeId;
   if (node.label !== undefined) row.label = node.label;
   if (node.description !== undefined) row.description = node.description;
+  if (node.content !== undefined) row.content = node.content;
   if (node.color !== undefined) row.color = node.color;
   if (node.positionX !== undefined) row.position_x = node.positionX;
   if (node.positionY !== undefined) row.position_y = node.positionY;
@@ -145,6 +111,34 @@ export async function getBoards(userId: string): Promise<ThinkBoard[]> {
   return rows.map(boardFromDB);
 }
 
+/**
+ * Fetches a lightweight summary of all active boards for the user.
+ * Used to inject into the GPT state packet.
+ */
+export async function getBoardSummaries(userId: string): Promise<MapSummary[]> {
+  const boards = await getBoards(userId);
+  const activeBoards = boards.filter(b => !b.isArchived);
+  
+  const summaries = await Promise.all(activeBoards.map(async (board) => {
+    // Instead of getBoardGraph, we query counts only if possible, 
+    // but the adapter is thin, so we just query and count.
+    const adapter = getStorageAdapter();
+    const [nodes, edges] = await Promise.all([
+      adapter.query<any>('think_nodes', { board_id: board.id }),
+      adapter.query<any>('think_edges', { board_id: board.id }),
+    ]);
+
+    return {
+      id: board.id,
+      name: board.name,
+      nodeCount: nodes.length,
+      edgeCount: edges.length,
+    };
+  }));
+
+  return summaries;
+}
+
 export async function createBoard(userId: string, name: string): Promise<ThinkBoard> {
   const adapter = getStorageAdapter();
   const workspaceId = await getWorkspaceId(userId);
@@ -192,6 +186,7 @@ export async function createNode(userId: string, boardId: string, node: Partial<
     parentNodeId: node.parentNodeId ?? null,
     label: node.label ?? 'New Node',
     description: node.description ?? '',
+    content: node.content ?? '',
     color: node.color ?? '#3f3f46',
     positionX: node.positionX ?? 0,
     positionY: node.positionY ?? 0,

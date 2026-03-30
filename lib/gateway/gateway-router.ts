@@ -77,6 +77,7 @@ export async function dispatchCreate(type: string, payload: any) {
       return createNode(payload.userId, boardId, {
         label: payload.label,
         description: payload.description,
+        content: payload.content,
         color: payload.color,
         positionX: payload.position_x,
         positionY: payload.position_y,
@@ -96,6 +97,70 @@ export async function dispatchCreate(type: string, payload: any) {
         }
       }
       return createEdge(edgeBoardId, payload.sourceNodeId, payload.targetNodeId);
+    }
+    case 'map_cluster': {
+      const { createNode, createEdge, getBoards, createBoard } = await import('@/lib/services/mind-map-service');
+      const { userId, boardId: providedBoardId, centerNode, childNodes } = payload;
+      
+      let boardId = providedBoardId;
+      if (!boardId) {
+        const boards = await getBoards(userId);
+        if (boards.length > 0) {
+          boardId = boards[0].id;
+        } else {
+          const newBoard = await createBoard(userId, 'Default Board');
+          boardId = newBoard.id;
+        }
+      }
+
+      // 1. Create center node
+      const center = await createNode(userId, boardId, {
+        label: centerNode.label,
+        description: centerNode.description,
+        content: centerNode.content,
+        color: centerNode.color,
+        positionX: centerNode.position_x ?? 0,
+        positionY: centerNode.position_y ?? 0,
+        nodeType: 'ai_generated'
+      });
+
+      // 2. Create child nodes with radial layout
+      const radius = 180; // Optimized spacing
+      const createdChildren = [];
+      const createdEdges = [];
+
+      if (childNodes && Array.isArray(childNodes)) {
+        const count = childNodes.length;
+        for (let i = 0; i < count; i++) {
+          const child = childNodes[i];
+          const angle = (2 * Math.PI * i) / count;
+          const x = (center.positionX ?? 0) + radius * Math.cos(angle);
+          const y = (center.positionY ?? 0) + radius * Math.sin(angle);
+
+          const newChild = await createNode(userId, boardId, {
+            label: child.label,
+            description: child.description,
+            content: child.content,
+            color: child.color,
+            positionX: x,
+            positionY: y,
+            nodeType: 'ai_generated',
+            parentNodeId: center.id
+          });
+
+          // 3. Auto-link edge from center to child
+          const edge = await createEdge(boardId, center.id, newChild.id);
+          
+          createdChildren.push(newChild);
+          createdEdges.push(edge);
+        }
+      }
+
+      return {
+        center,
+        children: createdChildren,
+        edges: createdEdges
+      };
     }
     default:
       throw new Error(`Unknown create type: "${type}"`);
@@ -166,7 +231,10 @@ export async function dispatchUpdate(action: string, payload: any) {
       return updateNode(payload.nodeId, {
         label: payload.label,
         description: payload.description,
+        content: payload.content,
         color: payload.color,
+        nodeType: payload.nodeType,
+        metadata: payload.metadata,
       });
 
     case 'delete_map_node':

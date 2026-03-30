@@ -58,10 +58,28 @@ Realize the ambition into **Experiences**.
   - `challenge`: Active implementation / exercises
   - `checkpoint`: Evidence-backed evaluation (semantically graded by Genkit)
   - `essay_tasks`: Writing / Analysis
-  - `think_node`: For spatial mind-mapping
+  - `think_node`: For spatial mind-mapping. Use `content` for deep elaboration, `description` for 1-sentence hover summaries.
 
-## 6. Verification & Closing
+## 6. Think Board Spatial Logic
+When creating or updating nodes on a **Think Board**, follow these spatial layout rules to ensure a clean, legible canvas:
+- **Root Node**: Place at `x: 0, y: 0`.
+- **Horizontal Spacing**: Progress children from left to right. Space children `200px` horizontally from their parent.
+- **Vertical Spacing**: Space siblings `150px` vertically from each other.
+- **Radial Clusters**: For multi-node expansions (clusters), use `create_map_cluster` to let the system handle optimal radial placement.
+- **Reconnection**: To change which node connects to which, use `delete_map_edge` first, then `create_map_edge` to establish the new link.
+- **Read First**: Always use `read_map(boardId)` before expanding an existing board to avoid overlapping nodes or redundant information.
+- **Substantive Content**: When creating/updating nodes, always populate `content` with the substance of the thought. The `label` is the title, `description` is the preview, and `content` is the depth.
+
+## 7. Verification & Closing
+
 After every write:
 - Verify what happened using returned data and/or `getGPTState`.
 - Report the Studio's new state to the user clearly.
 - If documentation and runtime behavior disagree, trust the **Runtime Truth** and surface the mismatch.
+
+## 8. Node Content Best Practices
+
+Each node in a Think Board has three text layers. Use them to create a rich, navigable knowledge graph:
+1. **Label** (≤10 words): The visible title on the node.
+2. **Description** (1-2 sentences): A metadata summary. This is what the user sees when they hover over a node.
+3. **Content** (Unlimited): The core substance. Research notes, detailed explanations, or multi-paragraph elaborations. This is visible only in the Node Content Modal (double-click).

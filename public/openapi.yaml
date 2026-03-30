@@ -95,7 +95,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [create_outline, dispatch_research, assess_gaps]
+                  enum: [create_outline, dispatch_research, assess_gaps, read_map]
                   description: The planning action to perform.
                 topic:
                   type: string
@@ -128,6 +128,9 @@ paths:
                 userId:
                   type: string
                   default: "a0000000-0000-0000-0000-000000000001"
+                boardId:
+                  type: string
+                  description: For action=read_map — the board UUID to read.
       responses:
         '200':
           description: Success
@@ -153,7 +156,7 @@ paths:
               properties:
                 type:
                   type: string
-                  enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge]
+                  enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge, map_cluster]
                   description: The entity type to create.
                 templateId:
                   type: string
@@ -231,7 +234,10 @@ paths:
                   description: For map nodes — label text.
                 description:
                   type: string
-                  description: For map nodes — detailed description.
+                  description: For map nodes — short summary visible on hover (1-2 sentences).
+                content:
+                  type: string
+                  description: For map nodes — long-form elaboration text (can be paragraphs).
                 color:
                   type: string
                   description: For map nodes — color (hex or tailwind).
@@ -247,6 +253,24 @@ paths:
                 targetNodeId:
                   type: string
                   description: For map edges — target node UUID.
+                centerNode:
+                  type: object
+                  description: For map clusters — central hub node.
+                  properties:
+                    label: { type: string }
+                    description: { type: string }
+                    color: { type: string }
+                    position_x: { type: number }
+                    position_y: { type: number }
+                childNodes:
+                  type: array
+                  description: For map clusters — children of the center node.
+                  items:
+                    type: object
+                    properties:
+                      label: { type: string }
+                      description: { type: string }
+                      color: { type: string }
       responses:
         '201':
           description: Created
@@ -269,7 +293,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain]
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge]
                   description: The mutation action to perform.
                 experienceId:
                   type: string
@@ -307,6 +331,28 @@ paths:
                 domainId:
                   type: string
                   description: For action=update_skill_domain — the domain ID to update or link to.
+                nodeId:
+                  type: string
+                  description: For action=update_map_node or delete_map_node — the node UUID.
+                edgeId:
+                  type: string
+                  description: For action=delete_map_edge — the edge UUID.
+                label:
+                  type: string
+                  description: For action=update_map_node — optional new label.
+                description:
+                  type: string
+                  description: For action=update_map_node — optional new hover summary.
+                content:
+                  type: string
+                  description: For action=update_map_node — optional long-form content update.
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: For action=update_map_node — optional metadata (linkedEntityId, linkedEntityType).
+                nodeType:
+                  type: string
+                  description: For action=update_map_node — optional nodeType override (e.g. 'exported').
       responses:
         '200':
           description: Updated
@@ -359,7 +405,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, update_map_node, delete_map_node, delete_map_edge"
+          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge"
         - name: step_type
           in: query
           required: false

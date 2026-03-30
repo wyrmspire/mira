@@ -19,9 +19,12 @@ export type DiscoverCapability =
   | 'skill_domain'
   | 'create_map_node'
   | 'create_map_edge'
+  | 'create_map_cluster'
   | 'update_map_node'
   | 'delete_map_node'
-  | 'delete_map_edge';
+  | 'delete_map_edge'
+  | 'read_map';
+
 
 /**
  * Response shape for the discovery endpoint.

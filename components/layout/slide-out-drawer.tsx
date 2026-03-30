@@ -47,10 +47,10 @@ export function SlideOutDrawer() {
         className={`fixed inset-y-0 right-0 w-full max-w-sm bg-[#12121a] border-l border-[#1e1e2e] shadow-2xl z-50 transition-transform duration-300 transform ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
       >
         <div className="h-full flex flex-col p-6 overflow-y-auto custom-scrollbar">
-          {content?.type === 'think_node' && (
-            <ThinkNodeDrawer node={content.data} onClose={() => setIsOpen(false)} />
+          {/* Drawer content types will be added here */}
+          {content?.type === 'generic' && (
+            <div>Generic drawer content not implemented</div>
           )}
-          {/* Add more types if needed later */}
         </div>
       </div>
     </>

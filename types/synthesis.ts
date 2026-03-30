@@ -18,6 +18,13 @@ export interface SynthesisSnapshot {
   created_at: string;
 }
 
+export interface MapSummary {
+  id: string;
+  name: string;
+  nodeCount: number;
+  edgeCount: number;
+}
+
 export interface GPTStatePacket {
   latestExperiences: ExperienceInstance[];
   activeReentryPrompts: ActiveReentryPrompt[];
@@ -31,4 +38,6 @@ export interface GPTStatePacket {
     suggestedOpeningTopic: string;
   };
   reentryCount?: number;
+  activeMaps?: MapSummary[];
 }
+

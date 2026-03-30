@@ -260,5 +260,12 @@ export const COPY = {
     heading: 'Mind Map',
     subheading: 'Your visual thinking board.',
     emptyState: 'Create your first thinking board to start mapping.',
+    actions: {
+      createBoard: 'New Board',
+      switchBoard: 'Switch Board',
+    },
+    labels: {
+      activeBoard: 'Active Map',
+    }
   },
 }
