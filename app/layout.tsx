@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: COPY.app.tagline,
 }
 
+import { ChangesFloater } from '@/components/shell/ChangesFloater'
+
 export default function RootLayout({
   children,
 }: {
@@ -17,6 +19,7 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className="min-h-screen bg-[#0a0a0f] text-[#e2e8f0] antialiased">
         {children}
+        <ChangesFloater />
       </body>
     </html>
   )

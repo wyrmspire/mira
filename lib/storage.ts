@@ -40,6 +40,9 @@ export interface StudioStore {
   step_knowledge_links?: any[]
   knowledge_units?: any[]
   knowledge_progress?: any[]
+  
+  // Sprint 17 (Changes Tracker)
+  change_reports?: any[]
 }
 
 // Full paths for fs operations
@@ -71,6 +74,7 @@ const STORE_DEFAULTS: Partial<StudioStore> = {
   step_knowledge_links: [],
   knowledge_units: [],
   knowledge_progress: [],
+  change_reports: [],
 }
 
 export function readStore(): StudioStore {

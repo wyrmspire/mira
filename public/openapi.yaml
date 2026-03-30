@@ -279,6 +279,41 @@ paths:
         '400':
           description: Validation error
 
+  /api/gpt/changes:
+    get:
+      operationId: getChangeReports
+      summary: View user-reported UI/UX changes and bugs
+      description: Returns all open feedback, bugs, and change requests reported by the user via the Changes floater. Use this to help the user scope the next version, track UI issues, or answer questions about the app's current state. Includes the exact URL/page they were on when they reported it.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum: [bug, ux, idea, change, comment]
+                        url:
+                          type: string
+                        content:
+                          type: string
+                        status:
+                          type: string
+                          enum: [open, resolved]
+                        createdAt:
+                          type: string
+        '500':
+          description: Server Error
+
   /api/gpt/discover:
     get:
       operationId: discoverCapability
