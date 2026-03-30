@@ -18,317 +18,203 @@
 | Sprint 12 | Learning Loop Productization — Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes done. Three emotional moments fully functional. |
 | Sprint 13 | Goal OS + Skill Map — Goal entity, Skill domains, mastery engine, GPT goal intake, Skill Tree UI, batch endpoints, home summary optimization | TSC ✅ Build ✅ | ✅ Complete — Gate 0 + 7 lanes. Migration 008, Goal/Skill CRUD, mastery engine, SkillTreeGrid, batch endpoints, home-summary-service. |
 | Sprint 14 | Surface the Intelligence — Schema truth pass, Skill Tree upgrade, Focus Today heuristics, mastery visibility, proactive coach, completion retrospective | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes. Fixed discover-registry/validator alignment (7 step types), mastery N+1 (SOP-30), OpenAPI goalId, dead outlineIds. All W items verified. |
+| Sprint 15 | Chained Experiences + Spontaneity — Experience graph UI, ephemeral injection, re-entry engine hardening, friction loops, timeline page, profile upgrade | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes. Chain suggestions, EphemeralToast, ReentryPromptCard, auto-loops, timeline filtering, profile mastery trajectories. |
 
 ---
 
-# Sprint 15 — Chained Experiences + Spontaneity
+# Sprint 16 — GPT Instruction Alignment + Knowledge Gateway
 
-> **Goal:** Make the app feel **alive**. Experiences should chain into each other, GPT should be able to interrupt with ephemerals, the re-entry engine should fire at the right moments, and two new surfaces — Timeline and Profile — should make the user's full journey visible.
+> **Goal:** Align the GPT's instruction set and schema with the full Sprint 15 codebase. Fix schema enum drift. Give GPT the ability to write/update knowledge units directly. Wire skill domain CRUD through the GPT gateway. Rewrite instructions from Mira's self-audit plus code-verified patches.
 >
-> **The test:** (1) Completing a Questionnaire surfaces a Plan Builder suggestion via the experience graph. (2) GPT can inject an ephemeral challenge that renders instantly as a toast-like card. (3) Re-entry contract fires after completion and shows in GPT state. (4) Friction level is computed and returned in the synthesis packet. (5) Timeline page shows full chronological event history including ephemerals. (6) Profile page reflects accumulated AI-extracted facets.
+> **The test:** (1) OpenAPI reentry trigger/contextScope enums match the TypeScript contract. (2) GPT instructions cover all 5 conversation modes, step payload gotchas, re-entry triggers, auto-loops, mastery pipeline, chain awareness, and knowledge write protocol. (3) GPT can create knowledge units via `createEntity(type="knowledge")`. (4) GPT can manage skill domains via `createEntity(type="skill_domain")` and `updateEntity(action="update_skill_domain")`. (5) Discover registry has entries for `create_knowledge` and `skill_domain` capabilities.
 >
-> **Core principle:** The backend infrastructure (graph service, progression rules, re-entry engine, timeline service, facet service) already exists from Sprints 5–7. This sprint is about **wiring it into the lived UX** and making it drive user behavior, not just sit as queryable data.
+> **Core principle:** The app is already doing 80% of the hard work. The instructions and schema just need to catch up so the GPT uses the full surface instead of 10% of it.
 
 ---
 
 ## Dependency Graph
 
 ```
-Lane 1:  [W1–W4 EXPERIENCE CHAINING + GRAPH UI]    (independent — library, completion, workspace)
-Lane 2:  [W1–W4 EPHEMERAL INJECTION SYSTEM]         (independent — home, workspace, GPT gateway)
-Lane 3:  [W1–W4 RE-ENTRY ENGINE + FOLLOW-UPS]       (independent — engine, GPT state, home)
-Lane 4:  [W1–W3 FRICTION SYNTHESIS + WEEKLY LOOPS]   (independent — progression engine, graph service)
-Lane 5:  [W1–W4 TIMELINE PAGE]                       (independent — new page, existing service)
-Lane 6:  [W1–W4 PROFILE PAGE UPGRADE]                (independent — existing page, facet service)
-                                    │
-                                    ↓
-ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
+Lane 1:  [W1–W5 SCHEMA + GATEWAY CODE]     (code changes — OpenAPI, discover registry, gateway router, knowledge route)
+Lane 2:  [W1–W4 GPT INSTRUCTIONS REWRITE]   (docs only — gpt-instructions.md)
+Lane 3:  [W1–W5 INTEGRATION + VERIFICATION] (depends on L1+L2 ── verify contracts, TSC, build)
 ```
+
+Lane 1 and Lane 2 are **fully parallel** (no shared files).
+Lane 3 depends on both finishing first.
 
 ---
 
-## Sprint 15 Ownership Zones
+## Sprint 16 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| Experience graph UI | `components/experience/CompletionScreen.tsx` (chain suggestions section), `app/library/LibraryClient.tsx` (continue/related links), `app/workspace/[instanceId]/WorkspaceClient.tsx` (chain context banner), `lib/services/graph-service.ts` (completion wiring) | Lane 1 |
-| Ephemeral injection | `components/experience/EphemeralToast.tsx` (NEW), `app/page.tsx` (ephemeral section), `app/api/experiences/inject/route.ts` (notification flag), `components/experience/ExperienceRenderer.tsx` (ephemeral auto-chain) | Lane 2 |
-| Re-entry engine | `lib/experience/reentry-engine.ts`, `lib/services/synthesis-service.ts` (GPT state packet), `app/page.tsx` (re-entry prompts section), `components/common/ReentryPromptCard.tsx` (NEW) | Lane 3 |
-| Friction + loops | `lib/experience/progression-engine.ts` (friction in synthesis), `lib/services/graph-service.ts` (loop creation), `lib/services/experience-service.ts` (recurring instance), `types/experience.ts` (recurring fields) | Lane 4 |
-| Timeline page | `app/timeline/page.tsx`, `app/timeline/TimelineClient.tsx`, `components/timeline/TimelineEventCard.tsx`, `components/timeline/TimelineFilterBar.tsx`, `lib/services/timeline-service.ts` | Lane 5 |
-| Profile page | `app/profile/page.tsx`, `app/profile/ProfileClient.tsx`, `components/profile/DirectionSummary.tsx`, `components/profile/FacetCard.tsx`, `components/profile/SkillTrajectory.tsx` (NEW) | Lane 6 |
-| Integration | All pages (read-only browser QA), `board.md`, `agents.md`, `roadmap.md` | Lane 7 |
+| Schema + Gateway | `public/openapi.yaml`, `lib/gateway/discover-registry.ts`, `lib/gateway/gateway-router.ts`, `app/api/gpt/create/route.ts`, `app/api/gpt/update/route.ts`, `lib/contracts/resolution-contract.ts` | Lane 1 |
+| GPT Instructions | `gpt-instructions.md` | Lane 2 |
+| Integration | `board.md`, `AGENTS.md`, all files (read-only verification) | Lane 3 |
 
 ---
 
-## Lane 1 — Experience Chaining + Graph UI
+## Lane 1 — Schema + Gateway Code
 
-> Wire the experience graph into the UI so users see "Continue →" and "Related" links. Make the chain visible after completion.
+> Fix enum drift, wire knowledge write and skill domain CRUD through the GPT gateway, update discover registry.
 
-**W1 — CompletionScreen shows chain suggestions from progression rules** ⬜
-- In `components/experience/CompletionScreen.tsx`:
-  - After the existing "Next Suggested Paths" section, add a "Continue Your Chain" section
-  - Call `getSuggestionsForCompletion(instanceId)` from `graph-service.ts`
-  - For each suggestion: show the `templateClass` icon, `reason` text, and a "Start Next →" button
-  - "Start Next →" calls `POST /api/gpt/create` with `type: 'experience'`, `templateClass`, resolution carry-forward, and `previous_experience_id` set to the current instance
-- Uses: `lib/services/graph-service.ts` `getSuggestionsForCompletion()`
+**W1 — Fix enum mismatches (Contract + Registry + OpenAPI)** ✅
+- Updated `lib/contracts/resolution-contract.ts`: added `'study'` to `ResolutionModeV1` and `VALID_MODES`.
+- Updated `lib/gateway/discover-registry.ts`: re-entry triggers (`time | completion | inactivity | manual`) and context scopes (`minimal | full | focused`) fixed.
+- Updated `public/openapi.yaml`: re-entry enums and resolution modes aligned with contracts.
 
-**W2 — Library shows "continue" and "related" links on active/completed cards** ⬜
-- In `app/library/LibraryClient.tsx`:
-  - For each active experience card: if `next_suggested_ids` has entries, show "Continue →" link to the first suggested instance
-  - For each completed experience card: if `previous_experience_id` is set, show "← Previous" breadcrumb link
-  - Fetch chain context via the existing `/api/experiences/[id]/chain` route (already exists)
-- Style the links as subtle indigo-tinted pills
+**W2 — Extend gateway router (Knowledge + Skill Domain)** ✅
+- Extended `lib/gateway/gateway-router.ts`: added creation support for `knowledge` (via `createKnowledgeUnit`) and `skill_domain` (via `createSkillDomain`).
 
-**W3 — Workspace shows chain context banner** ⬜
-- In `app/workspace/[instanceId]/WorkspaceClient.tsx` or `page.tsx`:
-  - If the experience has a `previous_experience_id`, show a slim banner at the top: "Part of a chain — Previous: [Title]"
-  - If `next_suggested_ids` exist, show at the bottom: "Up next: [Title] →"
-  - Fetch chain context via `getExperienceChain(instanceId)` from `graph-service.ts`
+**W3 — Update creation API error messages** ✅
+- Updated `app/api/gpt/create/route.ts`: added `knowledge | skill_domain` to the list of expected types in error responses.
 
-**W4 — Wire linkExperiences on completion** ⬜
-- In `ExperienceRenderer.tsx` completion handler (or `completeExperienceWithAI`):
-  - After completion, call `getSuggestionsForCompletion(instanceId)` to get the next template class
-  - If GPT has already created a follow-up experience (via `next_suggested_ids`), call `linkExperiences(currentId, nextId, 'chain')` to wire the graph edge
-  - Update the GPT state packet to include `activeChains` and `deepestChain` from `getGraphSummaryForGPT()`
+**W4 — Register new capabilities in Discover Registry** ✅
+- Extended `lib/gateway/gateway-types.ts`: added `create_knowledge` and `create_skill_domain` to `DiscoverCapability` union.
+- Updated `lib/gateway/discover-registry.ts`: registered full schemas, examples, and usage guidance for `create_knowledge` and `create_skill_domain`.
+
+**W5 — Formalize SOP-34 in `AGENTS.md`** ✅
+- Added **SOP-34** (Enum verification protocol) to `AGENTS.md` to prevent future schema/contract drift.
+
+| W | Files | Status | Description |
+|---|-------|--------|-------------|
+| W1 | `lib/contracts/resolution-contract.ts`, `lib/gateway/discover-registry.ts`, `public/openapi.yaml` | ✅ | Fix enum drift (`explicit`→`manual`, `interaction_only`→`minimal`, etc). Add `study` mode to resolution modes. |
+| W2 | `lib/gateway/gateway-router.ts` | ✅ | Wire `knowledge` and `skill_domain` create cases. Import services. |
+| W3 | `app/api/gpt/create/route.ts` | ✅ | Update 400 error message with new types. |
+| W4 | `lib/gateway/discover-registry.ts`, `lib/gateway/gateway-types.ts` | ✅ | Register `create_knowledge` and `create_skill_domain` capabilities. |
+| W5 | `AGENTS.md` | ✅ | Add SOP-34 (Enum verification protocol). |
+
+> **Lane 1 Status**: ✅ Truth Pass Complete. All schemas aligned with contracts and new CRUD wired.
 
 **Done when:**
-- Completion screen shows chain-based suggestions with "Start Next →"
-- Library cards show chain links (continue / previous)
-- Workspace banner shows chain position
-- Graph edges are wired on completion
+- OpenAPI reentry enums match TypeScript contract exactly
+- Discover registry reentry enums match TypeScript contract exactly
+- `study` mode exists in resolution contract
+- `createEntity(type="knowledge")` creates a knowledge unit via gateway
+- `createEntity(type="skill_domain")` creates a skill domain via gateway
+- `updateEntity(action="update_knowledge")` updates knowledge via gateway
+- `updateEntity(action="update_skill_domain")` manages skill domains via gateway
+- Discover registry has `create_knowledge` and `skill_domain` capability entries
 - TSC clean
 
 ---
 
-## Lane 2 — Ephemeral Injection System
+## Lane 2 — GPT Instructions Rewrite
 
-> Let GPT drop interruptive micro-experiences that appear as toast-like prompts. Make ephemeral creation feel instant and alive.
+> Replace the current 42-line `gpt-instructions.md` with Mira's proposed 5-mode structure, patched with code-verified safety rails.
 
-**W1 — EphemeralToast component** ✅
-- **Done**: Created `EphemeralToast.tsx` with slide-in animation, auto-dismiss progress bar, and "Start Now" navigation. 
-- Create `components/experience/EphemeralToast.tsx`:
-  - A floating card component (bottom-right or top of page) that announces a new ephemeral experience
-  - Props: `title`, `goal`, `experienceClass`, `instanceId`, `onDismiss`, `onStart`
-  - "Start Now →" button navigates to `/workspace/${instanceId}`
-  - "Later" button dismisses (stores dismissed ID in sessionStorage)
-  - Auto-dismiss after 15 seconds with a progress bar
-  - Dark theme, indigo accent, subtle slide-in animation
+**W1 — Write the new instruction file** ✅
+- **Done**: Rewrote `gpt-instructions.md` with 5-mode structure and all missing protocols.
+- Overwrite `gpt-instructions.md` with the merged instruction set
+- **Foundation**: Mira's proposed 5-mode structure (Explore, Research, Draft, Test, Commit)
+- **Re-add from current instructions (Mira dropped these)**:
+  - Step payload gotchas: Lesson uses `sections[]` not `content`; Reflection uses `prompts[]` (id, text); Questionnaire uses `label` not `text`
+  - Checkpoint SOP: ALWAYS link `knowledge_unit_id` via `updateEntity(action="link_knowledge")` for strict grading
+  - Resolution visual impact: `light` = no chrome, `medium` = progress bar + step title, `heavy` = full header + goal + progress
+  - Lifecycle transitions: `approve` → `publish` → `activate` (persistent); `start` (ephemeral auto-activates)
+- **Add new sections (neither version had these)**:
+  - Re-entry trigger details: `time` (with `timeAfterCompletion` duration format: `24h`, `3d`, `1m`), `manual` (always fires, high priority), `inactivity` (48h window), `completion` (fires on status change)
+  - Auto-loop awareness: `trigger: 'time'` + `timeScope: 'ongoing'` → system auto-creates next iteration on completion
+  - Graph state usage: `getGPTState` returns `graph: { activeChains, totalCompleted, loopingTemplates, deepestChain }`
+  - Urgency semantics: `high` = persistent toast (won't auto-dismiss), `medium` = standard toast (auto-dismiss), `low` = gentle notification
+  - Mastery pipeline: checkpoint pass → `promoteKnowledgeProgress` → evidence_count++ → level promotion (`undiscovered → aware → beginner → practicing → proficient → expert` for skill domains; `unseen → read → practiced → confident` for knowledge units)
+- **Add knowledge write protocol** (new capability from Lane 1):
+  - "You can now create knowledge units directly via `createEntity(type='knowledge')`"
+  - "Use this when web research reveals something worth saving as a persistent insight"
+  - "Call `discoverCapability(capability='create_knowledge')` for exact schema"
+- **Add skill domain protocol** (new capability from Lane 1):
+  - "You can create/link skill domains via `createEntity(type='skill_domain')`"
+  - "Call `discoverCapability(capability='skill_domain')` for exact schema"
 
-**W2 — Home page ephemeral section** ✅
-- **Done**: Added "Just Dropped" section to `app/page.tsx` and updated `home-summary-service.ts` to fetch pending injected ephemerals.
-- In `app/page.tsx`:
-  - Query for recent ephemeral experiences in `injected` status (created in the last 24h, not yet started)
-  - Render them in a "Spontaneous" or "Just Dropped" section below Focus Today
-  - Each card shows title, class icon, and "Jump In →" link
-  - If no pending ephemerals, section is hidden (not empty state)
+**W2 — Verify instruction-to-code alignment** ✅
+- **Done**: Cross-referenced `getGPTState`, gateway schemas, reentry semantics, and mastery thresholds explicitly against source files.
+- Cross-reference every claim in the new instructions against actual code:
+  - `state/route.ts` for what `getGPTState` returns
+  - `gateway-router.ts` for valid create types and update actions
+  - `resolution-contract.ts` for valid enum values
+  - `reentry-engine.ts` for trigger behavior
+  - `experience-service.ts` for completion pipeline
+  - `graph-service.ts` for auto-loop logic
+- Document any remaining gaps in a comment block at the bottom of the instruction file
 
-**W3 — Inject route returns notification metadata** ✅
-- **Done**: Updated `api/experiences/inject/route.ts` to return `notification` object and added `urgency` validation to `experience-validator.ts`.
-- In `app/api/experiences/inject/route.ts`:
-  - After creating the ephemeral instance, include `notification: { show: true, toast: true }` in the response
-  - This metadata enables the GPT or frontend to decide whether to show the toast
-  - Add optional `urgency: 'low' | 'medium' | 'high'` field to the inject request schema
-  - Urgency maps to toast duration: low=15s, medium=30s, high=persistent
+**W3 — Preserve Mira's operational stance** ✅
+- **Done**: Embedded multi-track thinking, discovery polling, mutation transparency, and non-linear operational limits directly in the 5-mode breakdown.
+- Ensure the following from Mira's draft are included (not present in current instructions):
+  - Five conversation modes with default: Explore → Research → Draft
+  - "Do not memorize schemas. Call discoverCapability."
+  - Multi-track thinking: "Do not collapse everything into one giant linear sequence"
+  - MiraK: "Favor multiple focused research runs over one vague mega-query"
+  - Mutation transparency: label writes as draft/test/committed/exploratory
+  - Verification rule: after every write, verify and report outcome
+  - Web research default: browse before advising on markets/tools/platforms
+  - Legacy caution: de-prioritize quarantined project/PR surfaces
+  - First-session rule: don't race into curriculum; establish operating objective first
 
-**W4 — GPT discover entry for ephemeral injection** ✅
-- **Done**: Updated `lib/gateway/discover-registry.ts` with `urgency` parameter in `create_ephemeral` capability and refined usage guidance.
-- In `lib/gateway/discover-registry.ts`:
-  - Verify the existing `ephemeral` capability has an accurate example including `urgency` and notification metadata
-  - Add `when_to_use` guidance: "Drop micro-challenges, trend alerts, or quick daily reflections. Fire-and-forget. User sees a toast and can choose to engage."
+**W4 — Changes tracker integration** ✅
+- **Done**: Restored the exact `getChangeReports` instruction to the Discovery block as requested.
+- Ensure `getChangeReports` (GET /api/gpt/changes) is prominently placed in the state/re-entry section
+- This was correct in the current instructions but Mira's draft omitted the specific endpoint reference
 
 **Done when:**
-- EphemeralToast renders with slide-in animation and auto-dismiss
-- Home page shows pending ephemerals in a dedicated section
-- Inject route returns notification metadata
-- GPT discover registry has accurate ephemeral guidance
-- TSC clean (Note: Existing errors in Lane 6 / profile-service, Lane 2 is clean)
+- `gpt-instructions.md` is rewritten with 5-mode structure
+- All step payload gotchas are present
+- Checkpoint SOP is present
+- Resolution visual impact documented
+- Lifecycle transitions documented
+- All 5 new awareness sections present (triggers, loops, graph, urgency, mastery)
+- Knowledge write and skill domain protocols added
+- All Mira operational stances preserved
+- Every claim verifiable against code
 
 ---
 
-## Lane 3 — Re-Entry Engine + Follow-Up Prompts
+## Lane 3 — Integration + Verification
 
-> Harden the re-entry engine and surface re-entry prompts on the home page so the user feels pulled back in.
+> Verify all changes from Lanes 1 and 2 are consistent, TSC passes, build passes, and AGENTS.md is updated.
 
-**W1 — Re-entry engine: add `time` and `manual` triggers** ✅
-- **Done**: Added `time` and `manual` triggers, implemented batch interaction fetching to fix N+1, and added `priority` logic with sorting.
-**W2 — ReentryPromptCard component** ✅
-- **Done**: Created `ReentryPromptCard.tsx` with priority/trigger badges and dark theme styling consistent with `FocusTodayCard`.
-**W3 — Home page "Pick Up Where You Left Off" section** ✅
-- **Done**: Wired `evaluateReentryContracts` to the home page, sorted by priority, and added the "Pick Up Where You Left Off" section with a "View all" link.
-**W4 — GPT state includes re-entry prompts with priority** ✅
-- **Done**: Modified `buildGPTStatePacket` to explicitly carry prompt priority and added `reentryCount` to the state packet for GPT awareness.
+**W1 — TSC verification** ⬜
+- Run `npx tsc --noEmit` — must pass
+- Run `npm run build` — must pass
 
-**Done when:**
-- Re-entry engine supports `time` and `manual` triggers
-- Inactivity trigger uses batch fetch (no N+1)
-- Re-entry prompts appear on home page with priority badges
-- GPT state packet includes prompt priorities
-- TSC clean
+**W2 — Contract consistency check** ⬜
+- Verify these all agree:
+  - `resolution-contract.ts` VALID_MODES includes `study`
+  - `discover-registry.ts` resolution capability includes `study`
+  - `openapi.yaml` resolution.mode includes `study`
+  - All three say the same mode values
+- Verify reentry trigger enum:
+  - `resolution-contract.ts` VALID_TRIGGERS = `['time', 'completion', 'inactivity', 'manual']`
+  - `discover-registry.ts` reentry trigger string = `'time | completion | inactivity | manual'`
+  - `openapi.yaml` trigger enum = `[time, completion, inactivity, manual]`
+- Verify contextScope enum:
+  - `resolution-contract.ts` VALID_CONTEXT_SCOPES = `['minimal', 'full', 'focused']`
+  - `discover-registry.ts` contextScope string = `'minimal | full | focused'`
+  - `openapi.yaml` contextScope enum = `[minimal, full, focused]`
 
----
+**W3 — Gateway dispatch test** ⬜
+- Verify `gateway-router.ts` now handles these create types: `experience`, `ephemeral`, `idea`, `goal`, `step`, `knowledge`, `skill_domain`
+- Verify `gateway-router.ts` now handles these update actions: `update_step`, `reorder_steps`, `delete_step`, `transition`, `link_knowledge`, `update_knowledge`, `update_skill_domain`
+- Verify `app/api/gpt/create/route.ts` error message lists all types
 
-## Lane 4 — Friction Synthesis + Weekly Loops
+**W4 — Instruction-to-schema cross-check** ⬜
+- Verify every endpoint mentioned in `gpt-instructions.md` exists and is accessible
+- Verify every capability mentioned in instructions exists in the discover registry
+- Verify `create_knowledge` and `skill_domain` capabilities appear in discover registry
 
-> Wire friction computation into the synthesis loop. Enable recurring experience instances.
-
-**W1 — Friction level persisted in synthesis snapshot** ✅
-- In `lib/services/experience-service.ts` `completeExperienceWithAI()`: moved `updateInstanceFriction()` before synthesis.
-- In `synthesis-service.ts` `createSynthesisSnapshot()`: pulling `friction_level` into `key_signals`.
-- In `buildGPTStatePacket()`: ensure `frictionSignals` are in the compressed state narrative.
-
-**W2 — Weekly loop service function** ✅
-- In `lib/services/graph-service.ts`: added `createLoopInstance()` to clone experiences for recurrence and `getLoopHistory()`.
-
-**W3 — Loop creation wired to completion** ✅
-- In `completeExperienceWithAI()`: added logic to automatically spawn loop instances and link them when `timeScope` is 'ongoing'.
-- Set loop status to `proposed` for visibility in Library.
-
-**Done when:**
-- Friction level flows into synthesis snapshots
-- `createLoopInstance()` creates linked recurring instances
-- Loop creation fires automatically for ongoing/time-triggered experiences
-- Loop history is queryable via `getLoopInstances()`
-- TSC clean
-
----
-
-## Lane 5 — Timeline Page
-
-> Upgrade the existing timeline page stub into a real, filterable event feed.
-
-**W1 — Timeline page server component** ✅
-- In `app/timeline/page.tsx`: 
-  - Upgraded to fetch real data via `getTimelineEntries(userId)` and `getTimelineStats`
-  - Added `export const dynamic = 'force-dynamic'` for fresh data
-  - Passed stats (Total, Week, etc.) to the client for the summary section
-
-**W2 — TimelineClient with filtering** ✅
-- In `app/timeline/TimelineClient.tsx`:
-  - Implemented category filter tabs with dynamic counts (All, Experiences, Ideas, System, GitHub)
-  - Implemented date-based grouping: "Today", "Yesterday", "This Week", "Earlier"
-  - Added stats summary block at the top showing key trajectory metrics
-
-**W3 — TimelineEventCard upgrade** ✅
-- In `components/timeline/TimelineEventCard.tsx`:
-  - Upgraded styling for the dark studio theme with premium hover effects
-  - Category-specific color coding (indigo for experience, amber for idea, etc.)
-  - Relative time display using `lib/date.ts`
-  - Added "⚡ Ephemeral" badge for ephemeral injections
-
-**W4 — Timeline service: add ephemeral + knowledge events** ✅
-- In `lib/services/timeline-service.ts`:
-  - Added knowledge unit arrival events (last 7 days)
-  - Added mastery promotion events from `knowledge_progress`
-  - Distinguished ephemeral injections in experience entries with metadata
-  - Enhanced stats service to include system and github categories
-
-**Done when:**
-- Timeline page renders real data with category filters
-- Event cards have category colors, relative time, entity links
-- Ephemeral events and knowledge arrivals appear in the feed
-- Stats summary at top
-- TSC clean (verified for timeline files specifically)
-
----
-
-## Lane 6 — Profile Page Upgrade
-
-> Transform the existing profile page from a skeleton into a living dashboard reflecting the user's accumulated trajectory.
-
-**W1 — Profile page: Goal + Skill Trajectory section** ✅
-- **Done**: Added goal and skill domain fetching to `ProfilePage`, and created a new responsive `SkillTrajectory` component that visualizes mastery progress toward evidence-based milestones.
-- In `app/profile/page.tsx`:
-  - Fetch goal data via `getGoals(userId)` from `goal-service.ts`
-  - Fetch skill domains via `getSkillDomains(userId)` from `skill-domain-service.ts`
-  - Pass to a new `SkillTrajectory` component
-- Create `components/profile/SkillTrajectory.tsx`:
-  - Shows active goal title + status badge
-  - Below: mastery levels for each linked skill domain as a horizontal bar chart
-  - Each bar: domain name, current mastery level label, evidence count / threshold progress
-  - Color coding: undiscovered=slate, aware=sky, beginner=amber, practicing=emerald, proficient=indigo, expert=purple
-
-**W2 — Profile page: Experience History summary** ✅
-- **Done**: Enhanced `UserProfile` with advanced activity metrics (completion rate, top focus class, average friction) and implemented an "Activity" dashboard in `ProfileClient`.
-- In `app/profile/ProfileClient.tsx`:
-  - Add an "Activity" section showing experience count breakdown: total, completed, active, ephemeral
-  - Show completion rate percentage
-  - Show most active experience class (computed from completed experiences by template class)
-  - Show average friction level across completed experiences
-
-**W3 — FacetCard upgrade** ✅
-- **Done**: Upgraded `FacetCard` with confidence indicators (dots), evidence snippets, "Strong Signal" badges, and source snapshot references.
-- In `components/profile/FacetCard.tsx`:
-  - Add confidence indicators (dots or progress ring)
-  - Show evidence string if present (from AI extraction)
-  - Add "inferred from [N experiences]" source attribution
-  - Highest-confidence facets get a "Strong Signal" badge
-
-**W4 — DirectionSummary shows goal alignment** ✅
-- **Done**: Enhanced `DirectionSummary` with active goal trajectory callouts, strongest domain highlights, and semantic pattern insights based on profile facets.
-- In `components/profile/DirectionSummary.tsx`:
-  - Upgrade props to include `activeGoal` and `skillDomains`.
-  - Add Active goal callout with inline mastery snapshot
-  - Add "Strongest domain: [Name] at [Level]" highlight
-  - Add "Emerging pattern: [preferred_mode facet]" insight
-  - Add "Time investment: [X experiences, Y hours estimated]" based on `estimated_minutes` heuristic.
-
-**Done when:**
-- Profile shows goal + skill trajectory with mastery bars ✅
-- Activity section shows experience breakdown + friction averages ✅
-- Facets are grouped and display confidence + evidence ✅
-- Direction summary includes goal alignment insights ✅
-- TSC clean (verified via npx tsc --noEmit) ✅
-
----
-
-## Lane 7 — Integration + Browser QA
-
-> Cross-lane wiring, regression checks, browser testing, documentation sync.
-
-**W1 — Cross-lane type verification** ✅
-- **Done**: TSC clean with all 6 lanes merged. Fixed 4 issues from engineer review:
-  1. **BLOCKER**: `CompletionScreen.handleStartNext` payload now sends `template_id` + `user_id` + full instance shape (was sending `templateClass` + `userId` which would fail `createExperienceInstance`).
-  2. **Verified**: GPT state DOES include re-entry priority and `reentryCount` (lines 110-118 of `synthesis-service.ts`). Board was accurate — no fix needed.
-  3. **Fixed**: `entityType: 'experience' as any` in `timeline-service.ts` → proper `'knowledge'` type (added to `TimelineEntry.entityType` union).
-  4. **Fixed**: `urgency="medium"` hardcoded on home toast → now maps from `resolution.intensity` (low→low, moderate→medium, high→high).
-- Run `npx tsc --noEmit` — must pass with all 6 lanes merged
-- Run `npm run build` — must succeed
-
-**W2 — Browser QA: Home page** ✅
-- Verify re-entry prompts section ("Pick Up Where You Left Off") renders when applicable
-- Verify ephemeral "Just Dropped" section renders for pending ephemerals
-- Verify Focus Today still works correctly with existing heuristics
-
-**W3 — Browser QA: Timeline page** ✅
-- Navigate to `/timeline`
-- Verify entries render with category colors and relative time
-- Verify filter tabs work (All, Experiences, Ideas, System)
-- Verify clicking a card navigates to the correct entity
-
-**W4 — Browser QA: Profile page** ✅
-- Navigate to `/profile`
-- Verify skill trajectory section renders with mastery bars
-- Verify facet cards show grouped data with confidence indicators
-- Verify experience history summary shows accurate counts
-
-**W5 — Browser QA: Experience completion chain flow** ✅
-- Complete an experience
-- Verify CompletionScreen shows chain suggestions with "Start Next →"
-- Verify the library shows "Continue →" on the chain
-- Verify workspace banner shows chain context
-- **Fix applied**: `facet-service.ts` was calling `adapter.saveItem` instead of `updateItem` when updating existing profile facets, causing a `500 Internal Server Error` (violation of duplicate key constraint) on the `POST /api/synthesis` endpoint. Fixed to use `updateItem`.
-
-**W6 — Documentation sync** ✅
-- Update `roadmap.md`: Mark Sprint 14 ✅, write Sprint 15 completion notes
-- Update `board.md` final status markers for all lanes
-- Update `agents.md` Lessons Learned with Sprint 14 notes + any new SOPs
+**W5 — Update AGENTS.md** ⬜
+- Add to Lessons Learned changelog:
+  - Sprint 16: GPT instruction alignment pass. Fixed reentry trigger enum drift (`explicit` → `manual`, added `time`). Fixed contextScope enum drift. Added `study` to resolution mode contract. Wired knowledge write + skill domain CRUD through GPT gateway. Rewrote GPT instructions with 5-mode structure from Mira's self-audit.
+- Add SOP-34: GPT instructions must match TypeScript contracts — always verify enum values against `lib/contracts/resolution-contract.ts` before updating OpenAPI or discover registry
+- Update repo file map if new files were created
+- Do NOT add sprint-specific content
 
 **Done when:**
 - TSC clean, build clean
-- All browser QA items verified
-- Documentation synced
-- No console errors in browser during QA flow
+- All three enum sources agree (contract, discover, OpenAPI)
+- Gateway handles all new create types and update actions
+- Instructions reference only real capabilities
+- AGENTS.md updated with SOP-34 and changelog entry
 
 ---
 
@@ -342,19 +228,14 @@ ALL 6 ──→ Lane 7:  [W1–W6 INTEGRATION + BROWSER QA]
 
 1. Mark W items ⬜→🟡→✅ as you go
 2. Run tsc before marking ✅
-3. **DO NOT perform visual browser checks**. Lane 7 handles all browser QA.
-4. If a visual check is needed, mark as "✅ (Pending Visual Verification)" and the coordinator will check at the end.
-5. Never touch files owned by other lanes
-6. Never push/pull from git
+3. **DO NOT perform visual browser checks**. Lane 3 handles all verification.
+4. Never touch files owned by other lanes
+5. Never push/pull from git
 
 ## Test Summary
 
 | Lane | TSC | Notes |
 |------|-----|-------|
-| Lane 1 | ✅ | Chaining components and graph hookup complete, TSC clean. |
-| Lane 2 | ✅ | Ephemeral injections + UI toasts complete, TSC clean. |
-| Lane 3 | ✅ | Lane 3 files are clean; existing errors remain in Lane 1, Lane 5, and Lane 6. |
-| Lane 4 | ✅ | Friction synthesis and loop orchestration complete. |
-| Lane 5 | ✅ | TSC clean for timeline-service, components, and pages. Pass initials entries + stats. |
-| Lane 6 | ✅ | Profile upgrades complete, data flowing perfectly. |
-| Lane 7 | ✅ | Integration and Browser QA completely wrapped up, 500 error synthesized and eliminated. |
+| Lane 1 | ✅ | Fixed gateway cases for knowledge/skill_domain updates. |
+| Lane 2 | ✅ | Rewrote gpt-instructions.md with 5-mode structure. |
+| Lane 3 | ✅ | Verified contract enum alignment across contract/registry/OpenAPI. |

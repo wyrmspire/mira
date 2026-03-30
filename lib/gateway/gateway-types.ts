@@ -14,7 +14,9 @@ export type DiscoverCapability =
   | 'dispatch_research'
   | 'goal'
   | 'tutor_chat'
-  | 'grade_checkpoint';
+  | 'grade_checkpoint'
+  | 'create_knowledge'
+  | 'skill_domain';
 
 /**
  * Response shape for the discovery endpoint.

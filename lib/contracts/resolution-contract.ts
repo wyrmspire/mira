@@ -15,7 +15,7 @@
 export type ResolutionDepthV1 = 'light' | 'medium' | 'heavy'
 
 /** @evolving — new modes may be added */
-export type ResolutionModeV1 = 'illuminate' | 'practice' | 'challenge' | 'build' | 'reflect'
+export type ResolutionModeV1 = 'illuminate' | 'practice' | 'challenge' | 'build' | 'reflect' | 'study'
 
 /** @evolving — new scopes may be added */
 export type ResolutionTimeScopeV1 = 'immediate' | 'session' | 'multi_day' | 'ongoing'
@@ -73,7 +73,7 @@ export function getChromeForDepth(depth: ResolutionDepthV1): ResolutionChromeCon
 // ---------------------------------------------------------------------------
 
 export const VALID_DEPTHS: readonly ResolutionDepthV1[] = ['light', 'medium', 'heavy']
-export const VALID_MODES: readonly ResolutionModeV1[] = ['illuminate', 'practice', 'challenge', 'build', 'reflect']
+export const VALID_MODES: readonly ResolutionModeV1[] = ['illuminate', 'practice', 'challenge', 'build', 'reflect', 'study']
 export const VALID_TIME_SCOPES: readonly ResolutionTimeScopeV1[] = ['immediate', 'session', 'multi_day', 'ongoing']
 export const VALID_INTENSITIES: readonly ResolutionIntensityV1[] = ['low', 'medium', 'high']
 

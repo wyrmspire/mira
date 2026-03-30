@@ -8,6 +8,9 @@ import {
   transitionExperienceStatus 
 } from '@/lib/services/experience-service';
 import { createIdea } from '@/lib/services/ideas-service';
+import { createKnowledgeUnit } from '@/lib/services/knowledge-service';
+import { createSkillDomain } from '@/lib/services/skill-domain-service';
+
 // Note: Lane 4 builds this service. We import it to ensure we provide the link_knowledge capability.
 // If it fails to import (e.g. file doesn't exist yet), it will be a TSC error later which Lane 2 or 7 will fix.
 import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'; 
@@ -55,6 +58,10 @@ export async function dispatchCreate(type: string, payload: any) {
         throw new Error('Missing experienceId for step creation');
       }
       return addStep(payload.experienceId, payload);
+    case 'knowledge':
+      return createKnowledgeUnit(payload);
+    case 'skill_domain':
+      return createSkillDomain(payload);
     default:
       throw new Error(`Unknown create type: "${type}"`);
   }
@@ -90,6 +97,34 @@ export async function dispatchUpdate(action: string, payload: any) {
         throw new Error('Missing stepId or knowledgeUnitId');
       }
       return linkStepToKnowledge(payload.stepId, payload.knowledgeUnitId, payload.linkType || 'teaches');
+
+    case 'update_knowledge':
+      if (!payload.unitId) throw new Error('Missing unitId for knowledge update');
+      if (payload.mastery_status) {
+        const { updateMasteryStatus } = await import('@/lib/services/knowledge-service');
+        return updateMasteryStatus(payload.userId, payload.unitId, payload.mastery_status);
+      }
+      const { enrichKnowledgeUnit } = await import('@/lib/services/knowledge-service');
+      return enrichKnowledgeUnit(payload.unitId, payload.updates);
+
+    case 'update_skill_domain':
+      if (!payload.domainId) throw new Error('Missing domainId for skill domain update');
+      const { updateSkillDomain, linkKnowledgeUnit, linkExperience } = await import('@/lib/services/skill-domain-service');
+      
+      if (payload.action === 'link_unit') {
+        return linkKnowledgeUnit(payload.domainId, payload.unitId);
+      }
+      if (payload.action === 'link_experience') {
+        return linkExperience(payload.domainId, payload.experienceId);
+      }
+      if (payload.action === 'recompute_mastery') {
+        const { updateDomainMastery } = await import('@/lib/experience/skill-mastery-engine');
+        const { getSkillDomain } = await import('@/lib/services/skill-domain-service');
+        const domain = await getSkillDomain(payload.domainId);
+        if (!domain) throw new Error('Skill domain not found');
+        return updateDomainMastery(domain.goalId, payload.domainId);
+      }
+      return updateSkillDomain(payload.domainId, payload.updates);
     
     default:
       throw new Error(`Unknown update action: "${action}"`);

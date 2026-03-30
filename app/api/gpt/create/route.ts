@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: 'Missing `type` parameter',
         expected: {
-          type: 'experience | ephemeral | idea | step | goal',
+          type: 'experience | ephemeral | idea | step | goal | knowledge | skill_domain',
           payload: '{ ... } — call GET /api/gpt/discover?capability=goal for schema',
         },
       }, { status: 400 });

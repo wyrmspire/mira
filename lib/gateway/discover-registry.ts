@@ -30,9 +30,9 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
           intensity: 'low | medium | high'
         },
         reentry: {
-          trigger: 'completion | inactivity | explicit',
+          trigger: 'time | completion | inactivity | manual',
           prompt: 'string (max 500)',
-          contextScope: 'interaction_only | full_synthesis | interaction_and_synthesis'
+          contextScope: 'minimal | full | focused'
         },
         steps: [
           {
@@ -289,6 +289,68 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     schema: null,
     example: null,
     when_to_use: 'When creating checkpoint steps.'
+  }),
+ 
+  create_knowledge: () => ({
+    capability: 'create_knowledge',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Manually create a knowledge unit. Use when you have high-quality content that doesn\'t require MiraK research.',
+    schema: {
+      type: 'knowledge',
+      payload: {
+        userId: 'UUID from state',
+        topic: 'string',
+        domain: 'string',
+        unit_type: 'foundation | playbook | deep_dive | example | audio_script',
+        title: 'string',
+        thesis: 'string (one-sentence core claim)',
+        content: 'markdown (the full body)',
+        key_ideas: 'string[]',
+        common_mistake: 'optional string',
+        action_prompt: 'optional string'
+      }
+    },
+    example: {
+      type: 'knowledge',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        topic: 'LTV/CAC Ratio',
+        domain: 'Unit Economics',
+        unit_type: 'foundation',
+        title: 'The Golden Ratio: 3:1 LTV/CAC',
+        thesis: 'A healthy SaaS business maintains a lifetime value at least 3x its customer acquisition cost.',
+        content: '# The 3:1 Rule\n\nIn venture-backed SaaS...',
+        key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']
+      }
+    },
+    when_to_use: 'To persist self-generated research or core curriculum concepts.',
+    relatedCapabilities: ['read_knowledge', 'dispatch_research', 'link_knowledge']
+  }),
+ 
+  skill_domain: () => ({
+    capability: 'skill_domain',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a specific skill domain to track mastery evidence under a goal.',
+    schema: {
+      type: 'skill_domain',
+      payload: {
+        userId: 'UUID from state',
+        goalId: 'UUID from goal metadata',
+        name: 'string (e.g. "React Performance")',
+        description: 'string'
+      }
+    },
+    example: {
+      type: 'skill_domain',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        goalId: 'goal-uuid-here',
+        name: 'Component Memoization',
+        description: 'Deep mastery of useMemo, useCallback, and React.memo patterns.'
+      }
+    },
+    when_to_use: 'When breaking down a broad goal into measurable sub-skills.',
+    relatedCapabilities: ['goal', 'link_knowledge']
   })
 };
 
