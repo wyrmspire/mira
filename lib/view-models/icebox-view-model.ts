@@ -20,7 +20,7 @@ export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): Icebox
       type: 'idea',
       id: i.id,
       title: i.title,
-      summary: i.gpt_summary,
+      summary: i.gptSummary,
       daysInIcebox: daysSince(i.created_at),
       isStale: daysSince(i.created_at) >= STALE_ICEBOX_DAYS,
       createdAt: i.created_at,

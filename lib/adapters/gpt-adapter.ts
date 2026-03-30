@@ -1,6 +1,7 @@
 import type { Idea } from '@/types/idea'
 
 export interface GPTIdeaPayload {
+  userId?: string
   title: string
   rawPrompt: string
   gptSummary: string
@@ -11,9 +12,10 @@ export interface GPTIdeaPayload {
 
 export function parseGPTPayload(payload: GPTIdeaPayload): Omit<Idea, 'id' | 'created_at' | 'status'> {
   return {
+    userId: payload.userId ?? '',
     title: payload.title,
-    raw_prompt: payload.rawPrompt,
-    gpt_summary: payload.gptSummary,
+    rawPrompt: payload.rawPrompt,
+    gptSummary: payload.gptSummary,
     vibe: payload.vibe ?? 'unknown',
     audience: payload.audience ?? 'unknown',
     intent: payload.intent ?? '',

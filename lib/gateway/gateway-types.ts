@@ -16,7 +16,12 @@ export type DiscoverCapability =
   | 'tutor_chat'
   | 'grade_checkpoint'
   | 'create_knowledge'
-  | 'skill_domain';
+  | 'skill_domain'
+  | 'create_map_node'
+  | 'create_map_edge'
+  | 'update_map_node'
+  | 'delete_map_node'
+  | 'delete_map_edge';
 
 /**
  * Response shape for the discovery endpoint.

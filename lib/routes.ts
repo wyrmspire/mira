@@ -34,4 +34,6 @@ export const ROUTES = {
   // --- Sprint 13: Goal OS + Skill Map ---
   skills: '/skills',
   skillDomain: (id: string) => `/skills/${id}`,
+  // --- Sprint 17: Mind Map Station ---
+  mindMap: '/map',
 } as const

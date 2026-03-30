@@ -22,12 +22,12 @@ export function CapturedIdeaCard({ idea, onHold, onRemove }: CapturedIdeaCardPro
         </div>
 
         {/* GPT Summary */}
-        <p className="text-sm text-[#cbd5e1] mb-4 leading-relaxed">{idea.gpt_summary}</p>
+        <p className="text-sm text-[#cbd5e1] mb-4 leading-relaxed">{idea.gptSummary}</p>
 
         {/* Raw prompt as blockquote */}
-        {idea.raw_prompt && (
+        {idea.rawPrompt && (
           <blockquote className="border-l-2 border-[#2e2e42] pl-3 mb-4">
-            <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.raw_prompt}&rdquo;</p>
+            <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.rawPrompt}&rdquo;</p>
           </blockquote>
         )}
 

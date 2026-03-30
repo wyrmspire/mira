@@ -351,6 +351,122 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     },
     when_to_use: 'When breaking down a broad goal into measurable sub-skills.',
     relatedCapabilities: ['goal', 'link_knowledge']
+  }),
+
+  create_map_node: () => ({
+    capability: 'create_map_node',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Add a new node to a mind map (think board). If boardId is omitted, it will use your default board.',
+    schema: {
+      type: 'map_node',
+      payload: {
+        userId: 'UUID from state',
+        boardId: 'optional UUID of the think board',
+        label: 'string (max 100)',
+        description: 'optional string (max 500)',
+        color: 'optional string (hex or tailwind color name)',
+        position_x: 'number',
+        position_y: 'number'
+      }
+    },
+    example: {
+      type: 'map_node',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        label: 'Frontend Performance',
+        description: 'Core concepts for optimizing React apps.',
+        color: '#3b82f6',
+        position_x: 100,
+        position_y: 100
+      }
+    },
+    when_to_use: 'When you want to visualize a concept as a node in a spatial mind map.'
+  }),
+
+  create_map_edge: () => ({
+    capability: 'create_map_edge',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Connect two mind map nodes with an edge.',
+    schema: {
+      type: 'map_edge',
+      payload: {
+        userId: 'UUID from state',
+        boardId: 'optional UUID of the think board',
+        sourceNodeId: 'UUID of source node',
+        targetNodeId: 'UUID of target node'
+      }
+    },
+    example: {
+      type: 'map_edge',
+      payload: {
+        userId: 'a0000000-0000-0000-0000-000000000001',
+        sourceNodeId: 'node-uuid-1',
+        targetNodeId: 'node-uuid-2'
+      }
+    },
+    when_to_use: 'When defining relationships between existing nodes on the canvas.'
+  }),
+
+  update_map_node: () => ({
+    capability: 'update_map_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update the content or color of a mind map node.',
+    schema: {
+      action: 'update_map_node',
+      payload: {
+        nodeId: 'UUID of the node to update',
+        label: 'optional string',
+        description: 'optional string',
+        color: 'optional string'
+      }
+    },
+    example: {
+      action: 'update_map_node',
+      payload: {
+        nodeId: 'node-uuid-1',
+        label: 'Updated Label',
+        description: 'New longer description.'
+      }
+    },
+    when_to_use: 'When improving or refining a node on the mind map.'
+  }),
+
+  delete_map_node: () => ({
+    capability: 'delete_map_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Delete a node from a mind map.',
+    schema: {
+      action: 'delete_map_node',
+      payload: {
+        nodeId: 'UUID of the node to delete'
+      }
+    },
+    example: {
+      action: 'delete_map_node',
+      payload: {
+        nodeId: 'node-uuid-1'
+      }
+    },
+    when_to_use: 'When pruning a mind map.'
+  }),
+
+  delete_map_edge: () => ({
+    capability: 'delete_map_edge',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Delete a relationship between nodes on a mind map.',
+    schema: {
+      action: 'delete_map_edge',
+      payload: {
+        edgeId: 'UUID of the edge to delete'
+      }
+    },
+    example: {
+      action: 'delete_map_edge',
+      payload: {
+        edgeId: 'edge-uuid-1'
+      }
+    },
+    when_to_use: 'When pruning connections on a mind map.'
   })
 };
 

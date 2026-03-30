@@ -8,9 +8,10 @@ export type IdeaStatus =
 
 export interface Idea {
   id: string
+  userId: string
   title: string
-  raw_prompt: string
-  gpt_summary: string
+  rawPrompt: string
+  gptSummary: string
   vibe: string
   audience: string
   intent: string

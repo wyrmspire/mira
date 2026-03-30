@@ -1,13 +1,15 @@
 import type { StudioStore } from './storage'
+import { DEFAULT_USER_ID } from './constants'
 
 export function getSeedData(): StudioStore {
   return {
     ideas: [
       {
         id: 'idea-001',
+        userId: DEFAULT_USER_ID,
         title: 'AI-powered code review assistant',
-        raw_prompt: 'What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?',
-        gpt_summary: 'A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.',
+        rawPrompt: 'What if we had a tool that could automatically review PRs and suggest improvements based on team coding standards?',
+        gptSummary: 'A GitHub-integrated tool that analyzes pull requests against defined coding standards and provides actionable feedback.',
         vibe: 'productivity',
         audience: 'engineering teams',
         intent: 'Reduce code review bottlenecks and maintain code quality at scale.',
@@ -16,9 +18,10 @@ export function getSeedData(): StudioStore {
       },
       {
         id: 'idea-002',
+        userId: DEFAULT_USER_ID,
         title: 'Team onboarding checklist builder',
-        raw_prompt: 'Build something to help companies create interactive onboarding flows for new hires',
-        gpt_summary: 'A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.',
+        rawPrompt: 'Build something to help companies create interactive onboarding flows for new hires',
+        gptSummary: 'A tool for building structured, trackable onboarding checklists with progress visibility for managers and new hires.',
         vibe: 'operations',
         audience: 'HR teams and new employees',
         intent: 'Cut onboarding time and reduce "what do I do next" anxiety.',

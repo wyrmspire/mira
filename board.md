@@ -19,223 +19,207 @@
 | Sprint 13 | Goal OS + Skill Map — Goal entity, Skill domains, mastery engine, GPT goal intake, Skill Tree UI, batch endpoints, home summary optimization | TSC ✅ Build ✅ | ✅ Complete — Gate 0 + 7 lanes. Migration 008, Goal/Skill CRUD, mastery engine, SkillTreeGrid, batch endpoints, home-summary-service. |
 | Sprint 14 | Surface the Intelligence — Schema truth pass, Skill Tree upgrade, Focus Today heuristics, mastery visibility, proactive coach, completion retrospective | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes. Fixed discover-registry/validator alignment (7 step types), mastery N+1 (SOP-30), OpenAPI goalId, dead outlineIds. All W items verified. |
 | Sprint 15 | Chained Experiences + Spontaneity — Experience graph UI, ephemeral injection, re-entry engine hardening, friction loops, timeline page, profile upgrade | TSC ✅ Build ✅ Browser ✅ | ✅ Complete — 7 lanes. Chain suggestions, EphemeralToast, ReentryPromptCard, auto-loops, timeline filtering, profile mastery trajectories. |
-
----
-
-# Sprint 16 — GPT Instruction Alignment + Knowledge Gateway
-
-> **Goal:** Align the GPT's instruction set and schema with the full Sprint 15 codebase. Fix schema enum drift. Give GPT the ability to write/update knowledge units directly. Wire skill domain CRUD through the GPT gateway. Rewrite instructions from Mira's self-audit plus code-verified patches.
+| Sprint 16 | GPT Instruction Alignment + Knowledge Gateway | TSC ✅ Build ✅ | ✅ Complete — Enum drift fixed. Knowledge/Skill gateway CRUD wired. GPT instructions rewritten to 5-mode structure. |
+> **Goal:** Deploy critical fixes to the GPT Gateway (Ideas table missing `user_id` and normalization, knowledge DB constraint mismatch) and implement the "Mind Map Station" feature by porting architectural patterns from the `workcoms` Think Tank module into Mira's existing `think_` DB infrastructure. The GPT instructions must also be updated to ensure the AI knows Mira is an operating system with experiences, not just tool-usage logic.
 >
-> **The test:** (1) OpenAPI reentry trigger/contextScope enums match the TypeScript contract. (2) GPT instructions cover all 5 conversation modes, step payload gotchas, re-entry triggers, auto-loops, mastery pipeline, chain awareness, and knowledge write protocol. (3) GPT can create knowledge units via `createEntity(type="knowledge")`. (4) GPT can manage skill domains via `createEntity(type="skill_domain")` and `updateEntity(action="update_skill_domain")`. (5) Discover registry has entries for `create_knowledge` and `skill_domain` capabilities.
->
-> **Core principle:** The app is already doing 80% of the hard work. The instructions and schema just need to catch up so the GPT uses the full surface instead of 10% of it.
+> **The test:** The `ideas` and `knowledge_units` tables can properly ingest GPT creations. The GPT's instructions explicitly define what Mira IS. The Mind Map canvas (`/map`) loads nodes and edges using `@xyflow/react` against Supabase `think_boards`, `think_nodes`, and `think_edges`, and GPT can manipulate this canvas via new endpoints.
 
 ---
 
 ## Dependency Graph
 
 ```
-Lane 1:  [W1–W5 SCHEMA + GATEWAY CODE]     (code changes — OpenAPI, discover registry, gateway router, knowledge route)
-Lane 2:  [W1–W4 GPT INSTRUCTIONS REWRITE]   (docs only — gpt-instructions.md)
-Lane 3:  [W1–W5 INTEGRATION + VERIFICATION] (depends on L1+L2 ── verify contracts, TSC, build)
+Lane 1:  [W1–W6 FIXES & MIGRATIONS]       ───> (Code + DB migrations)
+Lane 2:  [W1–W2 MAP INFRASTRUCTURE]       ───> (Supabase CRUD)
+Lane 3:  [W1–W4 MAP GPT ENDPOINTS]        ───> (Gateway wiring, relies on L2)
+Lane 4:  [W1–W4 MAP CANVAS UI]            ───> (React Flow frontend, relies on L2)
+Lane 5:  [W1–W3 MAP DRAWERS & EXPORTS]    ───> (Frontend UX, relies on L4)
+              │
+              ↓
+Lane 6:  [W1–W4 INTEGRATION + VERIFICATION] (Relies on all lanes finishing)
 ```
 
-Lane 1 and Lane 2 are **fully parallel** (no shared files).
-Lane 3 depends on both finishing first.
+**Independent:** Lanes 1, 2, and 4 can start immediately. Lane 3 requires L2. Lane 5 requires L4.
 
 ---
 
-## Sprint 16 Ownership Zones
+## Sprint 17 Ownership Zones
 
 | Zone | Files | Lane |
 |------|-------|------|
-| Schema + Gateway | `public/openapi.yaml`, `lib/gateway/discover-registry.ts`, `lib/gateway/gateway-router.ts`, `app/api/gpt/create/route.ts`, `app/api/gpt/update/route.ts`, `lib/contracts/resolution-contract.ts` | Lane 1 |
-| GPT Instructions | `gpt-instructions.md` | Lane 2 |
-| Integration | `board.md`, `AGENTS.md`, all files (read-only verification) | Lane 3 |
+| Fixes & Core | `ideas-service.ts`, `gpt-instructions.md`, DB migrations, `openapi.yaml` | Lane 1 |
+| Map Backend | `mind-map-service.ts` | Lane 2 |
+| Map GPT | `gateway-router.ts`, `discover-registry.ts`, `gateway-types.ts`, `api/gpt/create/route.ts` | Lane 3 |
+| Map UI Core | `app/map/page.tsx`, `components/think/think-canvas.tsx`, `think-node.tsx`, `package.json` | Lane 4 |
+| Map Deep Dive | `think-node-drawer.tsx`, `slide-out-drawer.tsx`, export wiring | Lane 5 |
+| Integration | `board.md`, TSC, DB review | Lane 6 |
 
 ---
 
-## Lane 1 — Schema + Gateway Code
+## Lane 1 — System Fixes & DB Migrations
 
-> Fix enum drift, wire knowledge write and skill domain CRUD through the GPT gateway, update discover registry.
+> Add `user_id` to ideas, fix gateway normalization, expand knowledge unit_type constraint, and revive GPT instruction product reality.
 
-**W1 — Fix enum mismatches (Contract + Registry + OpenAPI)** ✅
-- Updated `lib/contracts/resolution-contract.ts`: added `'study'` to `ResolutionModeV1` and `VALID_MODES`.
-- Updated `lib/gateway/discover-registry.ts`: re-entry triggers (`time | completion | inactivity | manual`) and context scopes (`minimal | full | focused`) fixed.
-- Updated `public/openapi.yaml`: re-entry enums and resolution modes aligned with contracts.
+**W1 — Fix `ideas-service.ts` gateway normalization** ✅
+- Implement `toDB()` mapping `rawPrompt` -> `raw_prompt`, `gptSummary` -> `gpt_summary`, and `userId` -> `user_id`.
+- Implement `fromDB()` mapping back to camelCase.
+- Update `createIdea` and `getIdeas` to use these normalizations.
+- **Done**: Normalized Idea interface and service with toDB/fromDB mappers and updated all UI consumers.
 
-**W2 — Extend gateway router (Knowledge + Skill Domain)** ✅
-- Extended `lib/gateway/gateway-router.ts`: added creation support for `knowledge` (via `createKnowledgeUnit`) and `skill_domain` (via `createSkillDomain`).
+**W2 — Create Migration 010 (Ideas `user_id` + Knowledge `unit_type`)** ✅
+- Create a new migration file in `lib/supabase/migrations/` (e.g., `010_ideas_user_id_and_knowledge_constraint.sql`).
+- Add `user_id UUID REFERENCES users(id)` to the `ideas` table (or similar reference).
+- Drop `knowledge_units_unit_type_check` and add it back with the expanded array matching `KNOWLEDGE_UNIT_TYPES`.
+- **Done**: Created migration 010 (numbering incremented from existing 009) to add user_id to ideas and expand knowledge unit_type constraint.
 
-**W3 — Update creation API error messages** ✅
-- Updated `app/api/gpt/create/route.ts`: added `knowledge | skill_domain` to the list of expected types in error responses.
+**W3 — Filter `getIdeas()` by `user_id`** ✅
+- Ensure fetching ideas in the `ideas-service.ts` strictly enforces the `userId` in the query to avoid loading orphan data.
+- **Done**: Added optional userId parameter to getIdeas and getIdeasByStatus to enforce DB-level filtering.
 
-**W4 — Register new capabilities in Discover Registry** ✅
-- Extended `lib/gateway/gateway-types.ts`: added `create_knowledge` and `create_skill_domain` to `DiscoverCapability` union.
-- Updated `lib/gateway/discover-registry.ts`: registered full schemas, examples, and usage guidance for `create_knowledge` and `create_skill_domain`.
+**W4 — Update `openapi.yaml` and `discover-registry.ts`** ✅
+- Ensure the `idea` creation schema requires `userId` in the discover registry.
+- **Done**: Verified openapi.yaml and discover-registry.ts already correctly enforce userId and camelCase Idea fields.
+- Ensure the OpenAPI spec accurately reflects that `idea` requires `userId`, `rawPrompt`, and `gptSummary`.
 
-**W5 — Formalize SOP-34 in `AGENTS.md`** ✅
-- Added **SOP-34** (Enum verification protocol) to `AGENTS.md` to prevent future schema/contract drift.
+**W5 — Rewrite `gpt-instructions.md` following SOP-35** ✅
+- Add Mind Map Station to the description.
+- Use 5-mode operation (Explore, Research, Draft, Test, Commit).
+- Explain the Experience vs. Realization duality (Lived vs. Built).
+- **Done**: Rewrote gpt-instructions.md as a comprehensive Orchestration Protocol for the Learning OS. Mira is a goal-oriented operating system and experience engine, not just a database. You are creating structured learning journeys (Experiences, Skill Domains, Curriculum) where the user tests assumptions.
 
-| W | Files | Status | Description |
-|---|-------|--------|-------------|
-| W1 | `lib/contracts/resolution-contract.ts`, `lib/gateway/discover-registry.ts`, `public/openapi.yaml` | ✅ | Fix enum drift (`explicit`→`manual`, `interaction_only`→`minimal`, etc). Add `study` mode to resolution modes. |
-| W2 | `lib/gateway/gateway-router.ts` | ✅ | Wire `knowledge` and `skill_domain` create cases. Import services. |
-| W3 | `app/api/gpt/create/route.ts` | ✅ | Update 400 error message with new types. |
-| W4 | `lib/gateway/discover-registry.ts`, `lib/gateway/gateway-types.ts` | ✅ | Register `create_knowledge` and `create_skill_domain` capabilities. |
-| W5 | `AGENTS.md` | ✅ | Add SOP-34 (Enum verification protocol). |
-
-> **Lane 1 Status**: ✅ Truth Pass Complete. All schemas aligned with contracts and new CRUD wired.
-
-**Done when:**
-- OpenAPI reentry enums match TypeScript contract exactly
-- Discover registry reentry enums match TypeScript contract exactly
-- `study` mode exists in resolution contract
-- `createEntity(type="knowledge")` creates a knowledge unit via gateway
-- `createEntity(type="skill_domain")` creates a skill domain via gateway
-- `updateEntity(action="update_knowledge")` updates knowledge via gateway
-- `updateEntity(action="update_skill_domain")` manages skill domains via gateway
-- Discover registry has `create_knowledge` and `skill_domain` capability entries
-- TSC clean
+**W6 — Execute Supabase Migration** ✅
+- Use the Supabase tool to apply the new 010 migration so it's live on the remote DB.
+- **Done**: Applied migration 010 to Supabase project `bbdhhlungcjqzghwovsx`.
 
 ---
 
-## Lane 2 — GPT Instructions Rewrite
+## Lane 2 — Mind Map Infrastructure (Supabase Layer)
 
-> Replace the current 42-line `gpt-instructions.md` with Mira's proposed 5-mode structure, patched with code-verified safety rails.
+> Create the CRUD service layer for the `think_` tables that already exist in Supabase.
 
-**W1 — Write the new instruction file** ✅
-- **Done**: Rewrote `gpt-instructions.md` with 5-mode structure and all missing protocols.
-- Overwrite `gpt-instructions.md` with the merged instruction set
-- **Foundation**: Mira's proposed 5-mode structure (Explore, Research, Draft, Test, Commit)
-- **Re-add from current instructions (Mira dropped these)**:
-  - Step payload gotchas: Lesson uses `sections[]` not `content`; Reflection uses `prompts[]` (id, text); Questionnaire uses `label` not `text`
-  - Checkpoint SOP: ALWAYS link `knowledge_unit_id` via `updateEntity(action="link_knowledge")` for strict grading
-  - Resolution visual impact: `light` = no chrome, `medium` = progress bar + step title, `heavy` = full header + goal + progress
-  - Lifecycle transitions: `approve` → `publish` → `activate` (persistent); `start` (ephemeral auto-activates)
-- **Add new sections (neither version had these)**:
-  - Re-entry trigger details: `time` (with `timeAfterCompletion` duration format: `24h`, `3d`, `1m`), `manual` (always fires, high priority), `inactivity` (48h window), `completion` (fires on status change)
-  - Auto-loop awareness: `trigger: 'time'` + `timeScope: 'ongoing'` → system auto-creates next iteration on completion
-  - Graph state usage: `getGPTState` returns `graph: { activeChains, totalCompleted, loopingTemplates, deepestChain }`
-  - Urgency semantics: `high` = persistent toast (won't auto-dismiss), `medium` = standard toast (auto-dismiss), `low` = gentle notification
-  - Mastery pipeline: checkpoint pass → `promoteKnowledgeProgress` → evidence_count++ → level promotion (`undiscovered → aware → beginner → practicing → proficient → expert` for skill domains; `unseen → read → practiced → confident` for knowledge units)
-- **Add knowledge write protocol** (new capability from Lane 1):
-  - "You can now create knowledge units directly via `createEntity(type='knowledge')`"
-  - "Use this when web research reveals something worth saving as a persistent insight"
-  - "Call `discoverCapability(capability='create_knowledge')` for exact schema"
-- **Add skill domain protocol** (new capability from Lane 1):
-  - "You can create/link skill domains via `createEntity(type='skill_domain')`"
-  - "Call `discoverCapability(capability='skill_domain')` for exact schema"
+**W1 — Build `mind-map-service.ts` types and interface** ✅
+- **Done**: Created `lib/services/mind-map-service.ts` with ThinkBoard, ThinkNode, and ThinkEdge types and standard normalization mappers.
+- Create `lib/services/mind-map-service.ts`.
+- Define `ThinkBoard`, `ThinkNode`, `ThinkEdge` types.
+- Export standard `toDB()` / `fromDB()` mappers.
 
-**W2 — Verify instruction-to-code alignment** ✅
-- **Done**: Cross-referenced `getGPTState`, gateway schemas, reentry semantics, and mastery thresholds explicitly against source files.
-- Cross-reference every claim in the new instructions against actual code:
-  - `state/route.ts` for what `getGPTState` returns
-  - `gateway-router.ts` for valid create types and update actions
-  - `resolution-contract.ts` for valid enum values
-  - `reentry-engine.ts` for trigger behavior
-  - `experience-service.ts` for completion pipeline
-  - `graph-service.ts` for auto-loop logic
-- Document any remaining gaps in a comment block at the bottom of the instruction file
-
-**W3 — Preserve Mira's operational stance** ✅
-- **Done**: Embedded multi-track thinking, discovery polling, mutation transparency, and non-linear operational limits directly in the 5-mode breakdown.
-- Ensure the following from Mira's draft are included (not present in current instructions):
-  - Five conversation modes with default: Explore → Research → Draft
-  - "Do not memorize schemas. Call discoverCapability."
-  - Multi-track thinking: "Do not collapse everything into one giant linear sequence"
-  - MiraK: "Favor multiple focused research runs over one vague mega-query"
-  - Mutation transparency: label writes as draft/test/committed/exploratory
-  - Verification rule: after every write, verify and report outcome
-  - Web research default: browse before advising on markets/tools/platforms
-  - Legacy caution: de-prioritize quarantined project/PR surfaces
-  - First-session rule: don't race into curriculum; establish operating objective first
-
-**W4 — Changes tracker integration** ✅
-- **Done**: Restored the exact `getChangeReports` instruction to the Discovery block as requested.
-- Ensure `getChangeReports` (GET /api/gpt/changes) is prominently placed in the state/re-entry section
-- This was correct in the current instructions but Mira's draft omitted the specific endpoint reference
-
-**Done when:**
-- `gpt-instructions.md` is rewritten with 5-mode structure
-- All step payload gotchas are present
-- Checkpoint SOP is present
-- Resolution visual impact documented
-- Lifecycle transitions documented
-- All 5 new awareness sections present (triggers, loops, graph, urgency, mastery)
-- Knowledge write and skill domain protocols added
-- All Mira operational stances preserved
-- Every claim verifiable against code
+**W2 — Implement standard CRUD Operations** ✅
+- **Done**: Implemented getBoards, createBoard, getBoardGraph, createNode, updateNodePosition, updateNode, createEdge, deleteEdge, and deleteNode with workspace awareness.
+- `getBoards(userId: string)`
+- `createBoard(userId: string, name: string)`
+- `getBoardGraph(boardId: string)` -> returns `{ nodes: ThinkNode[], edges: ThinkEdge[] }`
+- `createNode(userId: string, boardId: string, node: Partial<ThinkNode>)`
+- `updateNodePosition(nodeId: string, x: number, y: number)`
+- `updateNode(nodeId: string, updates: Partial<ThinkNode>)`
+- `createEdge(boardId: string, sourceNodeId: string, targetNodeId: string)`
+- `deleteEdge(edgeId: string)`
+- `deleteNode(nodeId: string)` (Note: cascade delete rules in DB might handle edges)
 
 ---
 
-## Lane 3 — Integration + Verification
+## Lane 3 — Mind Map AI Endpoints (Gateway Integration) 🟡
 
-> Verify all changes from Lanes 1 and 2 are consistent, TSC passes, build passes, and AGENTS.md is updated.
+> Wire the Mind Map service into the GPT Gateway so Mira can build clusters in real-time.
 
-**W1 — TSC verification** ⬜
-- Run `npx tsc --noEmit` — must pass
-- Run `npm run build` — must pass
+**W1 — Add `map_node` and `map_edge` to gateway definitions** ✅
+- **Done**: Added `create_map_node` and `create_map_edge` to `DiscoverCapability` and registered them with schemas/examples in `discover-registry.ts`.
+- Edit `lib/gateway/gateway-types.ts` to add `create_map_node` and `create_map_edge` to capabilities.
+- Edit `lib/gateway/discover-registry.ts` to add these schemas.
+- Example Node Payload: `{ userId, boardId, label, description, color, position_x, position_y }`.
+- Example Edge Payload: `{ userId, boardId, sourceNodeId, targetNodeId }`.
 
-**W2 — Contract consistency check** ⬜
-- Verify these all agree:
-  - `resolution-contract.ts` VALID_MODES includes `study`
-  - `discover-registry.ts` resolution capability includes `study`
-  - `openapi.yaml` resolution.mode includes `study`
-  - All three say the same mode values
-- Verify reentry trigger enum:
-  - `resolution-contract.ts` VALID_TRIGGERS = `['time', 'completion', 'inactivity', 'manual']`
-  - `discover-registry.ts` reentry trigger string = `'time | completion | inactivity | manual'`
-  - `openapi.yaml` trigger enum = `[time, completion, inactivity, manual]`
-- Verify contextScope enum:
-  - `resolution-contract.ts` VALID_CONTEXT_SCOPES = `['minimal', 'full', 'focused']`
-  - `discover-registry.ts` contextScope string = `'minimal | full | focused'`
-  - `openapi.yaml` contextScope enum = `[minimal, full, focused]`
+**W2 — Connect endpoints in `gateway-router.ts`** ✅
+- **Done**: Imported `mind-map-service.ts` dynamically in `gateway-router.ts` and added switch cases for `map_node` and `map_edge`. Implemented auto-boarding logic to select or create a default board if `boardId` is missing.
 
-**W3 — Gateway dispatch test** ⬜
-- Verify `gateway-router.ts` now handles these create types: `experience`, `ephemeral`, `idea`, `goal`, `step`, `knowledge`, `skill_domain`
-- Verify `gateway-router.ts` now handles these update actions: `update_step`, `reorder_steps`, `delete_step`, `transition`, `link_knowledge`, `update_knowledge`, `update_skill_domain`
-- Verify `app/api/gpt/create/route.ts` error message lists all types
+**W3 — Error message registration** ✅
+- **Done**: Updated `app/api/gpt/create/route.ts` error messages to include `map_node` and `map_edge`.
 
-**W4 — Instruction-to-schema cross-check** ⬜
-- Verify every endpoint mentioned in `gpt-instructions.md` exists and is accessible
-- Verify every capability mentioned in instructions exists in the discover registry
-- Verify `create_knowledge` and `skill_domain` capabilities appear in discover registry
+**W4 — Update `openapi.yaml`** ✅
+- **Done**: Added `map_node` and `map_edge` into the OpenAPI `create` schema enum array and defined the relevant request parameters.
 
-**W5 — Update AGENTS.md** ⬜
-- Add to Lessons Learned changelog:
-  - Sprint 16: GPT instruction alignment pass. Fixed reentry trigger enum drift (`explicit` → `manual`, added `time`). Fixed contextScope enum drift. Added `study` to resolution mode contract. Wired knowledge write + skill domain CRUD through GPT gateway. Rewrote GPT instructions with 5-mode structure from Mira's self-audit.
-- Add SOP-34: GPT instructions must match TypeScript contracts — always verify enum values against `lib/contracts/resolution-contract.ts` before updating OpenAPI or discover registry
-- Update repo file map if new files were created
-- Do NOT add sprint-specific content
+---
 
-**Done when:**
-- TSC clean, build clean
-- All three enum sources agree (contract, discover, OpenAPI)
-- Gateway handles all new create types and update actions
-- Instructions reference only real capabilities
-- AGENTS.md updated with SOP-34 and changelog entry
+## Lane 4 — Mind Map UI (Canvas & Layout)
+
+> Implement the React Flow visual frontend (`app/map/page.tsx`).
+
+**W1 — Install Next-Gen Package** ✅
+- Run `npm install @xyflow/react` to install the modern React Flow library. Add it to `package.json`.
+- **Done**: Installed `@xyflow/react` dependency.
+
+**W2 — Add `/map` route** ✅
+- Define `ROUTES.mindMap = '/map'` in `lib/routes.ts`.
+- Add "Mind Map" to the `StudioSidebar` alongside Arena/Inbox/Library.
+- **Done**: Added `/map` route to `ROUTES` and `NAV_ITEMS` in `StudioSidebar`.
+
+**W3 — Build `app/map/page.tsx`** ✅
+- Create the page.
+- Load the user's default `ThinkBoard` via the server component, or create one instantly if none exist.
+- Pass initial `nodes` and `edges` to a client component.
+- **Done**: Created the page, automated board initialization if none exists, and wired to `ThinkCanvas`.
+
+**W4 — Build `components/think/think-canvas.tsx` and `think-node.tsx`** ✅
+- Implement the `ReactFlow` canvas. Use xyflow CSS imports.
+- Sync `onNodesChange` and `onEdgesChange`.
+- On drag stop: throttled update to `updateNodePosition` via a new API route `PATCH /api/mindmap/nodes/[id]/position`. (Build that endpoint in this W-item!).
+- `think-node.tsx`: A robust Custom Node styling to match the Mira Dark theme. Make sure it shows `label`.
+- **Done**: Fully implemented visual canvas with React Flow, custom node components, and wired drag-persistence boundary.
+
+---
+
+## Lane 5 — Mind Map Deep Dive & Side Effects ✅
+> Allow clicking nodes to reveal rich insights and export them into the Mira ecosystem.
+
+- [x] **W1 — Build components/drawers/think-node-drawer.tsx**
+  - **Done**: Established node detail drawer with form-controlled updates and interactive visual theme.
+- [x] **W2 — Register in components/layout/slide-out-drawer.tsx**
+  - **Done**: Built a global slide-out drawer system in AppShell that dispatches/listens for node-specific content.
+- [x] **W3 — Implement export actions** ("Save as Knowledge Unit", "Draft as Idea", "Create Goal")
+  - **Done**: Wired export logic using standardized API payloads for ideas and goals.
+
+---
+
+## Lane 6 — Integration, Polish & Verifications
+
+> Final sweeps before wrapping the sprint.
+
+**W1 — Verify DB Migrations (Lane 1 sync)** ⬜
+- Verify that `ideas` now correctly saves camelCase GPT inputs as snake_case in Supabase.
+- Verify `knowledge_units` correctly accepts "concept", "framework", etc.
+
+**W2 — TSC and Build validation** ⬜
+- Run `npx tsc --noEmit`. Fix any regressions.
+- Run `npm run build`. Verify no dynamic Next.js fetching issues or typing holes.
+
+**W3 — Canvas Lifecycle check** ⬜
+- Ensure loading `/map` doesn't yield server/client hydration mismatches.
+- Ensure node dropping saves to DB.
+
+**W4 — Final Validation of `gpt-instructions.md`** ⬜
+- Ensure the instruction narrative paints a vibrant picture of what Mira is. Verify it did not lose the crucial 5-mode workflows it gained in Sprint 16.
 
 ---
 
 ## Pre-Flight Checklist
-
-- [ ] TSC clean (`npx tsc --noEmit`)
-- [ ] Build clean (`npm run build`)
-- [ ] Dev server confirmed running (`npm run dev`)
+- [ ] Dependency installation for xyflow complete
+- [ ] Database migrated successfully
+- [ ] TSC clean
+- [ ] Build clean
+- [ ] Dev server confirmed running
 
 ## Handoff Protocol
-
-1. Mark W items ⬜→🟡→✅ as you go
-2. Run tsc before marking ✅
-3. **DO NOT perform visual browser checks**. Lane 3 handles all verification.
-4. Never touch files owned by other lanes
-5. Never push/pull from git
+1. Mark W items ⬜→🟡→✅ as you go.
+2. Run tsc before marking ✅.
+3. Test UI modifications visually without colliding workflows. 
+4. Never touch files owned by other lanes.
+5. Never push/pull from git.
 
 ## Test Summary
-
 | Lane | TSC | Notes |
 |------|-----|-------|
-| Lane 1 | ✅ | Fixed gateway cases for knowledge/skill_domain updates. |
-| Lane 2 | ✅ | Rewrote gpt-instructions.md with 5-mode structure. |
-| Lane 3 | ✅ | Verified contract enum alignment across contract/registry/OpenAPI. |
+| Lane 1 | ✅ | Normalized Idea entity and enforced userId filtering. |
+| Lane 2 | ✅ | Mind-map-service clean. |
+| Lane 3 | ✅ | Gateway wired; schemas registered; OpenAPI updated. TSC clean in Lane 3 files. |
+| Lane 4 | ✅ | Visual canvas and drag-persistence complete. |
+| Lane 5 | ✅ | Global drawer established; node details & export wiring complete. |
+| Lane 6 | ⬜ | Pending Final Visual Verification & Integration Check. |

@@ -32,7 +32,7 @@ export function IdeaSummaryPanel({ idea }: IdeaSummaryPanelProps) {
             <div className="space-y-3">
               <div>
                 <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Summary</span>
-                <p className="text-sm text-[#cbd5e1] leading-relaxed">{idea.gpt_summary}</p>
+                <p className="text-sm text-[#cbd5e1] leading-relaxed">{idea.gptSummary}</p>
               </div>
               {idea.vibe && (
                 <div className="flex gap-3">
@@ -52,11 +52,11 @@ export function IdeaSummaryPanel({ idea }: IdeaSummaryPanelProps) {
                   )}
                 </div>
               )}
-              {idea.raw_prompt && (
+              {idea.rawPrompt && (
                 <div>
                   <span className="block text-[10px] text-[#4a4a6a] uppercase tracking-wide mb-0.5">Original prompt</span>
                   <blockquote className="border-l-2 border-[#2e2e42] pl-3">
-                    <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.raw_prompt}&rdquo;</p>
+                    <p className="text-xs text-[#64748b] italic leading-relaxed">&ldquo;{idea.rawPrompt}&rdquo;</p>
                   </blockquote>
                 </div>
               )}

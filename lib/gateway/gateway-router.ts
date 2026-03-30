@@ -62,6 +62,41 @@ export async function dispatchCreate(type: string, payload: any) {
       return createKnowledgeUnit(payload);
     case 'skill_domain':
       return createSkillDomain(payload);
+    case 'map_node': {
+      const { createNode, getBoards, createBoard } = await import('@/lib/services/mind-map-service');
+      let boardId = payload.boardId;
+      if (!boardId) {
+        const boards = await getBoards(payload.userId);
+        if (boards.length > 0) {
+          boardId = boards[0].id;
+        } else {
+          const newBoard = await createBoard(payload.userId, 'Default Board');
+          boardId = newBoard.id;
+        }
+      }
+      return createNode(payload.userId, boardId, {
+        label: payload.label,
+        description: payload.description,
+        color: payload.color,
+        positionX: payload.position_x,
+        positionY: payload.position_y,
+        nodeType: 'ai_generated'
+      });
+    }
+    case 'map_edge': {
+      const { createEdge, getBoards, createBoard } = await import('@/lib/services/mind-map-service');
+      let edgeBoardId = payload.boardId;
+      if (!edgeBoardId) {
+        const boards = await getBoards(payload.userId);
+        if (boards.length > 0) {
+          edgeBoardId = boards[0].id;
+        } else {
+          const newBoard = await createBoard(payload.userId, 'Default Board');
+          edgeBoardId = newBoard.id;
+        }
+      }
+      return createEdge(edgeBoardId, payload.sourceNodeId, payload.targetNodeId);
+    }
     default:
       throw new Error(`Unknown create type: "${type}"`);
   }
@@ -125,7 +160,25 @@ export async function dispatchUpdate(action: string, payload: any) {
         return updateDomainMastery(domain.goalId, payload.domainId);
       }
       return updateSkillDomain(payload.domainId, payload.updates);
-    
+    case 'update_map_node':
+      if (!payload.nodeId) throw new Error('Missing nodeId');
+      const { updateNode } = await import('@/lib/services/mind-map-service');
+      return updateNode(payload.nodeId, {
+        label: payload.label,
+        description: payload.description,
+        color: payload.color,
+      });
+
+    case 'delete_map_node':
+      if (!payload.nodeId) throw new Error('Missing nodeId');
+      const { deleteNode } = await import('@/lib/services/mind-map-service');
+      return deleteNode(payload.nodeId);
+
+    case 'delete_map_edge':
+      if (!payload.edgeId) throw new Error('Missing edgeId');
+      const { deleteEdge } = await import('@/lib/services/mind-map-service');
+      return deleteEdge(payload.edgeId);
+
     default:
       throw new Error(`Unknown update action: "${action}"`);
   }

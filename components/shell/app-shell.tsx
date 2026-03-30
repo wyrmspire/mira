@@ -2,6 +2,7 @@ import { StudioSidebar } from './studio-sidebar'
 import { StudioHeader } from './studio-header'
 import { MobileNav } from './mobile-nav'
 import { CommandBar } from './command-bar'
+import { SlideOutDrawer } from '@/components/layout/slide-out-drawer'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -17,6 +18,7 @@ export function AppShell({ children }: AppShellProps) {
       </div>
       <MobileNav />
       <CommandBar />
+      <SlideOutDrawer />
     </div>
   )
 }

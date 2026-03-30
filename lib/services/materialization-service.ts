@@ -9,7 +9,7 @@ export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<
   const project = await createProject({
     ideaId: idea.id,
     name: idea.title,
-    summary: idea.gpt_summary,
+    summary: idea.gptSummary,
     state: 'arena',
     health: 'green',
     currentPhase: 'Getting started',

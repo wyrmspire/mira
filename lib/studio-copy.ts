@@ -255,4 +255,10 @@ export const COPY = {
       mastery: '{count} at {level}+',
     },
   },
+  // --- Sprint 17: Mind Map Station ---
+  mindMap: {
+    heading: 'Mind Map',
+    subheading: 'Your visual thinking board.',
+    emptyState: 'Create your first thinking board to start mapping.',
+  },
 }

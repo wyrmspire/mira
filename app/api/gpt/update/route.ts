@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: 'Missing `action` parameter',
         expected: {
-          action: 'update_step | reorder_steps | delete_step | transition | link_knowledge | update_knowledge | update_skill_domain',
+          action: 'update_step | reorder_steps | delete_step | transition | link_knowledge | update_knowledge | update_skill_domain | update_map_node | delete_map_node | delete_map_edge',
           payload: '{ ... } — call GET /api/gpt/discover for schema',
         },
       }, { status: 400 });
