@@ -245,7 +245,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge]
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain]
                   description: The mutation action to perform.
                 experienceId:
                   type: string
@@ -273,6 +273,16 @@ paths:
                   type: string
                   enum: [teaches, tests, deepens, pre_support, enrichment]
                   description: For action=link_knowledge — the type of link.
+                unitId:
+                  type: string
+                  description: For action=update_knowledge — the knowledge unit to update.
+                updates:
+                  type: object
+                  additionalProperties: true
+                  description: For action=update_knowledge or update_skill_domain — the patch updates.
+                domainId:
+                  type: string
+                  description: For action=update_skill_domain — the domain ID to update or link to.
       responses:
         '200':
           description: Updated
@@ -325,7 +335,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal"
+          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain"
         - name: step_type
           in: query
           required: false
