@@ -58,11 +58,15 @@ export async function dispatchCreate(type: string, payload: any) {
       if (payload.steps && Array.isArray(payload.steps)) {
         for (let i = 0; i < payload.steps.length; i++) {
           const step = payload.steps[i];
+          const st = step.step_type ?? step.type;
+          if (!st || st === 'step') continue;
+          
+          const { type: _tp, step_type: _st, title, payload: nestedPayload, completion_rule, ...rest } = step;
           await addStep(newInstance.id, {
-            step_type: step.step_type ?? step.type,
-            title: step.title ?? '',
-            payload: step.payload ?? {},
-            completion_rule: step.completion_rule ?? null,
+            step_type: st,
+            title: title ?? '',
+            payload: nestedPayload ?? rest,
+            completion_rule: completion_rule ?? null,
           });
         }
       }
@@ -107,11 +111,24 @@ export async function dispatchCreate(type: string, payload: any) {
       }
       return goal;
     }
-    case 'step':
+    case 'step': {
       if (!payload.experienceId && !payload.instanceId) {
         throw new Error('Missing experienceId (or instanceId) for step creation');
       }
-      return addStep(payload.experienceId ?? payload.instanceId, payload);
+      const st = payload.step_type ?? payload.type;
+      if (!st || st === 'step') {
+        throw new Error('Missing explicit step_type (e.g. lesson, challenge, checkpoint) for step creation');
+      }
+      
+      const { type: _tp, experienceId, instanceId, step_type: _st, title, payload: nestedPayload, completion_rule, ...rest } = payload;
+      
+      return addStep(payload.experienceId ?? payload.instanceId, {
+        step_type: st,
+        title: title ?? '',
+        payload: nestedPayload && Object.keys(nestedPayload).length > 0 ? nestedPayload : rest,
+        completion_rule: completion_rule ?? null
+      });
+    }
     case 'knowledge':
       return createKnowledgeUnit(payload);
     case 'skill_domain': {
@@ -245,7 +262,7 @@ export async function dispatchUpdate(action: string, payload: any) {
   switch (action) {
     case 'update_step':
       if (!payload.stepId) throw new Error('Missing stepId');
-      return updateExperienceStep(payload.stepId, payload.updates);
+      return updateExperienceStep(payload.stepId, payload.stepPayload ?? payload.updates);
     
     case 'reorder_steps':
       if (!payload.experienceId || !payload.orderedIds) {
