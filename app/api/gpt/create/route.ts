@@ -12,9 +12,10 @@ export const dynamic = 'force-dynamic';
  *   Flat:   { type: "goal", userId: "...", title: "..." }
  */
 export async function POST(request: NextRequest) {
+  let type: string | undefined;
   try {
     const body = await request.json();
-    const type = body.type;
+    type = body.type;
 
     if (!type) {
       return NextResponse.json({
@@ -49,10 +50,13 @@ export async function POST(request: NextRequest) {
     const result = await dispatchCreate(type, payload);
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
-    console.error('Create gateway failed:', error.message);
+    const msg = error.message || 'Failed to process creation request';
+    console.error('Create gateway failed:', msg);
+    // Validation-style errors get 400, everything else 500
+    const isValidation = msg.includes('Missing') || msg.includes('required') || msg.includes('Unknown create type');
     return NextResponse.json(
-      { error: error.message || 'Failed to process creation request' },
-      { status: 500 }
+      { error: msg, type: type ?? 'unknown', hint: 'Call GET /api/gpt/discover?capability=<type> for the correct schema.' },
+      { status: isValidation ? 400 : 500 }
     );
   }
 }

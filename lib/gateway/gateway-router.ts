@@ -20,48 +20,119 @@ import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'
  */
 export async function dispatchCreate(type: string, payload: any) {
   switch (type) {
-    case 'experience':
-      const newInstance = await createExperienceInstance(payload);
-      if (payload.previous_experience_id) {
+    case 'experience': {
+      // Normalize camelCase GPT payload → snake_case ExperienceInstance
+      const instanceData: any = {
+        user_id: payload.userId ?? payload.user_id,
+        template_id: payload.templateId ?? payload.template_id,
+        title: payload.title ?? 'Untitled Experience',
+        goal: payload.goal ?? '',
+        instance_type: 'persistent' as const,
+        status: 'proposed' as const,
+        resolution: payload.resolution,
+        reentry: payload.reentry ?? null,
+        idea_id: payload.ideaId ?? payload.idea_id ?? null,
+        previous_experience_id: payload.previousExperienceId ?? payload.previous_experience_id ?? null,
+        next_suggested_ids: [],
+        friction_level: null,
+        source_conversation_id: payload.source_conversation_id ?? null,
+        generated_by: payload.generated_by ?? 'gpt',
+        realization_id: null,
+        published_at: null,
+        curriculum_outline_id: payload.curriculum_outline_id ?? null,
+      };
+
+      if (!instanceData.resolution) {
+        throw new Error('Resolution is required. Call GET /api/gpt/discover?capability=resolution for valid values.');
+      }
+      if (!instanceData.template_id) {
+        throw new Error('templateId is required. Call GET /api/gpt/discover?capability=templates for valid IDs.');
+      }
+      if (!instanceData.user_id) {
+        throw new Error('userId is required.');
+      }
+
+      const newInstance = await createExperienceInstance(instanceData);
+
+      // Create inline steps if provided
+      if (payload.steps && Array.isArray(payload.steps)) {
+        for (let i = 0; i < payload.steps.length; i++) {
+          const step = payload.steps[i];
+          await addStep(newInstance.id, {
+            step_type: step.step_type ?? step.type,
+            title: step.title ?? '',
+            payload: step.payload ?? {},
+            completion_rule: step.completion_rule ?? null,
+          });
+        }
+      }
+
+      if (instanceData.previous_experience_id) {
         const { linkExperiences } = await import('@/lib/services/graph-service');
-        await linkExperiences(payload.previous_experience_id, newInstance.id, 'chain');
+        await linkExperiences(instanceData.previous_experience_id, newInstance.id, 'chain');
       }
       return newInstance;
+    }
     case 'ephemeral':
       return injectEphemeralExperience(payload);
     case 'idea':
       return createIdea(payload);
-    case 'goal':
+    case 'goal': {
       const { createGoal } = await import('@/lib/services/goal-service');
-      // Lane 2 owns skill-domain-service. We use a dynamic import to tolerate its absence during initial pass.
       const goal = await createGoal(payload);
+      // Auto-create skill domains from the domains array (best-effort, won't fail the goal)
       if (payload.domains && Array.isArray(payload.domains)) {
+        const domainResults: string[] = [];
         try {
-          const { createSkillDomain } = await import('@/lib/services/skill-domain-service');
+          const { createSkillDomain: createDomain } = await import('@/lib/services/skill-domain-service');
           for (const domainName of payload.domains) {
-            await createSkillDomain({
-              userId: goal.userId,
-              goalId: goal.id,
-              name: domainName,
-              description: '',
-              linkedUnitIds: [],
-              linkedExperienceIds: []
-            });
+            try {
+              await createDomain({
+                userId: goal.userId,
+                goalId: goal.id,
+                name: domainName,
+                description: '',
+                linkedUnitIds: [],
+                linkedExperienceIds: []
+              });
+              domainResults.push(domainName);
+            } catch (innerErr: any) {
+              console.warn(`[gateway/create] Skill domain "${domainName}" failed:`, innerErr.message);
+            }
           }
         } catch (err) {
-          console.warn('[gateway/create] Skill domains not created (service may be missing):', err);
+          console.warn('[gateway/create] Skill domain service unavailable:', err);
         }
+        return { ...goal, _domainsCreated: domainResults };
       }
       return goal;
+    }
     case 'step':
-      if (!payload.experienceId) {
-        throw new Error('Missing experienceId for step creation');
+      if (!payload.experienceId && !payload.instanceId) {
+        throw new Error('Missing experienceId (or instanceId) for step creation');
       }
-      return addStep(payload.experienceId, payload);
+      return addStep(payload.experienceId ?? payload.instanceId, payload);
     case 'knowledge':
       return createKnowledgeUnit(payload);
-    case 'skill_domain':
-      return createSkillDomain(payload);
+    case 'skill_domain': {
+      if (!payload.userId && !payload.user_id) {
+        throw new Error('Missing userId for skill_domain creation.');
+      }
+      if (!payload.goalId && !payload.goal_id) {
+        throw new Error('Missing goalId for skill_domain creation. Create a goal first via type="goal".');
+      }
+      if (!payload.name) {
+        throw new Error('Missing name for skill_domain creation.');
+      }
+      return createSkillDomain({
+        userId: payload.userId ?? payload.user_id,
+        goalId: payload.goalId ?? payload.goal_id,
+        name: payload.name,
+        description: payload.description ?? '',
+        linkedUnitIds: payload.linkedUnitIds ?? [],
+        linkedExperienceIds: payload.linkedExperienceIds ?? [],
+      });
+    }
     case 'map_node': {
       const { createNode, getBoards, createBoard } = await import('@/lib/services/mind-map-service');
       let boardId = payload.boardId;

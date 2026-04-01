@@ -15,62 +15,57 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
   create_experience: () => ({
     capability: 'create_experience',
     endpoint: 'POST /api/gpt/create',
-    description: 'Create a persistent experience that goes through a review pipeline. Use for serious curriculum modules.',
+    description: 'Create a persistent experience. Flat payload (no nesting under "payload" key). Steps can be included inline or added later via type="step".',
     schema: {
       type: 'experience',
-      payload: {
-        templateId: 'UUID from templates list',
-        userId: 'UUID from state',
-        title: 'string (max 200)',
-        goal: 'string (max 1000)',
-        resolution: {
-          depth: 'light | medium | heavy',
-          mode: 'illuminate | practice | challenge | build | reflect | study',
-          timeScope: 'immediate | session | multi_day | ongoing',
-          intensity: 'low | medium | high'
-        },
-        reentry: {
-          trigger: 'time | completion | inactivity | manual',
-          prompt: 'string (max 500)',
-          contextScope: 'minimal | full | focused'
-        },
-        steps: [
-          {
-            type: 'lesson | challenge | reflection | questionnaire | essay_tasks | checkpoint',
-            title: 'string',
-            payload: 'discriminator: call discover?capability=step_payload&step_type=X'
-          }
-        ],
-        curriculum_outline_id: 'optional UUID',
-        previousExperienceId: 'optional UUID',
-        source_conversation_id: 'optional string'
-      }
+      templateId: 'UUID from templates list (REQUIRED)',
+      userId: 'UUID from state (REQUIRED)',
+      title: 'string (max 200)',
+      goal: 'string — what the user will achieve',
+      resolution: {
+        depth: 'light | medium | heavy',
+        mode: 'illuminate | practice | challenge | build | reflect | study',
+        timeScope: 'immediate | session | multi_day | ongoing',
+        intensity: 'low | medium | high'
+      },
+      reentry: {
+        trigger: 'time | completion | inactivity | manual',
+        prompt: 'string (max 500)',
+        contextScope: 'minimal | full | focused'
+      },
+      steps: [
+        {
+          type: 'lesson | challenge | reflection | questionnaire | essay_tasks | checkpoint',
+          title: 'string',
+          payload: 'call discover?capability=step_payload&step_type=X'
+        }
+      ],
+      curriculum_outline_id: 'optional UUID',
+      previousExperienceId: 'optional UUID'
     },
     example: {
       type: 'experience',
-      payload: {
-        templateId: DEFAULT_TEMPLATE_IDS.lesson,
-        userId: 'a0000000-0000-0000-0000-000000000001',
-        title: 'Introduction to Unit Economics',
-        goal: 'Master the concept of LTV and CAC',
-        resolution: {
-          depth: 'medium',
-          mode: 'practice',
-          timeScope: 'session',
-          intensity: 'medium'
-        },
-        steps: [
-          {
-            type: 'lesson',
-            title: 'What is LTV?',
-            payload: {
-              sections: [
-                { heading: 'Definition', body: 'LTV is Lifetime Value...', type: 'text' }
-              ]
-            }
+      templateId: DEFAULT_TEMPLATE_IDS.lesson,
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Introduction to Unit Economics',
+      goal: 'Master the concept of LTV and CAC',
+      resolution: {
+        depth: 'medium',
+        mode: 'practice',
+        timeScope: 'session',
+        intensity: 'medium'
+      },
+      steps: [
+        {
+          type: 'lesson',
+          title: 'What is LTV?',
+          payload: {
+            sections: [
+              { heading: 'Definition', body: 'LTV is Lifetime Value...', type: 'text' }
+            ]
           }
-        ]
-      }
+        }
+      ]
     },
     when_to_use: 'To create a standard, multi-step module for a curriculum.',
     relatedCapabilities: ['templates', 'step_payload', 'create_outline']
@@ -250,27 +245,23 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
   goal: () => ({
     capability: 'goal',
     endpoint: 'POST /api/gpt/create',
-    description: 'Create a long-term goal to provide a persistent container for your learning journey.',
+    description: 'Create a long-term goal. Flat payload. If domains[] is provided, skill domains are auto-created (best-effort).',
     schema: {
       type: 'goal',
-      payload: {
-        userId: 'UUID from state',
-        title: 'string (max 200) — e.g. "Master Backend Engineering"',
-        description: 'string (max 1000) — what you want to achieve',
-        domains: 'string[] — e.g. ["Databases", "API Design", "Security"]'
-      }
+      userId: 'UUID from state',
+      title: 'string (max 200) — REQUIRED',
+      description: 'string (max 1000) — what you want to achieve',
+      domains: 'optional string[] — auto-creates skill domains'
     },
     example: {
       type: 'goal',
-      payload: {
-        userId: 'a0000000-0000-0000-0000-000000000001',
-        title: 'Learn Systems Programming',
-        description: 'Deep dive into low-level systems, memory management, and performance optimization.',
-        domains: ['Memory Management', 'Concurrency', 'OS Internals', 'Compiler Design']
-      }
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Learn Systems Programming',
+      description: 'Deep dive into low-level systems, memory management, and performance optimization.',
+      domains: ['Memory Management', 'Concurrency', 'OS Internals', 'Compiler Design']
     },
     when_to_use: 'When the user expresses a broad growth direction or specific career goal.',
-    relatedCapabilities: ['create_outline', 'templates', 'dispatch_research']
+    relatedCapabilities: ['create_outline', 'templates', 'dispatch_research', 'skill_domain']
   }),
  
   tutor_chat: () => ({
@@ -330,26 +321,22 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
   skill_domain: () => ({
     capability: 'skill_domain',
     endpoint: 'POST /api/gpt/create',
-    description: 'Create a specific skill domain to track mastery evidence under a goal.',
+    description: 'Create a skill domain under a goal. Flat payload. All three fields (userId, goalId, name) are REQUIRED.',
     schema: {
       type: 'skill_domain',
-      payload: {
-        userId: 'UUID from state',
-        goalId: 'UUID from goal metadata',
-        name: 'string (e.g. "React Performance")',
-        description: 'string'
-      }
+      userId: 'UUID from state (REQUIRED)',
+      goalId: 'UUID — must be an existing goal (REQUIRED)',
+      name: 'string (REQUIRED)',
+      description: 'optional string'
     },
     example: {
       type: 'skill_domain',
-      payload: {
-        userId: 'a0000000-0000-0000-0000-000000000001',
-        goalId: 'goal-uuid-here',
-        name: 'Component Memoization',
-        description: 'Deep mastery of useMemo, useCallback, and React.memo patterns.'
-      }
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      goalId: 'goal-uuid-here',
+      name: 'Component Memoization',
+      description: 'Deep mastery of useMemo, useCallback, and React.memo patterns.'
     },
-    when_to_use: 'When breaking down a broad goal into measurable sub-skills.',
+    when_to_use: 'When breaking down a broad goal into measurable sub-skills. goalId must reference an existing goal.',
     relatedCapabilities: ['goal', 'link_knowledge']
   }),
 

@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Mira Studio API
-  description: Gateway for the Mira experience engine and Goal OS. GPT operations go through 6 endpoints.
-  version: 2.1.0
+  description: Gateway for the Mira experience engine and Goal OS. GPT operations go through 7 endpoints. All /create and /update payloads are FLAT (no nesting under a "payload" key).
+  version: 2.2.0
 servers:
   - url: https://mira-maddyup.vercel.app/  
     description: Mira Studio Backend
@@ -28,63 +28,13 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  latestExperiences:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  activeReentryPrompts:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  frictionSignals:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  suggestedNext:
-                    type: array
-                    items:
-                      type: string
-                  proposedExperiences:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  knowledgeSummary:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  goal:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  skill_domains:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-                  curriculum:
-                    type: object
-                    properties:
-                      active_outlines:
-                        type: array
-                        items:
-                          type: object
-                          additionalProperties: true
-                      recent_completions:
-                        type: array
-                        items:
-                          type: object
-                          additionalProperties: true
+                additionalProperties: true
 
   /api/gpt/plan:
     post:
       operationId: planCurriculum
       summary: Scoping and planning operations
-      description: Create curriculum outlines, dispatch research, or assess learning gaps before generating experiences.
+      description: Create curriculum outlines, dispatch research, assess gaps, or read mind maps. Flat payload — all fields alongside action.
       requestBody:
         required: true
         content:
@@ -96,41 +46,34 @@ paths:
                 action:
                   type: string
                   enum: [create_outline, dispatch_research, assess_gaps, read_map]
-                  description: The planning action to perform.
                 topic:
                   type: string
-                  description: The learning topic (required for create_outline and dispatch_research).
+                  description: Required for create_outline and dispatch_research.
                 domain:
                   type: string
-                  description: Optional broad domain grouping.
                 subtopics:
                   type: array
                   items:
                     type: object
                     properties:
-                      title:
-                        type: string
-                      description:
-                        type: string
-                      order:
-                        type: integer
-                  description: Optional subtopic breakdown for create_outline.
+                      title: { type: string }
+                      description: { type: string }
+                      order: { type: integer }
                 pedagogicalIntent:
                   type: string
                   enum: [build_understanding, develop_skill, explore_concept, problem_solve]
-                  description: The learning intent.
                 outlineId:
                   type: string
-                  description: Required for assess_gaps. The outline to analyze.
+                  description: Required for assess_gaps.
                 goalId:
                   type: string
-                  description: Optional. Links the outline to a goal. If provided, auto-activates the goal.
-                userId:
-                  type: string
-                  default: "a0000000-0000-0000-0000-000000000001"
+                  description: Optional. Links outline to a goal and auto-activates it.
                 boardId:
                   type: string
                   description: For action=read_map — the board UUID to read.
+                userId:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
       responses:
         '200':
           description: Success
@@ -142,10 +85,10 @@ paths:
   /api/gpt/create:
     post:
       operationId: createEntity
-      summary: Create experiences, ideas, or steps
+      summary: Create experiences, ideas, goals, steps, knowledge, skill domains, or map objects
       description: |
-        Discriminated by `type`. Call GET /api/gpt/discover?capability=create_experience for full payload schema.
-        All fields except `type` are the creation payload.
+        FLAT payload — all fields alongside `type`. Do NOT nest under a `payload` key.
+        Call GET /api/gpt/discover?capability=<type> for the exact schema.
       requestBody:
         required: true
         content:
@@ -157,19 +100,20 @@ paths:
                 type:
                   type: string
                   enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge, map_cluster]
-                  description: The entity type to create.
                 templateId:
                   type: string
-                  description: UUID of the experience template. Call discover?capability=templates for valid IDs.
+                  description: For experience/ephemeral — UUID of the template. REQUIRED.
                 userId:
                   type: string
                   default: "a0000000-0000-0000-0000-000000000001"
                 title:
                   type: string
-                  description: Title of the experience, idea, or step.
                 goal:
                   type: string
-                  description: Goal or purpose of the experience.
+                  description: For experiences — what the user will achieve.
+                description:
+                  type: string
+                  description: For goals — what you want to accomplish.
                 resolution:
                   type: object
                   properties:
@@ -209,53 +153,52 @@ paths:
                       payload:
                         type: object
                         additionalProperties: true
-                        description: Step-specific payload. Call discover?capability=step_payload&step_type=X for the exact shape.
-                  description: Array of steps for the experience.
+                  description: Inline steps for experience creation.
                 curriculum_outline_id:
                   type: string
-                  description: Optional. Links to a curriculum outline.
                 previousExperienceId:
                   type: string
-                  description: Optional. Links to a prior experience for chaining.
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  description: For goals — auto-creates skill domains.
+                goalId:
+                  type: string
+                  description: For skill_domain — REQUIRED existing goal UUID.
+                name:
+                  type: string
+                  description: For skill_domain — REQUIRED domain name.
+                experienceId:
+                  type: string
+                  description: For steps — the experience instance to add the step to.
                 rawPrompt:
                   type: string
                   description: For ideas — the raw user prompt.
                 gptSummary:
                   type: string
-                  description: For ideas — GPT's summary of the concept.
-                instanceId:
-                  type: string
-                  description: For steps — the experience instance to add the step to.
+                  description: For ideas — GPT's summary.
                 boardId:
                   type: string
-                  description: Optional UUID of the think board for map nodes/edges.
+                  description: For map nodes/edges — optional board UUID.
                 label:
                   type: string
                   description: For map nodes — label text.
-                description:
-                  type: string
-                  description: For map nodes — short summary visible on hover (1-2 sentences).
                 content:
                   type: string
-                  description: For map nodes — long-form elaboration text (can be paragraphs).
+                  description: For map nodes — long-form elaboration.
                 color:
                   type: string
-                  description: For map nodes — color (hex or tailwind).
                 position_x:
                   type: number
-                  description: For map nodes — X coordinate.
                 position_y:
                   type: number
-                  description: For map nodes — Y coordinate.
                 sourceNodeId:
                   type: string
-                  description: For map edges — source node UUID.
                 targetNodeId:
                   type: string
-                  description: For map edges — target node UUID.
                 centerNode:
                   type: object
-                  description: For map clusters — central hub node.
                   properties:
                     label: { type: string }
                     description: { type: string }
@@ -264,7 +207,6 @@ paths:
                     position_y: { type: number }
                 childNodes:
                   type: array
-                  description: For map clusters — children of the center node.
                   items:
                     type: object
                     properties:
@@ -275,14 +217,14 @@ paths:
         '201':
           description: Created
         '400':
-          description: Validation error
+          description: Validation error — includes field-level details
 
   /api/gpt/update:
     post:
       operationId: updateEntity
-      summary: Edit steps, transition status, link knowledge
+      summary: Edit steps, transition status, link knowledge, update nodes
       description: |
-        Discriminated by `action`. All fields except `action` are the mutation payload.
+        FLAT payload — all fields alongside `action`. Do NOT nest under a "payload" key.
       requestBody:
         required: true
         content:
@@ -294,65 +236,45 @@ paths:
                 action:
                   type: string
                   enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge]
-                  description: The mutation action to perform.
                 experienceId:
                   type: string
-                  description: The experience instance ID (required for transition, reorder, delete).
                 transitionAction:
                   type: string
                   enum: [approve, publish, activate, start, complete, archive]
-                  description: For action=transition — the lifecycle transition to apply.
                 stepId:
                   type: string
-                  description: For action=update_step or delete_step — the step to modify.
                 stepPayload:
                   type: object
                   additionalProperties: true
-                  description: For action=update_step — the updated step payload.
                 stepOrder:
                   type: array
                   items:
                     type: string
-                  description: For action=reorder_steps — array of step IDs in desired order.
                 knowledgeUnitId:
                   type: string
-                  description: For action=link_knowledge — the knowledge unit to link.
                 linkType:
                   type: string
                   enum: [teaches, tests, deepens, pre_support, enrichment]
-                  description: For action=link_knowledge — the type of link.
                 unitId:
                   type: string
-                  description: For action=update_knowledge — the knowledge unit to update.
                 updates:
                   type: object
                   additionalProperties: true
-                  description: For action=update_knowledge or update_skill_domain — the patch updates.
                 domainId:
                   type: string
-                  description: For action=update_skill_domain — the domain ID to update or link to.
                 nodeId:
                   type: string
-                  description: For action=update_map_node or delete_map_node — the node UUID.
                 edgeId:
                   type: string
-                  description: For action=delete_map_edge — the edge UUID.
                 label:
                   type: string
-                  description: For action=update_map_node — optional new label.
-                description:
-                  type: string
-                  description: For action=update_map_node — optional new hover summary.
                 content:
                   type: string
-                  description: For action=update_map_node — optional long-form content update.
                 metadata:
                   type: object
                   additionalProperties: true
-                  description: For action=update_map_node — optional metadata (linkedEntityId, linkedEntityType).
                 nodeType:
                   type: string
-                  description: For action=update_map_node — optional nodeType override (e.g. 'exported').
       responses:
         '200':
           description: Updated
@@ -363,7 +285,7 @@ paths:
     get:
       operationId: getChangeReports
       summary: View user-reported UI/UX changes and bugs
-      description: Returns all open feedback, bugs, and change requests reported by the user via the Changes floater. Use this to help the user scope the next version, track UI issues, or answer questions about the app's current state. Includes the exact URL/page they were on when they reported it.
+      description: Returns all open feedback, bugs, and change requests reported by the user.
       responses:
         '200':
           description: Success
@@ -377,67 +299,35 @@ paths:
                     items:
                       type: object
                       properties:
-                        id:
-                          type: string
-                        type:
-                          type: string
-                          enum: [bug, ux, idea, change, comment]
-                        url:
-                          type: string
-                        content:
-                          type: string
-                        status:
-                          type: string
-                          enum: [open, resolved]
-                        createdAt:
-                          type: string
-        '500':
-          description: Server Error
+                        id: { type: string }
+                        type: { type: string, enum: [bug, ux, idea, change, comment] }
+                        url: { type: string }
+                        content: { type: string }
+                        status: { type: string, enum: [open, resolved] }
+                        createdAt: { type: string }
 
   /api/gpt/discover:
     get:
       operationId: discoverCapability
       summary: Learn schemas and valid values at runtime
-      description: Progressive disclosure — ask how to perform any action and get the exact schema, examples, and related capabilities.
+      description: Progressive disclosure — ask how to perform any action and get the exact schema, examples, and related capabilities. ALWAYS call this before your first create or update.
       parameters:
         - name: capability
           in: query
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge"
+          description: "Examples: templates, create_experience, step_payload, resolution, create_outline, goal, skill_domain, create_map_node, create_map_cluster"
         - name: step_type
           in: query
           required: false
           schema:
             type: string
-          description: "Optional filter for step_payload (e.g. lesson, checkpoint, challenge)"
       responses:
         '200':
           description: Schema, examples, and usage guidance
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  capability:
-                    type: string
-                  endpoint:
-                    type: string
-                  description:
-                    type: string
-                  schema:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  example:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  when_to_use:
-                    type: string
         '400':
-          description: Unknown capability (returns list of valid capabilities)
+          description: Unknown capability
 
   /api/knowledge:
     get:
@@ -450,13 +340,11 @@ paths:
           required: false
           schema:
             type: string
-          description: Filter by domain (e.g. "AI Business Strategy", "SaaS Strategy")
         - name: topic
           in: query
           required: false
           schema:
             type: string
-          description: Filter by topic
       responses:
         '200':
           description: Knowledge units grouped by domain
@@ -467,35 +355,19 @@ paths:
                 properties:
                   units:
                     type: object
-                    description: Units grouped by domain
                     additionalProperties:
                       type: array
                       items:
                         type: object
                         properties:
-                          id:
-                            type: string
-                          title:
-                            type: string
-                          thesis:
-                            type: string
-                          content:
-                            type: string
-                            description: Full research content — read this to understand the topic deeply
+                          id: { type: string }
+                          title: { type: string }
+                          thesis: { type: string }
+                          content: { type: string }
                           key_ideas:
                             type: array
-                            items:
-                              type: string
-                          unit_type:
-                            type: string
-                            enum: [foundation, playbook]
-                          topic:
-                            type: string
-                          domain:
-                            type: string
-                  total:
-                    type: integer
-                  domains:
-                    type: object
-                    additionalProperties:
-                      type: integer
+                            items: { type: string }
+                          unit_type: { type: string }
+                          topic: { type: string }
+                          domain: { type: string }
+                  total: { type: integer }
