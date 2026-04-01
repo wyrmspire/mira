@@ -58,10 +58,10 @@ export async function dispatchCreate(type: string, payload: any) {
       if (payload.steps && Array.isArray(payload.steps)) {
         for (let i = 0; i < payload.steps.length; i++) {
           const step = payload.steps[i];
-          const st = step.step_type ?? step.type;
+          const st = step.step_type ?? step.stepType ?? step.type;
           if (!st || st === 'step') continue;
           
-          const { type: _tp, step_type: _st, title, payload: nestedPayload, completion_rule, ...rest } = step;
+          const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
           await addStep(newInstance.id, {
             step_type: st,
             title: title ?? '',
@@ -115,22 +115,75 @@ export async function dispatchCreate(type: string, payload: any) {
       if (!payload.experienceId && !payload.instanceId) {
         throw new Error('Missing experienceId (or instanceId) for step creation');
       }
-      const st = payload.step_type ?? payload.type;
+      const st = payload.step_type ?? payload.stepType ?? payload.type;
       if (!st || st === 'step') {
         throw new Error('Missing explicit step_type (e.g. lesson, challenge, checkpoint) for step creation');
       }
+
+      // SOP-41: Filter metadata out of step payload to prevent pollution
+      const STEP_CONTENT_KEYS: Record<string, string[]> = {
+        lesson: ['sections'],
+        challenge: ['objectives'],
+        checkpoint: ['questions', 'knowledge_unit_id', 'passing_threshold', 'on_fail'],
+        reflection: ['prompts'],
+        questionnaire: ['questions'],
+        essay_tasks: ['content', 'tasks'],
+        plan_builder: ['sections'],
+      };
       
-      const { type: _tp, experienceId, instanceId, step_type: _st, title, payload: nestedPayload, completion_rule, ...rest } = payload;
+      const { 
+        type: _tp, 
+        experienceId, 
+        instanceId, 
+        step_type: _st, 
+        stepType: _stc, 
+        title, 
+        payload: nestedPayload, 
+        completion_rule, 
+        ...rest 
+      } = payload;
+
+      const contentKeys = STEP_CONTENT_KEYS[st] || [];
+      const stepPayload: any = nestedPayload && Object.keys(nestedPayload).length > 0 ? { ...nestedPayload } : {};
+      
+      if (!nestedPayload || Object.keys(nestedPayload).length === 0) {
+        for (const key of contentKeys) {
+          if (rest[key] !== undefined) {
+            stepPayload[key] = rest[key];
+          }
+        }
+      }
       
       return addStep(payload.experienceId ?? payload.instanceId, {
         step_type: st,
         title: title ?? '',
-        payload: nestedPayload && Object.keys(nestedPayload).length > 0 ? nestedPayload : rest,
+        payload: stepPayload,
         completion_rule: completion_rule ?? null
       });
     }
-    case 'knowledge':
-      return createKnowledgeUnit(payload);
+    case 'knowledge': {
+      const { createKnowledgeUnit } = await import('@/lib/services/knowledge-service');
+      // Normalize camelCase GPT payload → snake_case KnowledgeUnit
+      const knowledgeData: any = {
+        ...payload,
+        user_id: payload.userId ?? payload.user_id,
+        unit_type: payload.unitType ?? payload.unit_type,
+        key_ideas: payload.keyIdeas ?? payload.key_ideas,
+        common_mistake: payload.commonMistake ?? payload.common_mistake,
+        action_prompt: payload.actionPrompt ?? payload.action_prompt,
+        retrieval_questions: payload.retrievalQuestions ?? payload.retrieval_questions,
+        linked_experience_ids: payload.linkedExperienceIds ?? payload.linked_experience_ids,
+        source_experience_id: payload.sourceExperienceId ?? payload.source_experience_id,
+        subtopic_seeds: payload.subtopicSeeds ?? payload.subtopic_seeds,
+        mastery_status: payload.masteryStatus ?? payload.mastery_status,
+      };
+      
+      if (!knowledgeData.user_id) {
+        throw new Error('userId is required for knowledge creation.');
+      }
+      
+      return createKnowledgeUnit(knowledgeData);
+    }
     case 'skill_domain': {
       if (!payload.userId && !payload.user_id) {
         throw new Error('Missing userId for skill_domain creation.');
@@ -334,6 +387,13 @@ export async function dispatchUpdate(action: string, payload: any) {
       if (!payload.edgeId) throw new Error('Missing edgeId');
       const { deleteEdge } = await import('@/lib/services/mind-map-service');
       return deleteEdge(payload.edgeId);
+
+    case 'transition_goal': {
+      if (!payload.goalId) throw new Error('Missing goalId for goal transition');
+      if (!payload.transitionAction) throw new Error('Missing transitionAction for goal transition (e.g. activate, pause, complete, archive)');
+      const { transitionGoalStatus } = await import('@/lib/services/goal-service');
+      return transitionGoalStatus(payload.goalId, payload.transitionAction);
+    }
 
     default:
       throw new Error(`Unknown update action: "${action}"`);

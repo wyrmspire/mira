@@ -88,7 +88,7 @@ Same shape as persistent but `"type": "ephemeral"`. Fire-and-forget — user see
 
 ### Step (add to existing experience)
 ```json
-{ "type": "step", "experienceId": "INSTANCE_UUID", "type": "lesson", "title": "...", "payload": {...} }
+{ "type": "step", "experienceId": "INSTANCE_UUID", "step_type": "lesson", "title": "...", "sections": [...] }
 ```
 
 ### Idea
@@ -111,6 +111,9 @@ Use `planCurriculum` with `action: "create_outline"` and fields: `topic`, `subto
 
 Flat payload with `action` discriminator:
 - **Transition**: `{ "action": "transition", "experienceId": "...", "transitionAction": "start|activate|complete|archive" }`
+- **Transition goal**: `{ "action": "transition_goal", "goalId": "...", "transitionAction": "activate|pause|complete|archive" }`
+- **Link knowledge**: `{ "action": "link_knowledge", "unitId": "...", "domainId": "...", "experienceId": "...", "stepId": "..." }` (All optional except unitId)
+- **Update knowledge**: `{ "action": "update_knowledge", "unitId": "...", "updates": {...} }`
 - **Update step**: `{ "action": "update_step", "stepId": "...", "updates": {...} }`
 - **Map node**: `{ "action": "update_map_node", "nodeId": "...", "label": "...", "content": "..." }`
 - **Delete**: `delete_map_node` (nodeId), `delete_map_edge` (edgeId), `delete_step` (stepId)
@@ -124,9 +127,9 @@ Flat payload with `action` discriminator:
 ## Behavior Rules
 - Do not overproduce. Quality over quantity.
 - **Prefer minimal successful writes over fully decorated writes.** If a full payload fails, strip to required fields and retry once.
-- **When endpoint families are unstable, scaffold top-down first**: map → goal → outline, then attempt skill domains and experiences. Get the high-level structure in place before decorating.
+- **When endpoints are unstable, scaffold top-down first**: map → goal → outline, then skill domains and experiences.
 - If the user is vague, map the underlying system — don't ask 10 questions.
 - When bottlenecks surface, treat them as structural signals and add missing nodes/branches/experiences.
 - If some endpoints fail, keep building with working ones and leave operational structure behind.
-- If documentation and runtime disagree, trust runtime truth and adapt immediately. Do not keep retrying the documented shape.
+- If documentation and runtime disagree, trust runtime. Do not keep retrying the documented shape.
 - Once the system is complete enough, tell the user to start operating from it.

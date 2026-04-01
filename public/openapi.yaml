@@ -275,6 +275,8 @@ paths:
                       type: string
                     description:
                       type: string
+                    content:
+                      type: string
                     color:
                       type: string
                     position_x:
@@ -291,8 +293,50 @@ paths:
                         type: string
                       description:
                         type: string
+                      content:
+                        type: string
                       color:
                         type: string
+                step_type:
+                  type: string
+                  enum: [lesson, challenge, reflection, questionnaire, essay_tasks, plan_builder, checkpoint]
+                  description: For steps — the type of step to create.
+                stepType:
+                  type: string
+                  description: Alias for step_type.
+                sections:
+                  type: array
+                  items:
+                    type: object
+                  description: For lesson or plan_builder steps.
+                prompts:
+                  type: array
+                  items:
+                    type: object
+                  description: For reflection steps.
+                questions:
+                  type: array
+                  items:
+                    type: object
+                  description: For questionnaire or checkpoint steps.
+                tasks:
+                  type: array
+                  items:
+                    type: object
+                  description: For essay_tasks steps.
+                knowledge_unit_id:
+                  type: string
+                  description: For checkpoint steps — UUID of the knowledge unit.
+                passing_threshold:
+                  type: integer
+                  description: For checkpoint steps.
+                on_fail:
+                  type: string
+                  description: For checkpoint steps.
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Optional explicit wrapper for step payload if the agent prefers nested over flat.
       responses:
         '201':
           description: Created
@@ -315,15 +359,15 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge]
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal]
                   description: The mutation action to perform.
                 experienceId:
                   type: string
                   description: The experience instance ID (required for transition, reorder, delete).
                 transitionAction:
                   type: string
-                  enum: [approve, publish, activate, start, complete, archive]
-                  description: For action=transition — the lifecycle transition to apply.
+                  enum: [approve, publish, activate, start, pause, complete, archive]
+                  description: Lifecycle transition to apply (for action=transition or action=transition_goal). experience transitions: approve|publish|activate|start|complete|archive. goal transitions: activate|pause|complete|archive.
                 stepId:
                   type: string
                   description: For action=update_step or delete_step — the step to modify.
@@ -375,6 +419,9 @@ paths:
                 nodeType:
                   type: string
                   description: For action=update_map_node — optional nodeType override (e.g. 'exported').
+                goalId:
+                  type: string
+                  description: For action=transition_goal — the goal UUID to transition.
       responses:
         '200':
           description: Updated

@@ -23,7 +23,16 @@ export type DiscoverCapability =
   | 'update_map_node'
   | 'delete_map_node'
   | 'delete_map_edge'
-  | 'read_map';
+  | 'read_map'
+  | 'assess_gaps'
+  | 'update_step'
+  | 'reorder_steps'
+  | 'delete_step'
+  | 'transition'
+  | 'link_knowledge'
+  | 'update_knowledge'
+  | 'update_skill_domain'
+  | 'transition_goal';
 
 
 /**

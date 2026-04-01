@@ -1,3 +1,566 @@
+### GROUP 1 — Foundational (for Reader 1)
+**Source: [URL 1]**
+[Extracted content from this page — include ALL useful text, data, quotes]
+
+**Source: [URL 2]**
+[Extracted content]
+
+### GROUP 2 — Practical (for Reader 2)
+**Source: [URL 3]**
+[Extracted content]
+
+**Source: [URL 4]**
+[Extracted content]
+
+### GROUP 3 — Trends & Data (for Reader 3)
+**Source: [URL 5]**
+[Extracted content]
+
+**Source: [URL 6]**
+[Extracted content]
+
+CRITICAL RULES:
+- You MUST read/scrape the URLs, not just list them.
+- Extract as much content as possible from each URL.
+- The readers will ONLY see what you extract — they cannot access the web.
+- Include specific numbers, dates, statistics, quotes from each source.
+- If a URL is inaccessible, note it and use search snippet content instead.''',
+    tools=[
+        agent_tool.AgentTool(agent=strategist_search),
+        agent_tool.AgentTool(agent=strategist_url),
+    ],
+)
+
+
+# ==============================================================================
+# STAGE 2: DEEP READERS (x3) — Pure analysis, NO search tools
+# ==============================================================================
+# These agents receive pre-scraped content and extract structured findings.
+# No web access = fast (5-10s each vs 20-80s with search tools).
+# ==============================================================================
+
+def _make_deep_reader(reader_name: str):
+    """Factory for pure-analysis reader agents (no search tools)."""
+    return LlmAgent(
+        name=reader_name,
+        model='gemini-2.5-flash',
+        description=f'Analyzes pre-scraped source content and extracts structured findings.',
+        sub_agents=[],
+        instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
+
+You receive RAW SCRAPED CONTENT from web sources. You have NO web access.
+
+Your job: Extract brutally concise, high-signal, operator-level mechanics. 
+IGNORE all generic advice, throat-clearing, and beginner "SEO fluff".
+If a source says "Use good lighting and a hook," IGNORE it.
+If a source says "Hooks must be <2s and resolve a 3-second hold proxy," EXTRACT it.
+
+FOCUS EXCLUSIVELY ON:
+1. **Hard Data & Formulas**: Benchmarks, precise dates, statistical thresholds, algorithmic weighting.
+2. **Mental Models & Workflows**: Specific sequential steps (e.g., "Hook → Value → Payoff").
+3. **Platform Mechanics**: Specific UI constraints, discovery algorithms (e.g., "Swipe-based feed ranking").
+4. **KPI Definitions**: How metrics are actually calculated (e.g., "Engaged views vs starts").
+5. **Implementation Specifics**: Naming specific tools, constraints, frameworks, or legal checks.
+
+OUTPUT FORMAT (KEEP UNDER 3000 CHARACTERS):
+## Findings from {reader_name}
+
+### Key Data Points (top 15-20)
+- [specific data point with numbers/dates/source]
+- [specific data point]
+[Prioritize: numbers > frameworks > quotes > general observations]
+
+### Comparison Data
+[Any head-to-head comparisons found (platform vs platform, etc.)]
+
+### Implementation Specifics
+[Concrete settings, workflows, tools, parameters]
+
+### Warnings
+[Top 3-5 mistakes or gotchas with fixes]
+
+Rules:
+- Be SPECIFIC — include numbers, dates, percentages, names.
+- Extract EVERYTHING useful. More is better at this stage.
+- Note contradictions between sources explicitly.
+- Do NOT write a final article — just extract structured findings.''',
+        tools=[],  # NO tools — pure analysis
+    )
+
+
+deep_reader_1 = _make_deep_reader('deep_reader_1')
+deep_reader_2 = _make_deep_reader('deep_reader_2')
+deep_reader_3 = _make_deep_reader('deep_reader_3')
+
+
+# ==============================================================================
+# STAGE 3: FINAL SYNTHESIZER
+# ==============================================================================
+
+synth_search = LlmAgent(
+    name='synth_search',
+    model='gemini-2.5-flash',
+    description='Supplementary searches for fact-checking.',
+    sub_agents=[],
+    instruction='Use GoogleSearchTool to verify specific claims or fill data gaps.',
+    tools=[GoogleSearchTool()],
+)
+
+synth_url = LlmAgent(
+    name='synth_url',
+    model='gemini-2.5-flash',
+    description='Reads URLs for fact-checking.',
+    sub_agents=[],
+    instruction='Use UrlContextTool to verify information from specific sources.',
+    tools=[url_context],
+)
+
+final_synthesizer = LlmAgent(
+    name='final_synthesizer',
+    model='gemini-2.5-pro',
+    description='Produces the final comprehensive knowledge-base document.',
+    sub_agents=[],
+    instruction='''You are an elite Growth Engineer and Technical Educator.
+Your job is to synthesize raw research into a definitive, action-oriented knowledge asset.
+
+Follow the exact structure defined in the entry below.
+DO NOT use markdown tables. Tables are banned as they cause formatting issues. Use dense bulleted lists instead.
+
+# [Specific, Professional Title]
+
+## Executive summary
+[3-4 sentences of extremely high-signal, tactical synthesis. Define the "real" objective—not the glossy one. Cite specific algorithmic/platform changes. NO FLUFF. NO "In today's fast-paced digital world..."]
+
+## Definitions and mechanics
+[Strict, operator-level definitions of formats, surfaces, or algorithms. Focus on HOW things work under the hood.]
+
+### Algorithm ranking & platform comparison
+[Detailed comparison using dense bulleted lists mapping platforms to their specific measurement criteria, max lengths, and ranking logic. NO TABLES.]
+
+## Implementation workflows
+[Concrete frameworks or mental models (e.g., "Hook -> Value -> Payoff -> Action").]
+[Process diagram (mermaid flowchart) showing the exact pipeline/workflow.]
+
+## Measurement and KPIs
+[What to measure, mapped by funnel stage (Top/Mid/Bottom). How metrics are calculated.]
+[KPIs mapped to platforms using dense bullet lists. NO TABLES.]
+
+## 30-day implementation calendar
+[Mermaid gantt and/or highly specific bulleted list showing batching, testing cadence, and exact tasks.]
+
+## Compliance and risk constraints 
+[Specific failure modes, legal issues (e.g., music rights, FTC disclosures).]
+
+## Sources and Citations
+[Cite the URLs provided by the readers as inline references or endnotes.]
+
+---
+Audience: Growth Engineering / Expert Operators
+Estimated reading time: [X min]
+---
+
+CRITICAL RULES:
+- BAN ALL FLUFF. Never use introductory filler. Never say "Crucially", "In conclusion", "As we navigate". 
+- Write in a dense, analytical, matter-of-fact tone. 
+- Prioritize mechanics and algorithms over soft skills.
+- Use explicit terminology ("retention curves", "cold-start testing", "cohorts").
+- MERMAID for processes is allowed, but NO tables. Use dense lists.
+- Do NOT use tools. Just write the document.
+''',
+    tools=[],  # NO tools — pure writer
+)
+
+
+playbook_builder = LlmAgent(
+    name='playbook_builder',
+    model='gemini-2.5-flash',
+    description='Produces a practical, tactical playbook from research findings.',
+    sub_agents=[],
+    instruction='''You are an elite Business Operator and Growth Strategist.
+Take the comprehensive research provided and transform it into a "Tactical Playbook."
+
+Your goal is to provide a step-by-step implementation guide that focuses on:
+1.  **Profitability and Efficiency**: How to maximize returns and minimize costs/time.
+2.  **Actionable Tactics**: Concrete, sequential steps an operator can take today.
+3.  **Deliberate-Practice Micro-tasks**: Tiny, repeatable exercises to build mastery in the topic.
+
+TONE: Brutally practical, technical, and executive. Use "operator language" (e.g., "batching", "LTV/CAC ratio", "SOPs").
+Include specific revenue/cost estimates or benchmarks where available in the research.
+
+OUTPUT FORMAT:
+# [Topic] Playbook
+
+## Tactical Overview
+[One-paragraph executive summary of the implementation strategy.]
+
+## Step-by-Step Implementation
+[Numbered list of 5-7 clear, sequential stages.]
+
+## Profitability Mechanics
+[Bullet points on how this topic drives revenue or reduces costs. Include hard numbers if possible.]
+
+## Deliberate Practice (Micro-tasks)
+[3-5 small exercises the user can do daily to master this.]
+
+Rules:
+- NO FLUFF.
+- Focus on EXECUTION.
+- Use dense bulleted lists.
+- NO TABLES.
+''',
+    tools=[],
+)
+
+audio_script_builder = LlmAgent(
+    name='audio_script_builder',
+    model='gemini-2.5-flash',
+    description='Produces an audio script skeleton from research findings.',
+    sub_agents=[],
+    instruction='''You are an expert Audio Producer and Scriptwriter.
+Take the comprehensive research provided and transform it into a 10-15 minute conversational audio script skeleton.
+
+The script should sound like a smart friend or a senior operator explaining a complex topic to an equal.
+It should be engaging, conversational, yet dense with insight.
+
+OUTPUT FORMAT:
+You MUST output your response as a valid JSON object with the following structure:
+{
+  "sections": [
+    {
+      "heading": "...",
+      "narration": "...",
+      "duration_estimate_seconds": 0
+    }
+  ]
+}
+
+Rules:
+- Conversational tone.
+- No "Today we are discussing..." intros.
+- Break it into 4-6 meaningful sections.
+- Ensure duration estimates are realistic.
+- OUTPUT ONLY THE JSON.
+''',
+    tools=[],
+)
+
+
+webhook_packager = LlmAgent(
+    name='webhook_packager',
+    model='gemini-2.5-flash',
+    description='Packages research metadata and experience proposals into the JSON.',
+    sub_agents=[],
+    instruction='''You are a system integrator. Your job is to extract metadata from research outputs and generate an experience proposal.
+
+You will receive:
+1. TOPIC (the original user topic)
+2. FOUNDATION_CONTENT (from synthesizer)
+3. PLAYBOOK_CONTENT (from playbook builder)
+
+Your output MUST be a JSON object matching this schema exactly:
+{
+  "domain": "...",
+  "foundation_metadata": {
+    "title": "...",
+    "thesis": "...",
+    "key_ideas": ["...", "..."],
+    "citations": [{"url": "...", "claim": "...", "confidence": 0.9}]
+  },
+  "playbook_metadata": {
+    "title": "...",
+    "thesis": "...",
+    "key_ideas": ["...", "..."]
+  },
+  "experience_proposal": {
+    "title": "...",
+    "goal": "...",
+    "template_id": "b0000000-0000-0000-0000-000000000002",
+    "resolution": { "depth": "heavy", "mode": "build", "timeScope": "multi_day", "intensity": "medium" },
+    "steps": [
+      {
+        "step_type": "lesson",
+        "title": "Understanding [Topic]",
+        "payload": { "sections": [{"heading": "...", "body": "...", "type": "text"}] }
+      },
+      {
+        "step_type": "challenge",
+        "title": "Apply [Topic]",
+        "payload": { "objectives": [{"id": "obj1", "description": "...", "proof": "..."}] }
+      },
+      {
+        "step_type": "reflection",
+        "title": "What surprised you?",
+        "payload": { "prompts": [{"id": "p1", "text": "...", "format": "free_text"}] }
+      },
+      {
+        "step_type": "plan_builder",
+        "title": "Build your action plan",
+        "payload": { "sections": [{"type": "goals", "items": [{"id": "g1", "text": "..."}]}] }
+      }
+    ]
+  }
+}
+
+CRITICAL RULES:
+- The experience_proposal MUST be a 4-step Kolb-style chain: lesson -> challenge -> reflection -> plan_builder.
+- Extract the 'thesis' (one-sentence summary) and 'key_ideas' (5-8 items) from the foundation and playbook text.
+- The 'domain' should be a broad category like "SaaS Strategy", "Growth Marketing", "Content Engineering", etc.
+- OUTPUT ONLY THE JSON. Do not output anything else.
+''',
+    tools=[],
+)
+
+
+# ==============================================================================
+# Root agent (unused — pipeline is code-orchestrated)
+# ==============================================================================
+
+root_agent = LlmAgent(
+    name='mirak_root',
+    model='gemini-2.5-flash',
+    description='Unused root agent — pipeline is code-orchestrated.',
+    sub_agents=[],
+    instruction='This agent is not used.',
+    tools=[],
+)
+
+
+# ==============================================================================
+# Pipeline Runner
+# ==============================================================================
+
+def run_agent_stage(agent, prompt_text: str, stage_name: str, user_id: str, session_id: str) -> str:
+    """Run a single agent stage and extract the text output."""
+    from google.adk import Runner
+    import google.adk.sessions
+    from google.genai.types import Content, Part
+
+    stage_session_id = f"{session_id}_{stage_name}"
+    stage_session_service = google.adk.sessions.InMemorySessionService()
+
+    msg = Content(role="user", parts=[Part.from_text(text=prompt_text)])
+    runner = Runner(
+        app_name="mirak",
+        agent=agent,
+        session_service=stage_session_service,
+        auto_create_session=True,
+    )
+
+    all_text = []
+    event_count = 0
+    tool_call_count = 0
+
+    logger.info(f"[{stage_name}] 🚀 Starting agent run...")
+
+    for event in runner.run(
+        user_id=user_id,
+        session_id=stage_session_id,
+        new_message=msg,
+    ):
+        event_count += 1
+        author = getattr(event, "author", "?")
+
+        if hasattr(event, "content") and event.content is not None:
+            if hasattr(event.content, "parts"):
+                for part in event.content.parts:
+                    if hasattr(part, "function_call") and part.function_call:
+                        tool_call_count += 1
+                        fn_name = getattr(part.function_call, "name", "unknown")
+                        logger.info(f"[{stage_name}] 🔧 Tool call #{tool_call_count}: {fn_name} (by {author})")
+
+                    if hasattr(part, "text") and part.text and len(part.text.strip()) > 0:
+                        all_text.append(part.text)
+                        preview = part.text[:100].replace('\n', ' ').strip()
+                        logger.info(f"[{stage_name}] 📝 Text [{author}]: {len(part.text)} chars — {preview}...")
+
+            elif hasattr(event.content, "text") and event.content.text:
+                all_text.append(event.content.text)
+                logger.info(f"[{stage_name}] 📝 Text [{author}]: {len(event.content.text)} chars")
+
+    # Combine ALL text blocks (not just the longest) for complete output
+    if all_text:
+        # If there's one dominant block (>80% of total), use it; otherwise concat all
+        total_chars = sum(len(t) for t in all_text)
+        longest = max(all_text, key=len)
+        if len(longest) > total_chars * 0.7:
+            result = longest
+        else:
+            result = "\n\n".join(all_text)
+        logger.info(f"[{stage_name}] ✅ Done — {event_count} events, {tool_call_count} tool calls, {len(result)} chars output")
+        return result
+    else:
+        logger.warning(f"[{stage_name}] ⚠️ No text output! ({event_count} events, {tool_call_count} tool calls)")
+        return f"[{stage_name} produced no output]"
+
+
+# ==============================================================================
+# API Endpoints
+# ==============================================================================
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "service": "mirak", "version": "0.4.0"}
+
+
+@app.post("/generate_knowledge")
+def generate_knowledge(req: GenerateKnowledgeRequest, background_tasks: BackgroundTasks):
+    """
+    Generate a knowledge-base entry asynchronously via 3-stage pipeline.
+    Immediately returns 202-like response to unblock the caller.
+    """
+    session_id = req.session_id or str(uuid.uuid4())
+    logger.info(f"Accepted request for topic: {req.topic} | session: {session_id}")
+    
+    background_tasks.add_task(_background_knowledge_generation, req, session_id)
+    
+    return {
+        "status": "accepted",
+        "message": "Research started asynchronously",
+        "topic": req.topic,
+        "session_id": session_id
+    }
+
+def _background_knowledge_generation(req: GenerateKnowledgeRequest, session_id: str):
+    pipeline_start = time.time()
+    logger.info("=" * 60)
+    logger.info(f"BACKGROUND GENERATION START: {req.topic}")
+    logger.info("=" * 60)
+    
+    try:
+        # 1. RESEARCH STRATEGIST
+        logger.info(f"[PIPELINE] Running Research Strategist for: {req.topic}")
+        strategist_output = run_agent_stage(
+            research_strategist, 
+            f"Perform deep research on the topic: {req.topic}. Extract technical mechanics, algorithms, and practical implementation details.", 
+            "strategist", req.user_id, session_id
+        )
+
+        # 2. DEEP READERS
+        logger.info("[PIPELINE] Running 3 Deep Readers for analysis...")
+        reader_1_output = run_agent_stage(
+            deep_reader_1, 
+            f"Analyze the following research for foundational mechanisms and technical models:\n\n{strategist_output}", 
+            "reader_1", req.user_id, session_id
+        )
+        reader_2_output = run_agent_stage(
+            deep_reader_2, 
+            f"Analyze the following research for practical implementation, how-to guides, and workflows:\n\n{strategist_output}", 
+            "reader_2", req.user_id, session_id
+        )
+        reader_3_output = run_agent_stage(
+            deep_reader_3, 
+            f"Analyze the following research for recent trends, platform updates, and statistical benchmarks:\n\n{strategist_output}", 
+            "reader_3", req.user_id, session_id
+        )
+
+        combined_findings = f"=== FOUNDATIONAL FINDINGS ===\n{reader_1_output}\n\n=== PRACTICAL FINDINGS ===\n{reader_2_output}\n\n=== TRENDS & DATA ===\n{reader_3_output}"
+
+        # 3. FINAL SYNTHESIZER
+        logger.info("[PIPELINE] Synthesizing final foundation document...")
+        synth_output = run_agent_stage(
+            final_synthesizer, 
+            f"Synthesize the following findings into a definitive, action-oriented foundation knowledge unit for: {req.topic}\n\n{combined_findings}", 
+            "synthesizer", req.user_id, session_id
+        )
+
+        # 4. PLAYBOOK BUILDER
+        logger.info("[PIPELINE] Building practical playbook...")
+        playbook_output = run_agent_stage(
+            playbook_builder, 
+            f"Create a tactical implementation playbook based on the following foundation research:\n\n{synth_output}", 
+            "playbook", req.user_id, session_id
+        )
+
+        # 5. WEBHOOK PACKAGING (metadata only — full content injected programmatically)
+        logger.info("[PIPELINE] Extracting metadata for webhook payload...")
+        packager_prompt = f"""
+ORIGINAL TOPIC: {req.topic}
+FOUNDATION CONTENT:
+{synth_output}
+
+PLAYBOOK CONTENT:
+{playbook_output}
+"""
+        final_json_str = run_agent_stage(
+            webhook_packager, 
+            packager_prompt, 
+            "packager", req.user_id, session_id
+        )
+
+        # Cleanup JSON formatting
+        clean_json = final_json_str.strip()
+        if "```json" in clean_json:
+            clean_json = clean_json.split("```json")[-1].split("```")[0].strip()
+        elif "```" in clean_json:
+            clean_json = clean_json.split("```")[-1].split("```")[0].strip()
+
+        start_idx = clean_json.find('{')
+        end_idx = clean_json.rfind('}')
+        if start_idx != -1 and end_idx != -1:
+            clean_json = clean_json[start_idx:end_idx+1]
+
+        try:
+            packager_data = json.loads(clean_json)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse packager JSON: {e}")
+            logger.error(f"Raw string was: {clean_json[:500]}")
+            packager_data = {}
+
+        # Build payload — full content injected programmatically to prevent LLM truncation
+        webhook_payload = {
+            "topic": req.topic,
+            "domain": packager_data.get("domain", "Strategic Initiative"),
+            "session_id": session_id,
+            "units": [
+                {
+                    "unit_type": "foundation",
+                    "title": packager_data.get("foundation_metadata", {}).get("title", f"{req.topic} Foundation"),
+                    "thesis": packager_data.get("foundation_metadata", {}).get("thesis", f"Foundation analysis of {req.topic}."),
+                    "content": synth_output,
+                    "key_ideas": packager_data.get("foundation_metadata", {}).get("key_ideas", []),
+                    "citations": packager_data.get("foundation_metadata", {}).get("citations", [])
+                },
+                {
+                    "unit_type": "playbook",
+                    "title": packager_data.get("playbook_metadata", {}).get("title", f"{req.topic} Playbook"),
+                    "thesis": packager_data.get("playbook_metadata", {}).get("thesis", f"Tactical playbook for {req.topic}."),
+                    "content": playbook_output,
+                    "key_ideas": packager_data.get("playbook_metadata", {}).get("key_ideas", [])
+                }
+            ],
+            "experience_proposal": packager_data.get("experience_proposal", {}),
+            "experience_id": req.experience_id,  # Pass through so Mira webhook can enrich this experience
+            "goal_id": req.goal_id,  # Pass through to link knowledge to goal
+        }
+
+        duration = time.time() - pipeline_start
+        logger.info(f"PIPELINE COMPLETE in {duration:.2f}s for: {req.topic}")
+        
+        # Webhook Routing: Local Primary, Vercel Fallback
+        local_target = "https://mira.mytsapi.us"
+        vercel_target = os.environ.get("VERCEL_WEBHOOK_URL", "https://mira-maddyup.vercel.app")
+        
+        target_webhook = f"{vercel_target}/api/webhook/mirak"
+        local_up = False
+        try:
+            health_check = requests.get(f"{local_target}/api/dev/diagnostic", timeout=15)
+            if health_check.status_code == 200:
+                local_up = True
+                target_webhook = f"{local_target}/api/webhook/mirak"
+        except requests.RequestException:
+            pass
+            
+        logger.info(f"Targeting webhook: {target_webhook} (Local up: {local_up})")
+        
+        secret = os.environ.get("MIRAK_WEBHOOK_SECRET", "")
+        headers = {"x-mirak-secret": secret}
+        
+        resp = requests.post(target_webhook, json=webhook_payload, headers=headers, timeout=30)
+        logger.info(f"Webhook delivered to {target_webhook}. Status: {resp.status_code}")
+        if resp.status_code != 200:
+            logger.error(f"Webhook error response: {resp.text}")
+            
+    except Exception as e:
         logger.error(f"Background task failed: {e}")
         traceback.print_exc()
 

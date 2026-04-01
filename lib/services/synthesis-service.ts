@@ -86,6 +86,9 @@ import { evaluateReentryContracts } from '@/lib/experience/reentry-engine'
 
 export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacket> {
   const experiences = await getExperienceInstances({ userId })
+
+  // SOP-39: Sort by most recent first — getExperienceInstances returns DB insertion order
+  experiences.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   
   // Call re-entry engine
   const activeReentryPrompts = await evaluateReentryContracts(userId)
@@ -107,7 +110,7 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
 
   // Create the base packet first
   const packet: GPTStatePacket = {
-    latestExperiences: experiences.slice(0, 5).map(e => ({ ...e } as ExperienceInstance)),
+    latestExperiences: experiences.slice(0, 10).map(e => ({ ...e } as ExperienceInstance)),
     activeReentryPrompts: activeReentryPrompts.map(p => ({
       ...p,
       priority: p.priority // Explicitly ensure priority is carried
@@ -115,7 +118,7 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
     frictionSignals,
     suggestedNext: experiences[0]?.next_suggested_ids || [],
     synthesisSnapshot: snapshot,
-    proposedExperiences: proposedExperiences.slice(0, 3).map(e => ({ ...e } as ExperienceInstance)),
+    proposedExperiences: proposedExperiences.slice(0, 5).map(e => ({ ...e } as ExperienceInstance)),
     reentryCount: activeReentryPrompts.length
   }
 
