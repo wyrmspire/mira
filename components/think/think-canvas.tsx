@@ -39,7 +39,7 @@ interface ThinkCanvasProps {
 }
 
 function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: ThinkCanvasProps) {
-  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow()
+  const { screenToFlowPosition, getIntersectingNodes, fitView } = useReactFlow()
   
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
@@ -313,6 +313,227 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     }
   }, [])
 
+  // ---------------------------------------------------------------------------
+  // Explode: force-directed web layout (visual only — does NOT persist to DB)
+  //
+  // Multi-pass simulation:
+  //   Pass 1: Seed initial positions via BFS from the most-connected hub
+  //   Pass 2–N: Force simulation
+  //     - ATTRACTION: connected nodes pull toward their ideal distance
+  //     - REPULSION:  all node pairs push apart to prevent overlap
+  //     - Ideal distance scales with subtree weight (leaf=tight, hub=roomier)
+  //   Final: overlap sweep — nudge any remaining collisions
+  // ---------------------------------------------------------------------------
+  const onExplode = useCallback(() => {
+    const currentNodes = nodesRef.current
+    const currentEdges = edges
+
+    if (currentNodes.length === 0) return
+
+    // --- Tuning knobs ---
+    const NODE_W = 160          // collision box width
+    const NODE_H = 70           // collision box height
+    const PADDING = 20          // minimum gap between node edges
+    const IDEAL_DIST_BASE = 140 // ideal spring length for leaf-to-leaf
+    const IDEAL_DIST_PER_CHILD = 30  // extra ideal distance per subtree child
+    const ATTRACTION = 0.08     // spring pull strength
+    const REPULSION = 5000      // repulsion constant (higher = pushier)
+    const ITERATIONS = 120      // simulation passes
+    const DAMPING = 0.9         // velocity damping per tick 
+    const MAX_FORCE = 50        // cap per-tick displacement
+    const TEMP_START = 1.0      // initial temperature (movement scale)
+    const TEMP_END = 0.05       // final temperature
+
+    // --- Build adjacency ---
+    const adj = new Map<string, Set<string>>()
+    const edgeSet = new Set<string>() // "a|b" for quick connected check
+    for (const node of currentNodes) adj.set(node.id, new Set())
+    for (const edge of currentEdges) {
+      adj.get(edge.source)?.add(edge.target)
+      adj.get(edge.target)?.add(edge.source)
+      edgeSet.add(`${edge.source}|${edge.target}`)
+      edgeSet.add(`${edge.target}|${edge.source}`)
+    }
+    const isConnected = (a: string, b: string) => edgeSet.has(`${a}|${b}`)
+
+    // --- Compute subtree weight (BFS descendant count) for each node ---
+    // More descendants = heavier = needs more space
+    const weight = new Map<string, number>()
+    for (const node of currentNodes) {
+      // Count reachable nodes from this node (excluding itself)
+      const visited = new Set<string>()
+      const q = [node.id]
+      visited.add(node.id)
+      while (q.length > 0) {
+        const nid = q.shift()!
+        for (const nbr of Array.from(adj.get(nid) ?? [])) {
+          if (!visited.has(nbr)) { visited.add(nbr); q.push(nbr) }
+        }
+      }
+      weight.set(node.id, visited.size) // includes self
+    }
+
+    // --- Ideal distance between two connected nodes ---
+    const idealDist = (a: string, b: string) => {
+      const wa = weight.get(a) ?? 1
+      const wb = weight.get(b) ?? 1
+      // Heavier nodes get more room, but logarithmic so it doesn't blow up
+      return IDEAL_DIST_BASE + Math.log2(wa + wb) * IDEAL_DIST_PER_CHILD
+    }
+
+    // --- Seed positions: BFS from most-connected node ---
+    const sorted = [...currentNodes].sort((a, b) => 
+      (adj.get(b.id)?.size ?? 0) - (adj.get(a.id)?.size ?? 0)
+    )
+    
+    type Pt = { x: number; y: number }
+    const pos = new Map<string, Pt>()
+    const vel = new Map<string, Pt>()
+    
+    // Tight initial seeding — close together, let simulation push apart only where needed
+    pos.set(sorted[0].id, { x: 0, y: 0 })
+    vel.set(sorted[0].id, { x: 0, y: 0 })
+    
+    const placed = new Set([sorted[0].id])
+    const bfsQ = [sorted[0].id]
+
+    while (bfsQ.length > 0) {
+      const nid = bfsQ.shift()!
+      const npos = pos.get(nid)!
+      const nbrs = Array.from(adj.get(nid) ?? []).filter(n => !placed.has(n))
+      
+      const angle0 = placed.size * 0.618 * 2 * Math.PI // golden angle offset
+      nbrs.forEach((nbr, i) => {
+        const angle = angle0 + (2 * Math.PI * i) / Math.max(nbrs.length, 1)
+        const r = idealDist(nid, nbr) * 0.6 // start tighter than ideal, simulation will adjust
+        pos.set(nbr, { x: npos.x + r * Math.cos(angle), y: npos.y + r * Math.sin(angle) })
+        vel.set(nbr, { x: 0, y: 0 })
+        placed.add(nbr)
+        bfsQ.push(nbr)
+      })
+    }
+
+    // Place any disconnected orphans nearby
+    let ox = 0
+    for (const node of currentNodes) {
+      if (!pos.has(node.id)) {
+        pos.set(node.id, { x: ox, y: 300 })
+        vel.set(node.id, { x: 0, y: 0 })
+        ox += NODE_W + PADDING
+      }
+    }
+
+    // --- Force simulation ---
+    const ids = currentNodes.map(n => n.id)
+    const n = ids.length
+
+    for (let iter = 0; iter < ITERATIONS; iter++) {
+      const temp = TEMP_START - (TEMP_START - TEMP_END) * (iter / ITERATIONS)
+      const forces = new Map<string, Pt>()
+      for (const id of ids) forces.set(id, { x: 0, y: 0 })
+
+      // Repulsion: every pair pushes apart (inverse-square, capped)
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const a = ids[i], b = ids[j]
+          const pa = pos.get(a)!, pb = pos.get(b)!
+          let dx = pb.x - pa.x
+          let dy = pb.y - pa.y
+          let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
+          
+          // Minimum distance based on node size
+          const minDist = Math.sqrt(NODE_W * NODE_W + NODE_H * NODE_H) / 2 + PADDING
+
+          const force = REPULSION / (dist * dist)
+          const fx = (dx / dist) * force
+          const fy = (dy / dist) * force
+
+          const fa = forces.get(a)!, fb = forces.get(b)!
+          fa.x -= fx; fa.y -= fy
+          fb.x += fx; fb.y += fy
+        }
+      }
+
+      // Attraction: connected pairs pull toward ideal distance
+      for (const edge of currentEdges) {
+        const a = edge.source, b = edge.target
+        if (!pos.has(a) || !pos.has(b)) continue
+        const pa = pos.get(a)!, pb = pos.get(b)!
+        let dx = pb.x - pa.x
+        let dy = pb.y - pa.y
+        let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
+        
+        const target = idealDist(a, b)
+        const displacement = dist - target
+        const force = ATTRACTION * displacement
+        const fx = (dx / dist) * force
+        const fy = (dy / dist) * force
+
+        const fa = forces.get(a)!, fb = forces.get(b)!
+        fa.x += fx; fa.y += fy
+        fb.x -= fx; fb.y -= fy
+      }
+
+      // Apply forces with temperature and damping
+      for (const id of ids) {
+        const f = forces.get(id)!
+        const v = vel.get(id)!
+        const p = pos.get(id)!
+
+        v.x = (v.x + f.x) * DAMPING * temp
+        v.y = (v.y + f.y) * DAMPING * temp
+
+        // Cap velocity
+        const speed = Math.sqrt(v.x * v.x + v.y * v.y)
+        if (speed > MAX_FORCE) {
+          v.x = (v.x / speed) * MAX_FORCE
+          v.y = (v.y / speed) * MAX_FORCE
+        }
+
+        p.x += v.x
+        p.y += v.y
+      }
+    }
+
+    // --- Final overlap sweep: nudge any boxes that still collide ---
+    for (let pass = 0; pass < 10; pass++) {
+      let anyOverlap = false
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const a = ids[i], b = ids[j]
+          const pa = pos.get(a)!, pb = pos.get(b)!
+          const overlapX = (NODE_W + PADDING) - Math.abs(pb.x - pa.x)
+          const overlapY = (NODE_H + PADDING) - Math.abs(pb.y - pa.y)
+
+          if (overlapX > 0 && overlapY > 0) {
+            anyOverlap = true
+            // Push apart along the axis of least overlap
+            if (overlapX < overlapY) {
+              const push = overlapX / 2 + 1
+              if (pb.x >= pa.x) { pa.x -= push; pb.x += push }
+              else { pa.x += push; pb.x -= push }
+            } else {
+              const push = overlapY / 2 + 1
+              if (pb.y >= pa.y) { pa.y -= push; pb.y += push }
+              else { pa.y += push; pb.y -= push }
+            }
+          }
+        }
+      }
+      if (!anyOverlap) break
+    }
+
+    // --- Apply final positions ---
+    setNodes((nds) => nds.map(n => {
+      const p = pos.get(n.id)
+      return p ? { ...n, position: { x: Math.round(p.x), y: Math.round(p.y) } } : n
+    }))
+
+    setTimeout(() => {
+      try { fitView({ padding: 0.12, duration: 600 }) } catch {}
+    }, 50)
+  }, [edges, setNodes, fitView])
+
   return (
     <div 
       style={{ width: '100%', height: '100%' }} 
@@ -344,6 +565,13 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           className="!bg-[#0a0a1a] !border-[#1e1e2e]" 
         />
         <Panel position="top-right" className="flex gap-2">
+            <button
+              onClick={onExplode}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/30 text-xs font-bold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
+              title="Auto-layout: arrange nodes into a clean tree"
+            >
+              💥 Explode
+            </button>
             <div className="px-3 py-1.5 rounded-lg bg-[#1e1e2e] border border-[#2e2e3e] text-xs font-medium text-[#94a3b8] shadow-2xl">
               Double Click — New Node • Right Click — Menu • Delete Key — Remove
             </div>
