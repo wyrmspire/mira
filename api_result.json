@@ -20,7 +20,7 @@
     "response": {
       "action": "create_outline",
       "outline": {
-        "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
+        "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
         "userId": "a0000000-0000-0000-0000-000000000001",
         "topic": "SaaS Pricing Strategy",
         "domain": "Business",
@@ -38,8 +38,8 @@
         "estimatedExperienceCount": null,
         "status": "planning",
         "goalId": null,
-        "createdAt": "2026-04-05T03:52:00.607+00:00",
-        "updatedAt": "2026-04-05T03:52:00.607+00:00"
+        "createdAt": "2026-04-05T04:20:50.285+00:00",
+        "updatedAt": "2026-04-05T04:20:50.285+00:00"
       },
       "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
     }
@@ -78,7 +78,7 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "826e015e-2fe6-46af-a259-7474337177c9",
+      "id": "83519a00-cca6-489b-bed5-145b27a8a06b",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -103,19 +103,19 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.517+00:00",
+      "created_at": "2026-04-05T04:20:50.471+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "e2d086a2-0734-4624-9089-def72bd03b8c",
-          "instance_id": "826e015e-2fe6-46af-a259-7474337177c9",
+          "id": "6566fedb-dc97-4f29-8c79-117c07e3fdf7",
+          "instance_id": "83519a00-cca6-489b-bed5-145b27a8a06b",
           "step_order": 0,
           "step_type": "lesson",
           "title": "What is a Value Metric?",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:01.971791+00:00",
+          "created_at": "2026-04-05T04:20:50.816234+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -188,7 +188,7 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -213,19 +213,19 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "created_at": "2026-04-05T04:20:50.696+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "created_at": "2026-04-05T04:20:51.014334+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -234,14 +234,14 @@
           "order_index": 0
         },
         {
-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "created_at": "2026-04-05T04:20:51.099639+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -297,7 +297,7 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+      "id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -322,19 +322,19 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:02.281+00:00",
+      "created_at": "2026-04-05T04:20:50.979+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "4c83c962-5abe-4e85-84e1-8a138037dde9",
-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "id": "a9aee5e2-8fce-4db8-a899-d218fb3d0d4f",
+          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
           "step_order": 0,
           "step_type": "lesson",
           "title": "The Hook",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.634363+00:00",
+          "created_at": "2026-04-05T04:20:51.267561+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -343,8 +343,8 @@
           "order_index": 0
         },
         {
-          "id": "321626ae-ce9f-4b5b-9eb0-27521f9d3b8a",
-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "id": "133db81e-e83c-4437-ba9c-23d58df0973b",
+          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
           "step_order": 1,
           "step_type": "challenge",
           "title": "Draft It",
@@ -355,7 +355,7 @@
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.761495+00:00",
+          "created_at": "2026-04-05T04:20:51.343757+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -389,8 +389,8 @@
     "url": "/update",
     "payload": {
       "action": "update_step",
-      "experienceId": "09c96086-cf3b-485e-ac40-135d42cdf027",
-      "stepId": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+      "experienceId": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+      "stepId": "51a49637-2a9c-4b02-9543-a3392d81d077",
       "stepPayload": {
         "title": "Interview Mechanics - Worked Example",
         "blocks": [
@@ -410,8 +410,8 @@
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-      "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+      "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "step_order": 0,
       "step_type": "lesson",
       "title": "Interview Mechanics - Worked Example",
@@ -430,7 +430,7 @@
         ]
       },
       "completion_rule": null,
-      "created_at": "2026-04-05T03:52:02.249138+00:00",
+      "created_at": "2026-04-05T04:20:51.014334+00:00",
       "status": "pending",
       "scheduled_date": null,
       "due_date": null,
@@ -440,12 +440,12 @@
   },
   {
     "name": "5b. Verify Surgery",
-    "url": "/experiences/09c96086-cf3b-485e-ac40-135d42cdf027",
+    "url": "/experiences/d04846eb-8bf7-41e2-a12e-942774b6c1af",
     "payload": null,
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -470,13 +470,13 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "created_at": "2026-04-05T04:20:50.696+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics - Worked Example",
@@ -495,7 +495,7 @@
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "created_at": "2026-04-05T04:20:51.014334+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -503,14 +503,14 @@
           "completed_at": null
         },
         {
-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "created_at": "2026-04-05T04:20:51.099639+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -533,6 +533,36 @@
     "statusText": "OK",
     "response": {
       "latestExperiences": [
+        {
+          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "QA Smoke Reentry",
+          "goal": "",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "study",
+            "depth": "moderate",
+            "intensity": "focused",
+            "timeScope": "evening"
+          },
+          "reentry": {
+            "prompt": "You finished the reentry smoke test",
+            "trigger": "completion",
+            "contextScope": "full"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:19:09.138+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
         {
           "id": "87b9c4bf-df01-4992-a737-6cf704061349",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -802,36 +832,6 @@
           "created_at": "2026-04-02T22:29:47.472+00:00",
           "published_at": null,
           "curriculum_outline_id": null
-        },
-        {
-          "id": "dfac2e3c-cfb0-4aa2-b1d5-537a33424e87",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Build Your Founder's AI Radar System (Expanded v2)",
-          "goal": "Design and deploy a practical AI radar operating system that collects high-signal updates on models, funding, tools, and workflows, filters noise through explicit scoring rules, and produces a weekly decision loop that changes what you build, publish, or ignore.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "medium",
-            "timeScope": "multi_day"
-          },
-          "reentry": {
-            "prompt": "Review which sources actually produced signal, which scoring rules filtered noise best, and what recurring review ritual should become permanent.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "4dc9995f-52d7-4ad1-ad55-6be4e997db4c",
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-02T22:29:15.45+00:00",
-          "published_at": null,
-          "curriculum_outline_id": null
         }
       ],
       "activeReentryPrompts": [
@@ -848,6 +848,36 @@
       "suggestedNext": [],
       "synthesisSnapshot": null,
       "proposedExperiences": [
+        {
+          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "QA Smoke Reentry",
+          "goal": "",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "study",
+            "depth": "moderate",
+            "intensity": "focused",
+            "timeScope": "evening"
+          },
+          "reentry": {
+            "prompt": "You finished the reentry smoke test",
+            "trigger": "completion",
+            "contextScope": "full"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:19:09.138+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
         {
           "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -967,51 +997,19 @@
           "created_at": "2026-04-03T02:54:35.361+00:00",
           "published_at": null,
           "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
-          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
-          "next_suggested_ids": [
-            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T01:13:17.389+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
         }
       ],
       "reentryCount": 1,
       "compressedState": {
-        "narrative": "The user is a highly engaged power user or developer, actively pursuing multiple complex 'build' goals. Their primary focus appears to be an extensive 'Founder Research & Data Engine' curriculum, with Sprints 01 through 05 all proposed and awaiting action. Additionally, they have proposed other substantial, heavy-depth 'build' projects, including 'Building Resilient Webhook Ingestion Systems', 'Build Your YouTube SaaS Growth Engine', and 'Build Your Founder's AI Radar System'. Recently, they completed a '[Test] Persistent Planning Journey' which now has an active re-entry prompt to review priorities, and also initiated an ephemeral test. The varied sources of experience generation (GPT, dev-harness, Mirak) suggest deep interaction with the platform, potentially including testing its capabilities. Despite the high volume and complexity of proposed work, no explicit friction has been reported.",
+        "narrative": "The user is highly engaged, demonstrating advanced domain mastery in building complex data and automation systems. Their primary active goal revolves around constructing a \"Founder Research & Data Engine,\" with all five sprints (01-05) currently in a proposed state, indicating a structured, multi-stage project they are planning or working through. Additionally, they have proposed two other significant, long-term goals: \"Building Resilient Webhook Ingestion Systems\" and \"Build Your YouTube SaaS Growth Engine.\" Recently, they completed a \"[Test] Persistent Planning Journey,\" which has generated an active reentry prompt. They also initiated a \"QA Smoke Reentry\" and an \"[Test] Ephemeral Quick Prompt,\" suggesting active engagement with platform features and testing. There are no reported friction signals.",
         "prioritySignals": [
-          "Dedicated Curriculum Engagement: Actively pursuing a multi-sprint 'Founder Research & Data Engine' project (Sprints 01-05 proposed).",
-          "High Volume of Complex Build Goals: Eight proposed persistent experiences, mostly 'heavy' depth and 'build' mode, indicating ambitious, long-term development.",
-          "Recent Test Completion with Active Re-entry: A '[Test] Persistent Planning Journey' was just completed, with an immediate prompt to review its priorities.",
-          "Power User Engagement: Experiences generated by 'dev-harness' and 'mirak' alongside 'gpt' suggest deep technical integration or platform testing.",
-          "No Reported Friction: Despite numerous complex projects, no friction signals are present."
+          "Active reentry prompt for '[Test] Persistent Planning Journey' (ID: 87b9c4bf-df01-4992-a737-6cf704061349)",
+          "Ongoing 'Founder Research & Data Engine' goal with 5 proposed sprints (ID: 0119f14a-6aa2-4101-a350-76c4293d8ee9)",
+          "Newly proposed 'Building Resilient Webhook Ingestion Systems' (ID: b9c4c1f9-012d-45cf-80f0-4aedcbe45878)",
+          "Active engagement with platform testing (evidenced by 'QA Smoke Reentry' and '[Test]' experiences)",
+          "No reported friction levels across experiences"
         ],
-        "suggestedOpeningTopic": "You've completed your test planning journey, and there's a prompt to review priorities. Shall we look at those, or are you ready to continue with Sprint 05 of your 'Founder Research & Data Engine'?"
+        "suggestedOpeningTopic": "Reviewing priorities for the '[Test] Persistent Planning Journey' experience"
       },
       "knowledgeSummary": {
         "domains": {
@@ -1101,11 +1099,35 @@
             "status": "planning",
             "subtopic_count": 1,
             "completed_subtopics": 0
+          },
+          {
+            "id": "68dba70f-8162-407a-8bf0-52022bb6eebd",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
           }
         ],
         "recent_completions": []
       },
       "pending_enrichments": [
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T04:20:51.293+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T04:20:11.471+00:00"
+        },
         {
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
@@ -1120,11 +1142,6 @@
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
           "requested_at": "2026-04-05T03:42:48.638+00:00"
-        },
-        {
-          "topic": "Unit Economics (CAC/LTV ratios)",
-          "status": "dispatched",
-          "requested_at": "2026-04-05T03:42:10.792+00:00"
         }
       ],
       "goal": {

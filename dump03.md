@@ -1,3 +1,358 @@
+    relatedCapabilities: ['read_knowledge', 'dispatch_research', 'link_knowledge']
+  }),
+ 
+  skill_domain: () => ({
+    capability: 'skill_domain',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a skill domain under a goal. Flat payload. All three fields (userId, goalId, name) are REQUIRED.',
+    schema: {
+      type: 'skill_domain',
+      userId: 'UUID from state (REQUIRED)',
+      goalId: 'UUID — must be an existing goal (REQUIRED)',
+      name: 'string (REQUIRED)',
+      description: 'optional string'
+    },
+    example: {
+      type: 'skill_domain',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      goalId: 'goal-uuid-here',
+      name: 'Component Memoization',
+      description: 'Deep mastery of useMemo, useCallback, and React.memo patterns.'
+    },
+    when_to_use: 'When breaking down a broad goal into measurable sub-skills. goalId must reference an existing goal.',
+    relatedCapabilities: ['goal', 'link_knowledge']
+  }),
+
+  create_map_node: () => ({
+    capability: 'create_map_node',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Add a new node to a mind map (think board). If boardId is omitted, it will use your default board.',
+    schema: {
+      type: 'map_node',
+      userId: 'UUID from state',
+      boardId: 'optional UUID of the think board',
+      label: 'string (max 100)',
+      description: 'optional string (short hover summary)',
+      content: 'optional string (long-form elaboration — can be paragraphs)',
+      color: 'optional string (hex or tailwind color name)',
+      position_x: 'number',
+      position_y: 'number'
+    },
+    example: {
+      type: 'map_node',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      label: 'Frontend Performance',
+      description: 'Core concepts for optimizing React apps.',
+      color: '#3b82f6',
+      position_x: 100,
+      position_y: 100
+    },
+    when_to_use: 'When you want to visualize a concept as a node in a spatial mind map.'
+  }),
+
+  create_map_edge: () => ({
+    capability: 'create_map_edge',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Connect two mind map nodes with an edge.',
+    schema: {
+      type: 'map_edge',
+      userId: 'UUID from state',
+      boardId: 'optional UUID of the think board',
+      sourceNodeId: 'UUID of source node',
+      targetNodeId: 'UUID of target node'
+    },
+    example: {
+      type: 'map_edge',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      sourceNodeId: 'node-uuid-1',
+      targetNodeId: 'node-uuid-2'
+    },
+    when_to_use: 'When defining relationships between existing nodes on the canvas.'
+  }),
+
+  update_map_node: () => ({
+    capability: 'update_map_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update the content or color of a mind map node.',
+    schema: {
+      action: 'update_map_node',
+      nodeId: 'UUID of the node to update',
+      label: 'optional string',
+      description: 'optional string',
+      content: 'optional string',
+      color: 'optional string'
+    },
+    example: {
+      action: 'update_map_node',
+      nodeId: 'node-uuid-1',
+      label: 'Updated Label',
+      description: 'New longer description.'
+    },
+    when_to_use: 'When improving or refining a node on the mind map.'
+  }),
+
+  delete_map_node: () => ({
+    capability: 'delete_map_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Delete a node from a mind map.',
+    schema: {
+      action: 'delete_map_node',
+      nodeId: 'UUID of the node to delete'
+    },
+    example: {
+      action: 'delete_map_node',
+      nodeId: 'node-uuid-1'
+    },
+    when_to_use: 'When pruning a mind map.'
+  }),
+
+  delete_map_edge: () => ({
+    capability: 'delete_map_edge',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Delete a relationship between nodes on a mind map.',
+    schema: {
+      action: 'delete_map_edge',
+      edgeId: 'UUID of the edge to delete'
+    },
+    example: {
+      action: 'delete_map_edge',
+      edgeId: 'edge-uuid-1'
+    },
+    when_to_use: 'When pruning connections on a mind map.'
+  }),
+ 
+  create_map_cluster: () => ({
+    capability: 'create_map_cluster',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a central hub node and multiple child nodes connected to it in one operation. Radius-based layout is handled automatically.',
+    schema: {
+      type: 'map_cluster',
+      userId: 'UUID from state',
+      boardId: 'optional UUID of the think board',
+      centerNode: {
+        label: 'string (max 100)',
+        description: 'optional string',
+        content: 'optional string',
+        color: 'optional string',
+        position_x: 'number (center X)',
+        position_y: 'number (center Y)'
+      },
+      childNodes: [
+        {
+          label: 'string',
+          description: 'optional string',
+          content: 'optional string',
+          color: 'optional string'
+        }
+      ]
+    },
+    example: {
+      type: 'map_cluster',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      centerNode: {
+        label: 'SaaS Business Model',
+        description: 'High level components of a SaaS company.',
+        color: '#3b82f6',
+        position_x: 0,
+        position_y: 0
+      },
+      childNodes: [
+        { label: 'Unit Economics', description: 'LTV, CAC, Churn' },
+        { label: 'Product Development', description: 'Roadmap, Tech Stack' },
+        { label: 'Go-To-Market', description: 'Sales, Marketing' }
+      ]
+    },
+    when_to_use: 'When you want to expand a concept into multiple sub-topics at once. Highly efficient for building trees.'
+  }),
+ 
+  read_map: () => ({
+    capability: 'read_map',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Fetch the full content (nodes and edges) of a mind map. Use this before updating or expanding a map if you dont have the full context.',
+    schema: {
+      action: 'read_map',
+      boardId: 'UUID of the think board to read'
+    },
+    example: {
+      action: 'read_map',
+      boardId: 'board-uuid-123'
+    },
+    when_to_use: 'When you need to see the current state of a mind map to decide where to add new nodes or how to restructure it.',
+    relatedCapabilities: ['create_map_node', 'create_map_cluster', 'update_map_node']
+  }),
+
+  assess_gaps: () => ({
+    capability: 'assess_gaps',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Compare current user knowledge against a goal or outline to identify missing concepts.',
+    schema: {
+      action: 'assess_gaps',
+      userId: 'UUID',
+      goalId: 'optional UUID',
+      outlineId: 'optional UUID'
+    },
+    example: {
+      action: 'assess_gaps',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      goalId: 'goal-uuid-456'
+    },
+    when_to_use: 'When planning the next phase of a curriculum.',
+    relatedCapabilities: ['create_outline', 'create_experience']
+  }),
+
+  update_step: () => ({
+    capability: 'update_step',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update the title or payload of an existing step in an experience.',
+    schema: {
+      action: 'update_step',
+      experienceId: 'UUID',
+      stepId: 'UUID',
+      updates: {
+        title: 'optional string',
+        payload: 'optional step_payload object'
+      }
+    },
+    example: {
+      action: 'update_step',
+      experienceId: 'exp-123',
+      stepId: 'step-456',
+      updates: {
+        title: 'New Lesson Title',
+        payload: { sections: [{ heading: 'Updated', body: 'New content', type: 'text' }] }
+      }
+    },
+    when_to_use: 'When refining a curriculum or correcting a step based on feedback.',
+    relatedCapabilities: ['create_experience', 'reorder_steps']
+  }),
+
+  reorder_steps: () => ({
+    capability: 'reorder_steps',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Change the order of steps in an experience using a list of step IDs.',
+    schema: {
+      action: 'reorder_steps',
+      experienceId: 'UUID',
+      stepIds: 'string[] — ordered list of step IDs'
+    },
+    example: {
+      action: 'reorder_steps',
+      experienceId: 'exp-123',
+      stepIds: ['step-2', 'step-1', 'step-3']
+    },
+    when_to_use: 'When adjusting the pedagogical flow of an experience.',
+    relatedCapabilities: ['update_step', 'delete_step']
+  }),
+
+  delete_step: () => ({
+    capability: 'delete_step',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Permanently remove a step from an experience.',
+    schema: {
+      action: 'delete_step',
+      experienceId: 'UUID',
+      stepId: 'UUID'
+    },
+    example: {
+      action: 'delete_step',
+      experienceId: 'exp-123',
+      stepId: 'step-456'
+    },
+    when_to_use: 'When pruning unnecessary content from a curriculum.',
+    relatedCapabilities: ['update_step']
+  }),
+
+  transition: () => ({
+    capability: 'transition',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Transition an experience lifecycle status.',
+    schema: {
+      action: 'transition',
+      experienceId: 'UUID',
+      transitionAction: 'activate | complete | kill | revive | supersede'
+    },
+    example: {
+      action: 'transition',
+      experienceId: 'exp-123',
+      transitionAction: 'complete'
+    },
+    when_to_use: 'When moving an experience through its development lifecycle.',
+    relatedCapabilities: ['create_experience', 'create_ephemeral']
+  }),
+
+  link_knowledge: () => ({
+    capability: 'link_knowledge',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Link a knowledge unit to a skill domain or an experience step to provide pedagogical support.',
+    schema: {
+      action: 'link_knowledge',
+      unitId: 'UUID of the knowledge unit (REQUIRED)',
+      domainId: 'optional UUID of a skill domain to link to',
+      experienceId: 'optional UUID of an experience to link to',
+      stepId: 'optional UUID of a specific step to link to'
+    },
+    example: {
+      action: 'link_knowledge',
+      unitId: 'unit-abc',
+      domainId: 'domain-xyz'
+    },
+    when_to_use: 'To populate skill areas or provide "pre-reading" for a specific step.',
+    relatedCapabilities: ['create_knowledge', 'skill_domain']
+  }),
+
+  update_knowledge: () => ({
+    capability: 'update_knowledge',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update the content or attributes of an existing knowledge unit.',
+    schema: {
+      action: 'update_knowledge',
+      unitId: 'UUID (REQUIRED)',
+      updates: 'object matching create_knowledge schema'
+    },
+    example: {
+      action: 'update_knowledge',
+      unitId: 'unit-abc',
+      updates: { title: 'Updated Title', content: 'New content here...' }
+    },
+    when_to_use: 'When refining persistent knowledge based on new research.',
+    relatedCapabilities: ['create_knowledge', 'link_knowledge']
+  }),
+
+  update_skill_domain: () => ({
+    capability: 'update_skill_domain',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update a skill domain description or linked entities.',
+    schema: {
+      action: 'update_skill_domain',
+      domainId: 'UUID (REQUIRED)',
+      updates: {
+        description: 'optional string',
+        linkedUnitIds: 'optional string[]',
+        linkedExperienceIds: 'optional string[]'
+      }
+    },
+    example: {
+      action: 'update_skill_domain',
+      domainId: 'domain-xyz',
+      updates: { description: 'Mastery of advanced React patterns.' }
+    },
+    when_to_use: 'When refining the structure of a goal\'s proficiency tree.',
+    relatedCapabilities: ['skill_domain', 'link_knowledge']
+  }),
+
+  transition_goal: () => ({
+    capability: 'transition_goal',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Transition a long-term goal through its lifecycle (activate, pause, complete, kill).',
+    schema: {
+      action: 'transition_goal',
+      goalId: 'UUID (REQUIRED)',
+      transitionAction: 'activate | pause | complete | kill | revive'
+    },
+    example: {
+      action: 'transition_goal',
+      goalId: 'goal-123',
+      transitionAction: 'activate'
     },
     when_to_use: 'When the user starts, pauses, or completes a broad goal.',
     relatedCapabilities: ['goal', 'skill_domain']
@@ -54,7 +409,8 @@ import {
   updateExperienceStep, 
   reorderExperienceSteps, 
   deleteExperienceStep, 
-  transitionExperienceStatus 
+  transitionExperienceStatus,
+  ExperienceStep
 } from '@/lib/services/experience-service';
 import { createIdea } from '@/lib/services/ideas-service';
 import { createKnowledgeUnit } from '@/lib/services/knowledge-service';
@@ -102,6 +458,7 @@ export async function dispatchCreate(type: string, payload: any) {
       }
 
       const newInstance = await createExperienceInstance(instanceData);
+      const createdSteps: ExperienceStep[] = [];
 
       // Create inline steps if provided
       if (payload.steps && Array.isArray(payload.steps)) {
@@ -111,12 +468,13 @@ export async function dispatchCreate(type: string, payload: any) {
           if (!st || st === 'step') continue;
           
           const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
-          await addStep(newInstance.id, {
+          const createdStep = await addStep(newInstance.id, {
             step_type: st,
             title: title ?? '',
             payload: nestedPayload ?? rest,
             completion_rule: completion_rule ?? null,
           });
+          createdSteps.push(createdStep);
         }
       }
 
@@ -124,7 +482,12 @@ export async function dispatchCreate(type: string, payload: any) {
         const { linkExperiences } = await import('@/lib/services/graph-service');
         await linkExperiences(instanceData.previous_experience_id, newInstance.id, 'chain');
       }
-      return newInstance;
+      const stepsResponse = createdSteps.map(s => ({
+        ...s,
+        order_index: s.step_order
+      }));
+
+      return { ...newInstance, steps: stepsResponse };
     }
     case 'ephemeral':
       return injectEphemeralExperience(payload);
@@ -362,9 +725,29 @@ export async function dispatchCreate(type: string, payload: any) {
  */
 export async function dispatchUpdate(action: string, payload: any) {
   switch (action) {
-    case 'update_step':
+    case 'update_step': {
       if (!payload.stepId) throw new Error('Missing stepId');
-      return updateExperienceStep(payload.stepId, payload.stepPayload ?? payload.updates);
+      const updates = payload.stepPayload ?? payload.updates ?? {};
+      
+      const columnFields = ['title', 'step_type', 'step_order', 'status', 'completion_rule', 'scheduled_date', 'due_date', 'estimated_minutes'];
+      const topLevel: any = {};
+      const payloadUpdates: any = {};
+      
+      Object.keys(updates).forEach(key => {
+        if (columnFields.includes(key)) {
+          topLevel[key] = updates[key];
+        } else {
+          payloadUpdates[key] = updates[key];
+        }
+      });
+      
+      // If there are payload updates, wrap them
+      if (Object.keys(payloadUpdates).length > 0) {
+        topLevel.payload = payloadUpdates;
+      }
+      
+      return updateExperienceStep(payload.stepId, topLevel);
+    }
     
     case 'reorder_steps':
       if (!payload.experienceId || !payload.orderedIds) {
@@ -1200,6 +1583,18 @@ export function useInteractionCapture(instanceId: string) {
     postEvent(INTERACTION_EVENTS.BLOCK_EXERCISE_COMPLETED, stepId, { blockId, ...result });
   };
 
+  const trackCoachTriggerCheckpointFail = (stepId: string, result: Record<string, any>) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_CHECKPOINT_FAIL, stepId, result);
+  };
+
+  const trackCoachTriggerDwell = (stepId: string, dwellMs: number) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_DWELL, stepId, { dwellMs });
+  };
+
+  const trackCoachTriggerUnreadKnowledge = (stepId: string, knowledgeUnitId: string) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_UNREAD_KNOWLEDGE, stepId, { knowledgeUnitId });
+  };
+
   return {
     trackStepView,
     trackAnswer,
@@ -1213,6 +1608,9 @@ export function useInteractionCapture(instanceId: string) {
     trackBlockHint,
     trackBlockPrediction,
     trackBlockExercise,
+    trackCoachTriggerCheckpointFail,
+    trackCoachTriggerDwell,
+    trackCoachTriggerUnreadKnowledge,
   };
 };
 
@@ -1761,6 +2159,24 @@ export async function getRecentlyCompletedOutlines(
 }
 
 /**
+ * Find an active or planning outline by topic (case-insensitive partial match).
+ */
+export async function findActiveOutlineByTopic(
+  userId: string,
+  topic: string
+): Promise<CurriculumOutline | null> {
+  const active = await getActiveCurriculumOutlines(userId);
+  const normalizedTopic = topic.toLowerCase().trim();
+  
+  // Try exact match first
+  const exact = active.find(o => o.topic.toLowerCase().trim() === normalizedTopic);
+  if (exact) return exact;
+  
+  // Fall back to partial match
+  return active.find(o => o.topic.toLowerCase().includes(normalizedTopic)) || null;
+}
+
+/**
  * Partial update of a curriculum outline (status, subtopics, etc.).
  */
 export async function updateCurriculumOutline(
@@ -2203,6 +2619,28 @@ export async function updateDeliveryStatus(
   await adapter.updateItem('enrichment_deliveries', id, updates);
 }
 
+/**
+ * Returns summary of enrichments for the GPT state packet.
+ */
+export async function getEnrichmentSummaryForState(userId: string): Promise<Array<{
+  topic: string;
+  status: string;
+  requested_at: string;
+}>> {
+  const adapter = getStorageAdapter();
+  const results = await adapter.query<EnrichmentRequestRow>('enrichment_requests', { user_id: userId });
+  
+  return results
+    .filter(r => r.status === 'dispatched' || r.status === 'pending' || r.status === 'delivered')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5) // Limit to most recent 5
+    .map(r => ({
+      topic: r.requested_gap,
+      status: r.status,
+      requested_at: r.created_at
+    }));
+}
+
 ```
 
 ### lib/services/experience-service.ts
@@ -2470,7 +2908,7 @@ export async function completeExperienceWithAI(instanceId: string, userId: strin
  * Gateway-compatible wrapper for ephemeral injection.
  * Handles validation and step creation in sequence.
  */
-export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance> {
+export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance & { steps: ExperienceStep[] }> {
   // Use existing route-level logic but inside a service
   const { createExperienceInstance, createExperienceStep } = await import('./experience-service')
   
@@ -2483,7 +2921,7 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
     instance_type: 'ephemeral',
     status: 'injected',
     resolution: data.resolution,
-    reentry: null,
+    reentry: data.reentry ?? null,
     previous_experience_id: null,
     next_suggested_ids: [],
     friction_level: null,
@@ -2494,11 +2932,12 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
   }
 
   const instance = await createExperienceInstance(instanceData)
+  const createdSteps: ExperienceStep[] = []
 
   if (data.steps && Array.isArray(data.steps)) {
     for (let i = 0; i < data.steps.length; i++) {
       const step = data.steps[i]
-      await createExperienceStep({
+      const createdStep = await createExperienceStep({
         instance_id: instance.id,
         step_order: i,
         step_type: step.step_type || step.type,
@@ -2506,10 +2945,16 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
         payload: step.payload || {},
         completion_rule: step.completion_rule || null
       })
+      createdSteps.push(createdStep)
     }
   }
 
-  return instance;
+  const stepsResponse = createdSteps.map(s => ({
+    ...s,
+    order_index: s.step_order
+  }));
+
+  return { ...instance, steps: stepsResponse };
 }
 
 /**
@@ -3958,6 +4403,7 @@ import { getInteractionsForInstances } from './interaction-service';
 import { getArenaProjects } from './projects-service';
 import { getInboxEvents } from './inbox-service';
 import { getIdeasByStatus } from './ideas-service';
+import { getEnrichmentSummaryForState } from './enrichment-service';
 import { DEFAULT_USER_ID, MASTERY_THRESHOLDS } from '@/lib/constants';
 
 /**
@@ -3979,7 +4425,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     outlines,
     arenaProjects,
     allEvents,
-    capturedIdeas
+    capturedIdeas,
+    enrichments
   ] = await Promise.all([
     getActiveGoal(userId),
     getExperienceInstances({ userId }),
@@ -3990,7 +4437,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     getCurriculumOutlinesForUser(userId),
     getArenaProjects(), // Note: Projects service doesn't yet take userId in most calls
     getInboxEvents(),
-    getIdeasByStatus('captured')
+    getIdeasByStatus('captured'),
+    getEnrichmentSummaryForState(userId)
   ]);
 
   // 2. Resolve skill domains (goal-specific if active goal exists, else user-wide)
@@ -4135,6 +4583,17 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
       totalSteps: focusTotalSteps,
       lastActivityAt: focusLastActivity,
       focusReason,
+      outlineTitle: focusExperience?.curriculum_outline_id 
+        ? outlines.find(o => o.id === focusExperience.curriculum_outline_id)?.topic 
+        : undefined,
+      outlineProgress: focusExperience?.curriculum_outline_id 
+        ? (() => {
+            const o = outlines.find(o => o.id === focusExperience.curriculum_outline_id);
+            if (!o) return undefined;
+            const completed = o.subtopics.filter(s => s.status === 'completed').length;
+            return Math.round((completed / o.subtopics.length) * 100);
+          })()
+        : undefined,
     },
     proposedExperiences,
     activeExperiences,
@@ -4146,6 +4605,7 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     arenaProjects,
     recentEvents: allEvents.slice(0, 3),
     capturedIdeas,
+    pendingEnrichments: enrichments,
   };
 }
 
@@ -4379,11 +4839,11 @@ import { InteractionEvent, InteractionEventType, Artifact } from '@/types/intera
 import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
-export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
+export async function recordInteraction(data: { instanceId?: string | null; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
   const adapter = getStorageAdapter()
   const event: InteractionEvent = {
     id: generateId(),
-    instance_id: data.instanceId,
+    instance_id: data.instanceId ?? null,
     step_id: data.stepId || null,
     event_type: data.eventType,
     event_payload: data.eventPayload,
@@ -4395,6 +4855,12 @@ export async function recordInteraction(data: { instanceId: string; stepId?: str
 export async function getInteractionsByInstance(instanceId: string): Promise<InteractionEvent[]> {
   const adapter = getStorageAdapter()
   return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
+}
+
+export async function getInteractionsByUnit(unitId: string): Promise<InteractionEvent[]> {
+  const adapter = getStorageAdapter()
+  const attempts = await adapter.query<InteractionEvent>('interaction_events', { event_type: 'practice_attempt' })
+  return attempts.filter(a => a.event_payload?.unit_id === unitId)
 }
 
 export async function getInteractionsForInstances(instanceIds: string[]): Promise<InteractionEvent[]> {
@@ -4642,22 +5108,32 @@ export async function getKnowledgeDomains(userId: string): Promise<{ domain: str
   }));
 }
 
-export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }> {
+export async function getKnowledgeSummaryForGPT(userId: string): Promise<{
+  domains: Record<string, number>;
+  totalUnits: number;
+  masteredCount: number;
+}> {
   try {
     const units = await getKnowledgeUnits(userId);
-    const domains = Array.from(new Set(units.map(u => u.domain)));
+    const domainCounts: Record<string, number> = {};
+
+    units.forEach(u => {
+      if (!u.domain) return;
+      domainCounts[u.domain] = (domainCounts[u.domain] || 0) + 1;
+    });
+
     const totalUnits = units.length;
     const masteredCount = units.filter(u => u.mastery_status === 'practiced' || u.mastery_status === 'confident').length;
 
     return {
-      domains,
+      domains: domainCounts,
       totalUnits,
       masteredCount
     };
   } catch (error) {
     console.error('Error fetching knowledge summary for GPT:', error);
     return {
-      domains: [],
+      domains: {},
       totalUnits: 0,
       masteredCount: 0
     };
@@ -5442,6 +5918,9 @@ import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
 import { getKnowledgeSummaryForGPT } from './knowledge-service'
 import { getFacetsBySnapshot } from './facet-service'
 import { getBoardSummaries } from './mind-map-service'
+import { getSkillDomainsForUser } from './skill-domain-service'
+import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
+import { SkillMasteryLevel } from '@/lib/constants'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -5475,6 +5954,37 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
       frictionAssessment: aiResult.frictionAssessment
     }
     snapshot.next_candidates = aiResult.nextCandidates
+  }
+  
+  // W2 - Compute Mastery Transitions for Lane 5
+  if (sourceType === 'experience') {
+    const allDomains = await getSkillDomainsForUser(userId)
+    const linkedDomains = allDomains.filter(d => d.linkedExperienceIds.includes(sourceId))
+    
+    if (linkedDomains.length > 0) {
+      const transitions: any[] = []
+      const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert']
+      const userInstances = await getExperienceInstances({ userId })
+      
+      for (const domain of linkedDomains) {
+        // 'After' state is current
+        const { masteryLevel: afterLevel, evidenceCount: afterEvidence } = await computeSkillMastery(domain, undefined, userInstances)
+        // 'Before' state skips this experience
+        const { masteryLevel: beforeLevel, evidenceCount: beforeEvidence } = await computeSkillMastery(domain, sourceId, userInstances)
+        
+        if (afterLevel !== beforeLevel || afterEvidence !== beforeEvidence) {
+          transitions.push({
+            domainId: domain.id,
+            domainName: domain.name,
+            before: { level: beforeLevel, evidence: beforeEvidence },
+            after: { level: afterLevel, evidence: afterEvidence },
+            isLevelUp: LEVELS.indexOf(afterLevel) > LEVELS.indexOf(beforeLevel)
+          })
+        }
+      }
+      
+      snapshot.key_signals.masteryTransitions = transitions
+    }
   }
   
   // Lane 4: Persist computed friction as a key signal if not already present
@@ -5798,6 +6308,8 @@ export async function generateInteractionTimelineEntries(userId: string): Promis
   )
 
   for (const event of completionEvents) {
+    if (!event.instance_id) continue;
+    
     entries.push({
       id: event.id,
       timestamp: event.created_at,
@@ -6380,6 +6892,12 @@ export const COPY = {
     activeSection: 'Active Journeys',
     emptySuggested: 'No new suggestions from Mira.',
     emptyActive: 'No active journeys.',
+    focusNarrative: "You're {percent}% through {title}. Next: {step}.",
+    reentry: {
+      heading: 'Pick Up Where You Left Off',
+      viewMore: 'View {count} other re-entry points ↓',
+      hideMore: 'Hide other re-entry points ↑',
+    },
   },
   send: {
     heading: 'Ideas from GPT',
@@ -7480,521 +7998,3 @@ export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): Icebox
       title: p.name,
       summary: p.summary,
       daysInIcebox: daysSince(p.updatedAt),
-      isStale: daysSince(p.updatedAt) >= STALE_ICEBOX_DAYS,
-      createdAt: p.updatedAt,
-    }))
-
-  return [...iceboxIdeas, ...iceboxProjects].sort(
-    (a, b) => b.daysInIcebox - a.daysInIcebox
-  )
-}
-
-```
-
-### lib/view-models/inbox-view-model.ts
-
-```typescript
-import type { InboxEvent } from '@/types/inbox'
-
-export interface InboxViewModel {
-  events: InboxEvent[]
-  unreadCount: number
-  errorCount: number
-}
-
-export function buildInboxViewModel(events: InboxEvent[]): InboxViewModel {
-  return {
-    events,
-    unreadCount: events.filter((e) => !e.read).length,
-    errorCount: events.filter((e) => e.severity === 'error').length,
-  }
-}
-
-```
-
-### lib/view-models/review-view-model.ts
-
-```typescript
-import type { PullRequest, ReviewStatus } from '@/types/pr'
-import type { Project } from '@/types/project'
-
-export interface ReviewViewModel {
-  pr: PullRequest
-  project?: Project
-  canMerge: boolean
-  reviewState: ReviewStatus
-}
-
-export function buildReviewViewModel(pr: PullRequest, project?: Project): ReviewViewModel {
-  let reviewState: ReviewStatus = 'pending'
-
-  if (pr.status === 'merged') {
-    reviewState = 'merged'
-  } else if (pr.reviewStatus) {
-    reviewState = pr.reviewStatus
-  } else if (pr.requestedChanges) {
-    reviewState = 'changes_requested'
-  }
-
-  return {
-    pr,
-    project,
-    canMerge: pr.status === 'open' && pr.buildState === 'success' && pr.mergeable,
-    reviewState,
-  }
-}
-
-```
-
-### .github/copilot-instructions.md
-
-```markdown
-# Copilot instructions for the Mira Studio repository.
-# The coding agent reads this file for context when working on issues.
-
-## Project Overview
-Mira Studio is a Next.js 14 (App Router) application for managing ideas
-from capture through execution. TypeScript strict mode, Tailwind CSS.
-
-## Key Conventions
-- All services read/write through `lib/storage.ts` to `.local-data/studio.json`
-- Client components use `fetch()` to call API routes — never import services directly
-- GitHub operations go through `lib/adapters/github-adapter.ts`
-- UI copy comes from `lib/studio-copy.ts`
-- Routes are centralized in `lib/routes.ts`
-
-## File Structure
-- `app/` — Next.js pages and API routes
-- `components/` — React components
-- `lib/` — Services, adapters, utilities
-- `types/` — TypeScript type definitions
-
-## Testing
-- `npx tsc --noEmit` for type checking
-- `npm run build` for production build verification
-
-```
-
-### agents.md
-
-```markdown
-# Mira Studio — Agent Context
-
-> Standing context for any agent entering this repo. Not sprint-specific.
-
----
-
-## Product Summary
-
-Mira is an experience engine disguised as a studio. Users talk to a Custom GPT ("Mira"), which proposes typed **Experiences** — structured modules the user lives through inside the app. Experiences can be persistent (go through a review pipeline) or ephemeral (injected instantly). A coding agent *realizes* these experiences against typed schemas and pushes them through GitHub. The frontend renders experiences from schema, not from hardcoded pages.
-
-**Core entities:**
-- **Experience** — the central noun. Can be a questionnaire, lesson, challenge, plan builder, reflection, or essay+tasks.
-- **Realization** — the internal build object (replaces "project" for code-execution contexts). Maps to GitHub issues/PRs.
-- **Resolution** — typed object on every experience controlling depth, mode, time scope, and intensity.
-- **Re-entry Contract** — per-experience hook that defines how GPT re-enters with awareness.
-
-**Two parallel truths:**
-- Runtime truth lives in Supabase (what the user did)
-- Realization truth lives in GitHub (what the coder built)
-
-**Local development model:** The user is the local dev. API endpoints are the same contract the Custom GPT hits in production. In local mode, ideas are entered via `/dev/gpt-send` harness. JSON file fallback requires explicit `USE_JSON_FALLBACK=true` in `.env.local` — see SOP-15. Dev harnesses exist at `/api/dev/diagnostic` (adapter/env/counts) and `/api/dev/test-experience` (creates test ephemeral + persistent).
-
----
-
-## Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| Framework | Next.js 14.2 (App Router) |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS 3.4, dark studio theme |
-| Database | Supabase (Postgres) — canonical runtime store |
-| Fallback data | JSON file storage under `.local-data/` (explicit opt-in only via `USE_JSON_FALLBACK=true`) |
-| State logic | `lib/state-machine.ts` — idea + project + experience + PR transition tables |
-| Copy/Labels | `lib/studio-copy.ts` — centralized UI copy |
-| Routing | `lib/routes.ts` — centralized route map |
-| GitHub | `@octokit/rest` via `lib/adapters/github-adapter.ts` |
-| Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
-| AI Intelligence | Genkit + `@genkit-ai/google-genai` via `lib/ai/genkit.ts` |
-| Research Engine | **MiraK** — Python/FastAPI microservice on Cloud Run (`c:/mirak` repo) |
-| Enrichment | **Nexus** — async content worker via enrichment endpoints |
-
-### MiraK Microservice (Separate Repo: `c:/mirak`)
-
-MiraK is a Python/FastAPI research agent that runs as a Cloud Run microservice. It is a **separate project** from Mira Studio but deeply integrated via webhooks.
-
-| Layer | Tech |
-|-------|------|
-| Framework | FastAPI (Python 3.11+) |
-| AI Agents | Google ADK (Agent Development Kit) |
-| Deployment | Google Cloud Run |
-| Endpoint | `POST /generate_knowledge` |
-| Cloud URL | `https://mirak-528663818350.us-central1.run.app` |
-| GPT Action | `mirak_gpt_action.yaml` (OpenAPI schema in `c:/mirak/`) |
-
-**Architecture:**
-```
-Custom GPT → POST /generate_knowledge (Cloud Run)
-  ↓ 202 Accepted (immediate)
-  ↓ BackgroundTasks: agent pipeline runs
-  ↓ On completion: webhook delivery
-  ↓
-  ├── Primary: https://mira.mytsapi.us/api/webhook/mirak (local tunnel)
-  └── Fallback: https://mira-maddyup.vercel.app/api/webhook/mirak (production)
-  ↓
-Mira Studio webhook receiver validates + persists to Supabase:
-  ├── knowledge_units table (the research content)
-  └── experience_instances table (enriches existing if experience_id present)
-```
-
-**Key files in `c:/mirak`:**
-- `main.py` — FastAPI app, `/generate_knowledge` endpoint, agent pipeline, webhook delivery
-- `knowledge.md` — Writing guide for content quality (NOT a schema constraint)
-- `mirak_gpt_action.yaml` — OpenAPI schema for the Custom GPT Action
-- `Dockerfile` — Cloud Run container definition
-- `requirements.txt` — Python dependencies
-
-**Webhook routing logic (in `main.py`):**
-1. Tries local tunnel diagnostic check (`GET /api/dev/diagnostic`)
-2. If local is up → delivers to local tunnel
-3. If local is down → delivers to Vercel production URL
-4. Authentication via `MIRAK_WEBHOOK_SECRET` header (`x-mirak-secret`)
-
-**Environment variables (both repos must share):**
-- `MIRAK_WEBHOOK_SECRET` in `c:/mira/.env.local` AND `c:/mirak/.env`
-- `NEXUS_WEBHOOK_SECRET` in `c:/mira/.env.local` AND the Nexus content worker
-
-**MiraK-specific env (in `c:/mirak/.env` only):**
-- `GEMINI_SEARCH` — Dedicated API key for MiraK's ADK agents. Do NOT rename this var. See `c:/mirak/AGENTS.md` for full context.
-
-**Cloud Run deployment requires `--set-env-vars` to inject secrets and `--no-cpu-throttling` for background tasks.** See `c:/mirak/AGENTS.md` for deploy commands.
-
----
-
-## Repo File Map
-
-```
-app/
-  page.tsx              ← Home / dashboard (attention cockpit)
-  layout.tsx            ← Root layout (html, body, globals.css)
-  globals.css           ← CSS custom props + tailwind directives
-  send/page.tsx         ← Incoming ideas from GPT (shows all captured ideas)
-  drill/page.tsx        ← 6-step idea clarification tunnel (client component)
-  drill/success/        ← Post-drill success screen
-  drill/end/            ← Post-drill kill screen
-  arena/page.tsx        ← Active projects list
-  arena/[projectId]/    ← Single project detail (3-pane)
-  review/[prId]/page.tsx← PR review page (preview-first)
-  inbox/page.tsx        ← Events feed (filterable, mark-read)
-  icebox/page.tsx       ← Deferred ideas + projects
-  shipped/page.tsx      ← Completed projects
-  killed/page.tsx       ← Removed projects
-  library/              ← Experience library (Active, Completed, Moments, Suggested)
-    page.tsx            ← Server component: fetches + groups experiences
-    LibraryClient.tsx   ← Client component: "Accept & Start" actions
-  workspace/            ← Lived experience surface
-    [instanceId]/
-      page.tsx          ← Server component: fetch instance + steps
-      WorkspaceClient.tsx ← Client component: renders ExperienceRenderer
-  dev/
-    gpt-send/page.tsx   ← Dev harness: simulate GPT sending an idea
-    github-playground/  ← Dev harness: test GitHub operations
-  api/
-    dev/
-      diagnostic/       ← GET dev-only: adapter, env, row counts, quarantined surfaces
-      test-experience/  ← POST dev-only: creates ephemeral + persistent for DEFAULT_USER_ID
-    gpt/                 ← GPT Gateway (compound endpoints — Sprint 10)
-      state/route.ts     ← GET: compressed user state for re-entry
-      plan/route.ts      ← POST: curriculum outlines, research dispatch, gap analysis
-      create/route.ts    ← POST: experiences, ideas, steps (discriminated by type)
-      update/route.ts    ← POST: step edits, reorder, transitions (discriminated by action)
-      discover/route.ts  ← GET: progressive disclosure — returns schemas + examples by capability
-    coach/               ← Coach API (frontend-facing inline tutor — Sprint 10)
-      chat/route.ts      ← POST: contextual tutor Q&A within active step (Genkit tutorChatFlow)
-      grade/route.ts     ← POST: semantic checkpoint grading (Genkit gradeCheckpointFlow)
-      grade-batch/route.ts ← POST: batch checkpoint grading (multiple questions)
-      mastery/route.ts   ← POST: evidence-based mastery assessment
-    goals/               ← Goal CRUD (Sprint 13)
-      route.ts           ← GET (list) / POST (create goal)
-      [id]/route.ts      ← GET/PATCH single goal
-    skills/              ← Skill Domain CRUD (Sprint 13)
-      route.ts           ← GET (list) / POST (create domain)
-      [id]/route.ts      ← GET/PATCH single domain (link_unit, link_experience, recompute_mastery)
-    knowledge/           ← Knowledge CRUD
-      route.ts           ← GET (list)
-      [id]/route.ts      ← GET single unit
-      batch/route.ts     ← GET batch units by IDs
-    ideas/route.ts       ← GET/POST ideas
-    ideas/materialize/   ← POST convert idea→project
-    drill/route.ts       ← POST save drill session
-    projects/route.ts    ← GET projects
-    tasks/route.ts       ← GET tasks by project
-    prs/route.ts         ← GET/PATCH PRs by project
-    inbox/route.ts       ← GET/PATCH inbox events
-    experiences/         ← Experience CRUD + inject (frontend-facing, still active)
-      route.ts           ← GET (list) / POST (create persistent)
-      inject/route.ts    ← POST (create ephemeral — GPT direct-create)
-      [id]/route.ts      ← GET single experience (enriched with graph + interactions)
-      [id]/steps/route.ts ← GET/POST steps for an experience
-      [id]/chain/route.ts ← GET/POST experience chaining
-      [id]/suggestions/   ← GET next-experience suggestions
-    interactions/        ← Event telemetry
-    synthesis/           ← Compressed state for GPT
-    enrichment/          ← Nexus enrichment loop (ingest, request)
-      ingest/route.ts    ← POST: deliver atoms from Nexus
-      request/route.ts   ← POST: request topic enrichment
-    actions/
-      promote-to-arena/  ← POST
-      move-to-icebox/    ← POST
-      mark-shipped/      ← POST
-      kill-idea/         ← POST
-      merge-pr/          ← POST
-    github/              ← GitHub-specific API routes
-      test-connection/   ← GET  validate token + repo access
-      create-issue/      ← POST create GitHub issue from project
-      create-pr/         ← POST create GitHub PR
-      dispatch-workflow/ ← POST trigger GitHub Actions workflow
-      sync-pr/           ← GET/POST sync PRs from GitHub
-      merge-pr/          ← POST merge real GitHub PR
-      trigger-agent/     ← POST trigger Copilot agent
-    webhook/
-      gpt/route.ts       ← GPT webhook receiver (used by dev harness locally)
-      github/route.ts    ← GitHub webhook receiver (real: signature-verified)
-      vercel/route.ts    ← Vercel webhook receiver (stub)
-      mirak/route.ts     ← MiraK research webhook receiver
-
-components/
-  shell/                 ← AppShell, StudioSidebar, StudioHeader, MobileNav, CommandBar
-  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, etc.
-  send/                  ← CapturedIdeaCard, DefineInStudioHero, IdeaSummaryPanel
-  drill/                 ← DrillLayout, DrillProgress, GiantChoiceButton, MaterializationSequence
-  arena/                 ← ArenaProjectCard, ActiveLimitBanner, PreviewFrame, ProjectPanes, etc.
-  review/                ← SplitReviewLayout, PRSummaryCard, DiffSummary, BuildStatusChip, etc.
-  inbox/                 ← InboxFeed, InboxEventCard, InboxFilterTabs
-  icebox/                ← IceboxCard, StaleIdeaModal, TriageActions
-  archive/               ← TrophyCard, GraveyardCard, ArchiveFilterBar
-  experience/            ← ExperienceRenderer, ExperienceCard, HomeExperienceAction,
-                           StepNavigator, ExperienceOverview, DraftProvider,
-                           step renderers (Questionnaire, Lesson, Challenge, PlanBuilder,
-                           Reflection, EssayTasks, CheckpointStep)
-                           KnowledgeCompanion (evolves → TutorChat mode)
-                           CompletionScreen (synthesis-driven completion UI)
-                           CoachTrigger (proactive coaching: failed checkpoint, dwell, unread)
-                           StepKnowledgeCard (pre/in/post timing knowledge delivery)
-                           TrackCard, TrackSection (curriculum outline UI)
-  knowledge/             ← KnowledgeUnitCard, KnowledgeUnitView, MasteryBadge, DomainCard
-  skills/                ← SkillTreeCard, SkillTreeGrid (Sprint 13)
-  common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
-                           FocusTodayCard (home page resume link),
-                           ResearchStatusBadge (MiraK research arrival indicator)
-  think/                 ← ThinkNode, ThinkCanvas (React Flow mind map)
-  drawers/               ← ThinkNodeDrawer (node detail editor)
-  layout/                ← SlideOutDrawer (global drawer system)
-  timeline/              ← TimelineEventCard, TimelineFilterBar
-  profile/               ← FacetCard, DirectionSummary
-  dev/                   ← GPT send form, dev tools
-
-lib/
-  config/
-    github.ts            ← GitHub env config, validation, repo coordinates
-  contracts/
-    experience-contract.ts ← v1 experience instance contract + module roles
-    step-contracts.ts      ← v1 per-type step payload contracts + unions
-    resolution-contract.ts ← v1 resolution + re-entry contracts + chrome mapping
-  gateway/               ← GPT Gateway layer (Sprint 10)
-    discover-registry.ts   ← Capability → schema + example map for /api/gpt/discover
-    gateway-router.ts      ← Action/type discriminator + dispatch logic
-    gateway-types.ts       ← GatewayRequest, DiscoverResponse types
-  github/
-    client.ts            ← Octokit wrapper, getGitHubClient()
-    signature.ts         ← HMAC-SHA256 webhook signature verification
-    handlers/            ← Per-event webhook handlers (issue, PR, workflow, review)
-  supabase/
-    client.ts            ← Server-side Supabase client
-    browser.ts           ← Browser-side Supabase client
-    migrations/          ← SQL migration files (001–012)
-      012_enrichment_tables.sql ← Nexus enrichment tables
-  ai/
-    genkit.ts            ← Genkit initialization + Google AI plugin
-    schemas.ts           ← Shared Zod schemas for AI flow outputs
-    safe-flow.ts         ← Graceful degradation wrapper for AI flows
-    flows/               ← Genkit flow definitions (one file per flow)
-      synthesize-experience.ts  ← narratize synthesis on experience completion
-      suggest-next-experience.ts← context-aware next-experience suggestions
-      extract-facets.ts         ← semantic profile facet extraction
-      compress-gpt-state.ts     ← token-efficient GPT state compression
-      refine-knowledge-flow.ts  ← knowledge enrichment (retrieval Qs, cross-links)
-      tutor-chat-flow.ts        ← contextual Q&A within a step [NEW]
-      grade-checkpoint-flow.ts  ← semantic grading of checkpoint answers [NEW]
-    context/             ← Context assembly helpers for flows
-      suggestion-context.ts  ← Gathers user profile + history for suggestions
-      facet-context.ts       ← Flattens interactions for facet extraction
-  experience/
-    renderer-registry.tsx← Step renderer registry (maps step_type → component)
-    reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
-  enrichment/            ← Nexus translation layer
-    atom-mapper.ts       ← Maps Nexus atoms to Mira knowledge units
-    nexus-bridge.ts      ← Orchestrates enrichment delivery
-    interaction-events.ts← Event type constants + payload builder
-    progression-engine.ts← Step scoring + friction calculator
-    progression-rules.ts ← Canonical experience chain map + suggestion logic
-    step-state-machine.ts← Step status transitions (pending → in_progress → completed)
-    step-scheduling.ts   ← Pacing utilities (daily/weekly/custom scheduling)
-    skill-mastery-engine.ts ← Mastery computation (evidence thresholds for 6 levels)
-    CAPTURE_CONTRACT.md  ← Interaction capture spec for 7 event types
-  hooks/
-    useInteractionCapture.ts ← Fire-and-forget telemetry hook
-    useDraftPersistence.ts   ← Debounced auto-save + hydration hook for step drafts
-  storage.ts             ← JSON file read/write for .local-data/ (atomic writes)
-  storage-adapter.ts     ← Adapter interface: Supabase primary, JSON fallback
-  seed-data.ts           ← Initial seed records (legacy JSON)
-  state-machine.ts       ← Idea + project + experience + PR transition rules
-  studio-copy.ts         ← Central copy strings for all pages
-  constants.ts           ← MAX_ARENA_PROJECTS, DRILL_STEPS, execution modes, experience classes, resolution constants, DEFAULT_USER_ID, DEFAULT_TEMPLATE_IDS
-  routes.ts              ← Centralized route paths (including workspace, library, timeline, profile)
-  guards.ts              ← Type guards (isExperienceInstance, isValidResolution, etc.)
-  utils.ts               ← generateId helper (UUID via crypto.randomUUID)
-  date.ts                ← Date formatting
-  services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
-                           agent-runs, external-refs, github-factory, github-sync,
-                           experience, interaction, synthesis, graph, timeline, facet,
-                           draft, knowledge, enrichment, curriculum-outline, goal, skill-domain,
-                           home-summary, mind-map services
-  adapters/              ← github (real Octokit client), gpt, vercel, notifications
-  formatters/            ← idea, project, pr, inbox formatters
-  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal, enrichment-validator
-  view-models/           ← arena, icebox, inbox, review VMs
-
-types/
-  idea.ts, project.ts, task.ts, pr.ts, drill.ts, inbox.ts, webhook.ts, api.ts,
-  agent-run.ts, external-ref.ts, github.ts,
-  experience.ts, interaction.ts, synthesis.ts,
-  graph.ts, timeline.ts, profile.ts,
-  knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
-  enrichment.ts          ← Nexus atom types + delivery contracts
-  curriculum.ts          ← CurriculumOutline, StepKnowledgeLink
-  goal.ts                ← Goal, GoalRow, GoalStatus (Sprint 13)
-  skill.ts               ← SkillDomain, SkillDomainRow, SkillMasteryLevel (Sprint 13)
-  mind-map.ts            ← ThinkBoard, ThinkNode, ThinkEdge
-
-content/                 ← Product copy markdown
-docs/
-  contracts/             ← v1 experience contract docs
-enrichment.md            ← Master thesis: 3-pillar enrichment strategy
-
-.local-data/             ← JSON file persistence (gitignored, auto-seeded)
-roadmap.md               ← Product roadmap (experience engine evolution)
-wiring.md                ← Manual setup steps for the user (env vars, webhooks, etc.)
-```
-
----
-
-## Commands
-
-```bash
-npm install          # install dependencies
-npm run dev          # start dev server (next dev)
-npm run build        # production build (next build)
-npm run lint         # eslint
-npx tsc --noEmit     # type check
-```
-
----
-
-## Common Pitfalls
-
-### Data persistence has two backends (fail-fast, not silent fallback)
-`lib/storage.ts` is the legacy JSON file store. Supabase is the primary backend via `lib/storage-adapter.ts`. All services call through the adapter interface. If Supabase is not configured, the adapter **throws an error** instead of silently falling back. To use JSON locally, set `USE_JSON_FALLBACK=true` in `.env.local`. **Do not** call `fs` directly from services — always go through the adapter.
-
-### Next.js 14 caches all `fetch()` calls by default — including Supabase
-`@supabase/supabase-js` uses `fetch()` internally. Next.js App Router patches `fetch()` and caches responses by default. **If you don't add `cache: 'no-store'` to the Supabase client's global fetch override, server components will serve stale data.** The fix is in `lib/supabase/client.ts` — `global.fetch` wrapper passes `cache: 'no-store'`. Do NOT remove this. `force-dynamic` on a page does NOT disable fetch-level caching.
-
-### Legacy entity services are quarantined
-`projects-service.ts` and `prs-service.ts` return empty arrays with warnings. The underlying Supabase tables (`realizations`, `realization_reviews`) exist but use snake_case columns (`idea_id`, `current_phase`) while the TypeScript types use camelCase (`ideaId`, `currentPhase`). They are intentionally quarantined until a proper schema migration aligns them. Arena, Review, Icebox, Shipped, and Killed pages show empty as a result.
-
-### Ephemeral experiences start in `injected` status
-Unlike persistent experiences which start in `proposed`, ephemeral experiences injected via API start as `injected`. Both must reach `active` status before they can transition to `completed`. `ExperienceRenderer` now handles this by auto-triggering the `start` (ephemeral) or `activate` (persistent) transition on mount if the experience is in its initial terminal status.
-
-### LessonStep expects `sections` array, not `content` string
-The `LessonStep` renderer does NOT support raw markdown strings. It requires a `payload.sections` array of `{ heading, body, type }`. If an agent sends a single `content` blob, the lesson will render as empty.
-
-### Synthesis Loop Automation
-State synthesis (generating insights for GPT) is not automated in the backend. `ExperienceRenderer` must explicitly call `POST /api/synthesis` with `userId`, `sourceType`, and `sourceId` upon experience completion to ensure the `gpt/state` packet contains the latest user insights.
-
-### Drill page is a client component
-`app/drill/page.tsx` is `'use client'`. It must use `fetch()` to call API routes. It cannot import server-side services directly.
-
-### All data mutations must go through API routes
-Client components call `/api/*` endpoints. Server components can import services directly. This ensures the same contract works for both the UI and the Custom GPT.
-
-### The central noun is Experience, not PR
-The user-facing language is "Approve Experience" / "Publish", not "Merge PR". Internally a realization may map to a PR, but the UI never exposes that. See `roadmap.md` for the full approval language table.
-
-### GitHub adapter is a real Octokit client
-`lib/adapters/github-adapter.ts` is a full provider boundary using `@octokit/rest`. All GitHub operations go through this adapter. If GitHub is not configured (no token), the app degrades gracefully to local-only mode.
-
-### GitHub webhook route verifies signatures
-The GitHub webhook (`app/api/webhook/github/route.ts`) uses HMAC-SHA256 to verify payloads. Requires `GITHUB_WEBHOOK_SECRET` in `.env.local`.
-
-### `studio-copy.ts` is the single source for UI labels
-All user-facing text should come from this file. Some pages still hardcode strings — fix them when you see them.
-
-### Route naming vs. internal naming
-Code uses "arena" / "icebox" / "killed" / "shipped" internally. The UI should present these in friendlier terms: "In Progress" / "On Hold" / "Removed" / "Shipped".
-
-### Experience has two instance types
-`persistent` = goes through proposal → review → publish pipeline.
-`ephemeral` = GPT creates directly via `/api/experiences/inject`, renders instantly, skips review.
-
-### Resolution object is mandatory on all experience instances
-Every experience carries a `resolution` JSONB field: `{ depth, mode, timeScope, intensity }`. This controls renderer chrome, coder spec shape, and GPT entry mode. Never create an experience instance without a resolution.
-
-### Persistent experiences use the same schema as ephemeral
-They share the same `experience_instances` table, same step structure, same renderer, same interaction model. The only differences are lifecycle (proposed → active) and visibility (shows in library, can be revisited). Do NOT create a second system for persistent experiences.
-
-### Review is an illusion layer in Sprint 4
-Approve/Publish are UI buttons that transition experience status. They do NOT wire to real GitHub PR logic. Do not deepen GitHub integration for experiences.
-
-### Resolution must visibly affect UX
-`light` → minimal chrome (no header, no progress bar, clean immersive step only).
-`medium` → progress bar + step title.
-`heavy` → full header with goal, progress, description.
-If resolution doesn't visibly change the UI → it's dead weight.
-
-### UUID-style IDs everywhere
-All IDs use `crypto.randomUUID()` via `lib/utils.ts`. No prefixed IDs (`exp-`, `step-`, etc.). This ensures clean DB alignment and easier joins.
-
-### DEFAULT_USER_ID for development
-Single-user dev mode uses `DEFAULT_USER_ID = 'a0000000-0000-0000-0000-000000000001'` from `lib/constants.ts`. No auth system exists yet — all API routes use this ID.
-
-### Supabase project is live
-Project ID: `bbdhhlungcjqzghwovsx`. 18 tables exist (including `curriculum_outlines` and `step_knowledge_links` from migration 007). Dev user and 6 templates are seeded.
-
-### Inbox uses `timeline_events` with normalization
-`inbox-service.ts` reads/writes to the `timeline_events` Supabase table, which uses snake_case (`project_id`, `action_url`, `github_url`). The service has `fromDB()`/`toDB()` normalization functions that map to/from the camelCase TypeScript `InboxEvent` type. Always go through the service, never query `timeline_events` directly.
-
-### Seeded template IDs use `b0000000-` prefix
-Experience templates are seeded with IDs like `b0000000-0000-0000-0000-000000000001` through `...000006`. If you create test experiences, use these IDs — foreign key constraints will reject any template_id that doesn't exist in `experience_templates`.
-
-### `gptschema.md` documents the GPT API contract
-All API response fields for the `Idea` entity use **snake_case** (`raw_prompt`, `gpt_summary`, `created_at`). The `CaptureIdeaRequest` accepts **both** camelCase and snake_case — the `normalizeIdeaPayload` function in `idea-validator.ts` handles both. If you change API response shapes, update `gptschema.md` to match.
-
----
-
-## ⚠️ PROTECTED FILES — READ BEFORE MODIFYING
-
-> **These files have been repeatedly regressed by agents.** They encode hard-won operational doctrine and runtime-verified API contracts. **Do not rewrite, simplify, or restructure them** without explicit user approval.
-
-| File | Why it's protected | Max size |
-|------|-------------------|----------|
-| `gpt-instructions.md` | The Custom GPT's operating doctrine. Encodes the philosophy that Mira is an **operating environment**, not a Q&A bot. Contains the 12-step operating sequence, flat payload format, field name cheat sheets, spatial layout rules, and behavior rules. Every word was verified against runtime. | **< 8,000 chars** |
-| `public/openapi.yaml` | The OpenAPI schema that the Custom GPT Action reads. Field names, enum values, and payload shapes must exactly match `gateway-router.ts` switch cases. If you add a new case to the router, add the enum value here. | — |
-| `lib/gateway/discover-registry.ts` | Runtime schema documentation served by `GET /api/gpt/discover`. Examples must pass `validateStepPayload()`. Payloads must be **flat** (no nesting under `payload` key). | — |
-| `lib/gateway/gateway-router.ts` | The dispatch layer. Normalizes camelCase GPT payloads → snake_case DB columns for experiences. Contains validation for required fields. Changes here must be mirrored in openapi.yaml and discover-registry. | — |
-
-**Rules for modifying these files:**
-1. **Never strip operational philosophy** from `gpt-instructions.md`. The GPT must understand that it builds operating environments, not just creates entities. (See SOP-35.)
-2. **Never re-nest payloads** under a `payload` key in discover-registry or openapi.yaml. The gateway normalizes flat payloads — the schema must match.
-3. **Never add a router case without updating openapi.yaml enums.** (See SOP-37.)
-4. **Never update discover-registry examples without verifying against step-payload-validator.** (See SOP-32.)

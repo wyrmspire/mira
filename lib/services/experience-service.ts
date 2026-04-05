@@ -289,13 +289,18 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
   if (data.steps && Array.isArray(data.steps)) {
     for (let i = 0; i < data.steps.length; i++) {
       const step = data.steps[i]
+      const st = step.step_type || step.type || 'lesson'
+      const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
+
+      const stepPayload = nestedPayload && Object.keys(nestedPayload).length > 0 ? { ...nestedPayload } : { ...rest };
+
       const createdStep = await createExperienceStep({
         instance_id: instance.id,
         step_order: i,
-        step_type: step.step_type || step.type,
-        title: step.title || '',
-        payload: step.payload || {},
-        completion_rule: step.completion_rule || null
+        step_type: st,
+        title: title || '',
+        payload: stepPayload,
+        completion_rule: completion_rule || null
       })
       createdSteps.push(createdStep)
     }

@@ -1,3 +1,213 @@
+               <p className="text-[10px] text-violet-400/70 font-mono tracking-widest">
+                 AWAITING YOUR INSIGHTS
+               </p>
+            )}
+            <button
+              type="submit"
+              disabled={!isComplete}
+              className="px-12 py-4 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-500 transition-all disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed shadow-xl shadow-violet-900/20 active:scale-95"
+            >
+              Finish Reflection →
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+```
+
+### components/experience/TrackCard.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import Link from 'next/link';
+import { CurriculumOutline } from '@/types/curriculum';
+import { ROUTES } from '@/lib/routes';
+
+interface TrackCardProps {
+  outline: CurriculumOutline;
+}
+
+export default function TrackCard({ outline }: TrackCardProps) {
+  const completedCount = outline.subtopics.filter(s => s.status === 'completed').length;
+  const totalCount = outline.subtopics.length;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  // Find next target for "Continue" button
+  const nextSubtopic = outline.subtopics.find(s => s.status !== 'completed');
+  const continueHref = nextSubtopic?.experienceId ? ROUTES.workspace(nextSubtopic.experienceId) : null;
+
+  const getStatusIcon = (status: 'pending' | 'in_progress' | 'completed') => {
+    switch (status) {
+      case 'completed':
+        return (
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+        );
+      case 'in_progress':
+        return (
+          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse ring-2 ring-indigo-500/20" />
+        );
+      default:
+        return (
+          <div className="w-1.5 h-1.5 rounded-full border border-[#33334d]" />
+        );
+    }
+  };
+
+  return (
+    <div className="flex flex-col p-6 bg-[#000000] border border-[#1e1e2e] rounded-2xl hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-indigo-500/5 min-h-[380px]">
+      <div className="flex justify-between items-start mb-4">
+        <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+          Track
+        </div>
+        {outline.domain && (
+          <div className="text-[10px] font-mono text-[#4a4a6a] uppercase tracking-tighter">
+            {outline.domain}
+          </div>
+        )}
+      </div>
+
+      <h3 className="text-xl font-bold text-[#f1f5f9] mb-2 group-hover:text-indigo-300 transition-colors">
+        {outline.topic}
+      </h3>
+
+      <div className="mb-6">
+        <div className="flex justify-between text-[10px] font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
+          <span>Completion</span>
+          <span>{progressPercent}%</span>
+        </div>
+        <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-indigo-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-5 mb-8 overflow-y-auto max-h-[180px] pr-2 scrollbar-none">
+        {outline.subtopics.map((subtopic, idx) => (
+          <div key={idx} className="flex items-start gap-4 group/subtopic">
+            <div className="mt-1 flex-shrink-0">{getStatusIcon(subtopic.status)}</div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`text-xs font-bold leading-tight truncate ${subtopic.status === 'completed' ? 'text-[#4a4a6a]' : 'text-[#e2e8f0]'}`}>
+                  {subtopic.title}
+                </span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                  subtopic.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500/70 border border-emerald-500/10' :
+                  subtopic.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                  'bg-[#1e1e2e] text-[#4a4a6a] border border-[#33334d]'
+                }`}>
+                  {subtopic.status === 'completed' ? 'Done' : 
+                   subtopic.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                </span>
+              </div>
+              <p className="text-[10px] text-[#64748b] line-clamp-2 leading-relaxed italic">
+                {subtopic.description}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-auto">
+        {continueHref ? (
+          <Link 
+            href={continueHref}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]"
+          >
+            Continue Journey
+          </Link>
+        ) : (
+          <div className="w-full py-4 text-center text-[10px] font-bold text-[#4a4a6a] bg-[#000000] rounded-xl border border-dashed border-[#33334d] uppercase tracking-widest">
+            {outline.status === 'planning' ? 'Planning in progress...' : 'Awaiting next experience'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/experience/TrackSection.tsx
+
+```tsx
+'use client';
+
+import React from 'react';
+import { CurriculumOutline } from '@/types/curriculum';
+import TrackCard from './TrackCard';
+import { COPY } from '@/lib/studio-copy';
+
+interface TrackSectionProps {
+  outlines: CurriculumOutline[];
+}
+
+export default function TrackSection({ outlines }: TrackSectionProps) {
+  if (outlines.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-indigo-500/5 rounded-3xl border border-dashed border-indigo-500/20 text-center mb-16">
+        <span className="text-4xl mb-4">🗺️</span>
+        <h2 className="text-lg font-bold text-[#f1f5f9] mb-2">{COPY.library.tracksSection}</h2>
+        <p className="text-sm text-[#94a3b8] max-w-xs">{COPY.library.emptyTracks}</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="mb-20">
+      <div className="flex items-center gap-4 mb-10 overflow-hidden">
+        <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest whitespace-nowrap">
+          {COPY.library.tracksSection}
+        </h2>
+        <div className="h-px w-full bg-[#1e1e2e]" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {outlines.map((outline) => (
+          <TrackCard key={outline.id} outline={outline} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+```
+
+### components/icebox/icebox-card.tsx
+
+```tsx
+import type { IceboxItem } from '@/lib/view-models/icebox-view-model'
+import { COPY } from '@/lib/studio-copy'
+
+interface IceboxCardProps {
+  item: IceboxItem
+}
+
+export function IceboxCard({ item }: IceboxCardProps) {
+  return (
+    <div
+      className={`bg-[#12121a] border rounded-xl p-5 transition-colors ${
+        item.isStale ? 'border-amber-500/30' : 'border-[#1e1e2e]'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div>
+          <span className="text-xs text-[#94a3b8] uppercase tracking-wide">
+            {item.type === 'idea' ? 'Idea' : 'Project'}
+          </span>
+          <h3 className="font-semibold text-[#e2e8f0] mt-0.5">{item.title}</h3>
+        </div>
+        <span
+          className={`text-xs flex-shrink-0 ${
+            item.isStale ? 'text-amber-400' : 'text-[#94a3b8]'
+          }`}
+        >
           {item.daysInIcebox}d
         </span>
       </div>
@@ -432,15 +642,39 @@ import MasteryBadge from './MasteryBadge';
 
 interface KnowledgeUnitViewProps {
   unit: KnowledgeUnit;
+  practiceCount: number;
 }
 
 type Tab = 'learn' | 'practice' | 'links';
 
-export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
+export default function KnowledgeUnitView({ unit, practiceCount: initialPracticeCount }: KnowledgeUnitViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [expandedQuestions, setExpandedQuestions] = useState<number[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [localPracticeCount, setLocalPracticeCount] = useState(initialPracticeCount);
+
+  const handlePracticeAttempt = async (correct: boolean) => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const res = await fetch(`/api/knowledge/${unit.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correct, userId: unit.user_id }),
+      });
+
+      if (res.ok) {
+        if (correct) setLocalPracticeCount(prev => prev + 1);
+        router.refresh(); // Sync mastery status from server
+      }
+    } catch (err) {
+      console.error('Failed to record practice:', err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const toggleQuestion = (index: number) => {
     setExpandedQuestions(prev => 
@@ -502,23 +736,30 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
         <h1 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{unit.title}</h1>
       </header>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#1e1e2e] mb-8 overflow-x-auto no-scrollbar">
-        {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
-              activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
-            }`}
-          >
-            {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-            )}
-          </button>
-        ))}
-      </div>
+        {/* Tabs */}
+        <div className="flex gap-8 border-b border-[#1e1e2e] mb-8">
+          {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 text-xs font-bold uppercase tracking-widest transition-all relative ${
+                activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {tab}
+                {tab === 'practice' && localPracticeCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded-md border border-amber-500/20">
+                    Practiced {localPracticeCount}x
+                  </span>
+                )}
+              </div>
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+              )}
+            </button>
+          ))}
+        </div>
 
       {/* Tab Content */}
       <div className="min-h-[400px]">
@@ -637,9 +878,27 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
                       </button>
                       {expandedQuestions.includes(i) && (
                         <div className="px-5 pb-5 pt-2 border-t border-[#1e1e2e] animate-in slide-in-from-top-1 duration-200">
-                          <p className="text-sm text-[#94a3b8] leading-relaxed">
+                          <p className="text-sm text-[#94a3b8] leading-relaxed mb-6">
                             {q.answer}
                           </p>
+                          
+                          <div className="flex items-center justify-between pt-4 border-t border-[#1e1e2e]/50">
+                            <span className="text-[10px] font-bold text-[#4a4a6a] uppercase">Did you get this right?</span>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handlePracticeAttempt(false)}
+                                className="px-3 py-1.5 rounded-lg border border-rose-500/20 text-rose-500 text-[10px] font-bold hover:bg-rose-500/10 transition-colors"
+                              >
+                                Not Yet
+                              </button>
+                              <button 
+                                onClick={() => handlePracticeAttempt(true)}
+                                className="px-4 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors"
+                              >
+                                Yes
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -6208,6 +6467,11 @@ export const INTERACTION_EVENTS = {
   BLOCK_HINT_USED: 'block_hint_used',
   BLOCK_PREDICTION_SUBMITTED: 'block_prediction_submitted',
   BLOCK_EXERCISE_COMPLETED: 'block_exercise_completed',
+
+  // Lane 4: Proactive Coach Telemetry
+  COACH_TRIGGER_CHECKPOINT_FAIL: 'coach_trigger_checkpoint_fail',
+  COACH_TRIGGER_DWELL: 'coach_trigger_dwell',
+  COACH_TRIGGER_UNREAD_KNOWLEDGE: 'coach_trigger_unread_knowledge',
 } as const;
 
 export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];
@@ -6861,8 +7125,10 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
   
   // Group interactions by instanceId
   const interactionsByInstance = allInteractions.reduce((acc, interaction) => {
-    if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
-    acc[interaction.instance_id].push(interaction)
+    if (interaction.instance_id) {
+      if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
+      acc[interaction.instance_id].push(interaction)
+    }
     return acc
   }, {} as Record<string, InteractionEvent[]>)
 
@@ -6924,9 +7190,16 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
     }
   }
 
-  // Sort by priority (high first)
+  // Sort by priority (high first) and then by trigger type
   const priorityOrder = { high: 0, medium: 1, low: 2 }
-  return prompts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+  const triggerOrder = { completion: 0, inactivity: 1, time: 2, manual: -1 }
+  
+  return prompts.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    }
+    return triggerOrder[a.trigger] - triggerOrder[b.trigger]
+  })
 }
 
 ```
@@ -6970,10 +7243,15 @@ function FallbackStep({ step }: { step: ExperienceStep }) {
 
 ```typescript
 import { SkillDomain } from '@/types/skill';
+import { ExperienceInstance } from '@/types/experience';
 import { updateSkillDomain, getSkillDomain } from '@/lib/services/skill-domain-service';
 import { getKnowledgeUnitsByIds } from '@/lib/services/knowledge-service';
 import { getExperienceInstances } from '@/lib/services/experience-service';
-import { SkillMasteryLevel } from '@/lib/constants';
+import { SkillMasteryLevel, MasteryStatus } from '@/lib/constants';
+import { getStorageAdapter } from '@/lib/storage-adapter';
+import { InteractionEvent } from '@/types/interaction';
+import { KnowledgeProgress } from '@/types/knowledge';
+import { promoteKnowledgeProgress } from '@/lib/services/knowledge-service';
 
 /**
  * Computes skill mastery level based on evidence count rules from goal-os-contract.md.
@@ -6987,7 +7265,7 @@ import { SkillMasteryLevel } from '@/lib/constants';
  * - proficient: 5+ completed experiences AND 2+ knowledge units at 'confident'
  * - expert: 8+ completed experiences AND all linked knowledge units at 'confident'
  */
-export async function computeSkillMastery(domain: SkillDomain): Promise<{ 
+export async function computeSkillMastery(domain: SkillDomain, skipExperienceId?: string, preFetchedInstances?: ExperienceInstance[]): Promise<{ 
   masteryLevel: SkillMasteryLevel; 
   evidenceCount: number;
 }> {
@@ -6997,9 +7275,10 @@ export async function computeSkillMastery(domain: SkillDomain): Promise<{
   
   // 1. Fetch ALL user instances once, then filter locally (SOP-30: no N+1)
   if (domain.linkedExperienceIds.length > 0) {
-    const allInstances = await getExperienceInstances({ userId: domain.userId });
+    const allInstances = preFetchedInstances || await getExperienceInstances({ userId: domain.userId });
     const linkedSet = new Set(domain.linkedExperienceIds);
     for (const inst of allInstances) {
+      if (skipExperienceId && inst.id === skipExperienceId) continue;
       if (linkedSet.has(inst.id) && inst.status === 'completed') {
         completedExperiences++;
       }
@@ -7065,6 +7344,80 @@ export async function updateDomainMastery(goalId: string, domainId: string): Pro
   
   return domain;
 }
+
+/**
+ * Knowledge Mastery Evidence Logic (Lane 6 — Sprint 23)
+ * Enforces thresholds for promotion to 'confident' and 'practiced'.
+ * Rules:
+ * - 'practiced': ≥ 1 practice attempt OR passed a checkpoint.
+ * - 'confident': ≥ 3 practice attempts AND passed a checkpoint.
+ */
+export async function syncKnowledgeMastery(
+  userId: string, 
+  unitId: string, 
+  trigger: { type: 'checkpoint_pass' | 'practice_attempt'; correct: boolean }
+): Promise<void> {
+  const adapter = getStorageAdapter();
+  
+  // 1. Fetch current status
+  const progresses = await adapter.query<KnowledgeProgress>('knowledge_progress', { 
+    user_id: userId, 
+    unit_id: unitId 
+  });
+  const currentStatus = (progresses[0]?.mastery_status as MasteryStatus) || 'unseen';
+
+  // 2. Fetch evidence from interactions
+  // SOP-30 optimization: Only fetch related events.
+  // Note: practice_attempt events store unit_id in event_payload.
+  // We fetch all interaction events for this user across instances if we can,
+  // but for now, we'll fetch all and filter (local-first dev env).
+  const interactions = await adapter.getCollection<InteractionEvent>('interaction_events');
+  
+  const practiceAttempts = interactions.filter(i => 
+    i.event_type === 'practice_attempt' && 
+    i.event_payload?.unit_id === unitId &&
+    i.event_payload?.correct === true
+  ).length;
+
+  const hasPassedCheckpoint = interactions.some(i => 
+    i.event_type === 'checkpoint_graded' && 
+    i.event_payload?.knowledgeUnitId === unitId && 
+    i.event_payload?.correct === true
+  ) || (trigger.type === 'checkpoint_pass' && trigger.correct);
+
+  // 3. Evaluate next status
+  let nextStatus: MasteryStatus = currentStatus;
+  
+  // Confident check (Threshold: ≥ 3 + checkpoint)
+  if (hasPassedCheckpoint && practiceAttempts >= 3) {
+    nextStatus = 'confident';
+  } 
+  // Practiced check (Threshold: ≥ 1 OR checkpoint)
+  else if (hasPassedCheckpoint || practiceAttempts >= 1) {
+    if (currentStatus === 'unseen' || currentStatus === 'read') {
+      nextStatus = 'practiced';
+    }
+  } 
+  // Read check
+  else if (currentStatus === 'unseen') {
+    nextStatus = 'read';
+  }
+
+  // 4. Update if advanced
+  const ORDER: MasteryStatus[] = ['unseen', 'read', 'practiced', 'confident'];
+  if (ORDER.indexOf(nextStatus) > ORDER.indexOf(currentStatus)) {
+    // We use the existing service to handle the update logic (monotonicity, unit sync)
+    // but we might need to call it multiple times if skipping levels.
+    // Actually, promoteKnowledgeProgress just bumps by 1.
+    // Let's call it until we reach nextStatus.
+    let tempStatus = currentStatus;
+    while (tempStatus !== nextStatus && ORDER.indexOf(tempStatus) < ORDER.indexOf(nextStatus)) {
+      await promoteKnowledgeProgress(userId, unitId);
+      tempStatus = ORDER[ORDER.indexOf(tempStatus) + 1] as MasteryStatus;
+    }
+  }
+}
+
 
 ```
 
@@ -7415,6 +7768,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       goal: 'string',
       urgency: 'low | medium | high (controls notification toast duration)',
       resolution: '{...}',
+      reentry: '{...} — trigger, prompt, contextScope',
       steps: '[...]'
     },
     example: {
@@ -7425,6 +7779,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       goal: 'Verify understanding of Unit Economics',
       urgency: 'medium',
       resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
+      reentry: { trigger: 'completion', prompt: 'Great job. Want to dive deeper into Unit Economics?', contextScope: 'full' },
       steps: [
         {
           type: 'checkpoint',
@@ -7643,358 +7998,3 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']
     },
     when_to_use: 'To persist self-generated research or core curriculum concepts.',
-    relatedCapabilities: ['read_knowledge', 'dispatch_research', 'link_knowledge']
-  }),
- 
-  skill_domain: () => ({
-    capability: 'skill_domain',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Create a skill domain under a goal. Flat payload. All three fields (userId, goalId, name) are REQUIRED.',
-    schema: {
-      type: 'skill_domain',
-      userId: 'UUID from state (REQUIRED)',
-      goalId: 'UUID — must be an existing goal (REQUIRED)',
-      name: 'string (REQUIRED)',
-      description: 'optional string'
-    },
-    example: {
-      type: 'skill_domain',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      goalId: 'goal-uuid-here',
-      name: 'Component Memoization',
-      description: 'Deep mastery of useMemo, useCallback, and React.memo patterns.'
-    },
-    when_to_use: 'When breaking down a broad goal into measurable sub-skills. goalId must reference an existing goal.',
-    relatedCapabilities: ['goal', 'link_knowledge']
-  }),
-
-  create_map_node: () => ({
-    capability: 'create_map_node',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Add a new node to a mind map (think board). If boardId is omitted, it will use your default board.',
-    schema: {
-      type: 'map_node',
-      userId: 'UUID from state',
-      boardId: 'optional UUID of the think board',
-      label: 'string (max 100)',
-      description: 'optional string (short hover summary)',
-      content: 'optional string (long-form elaboration — can be paragraphs)',
-      color: 'optional string (hex or tailwind color name)',
-      position_x: 'number',
-      position_y: 'number'
-    },
-    example: {
-      type: 'map_node',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      label: 'Frontend Performance',
-      description: 'Core concepts for optimizing React apps.',
-      color: '#3b82f6',
-      position_x: 100,
-      position_y: 100
-    },
-    when_to_use: 'When you want to visualize a concept as a node in a spatial mind map.'
-  }),
-
-  create_map_edge: () => ({
-    capability: 'create_map_edge',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Connect two mind map nodes with an edge.',
-    schema: {
-      type: 'map_edge',
-      userId: 'UUID from state',
-      boardId: 'optional UUID of the think board',
-      sourceNodeId: 'UUID of source node',
-      targetNodeId: 'UUID of target node'
-    },
-    example: {
-      type: 'map_edge',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      sourceNodeId: 'node-uuid-1',
-      targetNodeId: 'node-uuid-2'
-    },
-    when_to_use: 'When defining relationships between existing nodes on the canvas.'
-  }),
-
-  update_map_node: () => ({
-    capability: 'update_map_node',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Update the content or color of a mind map node.',
-    schema: {
-      action: 'update_map_node',
-      nodeId: 'UUID of the node to update',
-      label: 'optional string',
-      description: 'optional string',
-      content: 'optional string',
-      color: 'optional string'
-    },
-    example: {
-      action: 'update_map_node',
-      nodeId: 'node-uuid-1',
-      label: 'Updated Label',
-      description: 'New longer description.'
-    },
-    when_to_use: 'When improving or refining a node on the mind map.'
-  }),
-
-  delete_map_node: () => ({
-    capability: 'delete_map_node',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Delete a node from a mind map.',
-    schema: {
-      action: 'delete_map_node',
-      nodeId: 'UUID of the node to delete'
-    },
-    example: {
-      action: 'delete_map_node',
-      nodeId: 'node-uuid-1'
-    },
-    when_to_use: 'When pruning a mind map.'
-  }),
-
-  delete_map_edge: () => ({
-    capability: 'delete_map_edge',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Delete a relationship between nodes on a mind map.',
-    schema: {
-      action: 'delete_map_edge',
-      edgeId: 'UUID of the edge to delete'
-    },
-    example: {
-      action: 'delete_map_edge',
-      edgeId: 'edge-uuid-1'
-    },
-    when_to_use: 'When pruning connections on a mind map.'
-  }),
- 
-  create_map_cluster: () => ({
-    capability: 'create_map_cluster',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Create a central hub node and multiple child nodes connected to it in one operation. Radius-based layout is handled automatically.',
-    schema: {
-      type: 'map_cluster',
-      userId: 'UUID from state',
-      boardId: 'optional UUID of the think board',
-      centerNode: {
-        label: 'string (max 100)',
-        description: 'optional string',
-        content: 'optional string',
-        color: 'optional string',
-        position_x: 'number (center X)',
-        position_y: 'number (center Y)'
-      },
-      childNodes: [
-        {
-          label: 'string',
-          description: 'optional string',
-          content: 'optional string',
-          color: 'optional string'
-        }
-      ]
-    },
-    example: {
-      type: 'map_cluster',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      centerNode: {
-        label: 'SaaS Business Model',
-        description: 'High level components of a SaaS company.',
-        color: '#3b82f6',
-        position_x: 0,
-        position_y: 0
-      },
-      childNodes: [
-        { label: 'Unit Economics', description: 'LTV, CAC, Churn' },
-        { label: 'Product Development', description: 'Roadmap, Tech Stack' },
-        { label: 'Go-To-Market', description: 'Sales, Marketing' }
-      ]
-    },
-    when_to_use: 'When you want to expand a concept into multiple sub-topics at once. Highly efficient for building trees.'
-  }),
- 
-  read_map: () => ({
-    capability: 'read_map',
-    endpoint: 'POST /api/gpt/plan',
-    description: 'Fetch the full content (nodes and edges) of a mind map. Use this before updating or expanding a map if you dont have the full context.',
-    schema: {
-      action: 'read_map',
-      boardId: 'UUID of the think board to read'
-    },
-    example: {
-      action: 'read_map',
-      boardId: 'board-uuid-123'
-    },
-    when_to_use: 'When you need to see the current state of a mind map to decide where to add new nodes or how to restructure it.',
-    relatedCapabilities: ['create_map_node', 'create_map_cluster', 'update_map_node']
-  }),
-
-  assess_gaps: () => ({
-    capability: 'assess_gaps',
-    endpoint: 'POST /api/gpt/plan',
-    description: 'Compare current user knowledge against a goal or outline to identify missing concepts.',
-    schema: {
-      action: 'assess_gaps',
-      userId: 'UUID',
-      goalId: 'optional UUID',
-      outlineId: 'optional UUID'
-    },
-    example: {
-      action: 'assess_gaps',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      goalId: 'goal-uuid-456'
-    },
-    when_to_use: 'When planning the next phase of a curriculum.',
-    relatedCapabilities: ['create_outline', 'create_experience']
-  }),
-
-  update_step: () => ({
-    capability: 'update_step',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Update the title or payload of an existing step in an experience.',
-    schema: {
-      action: 'update_step',
-      experienceId: 'UUID',
-      stepId: 'UUID',
-      updates: {
-        title: 'optional string',
-        payload: 'optional step_payload object'
-      }
-    },
-    example: {
-      action: 'update_step',
-      experienceId: 'exp-123',
-      stepId: 'step-456',
-      updates: {
-        title: 'New Lesson Title',
-        payload: { sections: [{ heading: 'Updated', body: 'New content', type: 'text' }] }
-      }
-    },
-    when_to_use: 'When refining a curriculum or correcting a step based on feedback.',
-    relatedCapabilities: ['create_experience', 'reorder_steps']
-  }),
-
-  reorder_steps: () => ({
-    capability: 'reorder_steps',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Change the order of steps in an experience using a list of step IDs.',
-    schema: {
-      action: 'reorder_steps',
-      experienceId: 'UUID',
-      stepIds: 'string[] — ordered list of step IDs'
-    },
-    example: {
-      action: 'reorder_steps',
-      experienceId: 'exp-123',
-      stepIds: ['step-2', 'step-1', 'step-3']
-    },
-    when_to_use: 'When adjusting the pedagogical flow of an experience.',
-    relatedCapabilities: ['update_step', 'delete_step']
-  }),
-
-  delete_step: () => ({
-    capability: 'delete_step',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Permanently remove a step from an experience.',
-    schema: {
-      action: 'delete_step',
-      experienceId: 'UUID',
-      stepId: 'UUID'
-    },
-    example: {
-      action: 'delete_step',
-      experienceId: 'exp-123',
-      stepId: 'step-456'
-    },
-    when_to_use: 'When pruning unnecessary content from a curriculum.',
-    relatedCapabilities: ['update_step']
-  }),
-
-  transition: () => ({
-    capability: 'transition',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Transition an experience lifecycle status.',
-    schema: {
-      action: 'transition',
-      experienceId: 'UUID',
-      transitionAction: 'activate | complete | kill | revive | supersede'
-    },
-    example: {
-      action: 'transition',
-      experienceId: 'exp-123',
-      transitionAction: 'complete'
-    },
-    when_to_use: 'When moving an experience through its development lifecycle.',
-    relatedCapabilities: ['create_experience', 'create_ephemeral']
-  }),
-
-  link_knowledge: () => ({
-    capability: 'link_knowledge',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Link a knowledge unit to a skill domain or an experience step to provide pedagogical support.',
-    schema: {
-      action: 'link_knowledge',
-      unitId: 'UUID of the knowledge unit (REQUIRED)',
-      domainId: 'optional UUID of a skill domain to link to',
-      experienceId: 'optional UUID of an experience to link to',
-      stepId: 'optional UUID of a specific step to link to'
-    },
-    example: {
-      action: 'link_knowledge',
-      unitId: 'unit-abc',
-      domainId: 'domain-xyz'
-    },
-    when_to_use: 'To populate skill areas or provide "pre-reading" for a specific step.',
-    relatedCapabilities: ['create_knowledge', 'skill_domain']
-  }),
-
-  update_knowledge: () => ({
-    capability: 'update_knowledge',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Update the content or attributes of an existing knowledge unit.',
-    schema: {
-      action: 'update_knowledge',
-      unitId: 'UUID (REQUIRED)',
-      updates: 'object matching create_knowledge schema'
-    },
-    example: {
-      action: 'update_knowledge',
-      unitId: 'unit-abc',
-      updates: { title: 'Updated Title', content: 'New content here...' }
-    },
-    when_to_use: 'When refining persistent knowledge based on new research.',
-    relatedCapabilities: ['create_knowledge', 'link_knowledge']
-  }),
-
-  update_skill_domain: () => ({
-    capability: 'update_skill_domain',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Update a skill domain description or linked entities.',
-    schema: {
-      action: 'update_skill_domain',
-      domainId: 'UUID (REQUIRED)',
-      updates: {
-        description: 'optional string',
-        linkedUnitIds: 'optional string[]',
-        linkedExperienceIds: 'optional string[]'
-      }
-    },
-    example: {
-      action: 'update_skill_domain',
-      domainId: 'domain-xyz',
-      updates: { description: 'Mastery of advanced React patterns.' }
-    },
-    when_to_use: 'When refining the structure of a goal\'s proficiency tree.',
-    relatedCapabilities: ['skill_domain', 'link_knowledge']
-  }),
-
-  transition_goal: () => ({
-    capability: 'transition_goal',
-    endpoint: 'POST /api/gpt/update',
-    description: 'Transition a long-term goal through its lifecycle (activate, pause, complete, kill).',
-    schema: {
-      action: 'transition_goal',
-      goalId: 'UUID (REQUIRED)',
-      transitionAction: 'activate | pause | complete | kill | revive'
-    },
-    example: {
-      action: 'transition_goal',
-      goalId: 'goal-123',
-      transitionAction: 'activate'

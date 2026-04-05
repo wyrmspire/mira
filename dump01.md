@@ -1,3 +1,96 @@
+import { COPY } from '@/lib/studio-copy'
+
+interface ProfileClientProps {
+  profile: UserProfile
+}
+
+type FilterType = 'all' | FacetType
+
+export function ProfileClient({ profile }: ProfileClientProps) {
+  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+
+  const filteredFacets = activeFilter === 'all' 
+    ? profile.facets 
+    : profile.facets.filter(f => f.facet_type === activeFilter)
+
+  const FILTERS: { label: string; value: FilterType }[] = [
+    { label: 'All', value: 'all' },
+    { label: COPY.profilePage.sections.interests, value: 'interest' },
+    { label: COPY.profilePage.sections.skills, value: 'skill' },
+    { label: COPY.profilePage.sections.goals, value: 'goal' },
+    { label: 'Effort', value: 'effort_area' },
+    { label: 'Preferences', value: 'preferred_mode' },
+  ]
+
+  if (profile.facets.length === 0) return null
+
+  return (
+    <div className="space-y-8">
+      {/* Activity Section */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <ActivityCard 
+          label="Total Journeys" 
+          value={profile.experienceCount.total} 
+          subValue={`${profile.experienceCount.active} active`}
+        />
+        <ActivityCard 
+          label="Completion Rate" 
+          value={`${profile.experienceCount.completionRate.toFixed(0)}%`} 
+          subValue={`${profile.experienceCount.completed} completed`}
+          color="text-emerald-400"
+        />
+        <ActivityCard 
+          label="Top Focus" 
+          value={profile.experienceCount.mostActiveClass || 'None'} 
+          subValue="Most active class"
+          color="text-indigo-400"
+          isUppercase
+        />
+        <ActivityCard 
+          label="Avg Friction" 
+          value={profile.experienceCount.averageFriction.toFixed(1)} 
+          subValue="Scale 1-3"
+          color={profile.experienceCount.averageFriction > 2 ? 'text-amber-400' : 'text-slate-400'}
+        />
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {FILTERS.map(filter => (
+            <button
+              key={filter.value}
+              onClick={() => setActiveFilter(filter.value)}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                activeFilter === filter.value
+                  ? 'bg-white text-slate-900 shadow-lg'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+
+        {filteredFacets.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {filteredFacets.map(facet => (
+              <FacetCard key={facet.id} facet={facet} />
+            ))}
+          </div>
+        ) : (
+          <div className="py-12 text-center text-slate-500 italic">
+            No facets found for this category.
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ActivityCard({ 
+  label, 
+  value, 
+  subValue, 
   color = 'text-white',
   isUppercase = false 
 }: { 
@@ -1949,6 +2042,7 @@ import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 import { formatRelativeTime } from '@/lib/date'
 import { ExperienceInstance, ExperienceStep } from '@/types/experience'
+import { COPY } from '@/lib/studio-copy'
 
 interface FocusTodayCardProps {
   experience?: ExperienceInstance | null
@@ -1956,6 +2050,8 @@ interface FocusTodayCardProps {
   totalSteps?: number
   lastActivityAt?: string | null
   focusReason?: string
+  outlineTitle?: string
+  outlineProgress?: number
 }
 
 export function FocusTodayCard({ 
@@ -1963,7 +2059,9 @@ export function FocusTodayCard({
   nextStep, 
   totalSteps,
   lastActivityAt,
-  focusReason
+  focusReason,
+  outlineTitle,
+  outlineProgress
 }: FocusTodayCardProps) {
   if (!experience) {
     return (
@@ -2003,6 +2101,14 @@ export function FocusTodayCard({
             <h2 className="text-xl font-bold text-[#f1f5f9] leading-tight group-hover:text-white transition-colors">
               {experience.title}
             </h2>
+            {outlineTitle && outlineProgress !== undefined && (
+              <p className="text-xs text-[#94a3b8] mt-1 font-medium italic">
+                {COPY.home.focusNarrative
+                  .replace('{percent}', String(outlineProgress))
+                  .replace('{title}', outlineTitle)
+                  .replace('{step}', nextStep?.title || 'Next Step')}
+              </p>
+            )}
           </div>
           {lastActivityAt && (
             <span className="text-[10px] font-medium text-[#4a4a6a] uppercase tracking-tighter whitespace-nowrap">
@@ -3875,16 +3981,16 @@ export default function PredictionBlockRenderer({
 ### components/experience/CoachTrigger.tsx
 
 ```tsx
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KnowledgeUnit } from '@/types/knowledge';
 import { StepKnowledgeLink } from '@/types/curriculum';
+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
 
 interface CoachTriggerProps {
   stepId: string;
   userId: string;
+  instanceId: string;
   onOpenCoach: () => void;
   // External triggers
   failedCheckpoint?: boolean;
@@ -3893,12 +3999,13 @@ interface CoachTriggerProps {
 }
 
 /**
- * CoachTrigger - Lane 6
+ * CoachTrigger - Lane 4
  * surfaces coach after failed checkpoints, extended dwell, or for unread units.
  */
 export function CoachTrigger({
   stepId,
   userId,
+  instanceId,
   onOpenCoach,
   failedCheckpoint = false,
   knowledgeLinks = [],
@@ -3909,8 +4016,28 @@ export function CoachTrigger({
   const [dismissed, setDismissed] = useState(false);
   const [unseenUnitTitle, setUnseenUnitTitle] = useState<string | null>(null);
   const [unseenUnitId, setUnseenUnitId] = useState<string | null>(null);
+  
+  const { 
+    trackCoachTriggerCheckpointFail, 
+    trackCoachTriggerDwell, 
+    trackCoachTriggerUnreadKnowledge 
+  } = useInteractionCapture(instanceId);
 
-  // Reset visibility when step changes
+  // Use refs to track if a specific trigger has already fired for this step session
+  const triggeredSteps = useRef<Set<string>>(new Set());
+  const sessionTriggers = useRef<Record<string, Set<string>>>({});
+
+  const hasTriggered = (type: string) => {
+    const key = `${stepId}:${type}`;
+    return triggeredSteps.current.has(key);
+  };
+
+  const markTriggered = (type: string) => {
+    const key = `${stepId}:${type}`;
+    triggeredSteps.current.add(key);
+  };
+
+  // Reset visibility state when stepId changes
   useEffect(() => {
     setIsVisible(false);
     setTriggerType(null);
@@ -3921,36 +4048,37 @@ export function CoachTrigger({
 
   // 1. failed_checkpoint trigger
   useEffect(() => {
-    if (failedCheckpoint && !dismissed && !isVisible) {
+    if (failedCheckpoint && !dismissed && !isVisible && !hasTriggered('failed_checkpoint')) {
       setTriggerType('failed_checkpoint');
       setIsVisible(true);
+      markTriggered('failed_checkpoint');
+      trackCoachTriggerCheckpointFail(stepId, { missedQuestions });
     }
-  }, [failedCheckpoint, dismissed, isVisible]);
+  }, [failedCheckpoint, dismissed, isVisible, stepId, missedQuestions]);
 
   // 2. unread_knowledge trigger
   useEffect(() => {
     // Check if we already have a more critical trigger or if we're active
-    if (dismissed || isVisible || (triggerType === 'failed_checkpoint')) return;
+    if (dismissed || isVisible || (triggerType === 'failed_checkpoint') || hasTriggered('unread_knowledge')) return;
 
     const preSupportLinks = knowledgeLinks.filter(l => l.linkType === 'pre_support');
     if (preSupportLinks.length === 0) return;
 
     async function checkPreSupport() {
       try {
-        for (const link of preSupportLinks) {
-          const unitRes = await fetch(`/api/knowledge/${link.knowledgeUnitId}`);
-          if (unitRes.ok) {
-            const unitResData = await unitRes.json();
-            // Handle possibility of data wrapping (e.g. { units: group }) or flat unit
-            const unit: KnowledgeUnit = unitResData.unit || unitResData;
-
-            if (unit.mastery_status === 'unseen') {
-              setUnseenUnitTitle(unit.title);
-              setUnseenUnitId(unit.id);
-              setTriggerType('unread_knowledge');
-              setIsVisible(true);
-              return;
-            }
+        const ids = preSupportLinks.map(l => l.knowledgeUnitId).join(',');
+        const res = await fetch(`/api/knowledge/batch?ids=${ids}`);
+        if (res.ok) {
+          const { units } = await res.json();
+          const unseen = (units as KnowledgeUnit[]).find(u => u.mastery_status === 'unseen');
+          
+          if (unseen) {
+            setUnseenUnitTitle(unseen.title);
+            setUnseenUnitId(unseen.id);
+            setTriggerType('unread_knowledge');
+            setIsVisible(true);
+            markTriggered('unread_knowledge');
+            trackCoachTriggerUnreadKnowledge(stepId, unseen.id);
           }
         }
       } catch (err) {
@@ -3959,19 +4087,22 @@ export function CoachTrigger({
     }
 
     checkPreSupport();
-  }, [knowledgeLinks, dismissed, isVisible, triggerType]);
+  }, [knowledgeLinks, dismissed, isVisible, triggerType, stepId]);
 
-  // 3. dwell trigger (> 5 mins)
+  // 3. dwell trigger (> 3 mins)
   useEffect(() => {
-    if (dismissed || isVisible || (triggerType !== null)) return;
+    if (dismissed || isVisible || (triggerType !== null) || hasTriggered('dwell')) return;
 
+    const dwellTime = 3 * 60 * 1000; // 3 minutes
     const timer = setTimeout(() => {
       setTriggerType('dwell');
       setIsVisible(true);
-    }, 5 * 60 * 1000); // 5 minutes
+      markTriggered('dwell');
+      trackCoachTriggerDwell(stepId, dwellTime);
+    }, dwellTime);
 
     return () => clearTimeout(timer);
-  }, [dismissed, isVisible, triggerType]);
+  }, [dismissed, isVisible, triggerType, stepId]);
 
   if (!isVisible || dismissed) return null;
 
@@ -3990,7 +4121,7 @@ export function CoachTrigger({
     if (triggerType === 'failed_checkpoint' && missedQuestions && missedQuestions.length > 0) {
       const q = missedQuestions[0];
       const topic = q.length > 40 ? q.substring(0, 40) + '...' : q;
-      return `You missed a few points. Want to review "${topic}"? 💬`;
+      return `You missed a few points on "${topic}". Want to review? 💬`;
     }
 
     const labels = {
@@ -4003,7 +4134,7 @@ export function CoachTrigger({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out">
+    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out pointer-events-auto">
       <div className="bg-[#1e1e2e] border border-amber-500/30 rounded-2xl p-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] flex items-center gap-4 max-w-sm backdrop-blur-xl transition-all hover:border-amber-500/50 group">
         <div className="flex-1 min-w-[200px]">
           <div className="text-slate-200 text-sm font-medium leading-relaxed">
@@ -4016,7 +4147,7 @@ export function CoachTrigger({
               onOpenCoach();
               setIsVisible(false);
             }}
-            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 whitespace-nowrap"
           >
             Chat
           </button>
@@ -4190,31 +4321,54 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
     expert: 'Max break', proficient: 'expert', practicing: 'proficient', beginner: 'practicing', aware: 'beginner', undiscovered: 'aware'
   };
 
+  const masteryTransitions = (snapshot?.key_signals as any)?.masteryTransitions || [];
+  
+  // If no structured transitions, fall back to old logic for legacy support
   const movedDomains: any[] = [];
   const accumulatingDomains: any[] = [];
-
-  skillDomains.forEach(domain => {
-    if (domain.linkedExperienceIds?.includes(experienceId)) {
-      const isLevelUp = 
-        (domain.masteryLevel === 'expert' && domain.evidenceCount === 8) ||
-        (domain.masteryLevel === 'proficient' && domain.evidenceCount === 5) ||
-        (domain.masteryLevel === 'practicing' && domain.evidenceCount === 3) ||
-        (domain.masteryLevel === 'beginner' && domain.evidenceCount === 1);
-
-      if (isLevelUp) {
+  
+  if (masteryTransitions.length > 0) {
+    masteryTransitions.forEach((t: any) => {
+      if (t.isLevelUp) {
         movedDomains.push({
-          ...domain,
-          previousLevel: PREV_MAP[domain.masteryLevel] || 'undiscovered'
+          name: t.domainName,
+          previousLevel: t.before.level,
+          masteryLevel: t.after.level
         });
       } else {
         accumulatingDomains.push({
-          ...domain,
-          nextThreshold: NEXT_THRESHOLD[domain.masteryLevel] || 0,
-          nextLevelName: NEXT_LEVEL[domain.masteryLevel] || 'expert'
+          name: t.domainName,
+          evidenceCount: t.after.evidence,
+          nextThreshold: NEXT_THRESHOLD[t.after.level] || 0,
+          nextLevelName: NEXT_LEVEL[t.after.level] || 'expert'
         });
       }
-    }
-  });
+    });
+  } else {
+    // Legacy fallback (as a safety measure)
+    skillDomains.forEach(domain => {
+      if (domain.linkedExperienceIds?.includes(experienceId)) {
+        const isLevelUp = 
+          (domain.masteryLevel === 'expert' && domain.evidenceCount === 8) ||
+          (domain.masteryLevel === 'proficient' && domain.evidenceCount === 5) ||
+          (domain.masteryLevel === 'practicing' && domain.evidenceCount === 3) ||
+          (domain.masteryLevel === 'beginner' && domain.evidenceCount === 1);
+
+        if (isLevelUp) {
+          movedDomains.push({
+            ...domain,
+            previousLevel: PREV_MAP[domain.masteryLevel] || 'undiscovered'
+          });
+        } else {
+          accumulatingDomains.push({
+            ...domain,
+            nextThreshold: NEXT_THRESHOLD[domain.masteryLevel] || 0,
+            nextLevelName: NEXT_LEVEL[domain.masteryLevel] || 'expert'
+          });
+        }
+      }
+    });
+  }
 
   const stepCount = steps.length;
   const checkpointSteps = steps.filter(s => s.step_type === 'checkpoint' || s.type === 'checkpoint');
@@ -4281,27 +4435,65 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
 
   return (
     <div className="w-full max-w-4xl mx-auto py-12 px-6 animate-in zoom-in-95 duration-700">
-      <div className="flex flex-col items-center text-center mb-16">
-        <div className="relative mb-6">
-           <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full scale-150 animate-pulse" />
-           <div className="relative w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
-              <svg className="w-12 h-12 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-              </svg>
-           </div>
+      {/* Header Narrative */}
+      <header className="mb-16 text-center max-w-2xl mx-auto">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-6">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+          Mira's Observation
         </div>
-        <h1 className="text-5xl font-black text-white mb-4 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
-          {COPY.completion.heading}
+        <h1 className="text-5xl font-black text-white mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
+          Goal Crystalized.
         </h1>
-        <p className="text-xl text-slate-400 max-w-2xl leading-relaxed font-light italic">
-          "{summary}"
-        </p>
-      </div>
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+          <p className="relative text-xl text-slate-300 leading-relaxed font-serif italic py-4 px-6 bg-slate-950/20 rounded-2xl border border-white/5">
+            "{summary}"
+          </p>
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16 text-left">
-        {/* Goal Progress & Retrospective Section */}
-        {activeGoal && (
-          <div className="md:col-span-12 space-y-6">
+      {/* Level Up Celebration */}
+      {movedDomains.length > 0 && (
+        <div className="mb-16 animate-in zoom-in duration-1000 delay-500 fill-mode-both">
+          <div className="p-1 rounded-[2.5rem] bg-gradient-to-r from-yellow-500/40 via-amber-500/40 to-orange-500/40 shadow-2xl shadow-amber-500/10">
+            <div className="bg-[#0a0a12] rounded-[2.25rem] p-8 text-center relative overflow-hidden">
+              <div className="absolute -top-24 -left-24 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px]" />
+              <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px]" />
+              
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-6 shadow-inner">
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              
+              <h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-orange-400 mb-2 uppercase tracking-tighter">
+                Level Up
+              </h3>
+              <p className="text-slate-400 text-sm mb-8 font-medium">
+                Your expertise in {movedDomains.map(d => d.name.replace(/-/g, ' ')).join(' & ')} has reached a new threshold.
+              </p>
+              
+              <div className="flex flex-wrap justify-center gap-4">
+                {movedDomains.map((d, i) => (
+                  <div key={i} className="flex items-center gap-4 bg-slate-950/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-amber-500/20 shadow-xl">
+                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{d.previousLevel}</div>
+                    <svg className="w-4 h-4 text-amber-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                    </svg>
+                    <div className="text-sm font-black text-amber-400 uppercase tracking-widest">{d.masteryLevel}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16">
+        {/* Left Column: Progress & Proof */}
+        <div className="md:col-span-12 lg:col-span-12 space-y-8">
+          {activeGoal && (
             <section className="bg-indigo-500/5 border border-indigo-500/20 rounded-3xl p-8 backdrop-blur-sm relative overflow-hidden group">
               <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
                 <span className="text-8xl italic font-black">⌬</span>
@@ -4324,202 +4516,209 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
                   href={ROUTES.skills}
                   className="px-6 py-3 bg-[#0d0d18] border border-indigo-500/30 text-indigo-400 text-sm font-bold rounded-2xl hover:bg-indigo-500/10 transition-all text-center"
                 >
-                  {COPY.skills.actions.viewTree}
+                  View Skill Tree
                 </Link>
               </div>
             </section>
+          )}
 
-            {(movedDomains.length > 0 || accumulatingDomains.length > 0) && (
-              <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-sm">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">What Moved</div>
-                <div className="space-y-3">
-                  {movedDomains.map((domain, i) => (
-                    <div key={`moved-${i}`} className="flex items-center gap-3">
-                      <span className="text-slate-200 font-medium capitalize">{domain.name.replace(/-/g, ' ')}:</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.previousLevel)}`}>
-                        {domain.previousLevel}
-                      </span>
-                      <span className="text-slate-500">→</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.masteryLevel)}`}>
-                        {domain.masteryLevel}
-                      </span>
-                    </div>
-                  ))}
-                  {accumulatingDomains.map((domain, i) => (
-                    <div key={`accum-${i}`} className="flex items-center gap-2 text-sm text-slate-400 flex-wrap">
-                      <span className="text-slate-300 font-medium capitalize">{domain.name.replace(/-/g, ' ')}</span>
-                      <span>— Your evidence is accumulating:</span>
-                      <span className="text-indigo-400 font-bold">{domain.evidenceCount}/{domain.nextThreshold}</span>
-                      <span>toward</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.nextLevelName)}`}>
-                        {domain.nextLevelName}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             {/* Key Observed Signals */}
+             <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
+               <div className="flex items-center gap-3 mb-6">
+                 <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-200">Key Observed Signals</h3>
+               </div>
+               <div className="flex flex-wrap gap-3">
+                 {signals.length > 0 ? signals.map((sig, i) => (
+                   <div key={i} className="px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm font-medium hover:scale-105 transition-transform">
+                     {sig}
+                   </div>
+                 )) : (
+                   <span className="text-slate-500 italic text-sm">Mapping behavioral patterns...</span>
+                 )}
+               </div>
+               {keySignals?.frictionAssessment && (
+                 <div className="mt-8 pt-8 border-t border-slate-800/50">
+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Friction Assessment</div>
+                    <p className="text-slate-300 leading-relaxed font-medium italic">
+                      "{keySignals.frictionAssessment}"
+                    </p>
+                 </div>
+               )}
+             </section>
 
-            <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-sm">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">What You Did</div>
-              <div className="flex flex-wrap gap-4">
-                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                    <span className="text-slate-300 text-sm font-medium">Completed {stepCount} step{stepCount !== 1 ? 's' : ''}</span>
+             {/* Growth Indicators (Facets) */}
+             <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
+               <div className="flex items-center gap-3 mb-6">
+                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-200">Growth Indicators</h3>
+               </div>
+               <div className="space-y-4">
+                  {facets.length > 0 ? facets.map((facet: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 group hover:border-emerald-500/20 transition-all">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{facet.facet_type.replace('_', ' ')}</span>
+                        <span className="text-slate-200 font-medium text-sm">{facet.value}</span>
+                      </div>
+                      <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
+                         <div 
+                           className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] transition-all duration-1000" 
+                           style={{ width: `${(facet.confidence || 0) * 100}%` }} 
+                         />
+                      </div>
+                    </div>
+                  )) : (
+                    <span className="text-slate-500 italic text-sm">Your profile is evolving...</span>
+                  )}
+               </div>
+             </section>
+          </div>
+
+          {/* Mastery Shifts & Proof */}
+          <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
+            <div className="flex items-center justify-between mb-8">
+              <div className="text-xs font-black text-slate-500 uppercase tracking-widest">Evidence Log</div>
+              <div className="flex gap-4">
+                 <div className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded">
+                   {stepCount} STEPS COMPLETE
                  </div>
                  {checkpointSteps.length > 0 && (
-                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <span className="text-emerald-400 text-sm font-medium">{checkpointsPassed}/{checkpointSteps.length} checkpoints passed</span>
-                   </div>
-                 )}
-                 {draftCount > 0 && (
-                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                      <span className="text-amber-400 text-sm font-medium">Saved {draftCount} draft{draftCount !== 1 ? 's' : ''}</span>
+                   <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                     {checkpointsPassed}/{checkpointSteps.length} CHECKPOINTS
                    </div>
                  )}
               </div>
-            </section>
-          </div>
-        )}
-
-        {/* Signals & Key Findings */}
-        <div className="md:col-span-12 lg:col-span-7 space-y-8">
-           <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm h-full">
-             <div className="flex items-center gap-3 mb-6">
-               <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-               </div>
-               <h3 className="text-lg font-bold text-slate-200">Key Observed Signals</h3>
-             </div>
-             <div className="flex flex-wrap gap-3">
-               {signals.length > 0 ? signals.map((sig, i) => (
-                 <div key={i} className="px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm font-medium hover:scale-105 transition-transform">
-                   {sig}
-                 </div>
-               )) : (
-                 <span className="text-slate-500 italic text-sm">No specific behavioral signals detected.</span>
-               )}
-             </div>
-             
-             {keySignals?.frictionAssessment && (
-               <div className="mt-8 pt-8 border-t border-slate-800/50">
-                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Friction Level</div>
-                  <p className="text-slate-300 leading-relaxed font-medium capitalize">
-                    {keySignals.frictionAssessment}
-                  </p>
-               </div>
-             )}
-           </section>
-        </div>
-
-        {/* Growth & Next Steps */}
-        <div className="md:col-span-12 lg:col-span-5 space-y-8">
-           <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
-             <div className="flex items-center gap-3 mb-6">
-               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-               </div>
-               <h3 className="text-lg font-bold text-slate-200">Growth Indicators</h3>
-             </div>
-             <div className="space-y-4">
-                {facets.length > 0 ? facets.map((facet: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{facet.facet_type.replace('_', ' ')}</span>
-                      <span className="text-slate-200 font-medium text-sm">{facet.value}</span>
+            </div>
+            
+            <div className="space-y-4">
+              {accumulatingDomains.length > 0 ? accumulatingDomains.map((domain, i) => (
+                <div key={`accum-${i}`} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 group">
+                  <div className="flex flex-col">
+                    <span className="text-slate-200 font-medium capitalize">{domain.name.replace(/-/g, ' ')}</span>
+                    <span className="text-[10px] text-slate-500">Toward {domain.nextLevelName}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-1 group-hover:scale-110 transition-transform">
+                      <span className="text-indigo-400 font-black text-lg">{domain.evidenceCount}</span>
+                      <span className="text-slate-600 text-xs font-bold">/ {domain.nextThreshold}</span>
                     </div>
-                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
-                       <div className="h-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" style={{ width: `${facet.confidence * 100}%` }} />
+                    <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                       <div 
+                         className="h-full bg-indigo-500" 
+                         style={{ width: `${(domain.evidenceCount / (domain.nextThreshold || 1)) * 100}%` }} 
+                       />
                     </div>
                   </div>
-                )) : (
-                  <span className="text-slate-500 italic text-sm">Your profile is evolving...</span>
-                )}
-             </div>
-           </section>
+                </div>
+              )) : (
+                <div className="text-slate-500 italic text-sm text-center py-4">Knowledge domains are recalibrating.</div>
+              )}
+            </div>
+          </section>
+        </div>
 
-           <section className="bg-indigo-600/10 border border-indigo-500/20 rounded-3xl p-8 backdrop-blur-sm">
-             <h3 className="text-lg font-bold text-indigo-300 mb-6 flex items-center gap-2">
-               Next Suggested Paths
-             </h3>
-             <ul className="space-y-4">
-               {nextCandidates.length > 0 ? nextCandidates.map((cad, i) => {
-                 const matchedDomain = skillDomains.find(d => cad.toLowerCase().includes(d.name.toLowerCase().replace(/-/g, ' ')));
-                 return (
-                   <li key={i} className="text-slate-400 text-sm leading-relaxed pl-4 border-l-2 border-indigo-500/30 flex flex-col items-start gap-2">
-                     {matchedDomain ? (
-                       <Link href={`/skills/${matchedDomain.id}`} className="hover:text-indigo-300 transition-colors block">
-                         {cad}
-                       </Link>
-                     ) : (
-                       <span>{cad}</span>
-                     )}
-                     {matchedDomain && (
-                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(matchedDomain.masteryLevel)}`}>
-                         {matchedDomain.name.replace(/-/g, ' ')} • {matchedDomain.masteryLevel}
-                       </span>
-                     )}
-                   </li>
-                 )
-               }) : (
-                 <li className="text-slate-500 italic text-sm">Mira is calculating your next move.</li>
-               )}
-             </ul>
-           </section>
+        {/* What's Next? (Now taking a larger role) */}
+        <div className="md:col-span-12 space-y-8 mt-8">
+          <div className="flex items-center gap-3 mb-4 px-2">
+            <span className="text-xs font-black text-[#475569] uppercase tracking-[0.2em]">Logical Next Conversions</span>
+            <span className="flex-grow h-px bg-[#1e1e2e]" />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {nextCandidates.slice(0, 3).map((cad, i) => {
+              const [classPart, ...rest] = cad.split(':');
+              const title = rest.join(':').trim() || cad;
+              const templateClass = classPart.toLowerCase().trim();
+              const isValidClass = ['questionnaire', 'lesson', 'challenge', 'plan_builder', 'reflection', 'essay_tasks'].includes(templateClass);
+              
+              return (
+                <div key={i} className="group p-6 rounded-3xl bg-indigo-600/5 border border-indigo-500/10 hover:border-indigo-500/40 transition-all flex flex-col gap-4 relative overflow-hidden backdrop-blur-md">
+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all" />
+                  <div className="flex items-center justify-between">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 group-hover:scale-110 transition-transform">
+                      {getClassIcon(isValidClass ? templateClass : 'default')}
+                    </div>
+                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded">
+                      {isValidClass ? (COPY.workspace.stepTypes as any)[templateClass] || templateClass : 'Recommendation'}
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-white font-bold leading-tight group-hover:text-indigo-200 transition-colors">
+                      {title}
+                    </p>
+                    <div className="text-[10px] text-slate-500 italic block">
+                      Generated by Mira based on your recent context.
+                    </div>
+                  </div>
+                  <Link 
+                    href={ROUTES.send}
+                    className="mt-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-center text-xs font-black transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                  >
+                    Start Experience →
+                  </Link>
+                </div>
+              );
+            })}
 
-           {chainSuggestions.length > 0 && (
-             <section className="bg-violet-600/10 border border-violet-500/20 rounded-3xl p-8 backdrop-blur-sm mt-8">
-               <h3 className="text-lg font-bold text-violet-300 mb-6 flex items-center gap-2">
-                 Continue Your Chain
-               </h3>
-               <div className="space-y-4">
-                 {chainSuggestions.map((suggestion, i) => (
-                   <div key={i} className="flex flex-col p-4 rounded-2xl bg-slate-950/40 border border-violet-500/20 group hover:border-violet-500/50 transition-all">
-                     <div className="flex items-center gap-3 mb-2">
-                       <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
-                         {getClassIcon(suggestion.templateClass)}
-                       </div>
-                       <div className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">
-                         {(COPY.workspace.stepTypes as any)[suggestion.templateClass] || suggestion.templateClass}
-                       </div>
-                     </div>
-                     <p className="text-sm text-slate-300 mb-4 italic">"{suggestion.reason}"</p>
-                     <button
-                       onClick={() => handleStartNext(suggestion)}
-                       disabled={!!isStartingNext}
-                       className="w-full py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                     >
-                       {isStartingNext === suggestion.templateClass ? (
-                         <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
-                       ) : (
-                         <span>Start Next →</span>
-                       )}
-                     </button>
-                   </div>
-                 ))}
-               </div>
-             </section>
-           )}
-         </div>
+            {chainSuggestions.slice(0, 3).map((suggestion, i) => (
+              <div key={`chain-${i}`} className="group p-6 rounded-3xl bg-violet-600/5 border border-violet-500/10 hover:border-violet-500/40 transition-all flex flex-col gap-4 relative overflow-hidden backdrop-blur-md">
+                <div className="absolute -right-4 -top-4 w-24 h-24 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition-all" />
+                <div className="flex items-center justify-between">
+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20 group-hover:scale-110 transition-transform">
+                    {getClassIcon(suggestion.templateClass)}
+                  </div>
+                  <div className="text-[10px] font-black text-violet-400 uppercase tracking-widest bg-violet-500/10 px-2 py-1 rounded">
+                    Chain Linked
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-white font-bold leading-tight group-hover:text-violet-200 transition-colors">
+                    {suggestion.templateClass.charAt(0).toUpperCase() + suggestion.templateClass.slice(1).replace('_', ' ')}
+                  </p>
+                  <div className="text-[10px] text-slate-500 italic line-clamp-1 block">
+                    "{suggestion.reason}"
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleStartNext(suggestion)}
+                  disabled={!!isStartingNext}
+                  className="mt-2 w-full py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-center text-xs font-black transition-all shadow-lg shadow-violet-600/20 active:scale-95 disabled:opacity-50"
+                >
+                  {isStartingNext === suggestion.templateClass ? 'Preparing...' : 'Continue Journey →'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 py-8">
+      {/* Footer Navigation */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-12 border-t border-white/5 mt-12 bg-slate-950/20 rounded-b-[3rem]">
         <Link 
           href={ROUTES.library}
-          className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white text-slate-950 font-bold hover:bg-slate-200 transition-all text-center shadow-xl shadow-white/5"
+          className="text-xs font-black text-slate-500 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-2 group"
         >
-          {COPY.library.heading}
+          <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Library
         </Link>
-        <div className="text-slate-500 text-sm font-medium font-mono uppercase tracking-widest px-4">OR</div>
         <Link 
-           href={ROUTES.home}
-           className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-slate-900 text-white font-bold border border-slate-700 hover:border-slate-500 transition-all text-center"
+          href={ROUTES.send}
+          className="px-12 py-4 bg-white text-black rounded-full font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all shadow-2xl shadow-indigo-500/10 active:scale-95"
         >
-           Return to Cockpit
+          Define Next Idea
         </Link>
       </div>
     </div>
   );
 }
+
 
 ```
 
@@ -5187,6 +5386,7 @@ export default function ExperienceRenderer({
           {/* Lane 6 / Lane 5: Coach Triggers */}
           <CoachTrigger 
             stepId={currentStep.id}
+            instanceId={instance.id}
             userId={instance.user_id}
             onOpenCoach={handleOpenCoach}
             failedCheckpoint={failedCheckpoint}
@@ -7798,203 +7998,3 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
           
           <div className="flex flex-col items-end gap-3">
             {!isComplete && (
-               <p className="text-[10px] text-violet-400/70 font-mono tracking-widest">
-                 AWAITING YOUR INSIGHTS
-               </p>
-            )}
-            <button
-              type="submit"
-              disabled={!isComplete}
-              className="px-12 py-4 bg-violet-600 text-white rounded-xl text-sm font-bold hover:bg-violet-500 transition-all disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed shadow-xl shadow-violet-900/20 active:scale-95"
-            >
-              Finish Reflection →
-            </button>
-          </div>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-```
-
-### components/experience/TrackCard.tsx
-
-```tsx
-'use client';
-
-import React from 'react';
-import Link from 'next/link';
-import { CurriculumOutline } from '@/types/curriculum';
-import { ROUTES } from '@/lib/routes';
-
-interface TrackCardProps {
-  outline: CurriculumOutline;
-}
-
-export default function TrackCard({ outline }: TrackCardProps) {
-  const completedCount = outline.subtopics.filter(s => s.status === 'completed').length;
-  const totalCount = outline.subtopics.length;
-  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-  // Find next target for "Continue" button
-  const nextSubtopic = outline.subtopics.find(s => s.status !== 'completed');
-  const continueHref = nextSubtopic?.experienceId ? ROUTES.workspace(nextSubtopic.experienceId) : null;
-
-  const getStatusIcon = (status: 'pending' | 'in_progress' | 'completed') => {
-    switch (status) {
-      case 'completed':
-        return (
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-        );
-      case 'in_progress':
-        return (
-          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse ring-2 ring-indigo-500/20" />
-        );
-      default:
-        return (
-          <div className="w-1.5 h-1.5 rounded-full border border-[#33334d]" />
-        );
-    }
-  };
-
-  return (
-    <div className="flex flex-col p-6 bg-[#000000] border border-[#1e1e2e] rounded-2xl hover:border-indigo-500/30 transition-all group shadow-sm hover:shadow-indigo-500/5 min-h-[380px]">
-      <div className="flex justify-between items-start mb-4">
-        <div className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
-          Track
-        </div>
-        {outline.domain && (
-          <div className="text-[10px] font-mono text-[#4a4a6a] uppercase tracking-tighter">
-            {outline.domain}
-          </div>
-        )}
-      </div>
-
-      <h3 className="text-xl font-bold text-[#f1f5f9] mb-2 group-hover:text-indigo-300 transition-colors">
-        {outline.topic}
-      </h3>
-
-      <div className="mb-6">
-        <div className="flex justify-between text-[10px] font-bold text-[#4a4a6a] uppercase tracking-widest mb-2">
-          <span>Completion</span>
-          <span>{progressPercent}%</span>
-        </div>
-        <div className="h-1.5 w-full bg-[#1e1e2e] rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-indigo-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-      </div>
-
-      <div className="space-y-4 mb-8 overflow-y-auto max-h-[120px] pr-2 scrollbar-none">
-        {outline.subtopics.map((subtopic, idx) => (
-          <div key={idx} className="flex items-start gap-3">
-            <div className="mt-1">{getStatusIcon(subtopic.status)}</div>
-            <div className="flex flex-col">
-              <span className={`text-xs font-bold leading-tight ${subtopic.status === 'completed' ? 'text-[#4a4a6a] line-through' : 'text-[#e2e8f0]'}`}>
-                {subtopic.title}
-              </span>
-              <span className="text-[10px] text-[#4a4a6a] line-clamp-1 mt-0.5">
-                {subtopic.description}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-auto">
-        {continueHref ? (
-          <Link 
-            href={continueHref}
-            className="w-full flex items-center justify-center gap-2 py-3.5 bg-indigo-500 text-white rounded-xl font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-[0.98]"
-          >
-            Continue Journey
-          </Link>
-        ) : (
-          <div className="w-full py-4 text-center text-[10px] font-bold text-[#4a4a6a] bg-[#000000] rounded-xl border border-dashed border-[#33334d] uppercase tracking-widest">
-            {outline.status === 'planning' ? 'Planning in progress...' : 'Awaiting next experience'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-```
-
-### components/experience/TrackSection.tsx
-
-```tsx
-'use client';
-
-import React from 'react';
-import { CurriculumOutline } from '@/types/curriculum';
-import TrackCard from './TrackCard';
-import { COPY } from '@/lib/studio-copy';
-
-interface TrackSectionProps {
-  outlines: CurriculumOutline[];
-}
-
-export default function TrackSection({ outlines }: TrackSectionProps) {
-  if (outlines.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 bg-indigo-500/5 rounded-3xl border border-dashed border-indigo-500/20 text-center mb-16">
-        <span className="text-4xl mb-4">🗺️</span>
-        <h2 className="text-lg font-bold text-[#f1f5f9] mb-2">{COPY.library.tracksSection}</h2>
-        <p className="text-sm text-[#94a3b8] max-w-xs">{COPY.library.emptyTracks}</p>
-      </div>
-    );
-  }
-
-  return (
-    <section className="mb-20">
-      <div className="flex items-center gap-4 mb-10 overflow-hidden">
-        <h2 className="text-xs font-bold text-[#4a4a6a] uppercase tracking-widest whitespace-nowrap">
-          {COPY.library.tracksSection}
-        </h2>
-        <div className="h-px w-full bg-[#1e1e2e]" />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {outlines.map((outline) => (
-          <TrackCard key={outline.id} outline={outline} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-```
-
-### components/icebox/icebox-card.tsx
-
-```tsx
-import type { IceboxItem } from '@/lib/view-models/icebox-view-model'
-import { COPY } from '@/lib/studio-copy'
-
-interface IceboxCardProps {
-  item: IceboxItem
-}
-
-export function IceboxCard({ item }: IceboxCardProps) {
-  return (
-    <div
-      className={`bg-[#12121a] border rounded-xl p-5 transition-colors ${
-        item.isStale ? 'border-amber-500/30' : 'border-[#1e1e2e]'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div>
-          <span className="text-xs text-[#94a3b8] uppercase tracking-wide">
-            {item.type === 'idea' ? 'Idea' : 'Project'}
-          </span>
-          <h3 className="font-semibold text-[#e2e8f0] mt-0.5">{item.title}</h3>
-        </div>
-        <span
-          className={`text-xs flex-shrink-0 ${
-            item.isStale ? 'text-amber-400' : 'text-[#94a3b8]'
-          }`}
-        >

@@ -57,6 +57,17 @@ paths:
                     type: object
                     nullable: true
                     additionalProperties: true
+                  pending_enrichments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        topic:
+                          type: string
+                        status:
+                          type: string
+                        requested_at:
+                          type: string
                   goal:
                     type: object
                     nullable: true

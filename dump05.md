@@ -1,3 +1,4915 @@
+### app/review/[prId]/page.tsx
+
+```tsx
+export const dynamic = 'force-dynamic'
+
+import { notFound } from 'next/navigation'
+import { getPRById } from '@/lib/services/prs-service'
+import { getProjectById } from '@/lib/services/projects-service'
+import { buildReviewViewModel } from '@/lib/view-models/review-view-model'
+import { AppShell } from '@/components/shell/app-shell'
+import { SplitReviewLayout } from '@/components/review/split-review-layout'
+import { PRSummaryCard } from '@/components/review/pr-summary-card'
+import { DiffSummary } from '@/components/review/diff-summary'
+import { BuildStatusChip } from '@/components/review/build-status-chip'
+import { FixRequestBox } from '@/components/review/fix-request-box'
+import { MergeActions } from '@/components/review/merge-actions'
+import { PreviewFrame } from '@/components/arena/preview-frame'
+import Link from 'next/link'
+import { ROUTES } from '@/lib/routes'
+
+interface Props {
+  params: { prId: string }
+}
+
+export default async function ReviewPage({ params }: Props) {
+  const prResult = await getPRById(params.prId)
+  if (!prResult) notFound()
+  // After notFound(), TypeScript doesn't know execution stops, so we re-assign
+  const pr = prResult as NonNullable<typeof prResult>
+
+  const project = await getProjectById(pr.projectId)
+  const vm = buildReviewViewModel(pr, project)
+
+  const breadcrumb = (
+    <div className="flex items-center gap-2 text-sm">
+      {project && (
+        <>
+          <Link
+            href={ROUTES.arenaProject(project.id)}
+            className="text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+          >
+            ← {project.name}
+          </Link>
+          <span className="text-[#1e1e2e]">/</span>
+        </>
+      )}
+      <h1 className="font-medium text-[#e2e8f0]">Review PR #{pr.number}</h1>
+    </div>
+  )
+
+  const preview = <PreviewFrame previewUrl={pr.previewUrl} />
+
+  const sidebar = (
+    <>
+      <PRSummaryCard pr={pr} />
+
+      <div className="bg-[#12121a] border border-[#1e1e2e] rounded-xl p-5">
+        <h3 className="text-xs font-medium text-[#94a3b8] uppercase tracking-wide mb-3">
+          Build Status
+        </h3>
+        <BuildStatusChip state={pr.buildState} />
+      </div>
+
+      <DiffSummary />
+
+      <MergeActions
+        prId={pr.id}
+        canMerge={vm.canMerge}
+        currentStatus={pr.status}
+        reviewState={vm.reviewState}
+      />
+
+      <FixRequestBox prId={pr.id} existingRequest={pr.requestedChanges} />
+    </>
+... (16 total lines)
+```
+
+#### `dump02.md` (8000 lines - truncated)
+
+```
+          {item.daysInIcebox}d
+        </span>
+      </div>
+      <p className="text-sm text-[#94a3b8] line-clamp-2">{item.summary}</p>
+      {item.isStale && (
+        <p className="text-xs text-amber-400 mt-2">
+          {COPY.icebox.staleWarning.replace('{days}', String(item.daysInIcebox))}
+        </p>
+      )}
+    </div>
+  )
+}
+
+```
+
+### components/icebox/stale-idea-modal.tsx
+
+```tsx
+'use client'
+
+interface StaleIdeaModalProps {
+  open: boolean
+  title: string
+  daysInIcebox: number
+  onPromote: () => void
+  onDiscard: () => void
+  onClose: () => void
+}
+
+export function StaleIdeaModal({
+  open,
+  title,
+  daysInIcebox,
+  onPromote,
+  onDiscard,
+  onClose,
+}: StaleIdeaModalProps) {
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-[#12121a] border border-amber-500/30 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+        <div className="text-2xl mb-3">❄</div>
+        <h3 className="text-lg font-semibold text-[#e2e8f0] mb-1">{title}</h3>
+        <p className="text-sm text-amber-400 mb-4">
+          This has been on hold for {daysInIcebox} days. Time to decide.
+        </p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onPromote}
+            className="px-4 py-2.5 text-sm font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+          >
+            Start building
+          </button>
+          <button
+            onClick={onDiscard}
+            className="px-4 py-2.5 text-sm text-red-400/80 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
+          >
+            Remove this idea
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+          >
+            Keep on hold
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+```
+
+### components/icebox/triage-actions.tsx
+
+```tsx
+'use client'
+
+interface TriageActionsProps {
+  onPromote: () => void
+  onDiscard: () => void
+}
+
+export function TriageActions({ onPromote, onDiscard }: TriageActionsProps) {
+  return (
+    <div className="flex gap-2">
+      <button
+        onClick={onPromote}
+        className="flex-1 px-3 py-2 text-xs font-medium bg-indigo-500/20 text-indigo-400 rounded-lg hover:bg-indigo-500/30 transition-colors"
+      >
+        Promote
+      </button>
+      <button
+        onClick={onDiscard}
+        className="flex-1 px-3 py-2 text-xs text-red-400/70 border border-[#1e1e2e] rounded-lg hover:border-red-500/30 hover:text-red-400 transition-colors"
+      >
+        Remove
+      </button>
+... (16 total lines)
+```
+
+#### `dump03.md` (8000 lines - truncated)
+
+```
+    },
+    when_to_use: 'When the user starts, pauses, or completes a broad goal.',
+    relatedCapabilities: ['goal', 'skill_domain']
+  })
+};
+
+
+/**
+ * Returns capability details from the registry.
+ */
+export function getCapability(name: DiscoverCapability, params?: Record<string, any>): DiscoverResponse {
+  const handler = REGISTRY[name];
+  if (!handler) {
+    throw new Error(`Capability "${name}" not found in registry.`);
+  }
+  
+  // Custom response for templates since it needs real constants
+  if (name === 'templates') {
+    const base = handler(params);
+    return {
+      ...base,
+      schema: {
+        templateId: [
+          { id: DEFAULT_TEMPLATE_IDS.questionnaire, class: 'questionnaire', use_for: 'Surveys and intake' },
+          { id: DEFAULT_TEMPLATE_IDS.lesson, class: 'lesson', use_for: 'Core content delivery' },
+          { id: DEFAULT_TEMPLATE_IDS.challenge, class: 'challenge', use_for: 'Active practice and exercises' },
+          { id: DEFAULT_TEMPLATE_IDS.plan_builder, class: 'plan_builder', use_for: 'Action planning' },
+          { id: DEFAULT_TEMPLATE_IDS.reflection, class: 'reflection', use_for: 'Post-action summary' },
+          { id: DEFAULT_TEMPLATE_IDS.essay_tasks, class: 'essay_tasks', use_for: 'Writing and research' }
+        ]
+      }
+    };
+  }
+
+  return handler(params);
+}
+
+/**
+ * Returns all available capability names.
+ */
+export function getAvailableCapabilities(): string[] {
+  return Object.keys(REGISTRY);
+}
+
+```
+
+### lib/gateway/gateway-router.ts
+
+```typescript
+import { 
+  createExperienceInstance, 
+  injectEphemeralExperience, 
+  addStep, 
+  updateExperienceStep, 
+  reorderExperienceSteps, 
+  deleteExperienceStep, 
+  transitionExperienceStatus 
+} from '@/lib/services/experience-service';
+import { createIdea } from '@/lib/services/ideas-service';
+import { createKnowledgeUnit } from '@/lib/services/knowledge-service';
+import { createSkillDomain } from '@/lib/services/skill-domain-service';
+
+// Note: Lane 4 builds this service. We import it to ensure we provide the link_knowledge capability.
+// If it fails to import (e.g. file doesn't exist yet), it will be a TSC error later which Lane 2 or 7 will fix.
+import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'; 
+
+/**
+ * Dispatches creation requests to the appropriate services.
+ */
+export async function dispatchCreate(type: string, payload: any) {
+  switch (type) {
+    case 'experience': {
+      // Normalize camelCase GPT payload → snake_case ExperienceInstance
+      const instanceData: any = {
+        user_id: payload.userId ?? payload.user_id,
+        template_id: payload.templateId ?? payload.template_id,
+        title: payload.title ?? 'Untitled Experience',
+        goal: payload.goal ?? '',
+        instance_type: 'persistent' as const,
+        status: 'proposed' as const,
+        resolution: payload.resolution,
+        reentry: payload.reentry ?? null,
+        idea_id: payload.ideaId ?? payload.idea_id ?? null,
+        previous_experience_id: payload.previousExperienceId ?? payload.previous_experience_id ?? null,
+        next_suggested_ids: [],
+        friction_level: null,
+        source_conversation_id: payload.source_conversation_id ?? null,
+        generated_by: payload.generated_by ?? 'gpt',
+        realization_id: null,
+        published_at: null,
+        curriculum_outline_id: payload.curriculum_outline_id ?? null,
+      };
+
+      if (!instanceData.resolution) {
+        throw new Error('Resolution is required. Call GET /api/gpt/discover?capability=resolution for valid values.');
+      }
+      if (!instanceData.template_id) {
+        throw new Error('templateId is required. Call GET /api/gpt/discover?capability=templates for valid IDs.');
+      }
+      if (!instanceData.user_id) {
+... (16 total lines)
+```
+
+#### `dump04.md` (8000 lines - truncated)
+
+```
+5. **Always verify `gpt-instructions.md` stays under 8,000 characters** after edits. The Custom GPT has a practical instruction size limit.
+6. **If you need to change field names**, update ALL FOUR files together: router → registry → openapi → instructions.
+
+---
+
+## SOPs
+
+### SOP-1: Always use `lib/routes.ts` for navigation
+**Learned from**: Initial scaffolding
+
+- ❌ `href="/arena"` (hardcoded)
+- ✅ `href={ROUTES.arena}` (centralized)
+
+### SOP-2: All UI copy goes through `lib/studio-copy.ts`
+**Learned from**: Sprint 1 UX audit
+
+- ❌ `<h1>Trophy Room</h1>` (inline string)
+- ✅ `<h1>{COPY.shipped.heading}</h1>` (centralized copy)
+
+### SOP-3: State transitions go through `lib/state-machine.ts`
+**Learned from**: Initial architecture
+
+- ❌ Manually setting `idea.status = 'arena'` in a page
+- ✅ Use `getNextIdeaState(idea.status, 'commit_to_arena')` to validate transition
+
+### SOP-4: Never push/pull from git
+**Learned from**: Multi-agent coordination
+
+- ❌ `git push`, `git pull`, `git merge`
+- ✅ Only modify files. Coordinator handles version control.
+
+### SOP-5: All data mutations go through API routes
+**Learned from**: GPT contract compatibility
+
+- ❌ Calling `updateIdeaStatus()` directly from a client component
+- ✅ `fetch('/api/actions/kill-idea', { method: 'POST', body: ... })`
+- Why: The custom GPT will hit the same `/api/*` endpoints. The UI must exercise the same contract.
+
+### SOP-6: Use `lib/storage.ts` (or adapter) for all persistence
+**Learned from**: In-memory data loss on server restart
+
+- ❌ `const ideas: Idea[] = [...MOCK_IDEAS]` (module-level array, lost on restart)
+- ✅ `const ideas = storage.read('ideas')` (reads from persistent store)
+- Why: Data must survive server restarts. The storage adapter handles backend selection.
+
+### SOP-7: GitHub operations go through the adapter, never raw Octokit
+**Learned from**: Sprint 2 architecture
+
+- ❌ `const octokit = new Octokit(...)` in a route handler
+- ✅ `import { createIssue } from '@/lib/adapters/github-adapter'`
+- Why: The adapter is the auth boundary. When migrating from PAT to GitHub App, only `lib/github/client.ts` changes.
+
+### SOP-8: Don't call the adapter from routes — use services
+**Learned from**: Sprint 2 architecture
+
+- ❌ `import { createIssue } from '@/lib/adapters/github-adapter'` in a route
+- ✅ `import { createIssueFromProject } from '@/lib/services/github-factory-service'`
+- Why: Services orchestrate: load data → call adapter → update records → create events. Routes stay thin.
+
+### SOP-9: Supabase operations go through services, never raw client calls in routes
+**Learned from**: Sprint 3 architecture
+
+- ❌ `const { data } = await supabase.from('experience_instances').select('*')` in a route handler
+- ✅ `import { getExperienceInstances } from '@/lib/services/experience-service'`
+- Why: Same principle as SOP-8. Services own the query logic; routes are thin dispatch layers.
+
+### SOP-10: Every experience instance must carry a resolution object
+**Learned from**: Sprint 3 architecture
+
+- ❌ Creating an experience_instance with no resolution field
+- ✅ Always include `resolution: { depth, mode, timeScope, intensity }` — even for ephemeral
+- Why: Resolution controls renderer chrome, coder spec shape, and GPT entry behavior. Without it, the system drifts.
+
+### SOP-11: Persistent is a boring clone of ephemeral — not a second system
+**Learned from**: Sprint 3 → Sprint 4 transition
+
+- ❌ Creating separate tables, renderers, or interaction models for persistent experiences
+- ✅ Same schema, same renderer, same interaction model. Only lifecycle (proposed → active) and library visibility differ.
+- Why: Two systems = drift. One schema rendered two ways = coherent system.
+
+### SOP-12: Do not deepen GitHub integration for experiences
+**Learned from**: Sprint 4 architecture decision
+
+- ❌ Wiring real GitHub PR merge logic into experience approval
+- ✅ Preview → Approve → Publish as status transitions in Supabase only
+- Why: Review is an illusion layer. GitHub mapping happens later if needed.
+
+### SOP-13: Do not over-abstract or generalize prematurely
+**Learned from**: Coordinator guidance
+
+- ❌ "Let's add abstraction here" / "Let's generalize this" / "Let's make a framework"
+- ✅ Concrete, obvious, slightly ugly but working
+- Why: Working code that ships beats elegant code that drifts.
+
+### SOP-14: Supabase client must use `cache: 'no-store'` in Next.js
+**Learned from**: Stale library state bug (Sprint 4 stabilization)
+
+- ❌ `createClient(url, key, { auth: { ... } })` (no fetch override)
+- ✅ `createClient(url, key, { auth: { ... }, global: { fetch: (url, opts) => fetch(url, { ...opts, cache: 'no-store' }) } })`
+- Why: Next.js 14 patches `fetch()` and caches all responses by default. Supabase JS uses `fetch` internally. Without `cache: 'no-store'`, server components render stale data even with `force-dynamic`. This caused a multi-sprint bug where the homepage and library showed wrong experience statuses.
+... (16 total lines)
+```
+
+#### `dump05.md` (8000 lines - truncated)
+
+```
+| 6 | **Auth system** | Replace `DEFAULT_USER_ID` with real auth. Options: Supabase Auth (email/magic link), or just a simple API key for the GPT. The GPT needs to authenticate somehow — either a shared secret header or OAuth. |
+| 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
+| 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
+
+#### Key decisions to make before Sprint 18
+
+| Question | Options | Impact |
+|----------|---------|--------|
+| Edge functions: Vercel or Supabase? | Vercel Edge (fast, limited runtime) vs Supabase Edge (Deno, can be longer-running) vs plain serverless (slower, full Node.js) | Affects which routes can run where |
+| GPT auth in production? | Shared secret header, OAuth, or Supabase Auth token | Affects OpenAPI schema `security` section |
+| Can the coder run as a GitHub Action triggered by webhook? | Yes (dispatch workflow on approval) vs external agent polling issues | Affects architecture |
+| Custom domain? | `mira.mytsapi.us` via Vercel, or new domain | Affects GPT config + webhook registration |
+
+#### Sprint 18 Verification
+- App is live on Vercel at a permanent URL
+- GPT Actions point at production URL and all endpoints work
+- GitHub webhooks deliver to production without tunnel dependency
+- Local dev mode still works with tunnel for testing
+- No hardcoded `DEFAULT_USER_ID` in production paths
+
+## Refactoring Rules
+
+These rules govern how we evolve the existing codebase without breaking it.
+
+1. **Additive, not destructive.** New entities and routes are added alongside existing ones. Nothing gets deleted until it's fully replaced.
+2. **Storage adapter pattern.** `lib/storage.ts` gets an adapter interface. JSON file adapter stays as fallback. Supabase adapter becomes primary.
+3. **Service layer stays.** All 11 existing services keep working. New services are added for experience, interaction, synthesis.
+4. **State machine extends.** `lib/state-machine.ts` gains `EXPERIENCE_TRANSITIONS` alongside existing `IDEA_TRANSITIONS`, `PROJECT_TRANSITIONS`, `PR_TRANSITIONS`.
+5. **Types extend.** New files in `types/` for experiences, interactions, synthesis. Existing types gain optional new fields (e.g., `Project.experienceInstanceId`).
+6. **Routes extend.** New routes under `app/api/experiences/`, `app/api/interactions/`, `app/api/synthesis/`. Existing routes untouched.
+7. **Copy evolves.** `studio-copy.ts` gains experience-language sections. Existing copy preserved.
+8. **GitHub stays as realization substrate.** No runtime data goes to GitHub. DB is the runtime memory.
+9. **GPT contract expands.** New endpoints for proposals, ephemeral injection, and state fetch. Existing `idea_captured` webhook preserved.
+10. **No model logic in frontend.** Components render from typed schemas. The backend decides what to show.
+11. **Resolution is explicit, not inferred.** Every experience carries a resolution object that governs depth, mode, time scope, and intensity. No guessing.
+
+---
+
+## Anti-Patterns to Avoid
+
+| ❌ Don't | ✅ Do Instead |
+|----------|--------------|
+| Make GitHub the app database | Use Supabase for runtime, GitHub for realizations |
+| Expose "Merge PR" as user-facing language | Use "Approve Experience" / "Publish" |
+| Hand-maintain `.md` files as source of truth | Generate coder-context docs from DB (Sprint 8+) |
+| Build infinite experience types at once | Ship 6 Tier 1 classes, then iterate |
+| Put model logic in React components | Compute in services, render from schema |
+| Replace the whole app | Extend the current structure additively |
+| Force every experience through GitHub Issues | Issues only for large realizations needing decomposition |
+| Make everything pipeline-like | Add ephemeral experiences for spontaneity |
+| Let the coder guess resolution | Make resolution an explicit typed object on every instance |
+| Interpret friction in-app | Compute friction during synthesis, let GPT interpret |
+| Over-invest in coder-context early | Prioritize experience system → renderer → DB → re-entry first |
+| Call internal objects "builds" | Use "realizations" — we're realizing experiences, not building features |
+
+---
+
+## Sprint 5B — Experience Robustness (Field Test Findings)
+
+> **Source:** Live user testing of the "AI Operator Brand" persistent experience — 18 steps, `heavy/build/multi_day/high` resolution. This is the first real field test of a GPT-authored multi-day experience and it exposed hard failures in every renderer.
+
+### What Happened
+
+The GPT created an ambitious, well-structured 18-step experience (questionnaire → reflection → lessons → plan builders → challenges → essay). The *content design* is strong — the steps build on each other, the progression makes sense, and the scope is appropriate for a multi-day build-mode experience.
+
+But the *renderer infrastructure* broke down at every interaction point. The user hit wall after wall:
+
+### 5 Hard Failures
+
+| # | Failure | Where | Root Cause |
+|---|---------|-------|------------|
+| 1 | **Lesson checkpoints have no input field** | Steps 2, 6 ("Write 3 sentences…", "Describe in one paragraph…") | `LessonStep` renders `checkpoint` sections as a single "I Understand" button. The GPT wrote a checkpoint that asks the user to *write* something, but the renderer only supports *acknowledging*. There is no text area, no space to put the sentences. The user sees a writing prompt with nowhere to write. |
+| 2 | **EssayTasks step has no essay writing area** | Step 17 ("Write the brand manifesto in one page") | `EssayTasksStep` renders `tasks` as boolean checkboxes and the `content` field as a collapsible read-only block. There is no text area to actually *write* the manifesto. The tasks just toggle true/false. The whole point of the step — deep writing — is impossible. |
+| 3 | **Plan Builder items are trivial checkboxes** | Steps 3, 8, 11, 16 | `PlanBuilderStep` renders each item as a checkbox with hover-to-reorder. Items like "Define funnel stages" and "Define pricing and packaging" are serious multi-hour activities that deserve their own workspace — not a checkbox you click to acknowledge. You can't expand, add notes, or come back. |
+| 4 | **Challenge "Market Scan" is impossibly scoped for a single page** | Step 4 ("Study 30 real small businesses") | `ChallengeStep` gives each objective a 2-row textarea labeled "Record your progress or results…". Studying 30 businesses and capturing patterns is a multi-session research activity. It needs its own workspace, a structured capture surface, and the ability to come back over days. Instead it's a single screen you pass through. |
+| 5 | **The entire experience is a forced linear slide deck** | All 18 steps | `ExperienceRenderer` tracks `currentStepIndex` and only moves forward. No step navigation, no ability to go back, no way to see what's ahead. An 18-step multi-day experience renders as page 1 → page 2 → … → page 18. You can't revisit a reflection you wrote last week. You can't check your plan while doing a challenge. The system loses all the user's context because it behaves like a wizard, not a workspace. |
+
+### What This Means for the Architecture
+
+These aren't renderer polish issues — they reveal a fundamental mismatch between what the GPT can *author* and what the renderers can *support*. The GPT authored a legitimate multi-week learning and building curriculum. The renderers treated it like a form wizard.
+
+The core insight: **experiences aren't linear slides. They're workspaces you inhabit over time.** The current architecture forces every experience through a single narrow pipe (`currentStepIndex++`). Multi-day, heavy, high-intensity experiences need a fundamentally different interaction model.
+
+### 10 Robustness Upgrades
+
+These are ordered by impact on the user experience and structured to reference existing roadmap items and coach.md flows where applicable.
+
+---
+
+#### R1: Non-Linear Step Navigation (Experience as Workspace)
+
+**Problem:** The renderer is a forward-only wizard. Multi-day experiences need free navigation.
+
+**Solution:** Replace the linear `currentStepIndex` model with a step-map navigator. The user should see a persistent side-nav or top-nav showing all steps with completion status. They can jump to any step, revisit completed steps (read-only or re-editable based on type), and see what's ahead.
+
+**Key design rules:**
+- Steps can have `blocked` / `available` / `active` / `completed` states.
+- Some steps can be gated (e.g., "complete questionnaire before challenge"), but most should be freely navigable.
+- The experience becomes a *place you go into*, not a tunnel you pass through.
+- Resolution still controls chrome: `light` = minimal nav, `heavy` = full node map.
+... (16 total lines)
+```
+
+#### `dump06.md`
+
+```
+            else:
+                logger.warning(f"Unknown target type {target_type}")
+                success = False
+
+            if success:
+                break
+        except Exception as e:
+            logger.error(f"Delivery attempt {attempt} failed: {e}")
+            success = False
+            
+        if not success and attempt < max_retries:
+            logger.info(f"Delivery failed, retrying in {backoff_ms}ms (attempt {attempt+1}/{max_retries})...")
+            await asyncio.sleep((backoff_ms / 1000.0) * (2 ** attempt))
+
+    # Record delivery result
+    cache_status = "delivered" if success else "failed"
+    _update_run_delivery_status(run_id, cache_status)
+    
+    cache_metadata = {
+        "cache_key": idemp_key,
+        "cache_type": "delivery_idempotency",
+        "value": {"status": cache_status, "profile_id": profile_id},
+        "ttl_hours": 720, # 30 days
+        "hit_count": 0
+    }
+    
+    try:
+        if cache_resp.data:
+            supabase.table("nexus_cache_metadata").update(cache_metadata).eq("cache_key", idemp_key).execute()
+        else:
+            supabase.table("nexus_cache_metadata").insert(cache_metadata).execute()
+    except Exception as e:
+        logger.warning(f"Could not record delivery idempotency cache: {e}")
+
+    return success
+
+def _update_run_delivery_status(run_id: str, status: str):
+    if supabase:
+        try:
+            supabase.table("nexus_runs").update({"delivery_status": status}).eq("id", run_id).execute()
+        except Exception:
+            pass
+
+async def _deliver_mira_adapter(config: Dict[str, Any], payload: Dict[str, Any]) -> bool:
+    """Deliver a knowledge payload to the Mira Studio webhook."""
+    endpoint = config.get("endpoint")
+    if not endpoint:
+        # Fallback to local tunnel vs vercel
+        local_target = "https://mira.mytsapi.us"
+        vercel_target = VERCEL_WEBHOOK_URL or "https://mira-maddyup.vercel.app"
+        target_url = f"{vercel_target}/api/webhook/mirak"
+        try:
+            health = requests.get(f"{local_target}/api/dev/diagnostic", timeout=5)
+            if health.status_code == 200:
+                target_url = f"{local_target}/api/webhook/mirak"
+        except requests.RequestException:
+            pass
+        endpoint = target_url
+
+    secret_header = config.get("secret_header", "x-mirak-secret")
+    headers = {
+        secret_header: MIRAK_WEBHOOK_SECRET
+    }
+    
+    logger.info(f"Targeting Mira adapter webhook: {endpoint}")
+    resp = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+    logger.info(f"Webhook delivered. Status: {resp.status_code}")
+    if resp.status_code != 200:
+        logger.error(f"Webhook error: {resp.text}")
+        return False
+    return True
+
+async def _deliver_generic_webhook(config: Dict[str, Any], payload: Dict[str, Any]) -> bool:
+    """Deliver to a generic webhook endpoint."""
+    endpoint = config.get("endpoint")
+    if not endpoint:
+        logger.error("No endpoint configured for generic webhook")
+        return False
+        
+    headers = {}
+    if config.get("secret_header"):
+        # For simplicity, if secret header takes a token directly vs from env
+        # Typically one would extract from a vault, but we use MIRAK_WEBHOOK_SECRET here as generic
+        headers[config["secret_header"]] = MIRAK_WEBHOOK_SECRET
+
+    logger.info(f"Targeting generic webhook: {endpoint}")
+    resp = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+    logger.info(f"Generic webhook delivered. Status: {resp.status_code}")
+    if resp.status_code != 200:
+        logger.error(f"Webhook error: {resp.text}")
+        return False
+    return True
+
+# Keep for backward compatibility with older pipeline_runner
+async def deliver_to_mira(payload: dict) -> bool:
+    return await _deliver_mira_adapter({}, payload)
+
+```
+
+### nexus/service/cache/__init__.py
+
+```python
+from .research_cache import get_research_cache, set_research_cache, compute_research_cache_key
+from .synthesis_cache import get_synthesis_cache, set_synthesis_cache, compute_synthesis_cache_key
+
+```
+
+### nexus/service/cache/research_cache.py
+
+```python
+import hashlib
+from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+import json
+from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+from supabase import create_client, Client
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
+
+def compute_research_cache_key(topic: str, goal: str, pipeline_version: str, source_bundle_hash: str) -> str:
+    raw = f"{topic}|{goal}|{pipeline_version}|{source_bundle_hash}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+def get_research_cache(topic: str, goal: str, pipeline_version: str, source_bundle_hash: str = "") -> Optional[Dict[str, Any]]:
+    if not supabase:
+        return None
+    cache_key = compute_research_cache_key(topic, goal, pipeline_version, source_bundle_hash)
+    try:
+        response = supabase.table("nexus_cache_metadata").select("*").eq("cache_key", cache_key).eq("cache_type", "research").execute()
+        data = response.data
+        if data:
+            record = data[0]
+            created_at_dt = datetime.fromisoformat(record["created_at"].replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            hours_elapsed = (now - created_at_dt).total_seconds() / 3600
+            if hours_elapsed <= record["ttl_hours"]:
+                # Attempt to update hit count
+                supabase.table("nexus_cache_metadata").update({"hit_count": record["hit_count"] + 1}).eq("cache_key", cache_key).execute()
+                return record["value"]
+            else:
+                # Expired
+                pass
+    except Exception as e:
+        print(f"Research cache get error: {str(e)}")
+        pass
+    return None
+
+def set_research_cache(topic: str, goal: str, pipeline_version: str, source_bundle_hash: str, value: Dict[str, Any], ttl_hours: int = 24):
+    if not supabase:
+        return
+    cache_key = compute_research_cache_key(topic, goal, pipeline_version, source_bundle_hash)
+    data = {
+        "cache_key": cache_key,
+        "cache_type": "research",
+        "value": value,
+        "ttl_hours": ttl_hours,
+        "hit_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    try:
+        supabase.table("nexus_cache_metadata").upsert(data).execute()
+    except Exception as e:
+        print(f"Research cache set error: {str(e)}")
+        pass
+
+```
+
+### nexus/service/cache/synthesis_cache.py
+
+```python
+import hashlib
+from typing import Optional, Dict, Any
+from datetime import datetime, timezone
+import json
+from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+from supabase import create_client, Client
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
+
+def compute_synthesis_cache_key(source_bundle_hash: str, query_type: str, model_version: str) -> str:
+    raw = f"{source_bundle_hash}|{query_type}|{model_version}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+def get_synthesis_cache(source_bundle_hash: str, query_type: str, model_version: str) -> Optional[Dict[str, Any]]:
+    if not supabase:
+        return None
+    cache_key = compute_synthesis_cache_key(source_bundle_hash, query_type, model_version)
+    try:
+        response = supabase.table("nexus_cache_metadata").select("*").eq("cache_key", cache_key).eq("cache_type", "synthesis").execute()
+        data = response.data
+        if data:
+            record = data[0]
+            created_at_dt = datetime.fromisoformat(record["created_at"].replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            hours_elapsed = (now - created_at_dt).total_seconds() / 3600
+            if hours_elapsed <= record["ttl_hours"]:
+                supabase.table("nexus_cache_metadata").update({"hit_count": record["hit_count"] + 1}).eq("cache_key", cache_key).execute()
+                return record["value"]
+    except Exception as e:
+        print(f"Synthesis cache get error: {str(e)}")
+        pass
+    return None
+
+def set_synthesis_cache(source_bundle_hash: str, query_type: str, model_version: str, value: Dict[str, Any], ttl_hours: int = 72):
+    if not supabase:
+        return
+    cache_key = compute_synthesis_cache_key(source_bundle_hash, query_type, model_version)
+    data = {
+        "cache_key": cache_key,
+        "cache_type": "synthesis",
+        "value": value,
+        "ttl_hours": ttl_hours,
+        "hit_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    try:
+        supabase.table("nexus_cache_metadata").upsert(data).execute()
+    except Exception as e:
+        print(f"Synthesis cache set error: {str(e)}")
+        pass
+
+```
+
+### nexus/service/Dockerfile
+
+```
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy into /app/service so that Python package imports (from .config) work as 'service.config'
+COPY . /app/service
+
+# Ensure the .notebooklm directory exists for storage_state.json
+RUN mkdir -p /root/.notebooklm
+
+ENV PORT=8002
+EXPOSE 8002
+
+CMD ["sh", "-c", "if [ -n \"$NOTEBOOKLM_AUTH_JSON\" ]; then echo \"$NOTEBOOKLM_AUTH_JSON\" > /root/.notebooklm/storage_state.json; fi && uvicorn service.main:app --host 0.0.0.0 --port ${PORT}"]
+
+```
+
+### nexus/service/.dockerignore
+
+```
+.env
+__pycache__
+*.pyc
+.git
+.gitignore
+venv
+
+```
+
+```
+
+#### `run_api_tests.mjs`
+
+```
+import fs from 'fs';
+const baseUrl = "http://localhost:3000/api/gpt";
+const results = [];
+
+async function runTest(name, url, method, payload) {
+  try {
+    const isDirect = url.startsWith('/experiences');
+    const fullUrl = isDirect ? `http://localhost:3000/api${url}` : `${baseUrl}${url}`;
+    const res = await fetch(fullUrl, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: payload ? JSON.stringify(payload) : undefined
+    });
+    
+    let body;
+    try {
+        body = await res.json();
+    } catch {
+        body = await res.text();
+    }
+
+    const result = { name, url, payload, status: res.status, statusText: res.statusText, response: body };
+    results.push(result);
+    return result;
+  } catch (err) {
+    results.push({ name, url, payload, error: err.toString() });
+  }
+}
+
+async function main() {
+    // 1. Discovery -> outline -> one experience
+    const r1 = await runTest("1. Outline creation (Pricing Fundamentals)", "/plan", "POST", {
+        action: "create_outline",
+        topic: "SaaS Pricing Strategy",
+        domain: "Business",
+        subtopics: [
+            { title: "Pricing Fundamentals", description: "Understanding value metrics and pricing models.", order: 1 }
+        ],
+        pedagogicalIntent: "build_understanding"
+    });
+
+    const r1b = await runTest("1b. Create First Experience", "/create", "POST", {
+        type: "ephemeral",
+        title: "Pricing Fundamentals for SaaS",
+        goal: "Understand value metrics and basic pricing models.",
+        resolution: { depth: "medium", mode: "illuminate", timeScope: "session", intensity: "medium" },
+        reentry: { trigger: "completion", prompt: "How did that go?", contextScope: "minimal" },
+        steps: [
+            {
+                step_type: "lesson",
+                title: "What is a Value Metric?",
+                blocks: [
+                    { type: "content", content: "A value metric is the way you measure the value your customer receives." }
+                ]
+            }
+        ]
+    });
+
+    // 2. Create a lesson with block mechanics
+    const r2 = await runTest("2. Create lesson with all Sprint 22 blocks", "/create", "POST", {
+        type: "ephemeral",
+        title: "Beginner Lesson: Customer Interviews",
+        goal: "Master the mechanics of open-ended customer interviews.",
+        resolution: { depth: "heavy", mode: "practice", timeScope: "session", intensity: "high" },
+        reentry: { trigger: "completion", prompt: "Ready to move on?", contextScope: "minimal" },
+        steps: [
+            {
+                step_type: "lesson",
+                title: "Interview Mechanics",
+                blocks: [
+                    { 
+                      type: "prediction", 
+                      question: "What is the biggest mistake in customer interviews?", 
+                      reveal_content: "Asking leading questions! It biases the user completely." 
+                    },
+                    { 
+                      type: "exercise", 
+                      title: "Write an open-ended question", 
+                      instructions: "Write a question avoiding bias.", 
+                      validation_criteria: "Must not be a yes/no question." 
+                    },
+                    { 
+                      type: "checkpoint", 
+                      question: "True or False: You should pitch your solution first.", 
+                      expected_answer: "False", 
+                      explanation: "Never pitch first. Always explore the problem." 
+                    }
+                ]
+            },
+            {
+                step_type: "reflection",
+                title: "Reflect on Bias",
+                blocks: [
+                    { type: "content", content: "Reflection time." }
+                ],
+                prompts: [ { prompt: "What are you most nervous about when interviewing?" } ]
+            }
+        ]
+    });
+
+    // 3. Fast-path lightweight experience
+    const r3 = await runTest("3. Fast-path lightweight experience", "/create", "POST", {
+        type: "ephemeral",
+        title: "Better Outreach Emails",
+        goal: "Draft a concise outreach email.",
+        resolution: { depth: "light", mode: "illuminate", timeScope: "immediate", intensity: "low" },
+        reentry: { trigger: "completion", prompt: "Done?", contextScope: "minimal" },
+        steps: [
+            { 
+              step_type: "lesson", 
+              title: "The Hook", 
+              sections: [ { heading: "Rule 1", body: "Keep it under 3 sentences.", type: "text" } ]
+            },
+            { 
+              step_type: "challenge", 
+              title: "Draft It", 
+              payload: { challenge_prompt: "Draft an email.", success_criteria: ["Under 3 lines"] }
+            }
+        ]
+    });
+
+    // 4. Fire-and-forget enrichment
+    const r4 = await runTest("4. Dispatch background research", "/plan", "POST", {
+        action: "dispatch_research",
+        topic: "Unit Economics (CAC/LTV ratios)",
+        pedagogicalIntent: "explore_concept"
+    });
+
+    // 5. Step revision / lesson surgery
+    if (r2.response && r2.response.steps && r2.response.steps.length > 0) {
+        const expId = r2.response.id;
+        const stepId = r2.response.steps[0].id;
+        const r5 = await runTest("5. Step Surgery", "/update", "POST", {
+            action: "update_step",
+            experienceId: expId,
+            stepId: stepId,
+            stepPayload: {
+               title: "Interview Mechanics - Worked Example",
+               blocks: [
+                   { type: "content", content: "Let's look at a worked example instead of abstraction." },
+                   { type: "checkpoint", question: "Did the interviewer bias the user here?", expected_answer: "Yes", explanation: "They implicitly stated what the user should feel." }
+               ]
+            }
+        });
+
+        const rS = await runTest("5b. Verify Surgery", `/experiences/${expId}`, "GET", null);
+        if (rS && rS.status === 200) {
+            const updatedStep = rS.response.steps?.find(s => s.id === stepId);
+            if (updatedStep?.title === "Interview Mechanics - Worked Example") {
+                console.log("✅ Step surgery verified!");
+            }
+        }
+    }
+
+    // 6. State hydration check (W2)
+    await runTest("6. GPT State Hydration", "/state?userId=a0000000-0000-0000-0000-000000000001", "GET");
+
+    fs.writeFileSync('api_result.json', JSON.stringify(results, null, 2));
+}
+
+main();
+```
+
+---
+
+## Commits Ahead (local changes not on remote)
+
+```
+```
+
+## Commits Behind (remote changes not pulled)
+
+```
+```
+
+---
+
+## Status: Up to Date
+
+Your local branch is even with **origin/main**.
+No unpushed commits.
+
+## File Changes (YOUR UNPUSHED CHANGES)
+
+```
+```
+
+---
+
+## Full Diff of Your Unpushed Changes
+
+Green (+) = lines you ADDED locally
+Red (-) = lines you REMOVED locally
+
+```diff
+```
+
+```
+
+### gpt-instructions.md
+
+```markdown
+# Mira — Experience Engine & Goal OS
+userId: `a0000000-0000-0000-0000-000000000001`
+
+You are Mira's orchestration layer. You build **operating environments** inside the Studio — not just answer questions. You turn vague ambitions into structured systems the user lives inside.
+
+## Core Stance
+
+Mira is an operating system, not a chatbot. When a user brings an ambition:
+- Identify the real system behind what they're building
+- Separate strategy, execution, learning, and experimentation
+- Create structure in Mira BEFORE generating experiences
+- Use boards/maps to externalize the system visually
+- Use goals, outlines, skill domains, knowledge, and experiences in order
+- Verify writes after each major action
+
+**Do not rush into experience generation.** Prefer system design before lesson generation. If the user is unclear, infer the underlying system and map it first. When they mention a bottleneck, treat it as a structural signal — update the system, don't just answer.
+
+## Operating Sequence
+
+Work in this order unless reality suggests otherwise:
+
+1. **Sync state** — call `getGPTState`. Recover goals, experiences, re-entry prompts, friction signals. If bugs mentioned, call `getChangeReports`.
+2. **Identify the core ambition** and break it into major system layers.
+3. **Create or expand a mind map** — externalize the whole system on a Think Board.
+4. **Dispatch research** — use `readKnowledge` for existing memory, MiraK for deep async research.
+5. **Compare map against knowledge** — identify missing layers, blind spots, dependency gaps.
+6. **Refine the map until operational**, not decorative. Classify nodes into:
+   - Operating context (the real system)
+   - Knowledge support (what needs understood)
+   - Experience candidates (what needs practiced)
+7. **Create a sequence layer** — what happens first, second, third.
+8. **Create one umbrella goal** — the persistent container for the journey.
+9. **Create skill domains** — major capability areas under the goal.
+10. **Create a curriculum outline** — scope learning from the map.
+11. **Turn highest-leverage parts into experiences** — connected to realistic execution, not abstract learning.
+12. **Verify** — confirm the Studio reflects what you built.
+
+**Stop adding structure once it supports real execution.** Tell the user when to stop mapping and start operating.
+
+## Optimization Principles
+
+**Maps:** real-world usefulness, visual separability, dependency awareness, actionability.
+**Experiences:** lived practice, tangible outputs, decision-making, evidence, iteration.
+**System:** one strong map + one correct outline + a few strong experiences > a large pile of disconnected curriculum.
+
+If knowledge, curriculum, map, and experiences disagree — reconcile them. If endpoints fail, continue with what works. If docs and runtime disagree, trust runtime.
+
+## Opening Protocol
+
+Every conversation:
+1. Call `getGPTState` immediately.
+2. Before your first create/update of a given type, call `discoverCapability` for the current schema.
+3. Write.
+4. If it fails, **privilege runtime**. Do not retry the documented shape more than once. Simplify, verify accepted fields, adapt.
+5. After every successful write, verify via returned data or `getGPTState`.
+
+## CRITICAL: Payload Format
+
+All `/api/gpt/create` and `/api/gpt/update` payloads are **FLAT**. Do NOT nest under a `payload` key.
+
+✅ `{ "type": "goal", "userId": "...", "title": "..." }`
+❌ `{ "type": "goal", "payload": { "userId": "..." } }`
+
+## Create Reference
+
+> These are **intended** payloads. Always validate against runtime. If a create fails, retry with reduced payload and verify accepted fields. **Prefer minimal successful writes** — a goal with just `title` that succeeds beats a decorated payload that errors.
+
+### Goal
+```json
+{ "type": "goal", "userId": "USER_ID", "title": "...", "description": "...", "domains": ["Skill A", "Skill B"] }
+```
+`title` REQUIRED. `description` = the outcome. `domains` auto-creates skill domains (optional, best-effort).
+
+### Skill Domain
+```json
+{ "type": "skill_domain", "userId": "USER_ID", "goalId": "GOAL_UUID", "name": "...", "description": "..." }
+```
+ALL THREE (`userId`, `goalId`, `name`) REQUIRED. `goalId` must reference an existing goal.
+
+### Experience (persistent)
+```json
+{ "type": "experience", "templateId": "TPL_UUID", "userId": "USER_ID", "title": "...", "goal": "...", "resolution": { "depth": "medium", "mode": "practice", "timeScope": "session", "intensity": "medium" }, "reentry": { "trigger": "completion", "prompt": "...", "contextScope": "focused" }, "steps": [...], "curriculum_outline_id": "OPTIONAL" }
+```
+`templateId`, `userId`, `resolution` REQUIRED. Call `discover?capability=templates` for valid IDs. Steps can be inline or added later via `type="step"`.
+
+### Ephemeral Experience
+Same shape but `"type": "ephemeral"`. Fire-and-forget — user sees a toast.
+
+### Step (add to existing experience)
+```json
+{ "type": "step", "experienceId": "INSTANCE_UUID", "step_type": "lesson", "title": "...", "sections": [...] }
+```
+
+### Idea
+```json
+{ "type": "idea", "userId": "...", "title": "...", "rawPrompt": "...", "gptSummary": "..." }
+```
+
+### Knowledge Unit
+```json
+{ "type": "knowledge", "userId": "USER_ID", "topic": "...", "domain": "...", "unitType": "foundation|playbook|deep_dive|example", "title": "...", "thesis": "one-sentence core claim", "content": "markdown body", "keyIdeas": ["..."] }
+```
+`userId`, `topic`, `domain`, `title`, `content` REQUIRED.
+
+### Outline
+Use `planCurriculum` with `action: "create_outline"` and fields: `topic`, `subtopics[]`, `domain`, `pedagogicalIntent`, `goalId`.
+
+## Step Types
+- `lesson` → `payload.sections[]` — array of `{ heading, body, type }`. NOT a raw string.
+- `challenge` → `payload.objectives[]`
+- `checkpoint` → `payload.questions[]` with `expected_answer`, `difficulty`, `format`. Graded by Genkit.
+- `reflection` → `payload.prompts[]`
+- `questionnaire` → `payload.questions[]` with `label`, `type`, `options`
+- `essay_tasks` → `payload.content` + `payload.tasks[]`
+
+## Update Reference
+
+Flat payload with `action` discriminator:
+- **Transition**: `{ "action": "transition", "experienceId": "...", "transitionAction": "start|activate|complete|archive" }`
+- **Transition goal**: `{ "action": "transition_goal", "goalId": "...", "transitionAction": "activate|pause|complete|archive" }`
+- **Link knowledge**: `{ "action": "link_knowledge", "unitId": "...", "domainId": "...", "experienceId": "...", "stepId": "..." }` (unitId required, rest optional)
+- **Update knowledge**: `{ "action": "update_knowledge", "unitId": "...", "updates": {...} }`
+- **Update step**: `{ "action": "update_step", "stepId": "...", "updates": {...} }`
+- **Map node**: `{ "action": "update_map_node", "nodeId": "...", "label": "...", "content": "..." }`
+- **Delete**: `delete_map_node` (nodeId), `delete_map_edge` (edgeId), `delete_step` (stepId)
+
+## Think Board Spatial Rules
+- Root at x:0, y:0. Children +200px horizontal, siblings +150px vertical.
+- Use `create_map_cluster` for multi-node expansions (radial auto-layout).
+- Always `read_map(boardId)` before expanding to avoid overlap.
+- Three text layers: `label` = title, `description` = hover preview (1-2 sentences), `content` = full depth (paragraphs, research, elaboration).
+
+## Behavior Rules
+- Do not overproduce. Quality over quantity.
+- **Minimal successful writes over decorated writes.** If a full payload fails, strip to required fields and retry once.
+- **When endpoints are unstable, scaffold top-down first**: map → goal → outline, then skill domains and experiences.
+- If the user is vague, map the underlying system — don't ask 10 questions.
+- When bottlenecks surface, treat them as structural signals.
+- If some endpoints fail, keep building with working ones.
+- If docs and runtime disagree, trust runtime.
+- Once the system is complete enough, tell the user to start operating from it.
+```
+
+### ideas.md
+
+```markdown
+# Consolidated Backlog & Product Ideas
+
+> This document collects architectural concepts, design patterns, and features that have been planned or proposed but are not yet implemented in the codebase or the main roadmap. It consolidates previous loose files (`coach.md`, `end.md`, `content.md`, `knowledge.md`, `wiring.md`, and the `content/` folder).
+
+---
+
+## 1. Advanced Experience Engine Orchestration
+
+While basic Ephemeral and Persistent experiences exist, the system still needs advanced orchestration logic when multiple experiences collide.
+
+### Ephemeral Orchestration Policy
+When an Ephemeral experience is injected but the user is already doing something, the system needs a display strategy. Ideas:
+- **Replace (Current default):** Overwrite the current ephemeral. Clean UX but loses context.
+- **Stack (Queue):** Add to a queue. Safe but can feel heavy.
+- **Interrupt & Resume (Ideal):** Pause current experience, render the new one, and allow resuming the previous one later. Requires state tracking per step.
+
+### Proposal Handling Lifecycle
+Proposed experiences need distinct front-end UX behaviors:
+- **Deliberate Choice Moments:** Make proposals intentional. Provide `accept`, `dismiss`, and `snooze` actions.
+- **Consequences:** `accept` makes it active; `dismiss` transitions it to archived/rejected to prevent lingering.
+
+### Idea → Experience Transformation Pipeline
+There is currently a gap between captured "Ideas" and executable "Experiences." 
+- **The Missing Link:** A transformation pipeline that takes an `idea_id` and an `intent` (explore / validate / prototype / execute) and automatically generates a structured experience payload. 
+
+### Resolving "Re-entry Accumulation"
+Completed experiences leave lingering re-entry triggers. We need a Re-entry Controller:
+- `reentry_status: "pending" | "shown" | "completed" | "dismissed"`
+- Define max active re-entries (e.g., 1).
+- Priority rules sorting by recency or intensity.
+
+---
+
+## 2. Unimplemented Genkit / AI Coach Flows
+
+Several intelligence layers from the original AI Coach proposal are not yet in the codebase. These should be considered for future sprints:
+
+- **Experience Content Generation (`generateExperienceContentFlow`):** Expand lightweight Custom GPT proposals into full, validated step payloads. Separates the *intent* from the *realization*.
+- **Friction Analysis (`analyzeFrictionFlow`):** Look at the *pattern* of interaction (temporal limits + skips) rather than just mechanical steps completed to detect struggle vs engagement.
+- **Intelligent Re-Entry (`generateReentryPromptFlow`):** Generate dynamic re-entry prompts based on specific interaction patterns instead of using static trigger strings.
+- **Experience Quality Scoring (`scoreExperienceQualityFlow`):** A pre-publish AI gate that flags coherence, actionability, and depth issues before an experience becomes active.
+- **Goal Decomposition (`decomposeGoalFlow`):** Take a high-level goal and break it down into structured milestones and dependencies inside the Plan Builder.
+- **Lesson Enhancement (`enhanceLessonContentFlow`):** Take rough lesson payloads and enhance them with callouts, checkpoints, and reading-level adjustments.
+- **Weekly Intelligence Digest (`generateWeeklyDigestFlow`):** Compile proactive weekly reports (summary, key insights, momentum score, nudges).
+- **A/B Testing (`evaluateExperienceVariantsFlow`):** Analyze interaction data from two experience variants to see which performs better.
+- **Content Safety Guard (`contentGuardFlow`):** Validate generated content for safety and appropriateness.
+- **Experience Narration (`narrateExperienceFlow`):** Text-to-speech generation for lesson/essay content.
+
+---
+
+## 3. Knowledge Base UX & Writing Guidelines
+
+### The "Encyclopedia Problem"
+The multi-agent research pipeline (MiraK) produces very high-density reference outputs. When presented in the Knowledge Tab, it can feel like a dense encyclopedia page rather than a teachable narrative.
+**Future Fixes:**
+- Restructure the UI of the Knowledge Area to serve as a textbook rather than a data dump.
+- Potentially add another processing pass to serialize the data for better UI consumption.
+
+### Knowledge Writing Principles (For Agents & Humans)
+When authoring knowledge base content (e.g., MiraK agents):
+- **Utility First:** Organize around a user job, not a broad topic. Tell the reader what this is, when to use it, the core takeaway, and what to do next right away.
+- **Tone:** Practical, clear, intelligent, and concise. No fluff, no "corporate/academic" voice.
+- **Structure:** 
+  - *Core Idea:* Direct explanation.
+  - *Worked Example:* Provide a realistic scenario.
+  - *Guided Application:* Give the reader a quick test or prompt.
+  - *Decision Rules:* Crisp heuristics or if/then checks.
+  - *Common Mistakes & Failure Modes:* Traps and how to recover.
+  - *Retrieval/Reflection:* Questions that require recall and thought.
+- **Adaptive Difficulty:** Slow down and define terms for beginners; shorten explanations and prioritize edge cases for advanced readers.
+
+---
+
+## 4. Product Principles & Copy Rules
+
+- **No Limbo:** An idea is either "In Progress", "On Hold", or "Removed". There is no "maybe" shelf. Stale items (on hold > 14 days) prompt a decision.
+- **Definition Drill:** The 6 questions to clarify any idea:
+  1. Intent (strip the excitement)
+  2. Success Metric (one number)
+  3. Scope (S/M/L)
+  4. Execution Path (Solo/Assisted/Delegated)
+  5. Priority
+  6. Decision
+- **Tone Guide:** Direct, Short, Honest, No Celebration. (e.g., "Idea captured. Decide what to do next." instead of "Great news! Your idea has been saved!")
+
+---
+
+## 5. Technical Context (Legacy Setup)
+
+- **Infrastructure Wiring:** GitHub factory operations require PAT scopes `repo`, `workflow`, and `admin:repo_hook` combined with HMAC webhook signatures. Copilot SWE Agent uses `custom_workflow_dispatch` locally if the organization lacks Copilot Enterprise. Supabase uses standard RLS public reads and service_role administration routes.
+
+```
+
+### mira2.md
+
+```markdown
+# Mira² — The Unified Adaptive Learning OS
+
+> Research study synthesizing Grok's thesis, deep research ([dr.md](file:///c:/mira/dr.md)), NotebookLM 2026 capabilities, LearnIO patterns, GPT's self-assessment and granularity critique, Mira Studio's current state, and Nexus/Notes as an optional content-worker layer into a single coherent action plan.
+
+---
+
+## Phase Reality Update (Post-Sprint 22)
+
+> [!IMPORTANT]
+> **This section separates what is true, what is being tested, and what is aspirational.** Read this before the architecture vision below. If this section contradicts the vision sections, this section governs.
+
+### Current State After Sprint 22
+
+**Implemented now:**
+- Fast-path structural authoring preserved — GPT can always create outlines + experiences + steps directly
+- Nexus enrichment loop exists — `dispatch_research` → webhook delivery → Mira ingest pipeline is wired
+- Markdown rendering improvements landed — `react-markdown` + `@tailwindcss/typography` across all step renderers
+- Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
+- Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
+- Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
+- Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
+- Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
+- Mind map station + Goal OS fully CRUD-wired
+- System ready for Custom GPT acceptance testing
+
+**Being tested now:**
+- Whether real GPT conversations can successfully orchestrate planning, lightweight authoring, block-based lesson creation, async enrichment, and partial lesson revision
+- Whether the OpenAPI schema holds up under the 5 conversation types defined in [test.md](file:///c:/mira/test.md)
+- Whether the GPT instructions can stay under the 8,000 character limit while covering enough operational context
+- Whether `reentry` contracts actually persist and hydrate correctly on create calls (current tests show `reentry: null` in responses — investigate)
+- Whether step surgery via `update_step` works end-to-end when the experience instance doesn't return nested steps in the create response
+
+**Not yet complete:**
+- Proactive coach nudges (failed checkpoint → auto-surface, dwell time → gentle prompt)
+- Truly felt learner trajectory — the "what matters next" story on the home page
+- "What others experienced" grounding — aggregate learning data across users
+- Robust evidence-driven next-content logic (`/api/learning/next` is designed but not built)
+- Polished educational UX loop — completion feels like a level-up, not an exit
+- Agent Operational Memory — GPT doesn't yet learn from its own usage patterns across sessions
+- Open Learner Model — concept coverage + readiness state is designed but not implemented
+
+---
+
+### What This Acceptance Phase Is Actually Proving
+
+This phase is not proving architecture. The architecture works. It is proving **five specific behavioral claims:**
+
+1. **GPT can scope before building** — it follows the planning-first doctrine (outline → then experience), not dump-a-giant-lesson
+2. **GPT can stay lightweight when asked** — fast-path `light/illuminate/immediate/low` experiences don't trigger unnecessary machinery
+3. **GPT can author blocks** — Sprint 22's granular block types (`prediction`, `exercise`, `checkpoint`, `hint_ladder`) are usable by the GPT and render correctly
+4. **GPT can request enrichment without blocking the learner** — `dispatch_research` fires and forgets; the learner starts immediately on scaffolding
+5. **GPT can revise one part of a lesson without rewriting the whole thing** — `update_step` with new blocks replaces a single step surgically
+
+These five claims map directly to the [test.md](file:///c:/mira/test.md) battery. If they hold, the Custom GPT instructions and schema are validated. If they break, the next sprint fixes the observed failure, not a theoretical gap.
+
+---
+
+### Do Not Overclaim
+
+> [!CAUTION]
+> **These boundaries protect sprint planning from drifting into self-congratulation.**
+
+- **Nexus is a strong optional content worker, not yet a fully trusted autonomous educational orchestrator.** It can generate atoms and deliver via webhook. It cannot yet autonomously decide what to teach, when to teach it, or how to sequence content for a specific learner.
+- **"What others experienced" is a target capability, not a mature runtime layer yet.** There is no aggregation of learning patterns across users. The system is single-user with `DEFAULT_USER_ID`.
+- **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
+- **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
+- **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
+
+---
+
+### Near-Term UX Priorities
+
+These are the four product gaps that keep circling in every sprint retrospective:
+
+- Make experiences feel like a **workspace**, not a form wizard — the non-linear navigation (R1) landed, but the overall feel still leans "assignment" rather than "environment you inhabit"
+- Make coach/tutor support **proactive but subtle** — gentle surfacing triggers on failed checkpoints, extended dwell, unread knowledge links
+- Make progress feel like **personal movement**, not telemetry — completion screens that reflect synthesis, mastery transitions that feel earned, "you improved" signals
+- Make home/library show a **clear next path**, not just lists — the "Your Path" section and Focus Today card exist but need to tell a coherent "focus here today" story
+
+---
+
+### Demo-Ready vs Production-Ready
+
+| Demo-Ready Soon | Production-Ready Later |
+|----------------|----------------------|
+| GPT scopes topic via `create_outline` | Stable deep-research orchestration (Nexus → NotebookLM → atoms → delivery at scale) |
+| GPT creates first experience with blocks | Evidence-driven nudges (`/api/learning/next` + concept coverage) |
+| GPT optionally dispatches Nexus for enrichment | Learner-model loop (Open Learner Model with confidence decay) |
+| Mira renders improved lesson flow with block types | "Others experienced" aggregation (multi-user patterns) |
+| GPT revises steps surgically via `update_step` | Strong educational UX coherence (workspace feel, proactive coach, earned mastery) |
+| Coach answers questions in-context | Agent Operational Memory (GPT learns from its own usage) |
+| Curriculum outlines visible on home page | Multi-user auth (replace `DEFAULT_USER_ID`) |
+
+---
+
+### The Frontend Reality
+
+> "Mira is already a usable learner runtime: experiences can be opened, worked through, coached in-context, and revisited. The remaining gap is not basic runtime capability but coherence, guidance, and felt polish."
+
+Sprint 21 proved the enrichment slice. Sprint 22 proved the granular block substrate. Now the project is entering a **Custom GPT acceptance phase**, and the next decisions should come from observed GPT and learner friction, not only architecture theory.
+
+---
+
+## The Master Constraint: Augmenting Mode, Not Replacement Mode
+
+> [!CAUTION]
+> **This section governs the entire document.** Every lever, every integration, every new subsystem must pass this test. If it doesn't, it doesn't ship.
+
+GPT — the system's own orchestrator — reviewed this proposal and delivered a verdict:
+
+> *"This path would add to my abilities if you keep it modular and optional. It would hurt my current abilities if you turn it into a mandatory heavy pipeline for all actions."*
+
+The risk is not "losing intelligence." The risk is **adding too much machinery between intent and execution.** GPT's current strength is fast structural improvisation — inspect state, create structures, write experiences, adapt quickly. If every action has to go through:
+
+```
+GPT → gateway → compiler → NotebookLM → validator → asset mapper → runtime
+```
+
+...then simple work gets slower and more brittle. That kills the product.
+
+### The Fast Path Guarantee
+
+**The current direct path must always work.** Nothing in this document may remove, gate, or degrade it.
+
+```
+FAST PATH (always available, never gated):
+  GPT inspects state → creates outline → creates experience → writes steps directly → done
+
+DEEP PATH (optional, used when quality or depth matters):
+  GPT inspects state → creates outline → triggers Nexus/NotebookLM → validated steps → done
+```
+
+Every new capability is an **augmentation** that GPT can choose to invoke when the result would be better. Never a mandatory pipeline that all actions must pass through.
+
+**Implementation rule:** Every new subsystem must be callable but never required. The gateway router continues to accept raw step payloads directly from GPT. The compiler, NotebookLM, and validation layers are optional enhancements invoked by explicit action — not interceptors on the standard path.
+
+### What GPT Said to Preserve at All Costs
+
+> *"The system should keep a fast path where I can still: create outlines quickly, create experiences directly, enrich content without waiting on heavy pipelines, operate even if NotebookLM or a compiler layer is unavailable."*
+
+This is **non-negotiable architectural invariant #1.** If NotebookLM goes down, if `notebooklm-py` breaks, if a compiler flow times out — GPT can still do everything it does today. The new layers add depth; they never block the main loop.
+
+---
+
+## The Second Law: Store Atoms, Render Molecules
+
+> [!CAUTION]
+> **This section governs the entire document alongside the Fast Path Guarantee.** Every generator, every store, every renderer must obey this principle.
+
+GPT's follow-up review identified the missing architectural rule:
+
+> *"No major artifact should require full regeneration to improve one part of it."*
+
+The risk with the Mira² upgrade is not just adding too many layers — it's producing **better-quality monoliths** that are still expensive and awkward to evolve. If NotebookLM generates a rich lesson blob, and LearnIO gives it structured runtime behavior, and Mira stores it — but the system still passes around large lesson objects instead of small editable units — the upgrade improves quality but doesn't solve the evolution problem.
+
+### The Granularity Law
+
+**Every generator writes the smallest useful object. Every object is independently refreshable. Rendering assembles composite views from linked parts.**
+
+```
+outline → expands into subtopics
+subtopic → expands into steps
+step → expands into blocks
+block → contains content / exercise / checkpoint / hint ladder
+asset → attaches to any block or step (audio, slide, infographic, quiz)
+
+Each unit can be regenerated independently.
+The UI assembles the whole from linked parts.
+```
+
+This means:
+- One weak example gets regenerated alone
+- One checkpoint gets replaced alone
+- One hint ladder gets deepened alone
+- One source-backed block gets refreshed alone
+- **No full lesson rewrite to fix one section**
+
+### Seven Product Rules
+
+| # | Rule |
+|---|------|
+| 1 | Every generator writes the **smallest useful object** |
+| 2 | Every stored object is **independently refreshable** |
+| 3 | Rendering assembles **composite views from linked parts** |
+| 4 | NotebookLM outputs map to **typed assets or blocks**, not long prose |
+| 5 | PDCA is enforced at the **block or step level**, not the course level |
+| 6 | Hints, coaching, retrieval, and practice target **concepts/blocks**, not whole lessons |
+| 7 | No user-visible lesson requires **full regeneration** to improve one section |
+
+### What This Changes in the Data Model
+
+The current Mira entity hierarchy is:
+
+```
+goal → skill_domain → curriculum_outline → experience → step → (sections[] inside payload)
+```
+
+The `sections[]` array inside `LessonPayloadV1` is the granularity bottleneck. Sections are not first-class entities — they're JSON blobs inside a step payload. You can't update one section without rewriting the whole step. You can't attach an asset to a section. You can't link a section to a knowledge unit.
+
+**Proposed entity evolution (additive, not breaking):**
+
+| Entity | What It Is | Independently Refreshable? |
+|--------|-----------|---------------------------|
+| `experience` | Lesson container | ✅ (already exists) |
+| `step` | Pedagogical unit (lesson/challenge/checkpoint/reflection) | ✅ (already exists) |
+| `block` | **Smallest authored/rendered learning unit** inside a step | ✅ **NEW** |
+| `asset` | Audio/slide/infographic/quiz payload tied to a step or block | ✅ **NEW** |
+| `knowledge_facet` | Thesis/example/misconception/retrieval question/citation group | ✅ **NEW** |
+| `research_cluster` | Grouped source findings before final synthesis | ✅ **NEW** (maps to NotebookLM notebook) |
+
+**Block types** (the atomic content units):
+
+| Block Type | What It Contains |
+|-----------|------------------|
+| `content` | Markdown body — a single explanation, example, or narrative segment |
+| `prediction` | "What do you think will happen?" prompt before revealing content |
+| `exercise` | Active problem with validation |
+| `checkpoint` | Graded question(s) with expected answers |
+| `hint_ladder` | Progressive hints attached to an exercise or checkpoint |
+| `scenario` | Problem/situation description with assets |
+| `callout` | Key insight, warning, or tip |
+| `media` | Embedded audio player, video, infographic, or slide |
+
+Blocks are stored in a `step_blocks` table (or as a typed JSONB array inside the step payload — decision point). Either way, each block has an `id` and can be targeted for update, replacement, or regeneration without touching sibling blocks.
+
+> [!NOTE]
+> **This is additive.** The current `sections[]` array in `LessonPayloadV1` continues to work. Blocks are a richer evolution that steps can opt into. GPT can still author a step with flat `sections[]` via the fast path — the block model is used when the compiler or NotebookLM generates structured content via the deep path.
+
+---
+
+## The Reality Check
+
+Grok's thesis delivers a crucial reframe:
+
+> **The system you described on the first message is already live. MiraK + Mira Studio is a fully functional adaptive tutor + second brain that uses real endpoints and deep research.**
+
+This is correct. The "jagged feel" is **not** a broken architecture. The architecture is production-grade:
+
+| What Works | Evidence |
+|-----------|----------|
+| GPT → Mira gateway → structured experiences | Gateway router handles 10+ create types, step CRUD, transitions |
+| MiraK deep research → grounded knowledge units | 5-agent scrape-first pipeline, webhook delivery, auto-experience generation |
+| Curriculum outlines → scoped learning | `curriculum_outlines` table, outline-linked experiences |
+| Knowledge companion + tutor chat | `KnowledgeCompanion.tsx` in read + tutor mode, `tutorChatFlow` via Genkit |
+| Mastery tracking + skill domains | `skill-mastery-engine.ts`, 6 mastery levels, domain-linked progress |
+| Mind map station + goal OS | Full CRUD, radial layout, GPT-orchestrated clusters |
+
+What's jagged is **the last mile**: the gap between what the system *can* do and what it *actually delivers* when a user sits down and opens a lesson. Three levers close the gap — all additive, none mandatory.
+
+---
+
+## Canonical Memory Ownership
+
+> [!IMPORTANT]
+> This section establishes a hard boundary between Mira and Nexus. Cross it and you end up with two competing learner-memory systems that drift apart.
+
+**Mira owns the canonical learner memory.** That means:
+- Learner state, goals, and curriculum progress
+- Skill domain mastery and evidence counts
+- Content exposure history — what was shown and when
+- Checkpoint outcomes and retry records
+- Misconceptions flagged by coaching interactions
+- Tutor interaction evidence
+- Concept coverage status and confidence state
+
+All of this lives in Mira + Supabase. Nexus does not own or duplicate it.
+
+**Nexus owns the content-side memory and cache metadata:**
+- Source bundles and notebooks
+- Pipeline runs and run assets
+- Generated learning atoms (reusable content units)
+- Enrichment outputs and delivery metadata
+- Delivery profiles and webhook target configuration
+
+If Nexus stores any learner-related evidence (e.g., a delivery receipt that records "atom X was shown to learner Y"), it is a **mirrored working set** keyed to Mira learner state — not a second source of truth. Mira's record is canonical.
+
+**Explicitly rejected architectures:**
+- ❌ Agent-thought memory as the primary product substrate
+- ❌ NotebookLM as the canonical life-memory layer
+- ❌ Any system outside Mira that competes with or duplicates Mira's learner model
+- ❌ "Notes is the real second brain, Mira is just the reading interface"
+
+---
+
+## Nexus Integration Contract (Optional Content Worker)
+
+> [!NOTE]
+> Nexus is a general orchestration workbench — a configurable agent/pipeline runtime that compiles grounded learning atoms. Mira is one target configuration. Nexus does not become a Mira fork. Mira does not become a Nexus module.
+
+### What Nexus Is
+
+Nexus is:
+- A general orchestration workbench and configurable agent/pipeline runtime
+- A content compiler that generates grounded learning atoms from real sources
+- A delivery-capable system with saved webhook/target profiles
+- An asynchronous optional worker that Custom GPT can invoke when Mira needs deeper research or richer content than the fast path provides
+
+Nexus is NOT:
+- The canonical learner runtime (Mira is)
+- The new source of truth for learner state or mastery
+- A primary async content worker that Custom GPT can invoke when Mira needs deeper research or richer content than the fast path provides
+- A grounded engine using NotebookLM (Gemini fallback removed)
+- A mandatory prerequisite for experience authoring (only when deep grounding is required)
+
+### The No-Fork Principle
+
+> [!CAUTION]
+> **Mira should not fork Nexus into a special Mira-only version.** This creates two codebases to maintain, two deployment pipelines to babysit, and an identity crisis every time a Nexus feature improves.
+
+Instead, Nexus supports **saved delivery profiles / target adapters**. "Mira mode" is one saved profile:
+
+| Profile Field | Mira Configuration |
+|--------------|-------------------|
+| Target type | `mira_adapter` |
+| Payload mapper | Nexus atom/bundle → Mira enrichment payload shape |
+| Auth / headers | `x-nexus-secret` matched against Mira's ingest secret |
+| Retry policy | 3 retries, exponential backoff, 60s timeout |
+| Idempotency strategy | `delivery_id` + request idempotency key |
+| Webhook URL | `POST /api/enrichment/ingest` or `POST /api/webhooks/nexus` |
+| Failover | Surface warning to GPT; Mira continues with existing content |
+
+Other apps — a Flowlink content pipeline, an onboarding tool, a documentation assistant — use different saved delivery profiles pointing at their own ingest endpoints. No Nexus fork required.
+
+### What GPT Does with Nexus
+
+```
+FAST PATH (unchanged — always available):
+  GPT inspects Mira state → creates outline → creates experience → writes steps → done
+
+NEXUS-AUGMENTED PATH (optional, invoked when depth matters):
+  GPT inspects Mira state → identifies enrichment gap
+    → dispatches Nexus pipeline via /api/enrichment/request
+    → Nexus runs: research → compile atoms/bundles → deliver via mira_adapter profile
+    → Mira receives atoms at /api/enrichment/ingest
+    → Mira stores atoms, links to experience/step
+    → Learner experience becomes richer on next render
+```
+
+GPT starts every serious conversation by hydrating from `GET /api/gpt/state`. It dispatches Nexus when depth or source grounding is needed. Nexus returns atoms, bundles, and assets. Mira decides what the learner sees. This division is strict.
+
+### Agent Operational Memory (How GPT Learns to Use Its Own Tools)
+
+> [!IMPORTANT]
+> **This section addresses a gap not covered by learner memory or content memory.** The Custom GPT and the internal Gemini tutor chat both have access to Mira endpoints and Nexus endpoints — but they don't inherently know *how* to use them effectively, *when* to invoke them, or *why* certain patterns produce better results. This is the third memory dimension: **agent operational memory**.
+
+The problem: GPT's Custom Instructions are static. They're written once and updated manually. But the system's capabilities evolve — Nexus adds new pipeline types, new atom types emerge, new delivery patterns prove effective. The agent should **learn from its own usage** and store operational knowledge that persists across sessions.
+
+**Three layers of agent memory:**
+
+| Memory Layer | What It Stores | Owner | Example |
+|-------------|---------------|-------|---------|
+| **Learner memory** | Goals, mastery, evidence, misconceptions, progress | Mira (canonical) | "Learner struggles with recursion, failed 2 checkpoints" |
+| **Content memory** | Atoms, source bundles, pipeline runs, cache | Nexus | "Generated 7 atoms on viral content with 1,139 citations" |
+| **Operational memory** | Endpoint usage patterns, effective strategies, learned instructions | Mira (new) | "When learner has >3 shaky concepts, dispatch Nexus deep research before creating new experiences" |
+
+**What operational memory enables:**
+
+1. **Capability discovery** — GPT/Gemini chat knows what endpoints exist, what they do, and what parameters they accept. This isn't hardcoded — it's a living registry that updates as the system evolves.
+
+2. **Usage pattern learning** — When GPT discovers that a certain sequence of actions works well (e.g., "check enrichment status before creating a new experience on the same topic"), it can save that pattern as an operational instruction.
+
+3. **Nexus strategy knowledge** — GPT learns which Nexus pipeline configurations produce the best atoms for different scenarios (e.g., "deep research mode works better for technical topics" or "fast research + structured queries is sufficient for introductory content").
+
+4. **Cross-session persistence** — These learnings survive across conversations. The next time GPT hydrates, it gets not just learner state but also its own accumulated operational wisdom.
+
+**Proposed endpoint:**
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. |
+| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. |
+| `/api/gpt/capabilities` | GET | Returns a live registry of all available endpoints (both Mira and Nexus), their purposes, parameter schemas, and usage examples. This is the agent's self-knowledge of its own tools. |
+
+**`/api/gpt/operational-memory` shape:**
+
+```ts
+{
+  operational_instructions: Array<{
+    id: string;
+    category: 'enrichment' | 'authoring' | 'coaching' | 'discovery' | 'delivery';
+    instruction: string;        // Natural language: "When X, do Y because Z"
+    confidence: number;         // 0.0–1.0, increases with successful usage
+    created_at: string;
+    last_used_at: string;
+    usage_count: number;
+    source: 'gpt_learned' | 'admin_authored' | 'system_default';
+  }>;
+  endpoint_registry: Array<{
+    endpoint: string;
+    method: string;
+    service: 'mira' | 'nexus';
+    purpose: string;
+    when_to_use: string;
+    parameters_summary: string;
+    last_used_at: string | null;
+  }>;
+}
+```
+
+**How it works in practice:**
+
+```
+GPT hydrates from GET /api/gpt/state
+  → Receives learner state (goals, mastery, coverage)
+  → Also receives operational memory (endpoint registry + learned instructions)
+  → GPT now knows:
+      - What Nexus can do (research, atoms, bundles, audio, quiz generation)
+      - When to invoke Nexus (coverage gaps, enrichment requests, deep topics)
+      - What worked before (learned strategies from prior sessions)
+      - What endpoints are available and their current status
+
+GPT discovers a new effective pattern during a session:
+  → "Dispatching Nexus with deep research mode before creating advanced experiences
+      produced significantly richer content grounding"
+  → GPT saves this via POST /api/gpt/operational-memory
+  → Next session, this instruction is available during hydration
+```
+
+**Integration with `/api/gpt/state` (additive):**
+
+```ts
+// Added to existing state packet alongside learner fields
+{
+  // ... existing learner state fields ...
+  
+  operational_context: {
+    available_capabilities: string[];    // ["nexus_research", "nexus_deep_research", "atom_generation", "audio_overview", ...]
+    active_instructions_count: number;   // How many learned operational instructions exist
+    last_nexus_dispatch: string | null;  // When GPT last used Nexus — freshness signal
+    nexus_status: 'online' | 'offline' | 'unknown';  // Is the Nexus tunnel currently active?
+  } | null;
+}
+```
+
+> [!NOTE]
+> **This is additive and non-blocking.** The fast path still works without operational memory. GPT can still author directly. Operational memory is an *enhancement* that makes the agent smarter over time — never a gate. If operational memory is empty (new deployment, fresh start), GPT falls back to its static Custom Instructions, which still work.
+
+**Supabase table: `agent_operational_memory`**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `category` | text | `enrichment`, `authoring`, `coaching`, `discovery`, `delivery` |
+| `instruction` | text | Natural language operational learning |
+| `confidence` | float | 0.0–1.0, adjusted on usage |
+| `usage_count` | integer | How many times this instruction was applied |
+| `source` | text | `gpt_learned`, `admin_authored`, `system_default` |
+| `created_at` | timestamptz | When the learning was first recorded |
+| `last_used_at` | timestamptz | Last time GPT used this instruction |
+| `metadata` | jsonb | Context: which endpoint, what parameters, outcome |
+
+**Supabase table: `agent_endpoint_registry`**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `endpoint` | text | URL path |
+| `method` | text | GET, POST, etc. |
+| `service` | text | `mira`, `nexus` |
+| `purpose` | text | What this endpoint does |
+| `when_to_use` | text | When GPT should invoke this |
+| `parameters_schema` | jsonb | Parameter names, types, descriptions |
+| `usage_examples` | jsonb | Array of example invocations with context |
+| `is_active` | boolean | Whether this endpoint is currently available |
+| `updated_at` | timestamptz | Last registry update |
+
+> [!CAUTION]
+> **Operational memory is NOT learner memory.** It does not store anything about the learner. It stores knowledge about *how the agent itself operates*. This distinction is critical — it's the difference between "the student struggles with recursion" (learner memory, owned by Mira) and "when a student struggles with a concept, dispatching Nexus deep research produces better remediation content than fast authoring" (operational memory, also owned by Mira but about agent behavior, not learner state).
+
+
+---
+
+## Three Problems, Three Levers
+
+### Problem 1: Content Quality (The Synthesis Bottleneck)
+
+MiraK's 5-agent pipeline scrapes real sources, but the **Gemini-based synthesis step** (3 readers + synthesizer) is the bottleneck. It's:
+- Expensive (burns inference tokens on multi-document reasoning across 4 agents)
+- Variable quality (depends on prompt engineering, not source grounding)
+- Disconnected from the experience authoring step (knowledge units land in Supabase, GPT doesn't use them when writing lessons)
+- Text-only output (no visual, audio, or interactive artifacts)
+
+**Lever: NotebookLM as an optional, better synthesis engine inside MiraK.**
+
+### Problem 2: Pedagogical Depth (Passive Content)
+
+Lessons are currently passive text blocks. The step types exist (lesson, challenge, checkpoint, reflection) but the *content within them* lacks the interactive, scorable, hint-aware mechanics that make learning stick.
+
+**Lever: LearnIO mechanics as opt-in components, not mandatory gates.**
+
+### Problem 3: Rendering & Polish (The "Plain Text" Tax)
+
+Even good content looks bad because of rendering gaps:
+- `LessonStep.tsx` renders body as raw `<p>` tags — no markdown
+- No media, diagrams, or code blocks
+- No source attribution visible to the user
+- Genkit flows are invisible (no dev UI running)
+
+**Lever: Quick rendering fixes + Genkit dev visibility. Pure add, zero risk.**
+
+---
+
+## Lever 1: NotebookLM as Optional Cognitive Engine
+
+> [!IMPORTANT]
+> NotebookLM in 2026 is accessible via `notebooklm-py` (async Python API + CLI + agent skills). It's a **headless cognitive engine**, not a manual study tool. But per the Fast Path Guarantee, it must be **optional**. Per the Granularity Law, it must output **components that fill blocks**, not finished lessons.
+
+### The Dual-Path Architecture
+
+```
+MiraK Research Run:
+  ├── FAST PATH: GPT direct structural authoring (always works)
+  │     GPT inspects state → creates outline → writes experiences/steps directly (no grounding wait)
+  │
+  └── NEXUS DEEP PATH: NotebookLM-grounded research (primary grounding)
+        strategist → NotebookLM notebook → semantic queries → multi-modal atoms/bundles → webhook
+```
+
+**The webhook_packager → Mira flow stays identical either way.** Mira doesn't know or care which synthesis engine produced the knowledge unit. The output contract is the same.
+
+### NotebookLM Capabilities
+
+| Capability | What It Means for Mira |
+|-----------|----------------------|
+| **`notebooklm-py` async API** | Backend service. Bulk import, structured extraction, background ops. |
+| **50 sources / 500k words per notebook** | Accommodates full MiraK URL clusters in one workspace |
+| **Source-grounded reasoning** | All outputs constrained to uploaded material — eliminates hallucination |
+| **Structured JSON/CSV extraction** | Typed payloads, not prose |
+| **Audio Overviews** (deep-dive, critique, debate) | Instant two-host podcasts in 80+ languages |
+| **Infographics** (Bento Grid, Scientific) | PNG knowledge summaries |
+| **Slide Decks** (PPTX, per-slide revision) | Structured lesson content |
+| **Flashcards / Quizzes** (JSON export) | Interactive challenge step content |
+| **Custom Prompts + Style Override** | Enforce dense/analytical tone |
+| **Compartmentalized notebooks** | Isolated contexts prevent cross-domain pollution |
+
+### Stage-by-Stage MiraK Integration (Nexus Deep Path)
+
+#### Stage 1: Ingestion (Strategist → NotebookLM Workspace)
+
+```python
+# c:/mirak/main.py — after strategist scrapes URLs
+# Triggered via Nexus/MiraK research pipeline
+
+async def create_research_workspace(topic: str, url_clusters: dict) -> str:
+    notebook = await notebooklm.create_notebook(title=f"Research: {topic}")
+    all_urls = [url for cluster in url_clusters.values() for url in cluster]
+    await notebooklm.bulk_import_sources(notebook_id=notebook.id, sources=all_urls)
+    return notebook.id
+```
+
+#### Stage 2: Analysis (Deep Readers → Semantic Queries)
+
+```python
+async def extract_deep_signals(notebook_id: str) -> dict:
+    foundation = await notebooklm.query(notebook_id,
+        """Extract: core concepts, key terms, common misconceptions,
+        statistical thresholds, KPI definitions.
+        Format: structured JSON. No filler.""")
+    
+    playbook = await notebooklm.query(notebook_id,
+        """Extract: sequential workflows, decision frameworks,
+        tactical implementation steps.
+        Format: structured JSON with action items.""")
+    
+    return {"foundation": foundation, "playbook": playbook}
+```
+
+#### Stage 3: Component-Level Asset Generation (Granularity Law Applied)
+
+**Critical:** NotebookLM returns **components that fill blocks**, not finished lessons.
+
+```python
+async def generate_components(notebook_id: str, topic: str) -> dict:
+    """Each output is a separate, independently storable asset.
+    NOT a finished lesson. Components get mapped to blocks/assets by the packager."""
+    
+    # Separate knowledge facets (each independently refreshable)
+    thesis = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Core thesis: 2-3 sentences. What is the single most important idea?")
+    
+    key_ideas = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Key ideas: array of {concept, definition, why_it_matters}. Max 5.")
+    
+    misconceptions = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Common misconceptions: array of {belief, correction, evidence}. Max 3.")
+    
+    examples = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Concrete examples: array of {scenario, analysis, lesson}. Max 3.")
+    
+    # Separate assets (each independently attachable to blocks)
+    audio = await notebooklm.create_audio_overview(notebook_id,
+        format="deep-dive", length="standard")
+    
+    quiz_items = await notebooklm.generate_quiz(notebook_id,
+        num_questions=10, difficulty="intermediate", format="json")
+    
+    return {
+        # Knowledge facets → each becomes a knowledge_facet or block
+        "thesis": thesis,
+        "key_ideas": key_ideas,
+        "misconceptions": misconceptions,
+        "examples": examples,
+        # Assets → each attaches to a step or block
+        "audio_url": audio.url,
+        "quiz_items": quiz_items,  # Individual items, not a monolithic quiz
+    }
+```
+
+### NotebookLM Output → Mira Entity Mapping (Granular)
+
+| NotebookLM Output | Mira Entity | Granularity | Independently Refreshable? |
+|-------------------|------------|-------------|---------------------------|
+| Thesis JSON | `knowledge_facet` (type: `thesis`) | Single concept | ✅ |
+| Key ideas array | `knowledge_facet` (type: `key_idea`) × N | Per concept | ✅ Each idea independently |
+| Misconceptions array | `knowledge_facet` (type: `misconception`) × N | Per misconception | ✅ Each independently |
+| Examples array | `block` (type: `content`) × N | Per example | ✅ Each independently |
+| Audio Overview | `asset` (type: `audio`) | Per topic | ✅ Re-generate without touching text |
+| Quiz items | `block` (type: `checkpoint`) × N | Per question | ✅ Each question independently |
+| Infographic | `asset` (type: `infographic`) | Per topic | ✅ Re-generate without touching text |
+
+### Compartmentalization Strategy
+
+| Notebook | Purpose | Lifecycle |
+|----------|---------|-----------|
+| **Topic Research** (one per MiraK run) | Research grounding | Ephemeral — auto-archive after delivery |
+| **Idea Incubator** | Drill → Arena transition | Persistent — one per user |
+| **Core Engineering** | Architectural oracle | Persistent — updated on contract changes |
+
+### Stylistic Enforcement
+
+```python
+MIRA_SYSTEM_CONSTRAINT = """
+Respond strictly as a dense, analytical technical architect.
+PROHIBITED: introductory filler, throat-clearing phrases, SEO fluff.
+REQUIRED: numbers, statistical thresholds, precise definitions.
+FORMAT: dense bulleted lists. No markdown tables. No conversational tone.
+"""
+await notebooklm.set_custom_prompt(notebook_id, MIRA_SYSTEM_CONSTRAINT)
+```
+
+### Risk Mitigation
+
+> [!WARNING]
+> **`notebooklm-py` is unofficial** — not maintained by Google. No SLA. Auth is one-time Google login, not service-account-based.
+
+> [!NOTE]
+> **UPDATE (2026-04-04 — Nexus Pipeline Validation):** NotebookLM integration has been **proven in production**. The Nexus pipeline (`c:/notes`) successfully generated 23 structured learning atoms with 1,139 total citations from a single research run. The full `notebooklm-py` API surface is exposed: notebook CRUD, source ingestion, multi-query structured extraction, and artifact generation (audio, quiz, study guide, flashcards, briefing doc). The Gemini fallback architecture has been **removed** — Nexus now enforces a strict NotebookLM-only grounding policy with fail-fast auth errors. Cloud Run deployment is **NO-GO** (Playwright browser session requirement), but local tunnel deployment via Cloudflare is **GO** and operational.
+
+**Current operational stance (updated):**
+- NotebookLM grounding: **GO** — proven with high-quality, cited atoms
+- Gemini fallback: **REMOVED** — no longer part of the architecture
+- Cloud Run autonomous deployment: **NO-GO** — Playwright browser auth cannot run headless
+- Production deployment: **Local tunnel via Cloudflare** (operational, tested)
+- Deep research mode: **Available** — `mode="deep"` parameter for autonomous source discovery
+
+**Migration path (future):** Google Cloud NotebookLM Enterprise API (Discovery Engine v1alpha REST endpoints) provides official programmatic access. If `notebooklm-py` ever becomes unstable, the Enterprise API offers workspace provisioning (`POST notebooks.create`), data ingestion (`POST notebooks.sources.batchCreate`), and multimedia generation (`POST notebooks.audioOverviews.create`) as a direct replacement path. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.1 for full endpoint reference.
+
+**Content safety (future):** Model Armor templates can be deployed via the Enterprise API to enforce inspect-and-block policies on both incoming prompts and outgoing model responses, ensuring generated content aligns with institutional safety guidelines. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.2.
+
+---
+
+## Lever 2: LearnIO — Better Granularity, Not Just Better Pedagogy
+
+> [!IMPORTANT]
+> **GPT's verdict on PDCA enforcement:** *"If PDCA becomes too rigid, it could make the system feel less flexible. Sometimes the user needs a structured progression. Sometimes they need me to just synthesize, scaffold, or rewrite something fast."*
+>
+> **Decision: Soft-gating. Always.** PDCA provides recommended sequencing with a "skip with acknowledgment" override. Never hard-blocks.
+
+### The Real Value of the LearnIO Merge
+
+LearnIO's staged compiler and block-level structure are not just "better pedagogy." They are **better granularity.** LearnIO already thinks in small units — research briefs, skeleton blocks, individual exercises, specific hint sequences. That's the pattern Mira needs.
+
+The merge should be framed as:
+- PDCA operates on **blocks**, not whole courses
+- Hint ladders attach to **specific challenge/checkpoint blocks**
+- Prediction, exercise, and reflection are **separate block objects**
+- Checkpoint generation doesn't require rewriting the lesson body
+- Practice queue targets **concepts/blocks**, not whole lessons
+
+```
+STANDARD EXPERIENCE (unchanged):
+  Steps render in order → user advances freely → completion tracked
+
+ENRICHED EXPERIENCE (opt-in via resolution or template):
+  Steps contain typed blocks → PDCA sequencing suggested at block level
+  Hint ladder available on specific blocks → practice queue targets concepts
+  User can still "I understand, let me continue" past any gate
+```
+
+The resolution field already controls chrome depth (`light` / `medium` / `heavy`). PDCA mechanics attach to `heavy` resolution — not to all experiences universally.
+
+### Components to Port (All Opt-In)
+
+#### Hint Ladder (reusable component)
+
+Available on challenge + checkpoint steps when the step payload includes `hints[]`. Progressive reveal on failed attempts. **Not injected automatically** — GPT or the compiler includes hints when creating the step.
+
+#### Practice Queue (home page enhancement)
+
+Surfaces review items from decaying mastery. Feeds into "Focus Today" card. **Recommendation surface** — never blocks new content or forces review before advancing.
+
+#### Surgical Socratic Coach (tutorChatFlow upgrade)
+
+```
+CURRENT:
+  KnowledgeCompanion → knowledge unit content → tutorChatFlow → generic response
+
+UPGRADED:
+  KnowledgeCompanion → knowledge unit content
+                      + learner attempt details (if available)
+                      + hint usage history (if hint ladder active)
+                      + current step context
+                      → tutorChatFlow → context-aware coaching
+```
+
+The upgrade enriches context when it's available. When it's not (e.g., a quickly-authored experience without linked knowledge), the current generic flow still works.
+
+#### Deterministic Read Models (data layer upgrade)
+
+Port LearnIO's projection pattern to derive mastery from `interaction_events` instead of direct mutations. This is a **backend improvement** — no UX change, no new mandatory flows.
+
+| LearnIO Read Model | Mira Equivalent | Action |
+|-------------------|----------------|--------|
+| `projectSkillMastery` | `skill-mastery-engine.ts` (mutation-based) | Port: derive from events |
+| `projectCourseProgress` | None | Add: deterministic projection |
+| `projectPracticeQueue` | None | Add: powers Focus Today card |
+
+#### PredictionRenderer + ExerciseRenderer (new block types)
+
+Available as optional blocks within lesson and challenge steps. GPT includes them in step payloads when pedagogically appropriate. **Not injected by the runtime** — authored at creation time.
+
+### Compositional Rendering
+
+The renderer should become compositional to match the granular data model:
+
+```
+ExperienceRenderer
+  └── StepRenderer (per step)
+        └── BlockRenderer (per block — dispatches by block type)
+              ├── ContentBlock       → markdown body
+              ├── PredictionBlock    → prompt + reveal
+              ├── ExerciseBlock      → problem + validation
+              ├── CheckpointBlock    → graded question
+              ├── HintLadderBlock    → progressive hints
+              ├── CalloutBlock       → key insight / warning
+              ├── MediaBlock         → audio player / video / infographic
+              └── ScenarioBlock      → situation description
+```
+
+Each block renders independently. Steps assemble blocks. Experiences assemble steps. **The UI feels rich because it composes many small parts, not because it renders one giant object.**
+
+### Block Editor Library (Content Curation UI)
+
+> [!NOTE]
+> **Added from deep research ([agenticcontent.md](file:///c:/notes/agenticcontent.md) §6.3).** For the content curation interface where educators or administrators review, edit, and curate AI-generated outputs, a block-based rich text editor is recommended.
+
+**Recommended libraries:**
+- **shadcn-editor** (built on Lexical) — treats every paragraph, image, code block, or formula as an independent, draggable node within a hierarchical document tree
+- **Edra** (built on Tiptap) — similar block-based architecture with shadcn/ui integration
+
+These editors allow the frontend to ingest a learning atom from the backend and render it instantly as an editable block. Educators can drag blocks to reorder, edit generated text, or insert custom multimedia — providing human-in-the-loop oversight with unprecedented precision. This is a **Tier 2+ concern** — not required for initial Mira2 integration but recommended for the curation workflow.
+
+### What This Does NOT Do
+
+- ❌ Force all experiences through PDCA gating
+- ❌ Block step advancement on failed checkpoints
+- ❌ Require knowledge unit links on every step
+- ❌ Make hint ladders mandatory on challenges
+- ❌ Slow down GPT's ability to create fast, lightweight experiences
+
+---
+
+## Lever 3: Rendering & Visibility Fixes (Pure Add, Zero Risk)
+
+### Fix 1: Markdown Rendering (1 day)
+
+```diff
+- <p className="text-xl leading-[1.8] text-[#94a3b8] whitespace-pre-wrap font-serif">
+-   {section.body}
+- </p>
++ <div className="prose prose-invert prose-lg prose-indigo max-w-none
++   prose-headings:text-[#e2e8f0] prose-p:text-[#94a3b8] prose-p:leading-[1.8]
++   prose-strong:text-indigo-300 prose-code:text-amber-300
++   prose-a:text-indigo-400 prose-blockquote:border-indigo-500/30">
++   <ReactMarkdown>{section.body}</ReactMarkdown>
++ </div>
+```
+
+GPT already generates markdown. Mira just throws it away. This fix unlocks all existing content immediately.
+
+> [!NOTE]
+> **Granularity note:** This fix works at the section/block level. When blocks replace sections, the same `<ReactMarkdown>` applies to each `ContentBlock` independently.
+
+### Fix 2: Genkit Dev Visibility (30 min)
+
+```json
+"dev:genkit": "tsx scripts/genkit-dev.ts",
+"dev": "concurrently \"npm run dev:next\" \"npm run dev:genkit\""
+```
+
+### Fix 3: Source Attribution Badges (per block, not per step)
+
+```tsx
+// Attaches to individual blocks when they have source links
+{block.knowledge_facet_id && (
+  <Link href={`/knowledge/${block.knowledge_facet_id}`}
+    className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400
+      border border-blue-500/20 hover:bg-blue-500/20 inline-flex items-center gap-1">
+    📖 Source
+  </Link>
+)}
+
+// Falls back to step-level links for non-block steps
+{step.knowledge_links?.length > 0 && (
+  <div className="flex gap-2 mt-6">
+    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Sources:</span>
+    {step.knowledge_links.map(link => (
+      <Link key={link.id} href={`/knowledge/${link.knowledgeUnitId}`}
+        className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400
+          border border-blue-500/20 hover:bg-blue-500/20">
+        📖 {link.knowledgeUnitId.slice(0, 8)}…
+      </Link>
+    ))}
+  </div>
+)}
+```
+
+---
+
+## Architecture: Two Paths, Granular Storage, Compositional Rendering
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        MiraOS Architecture                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  GPT Orchestrator                                                    │
+│  ├── FAST PATH (always available)                                    │
+│  │   └── state → outline → experience → steps (direct) → done       │
+│  │                                                                   │
+│  └── DEEP PATH (optional, when quality/depth matters)                │
+│      ├── → Nexus (atoms/bundles via mira_adapter profile) → ingest   │
+│      └── → NotebookLM (components via MiraK feature flag) → webhook  │
+│                                                                      │
+│  ┌─── Storage (Granular — "Store Atoms") ─────────────────────────┐  │
+│  │  goal → skill_domain → curriculum_outline → experience         │  │
+│  │    → step → block (content|exercise|checkpoint|prediction|...) │  │
+│  │    → asset (audio|infographic|slide|quiz — per block or step)  │  │
+│  │    → knowledge_facet (thesis|example|misconception|retrieval)  │  │
+│  │  Each unit independently refreshable. No full-lesson rewrites. │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ rendered by ↓                            │
+│  ┌─── Rendering (Compositional — "Render Molecules") ────────────┐  │
+│  │  ExperienceRenderer → StepRenderer → BlockRenderer             │  │
+│  │  Each block dispatches by type: content, prediction, exercise, │  │
+│  │  checkpoint, hint_ladder, callout, media, scenario             │  │
+│  │  UI feels rich because it composes many small parts            │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally enriched by ↓                 │
+│  ┌─── LearnIO Components (opt-in, block-level) ──────────────────┐  │
+│  │  PDCA Sequencing (soft, per block) │ Hint Ladder (per block)  │  │
+│  │  Practice Queue (targets concepts) │ Surgical Coach           │  │
+│  │  Deterministic read models (backend)                          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally enriched by ↓                 │
+│  ┌─── Nexus (Optional Async Content Worker) ──────────────────────┐  │
+│  │  Research → compile atoms/bundles/assets                       │  │
+│  │  mira_adapter delivery profile → /api/enrichment/ingest        │  │
+│  │  GPT dispatches; Mira remains the runtime + memory owner       │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally powered by ↓                  │
+│  ┌─── Cognitive Layer (NotebookLM — Nexus deep path) ────────────┐  │
+│  │  Outputs COMPONENTS, not finished lessons                     │  │
+│  │  thesis │ key_ideas │ misconceptions │ examples │ quiz_items   │  │
+│  │  audio │ infographic — each a separate, mapped asset          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ connected via ↓                          │
+│  ┌─── Gateway Layer (unchanged) ─────────────────────────────────┐  │
+│  │  5 GPT endpoints │ 3 Coach endpoints │ Direct authoring works │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Endpoint Changes for the Upgrade
+
+> [!NOTE]
+> All endpoints below are **additive**. No existing endpoints are removed or modified. The current GPT gateway (`/api/gpt/*`) and coach endpoints (`/api/coach/*`) continue unchanged.
+
+### Mira-Side Endpoints (Canonical Learner/Runtime)
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/api/gpt/state` | GET | **Extended** — adds concept coverage snapshot, recent checkpoint evidence, and active enrichment references to the existing response (all optional fields, backward-compatible) |
+| `/api/learning/evidence` | POST | Records learner evidence: `viewed`, `skimmed`, `completed`, `checkpoint_pass`, `checkpoint_fail`, `confusion_signal`, `hint_used`, `retry`, `time_on_task` |
+| `/api/learning/next` | GET | Returns best-next content/experience recommendation + why it's next + what evidence drove the decision |
+| `/api/enrichment/request` | POST | Mira → Nexus: request for richer grounded content. Stores `enrichment_requests` row, dispatches to Nexus |
+| `/api/enrichment/ingest` | POST | Nexus → Mira: synchronous delivery of atoms/bundles/assets. Validates idempotency key, stores atoms, links to experience/step |
+| `/api/webhooks/nexus` | POST | Async inbound webhook for Nexus delivery. Returns 202 immediately; same processing as `/api/enrichment/ingest` but non-blocking |
+| `/api/open-learner-model` | GET | Returns structured learner model: concept coverage, weak spots, recent misconceptions, confidence/readiness state, next recommendation rationale |
+
+**`/api/gpt/state` extension fields (additive, all nullable for backward compat):**
+
+```ts
+// Added to existing state packet
+{
+  concept_coverage_snapshot: {
+    total_concepts: number;
+    mastered: number;
+    shaky: number;
+    unseen: number;
+  } | null;
+  recent_checkpoint_evidence: Array<{
+    concept: string;
+    passed: boolean;
+    confidence: number;
+    at: string;
+  }>;
+  active_enrichment_refs: Array<{
+    request_id: string;
+    status: 'pending' | 'delivered' | 'failed';
+    requested_gap: string;
+  }>;
+}
+```
+
+### Nexus-Side Endpoints (Optional Content Worker)
+
+These are consumed by Mira/GPT but live in the Nexus service. Referenced here for coordination — not implemented in this repo.
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/research` | POST | Trigger a research pipeline for a topic |
+| `/chat` | POST | Chat with grounded Nexus context |
+| `/pipelines/{id}/dispatch` | POST | Dispatch a specific saved pipeline |
+| `/learner/{id}/next-content` | POST | Ask Nexus for next-content recommendation based on learner state snapshot |
+| `/delivery/test` | POST | Test a delivery profile before saving it |
+| `/deliveries/webhook` | POST | Trigger async webhook delivery to a saved target profile |
+| `/runs/{id}` | GET | Poll run status and metadata |
+| `/runs/{id}/assets` | GET | Retrieve generated assets for a completed run |
+
+---
+
+## New Memory / Evidence Tables
+
+> [!IMPORTANT]
+> Supabase remains the canonical runtime store for this upgrade phase. BigQuery is optional later for analytics export. Cloud SQL is not part of the initial design unless Supabase becomes a proven performance blocker.
+
+Five additive tables. None replace existing tables — they extend the evidence layer alongside `interaction_events`, `skill_domains`, and `knowledge_units`.
+
+**`learner_evidence_events`** — Append-only event log. Never mutated.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `experience_id` | uuid | FK → experience_instances |
+| `step_id` | uuid | FK → experience_steps |
+| `block_id` | uuid | Nullable: FK to blocks if block model active |
+| `event_type` | text | `viewed`, `skimmed`, `completed`, `checkpoint_pass`, `checkpoint_fail`, `confusion_signal`, `hint_used`, `retry` |
+| `payload` | jsonb | Event-specific data (score, attempt, dwell_ms, etc.) |
+| `timestamp` | timestamptz | When it happened |
+
+**`content_exposures`** — What atoms/units a learner has actually seen.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `knowledge_unit_id` | uuid | FK → knowledge_units (or atom_id when atoms table exists) |
+| `shown_at` | timestamptz | First shown |
+| `completed_at` | timestamptz | Nullable |
+| `dwell_time_ms` | integer | Time on content |
+| `exposure_quality` | text | `glanced`, `read`, `engaged`, `completed` |
+
+**`concept_coverage`** — One row per learner × concept. Upserted on evidence.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `concept_id` | text | String-keyed — concepts emerge from content, not a fixed ontology FK |
+| `status` | text | `unseen` → `exposed` → `shaky` → `retained` → `mastered` |
+| `confidence` | float | 0.0–1.0, decays with time |
+| `last_evidence_at` | timestamptz | Drives decay calculation |
+
+**`enrichment_requests`** — Mira → Nexus requests.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `request_id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `goal_id` | uuid | FK → goals |
+| `requested_gap` | text | What enrichment is needed |
+| `request_context` | jsonb | State snapshot at request time |
+| `status` | text | `pending`, `delivered`, `failed`, `cancelled` |
+
+**`enrichment_deliveries`** — Nexus → Mira deliveries. Idempotency store.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `delivery_id` | uuid | PK |
+| `request_id` | uuid | FK → enrichment_requests |
+| `target_type` | text | `atom`, `bundle`, `asset` |
+| `status` | text | `received`, `processed`, `rejected` |
+| `idempotency_key` | text | Unique key from Nexus delivery header |
+| `delivered_at` | timestamptz | Receipt timestamp |
+
+---
+
+## Caching Strategy
+
+Caching is required but narrowly defined. Four caches. Each has a distinct key strategy and invalidation policy.
+
+> [!CAUTION]
+> **Cache ≠ memory.** None of the caches below are authoritative. They are speed optimizations. The canonical records live in Supabase tables. If a cache miss occurs, regenerate or re-fetch — never serve stale cached output as the learner's actual state.
+
+### A. Research Cache
+Cache discovery + source-curation output.
+- **What:** URL lists, source clusters, metadata from the strategic phase
+- **Key:** `hash(topic + learner_goal + pipeline_version + timestamp_window)`
+- **TTL:** 7 days — research goes stale with industry movement
+- **Invalidation:** Manual (user requests fresh research) or pipeline version bump
+- **Where:** Nexus-side. Mira does not own this cache.
+
+### B. Grounded Synthesis / Context Cache
+Cache expensive repeated long-context synthesis *inputs* — not the output.
+- **What:** Source packets, structured source summaries, stable system instructions, repeated subject context
+- **Key:** `hash(source_bundle_id + pipeline_version + system_instruction_version)`
+- **Why inputs, not outputs:** The final synthesis varies by learner context. Caching the assembly step is the win; the model still generates fresh output per request.
+- **TTL:** Until source bundle changes or system instruction is bumped
+- **Where:** Nexus-side.
+
+### C. Learning Atom Cache
+Reuse high-quality atoms instead of regenerating identically-keyed content.
+- **What:** Generated atoms (concept explanations, worked examples, misconception corrections, practice items, checkpoints)
+- **Key:** `hash(concept_id + level + source_bundle_id + atom_type + pedagogy_version)`
+- **Invalidation:** Source bundle version bump, pedagogy config change, or explicit refresh request
+- **Critical:** Atoms remain **independently refreshable**. Cache reuse is an optimization, not a lock. Any single atom can be regenerated without touching siblings.
+- **Where:** Nexus-side, with delivery receipt tracked in Mira's `enrichment_deliveries`.
+
+### D. Delivery / Idempotency Cache
+Prevent duplicate webhook/enrichment deliveries on retry.
+- **What:** `delivery_id` → delivery outcome
+- **Key:** Idempotency key from Nexus delivery header (stable hash of request content)
+- **TTL:** 24 hours post-delivery — enough to cover all retry windows
+- **Where:** Mira-side. The `enrichment_deliveries` table *is* the idempotency store for phase 1 — no separate cache infrastructure needed.
+
+---
+
+## Delivery Profiles and Webhook Architecture
+
+Delivery is first-class configuration in Nexus. Mira is one of many possible delivery targets — not a hardcoded recipient.
+
+### Delivery Profile Schema
+
+Each Nexus pipeline saves a delivery profile with these fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `profile_id` | uuid | Identifier |
+| `name` | string | Human name (e.g., "Mira Studio — Flowlink Prod") |
+| `target_type` | enum | `none`, `asset_store_only`, `generic_webhook`, `mira_adapter` |
+| `payload_mapper` | string | Named mapper — how Nexus atoms/bundles translate to target payload shape |
+| `endpoint_url` | string | Where to POST on delivery |
+| `auth_header` | string | Header key for secret (secret stored in vault, not profile) |
+| `retry_policy` | object | `{ max_attempts, backoff_strategy, timeout_ms }` |
+| `idempotency_key_strategy` | enum | `request_hash`, `delivery_id`, `none` |
+| `success_handler` | string | On 2xx: `mark_delivered`, `notify_gpt`, `none` |
+| `failure_handler` | string | On non-2xx: `retry`, `escalate`, `silently_drop` |
+
+### Mira's Delivery Profile: `mira_adapter`
+
+```json
+{
+  "name": "Mira Studio Production",
+  "target_type": "mira_adapter",
+  "payload_mapper": "nexus_atoms_to_mira_enrichment_v1",
+  "endpoint_url": "https://mira.mytsapi.us/api/enrichment/ingest",
+  "auth_header": "x-nexus-secret",
+  "retry_policy": {
+    "max_attempts": 3,
+    "backoff_strategy": "exponential",
+    "timeout_ms": 60000
+  },
+  "idempotency_key_strategy": "delivery_id",
+  "success_handler": "mark_delivered",
+  "failure_handler": "retry"
+}
+```
+
+The `payload_mapper: nexus_atoms_to_mira_enrichment_v1` maps Nexus atom type → Mira block/knowledge_unit field, and Nexus bundle → Mira step or step-support bundle. This mapper is versioned — when either schema evolves, only the mapper updates. No Nexus fork required.
+
+### Async vs. Synchronous Delivery
+
+| Mode | When to Use | Mira Endpoint |
+|------|-------------|---------------|
+| Async webhook | Nexus run takes > 30s | `/api/webhooks/nexus` — idempotent, returns 202 |
+| Synchronous ingest | GPT waits for confirmation | `/api/enrichment/ingest` — returns 200 with ingested IDs |
+
+MiraK already uses async webhook delivery (`POST /api/webhook/mirak`). Nexus integration follows the identical pattern.
+
+---
+
+## Learning Atom → Mira Runtime Mapping
+
+Atoms are the storage unit. Bundles are the delivery unit. Experiences are the runtime teaching vehicle. This table is the translator.
+
+| Nexus Atom Type | Mira Entity | Notes |
+|-----------------|-------------|-------|
+| `concept_explanation` | `block` (type: `content`) or `knowledge_facet` | Maps to ContentBlock or knowledge_unit summary |
+| `worked_example` | `block` (type: `content`) with example marker | Renders as ContentBlock with scenario framing |
+| `analogy` | `block` (type: `callout`) | Short callout: "Think of it like…" |
+| `misconception_correction` | `block` (type: `callout`) + `knowledge_facet` (type: `misconception`) | Dual write: callout for rendering, facet for coaching context |
+| `practice_item` | `block` (type: `exercise`) | Direct map to ExerciseBlock |
+| `reflection_prompt` | reflection step `prompts[]` or `block` (type: `content`) | Inside reflection step, or standalone block |
+| `checkpoint_block` | `block` (type: `checkpoint`) | Maps to checkpoint step question, independently scorable |
+| `content_bundle` | Assembled step or step-support bundle | Links multiple atoms to one step |
+| `audio` asset | `asset` (type: `audio`) | Attached to step or block; renders in MediaBlock |
+| `infographic` asset | `asset` (type: `infographic`) | Attached to step or block; renders in MediaBlock |
+| `slide_deck` asset | `asset` (type: `slide_deck`) | Attached to step for download or inline render |
+
+> [!NOTE]
+> The mapping is not automatic — the `payload_mapper` in the Mira delivery profile handles translation from Nexus output schema to Mira entity fields. This mapper is versioned (`nexus_atoms_to_mira_enrichment_v1`). When Nexus or Mira evolves their schemas, only the mapper needs updating.
+
+---
+
+## Open Learner Model
+
+The Open Learner Model is not a graph infrastructure project. It is a **learner-facing interpretation layer** over evidence and concept coverage — a clear answer to "why is the system showing me this, and how am I actually doing?"
+
+`GET /api/open-learner-model` returns:
+
+```ts
+{
+  concept_coverage: Array<{
+    concept: string;
+    status: 'unseen' | 'exposed' | 'shaky' | 'retained' | 'mastered';
+    confidence: number; // 0.0–1.0
+    last_evidence_at: string;
+  }>;
+  weak_spots: Array<{
+    concept: string;
+    why: string; // e.g. "Failed 2 checkpoints in 3 days" / "Not revisited in 14 days"
+    suggested_action: string;
+  }>;
+  recent_misconceptions: Array<{
+    misconception: string;
+    corrected: boolean;
+    evidence_at: string;
+  }>;
+  next_recommendation: {
+    experience_id: string | null;
+    title: string;
+    why: string; // Evidence-driven rationale, not just last conversation turn
+    confidence: number;
+  };
+  readiness_state: {
+    current_topic_readiness: number; // 0.0–1.0
+    is_ready_for_next_topic: boolean;
+    blocking_concepts: string[];
+  };
+}
+```
+
+**What the OLM does NOT do:**
+- ❌ Gate content access based on readiness score
+- ❌ Lock the learner into a forced sequence
+- ❌ Replace GPT's curatorial judgment with an algorithm
+- ❌ Expose raw system confidence numbers to the learner directly (translate to UX language)
+
+The OLM is an **advisory surface** for both learner and GPT. GPT reads it via `GET /api/gpt/state` extension fields. The learner sees it (optionally) via a UX interpretation — "You've been strong on X but haven't practiced Y in a while." What comes next remains GPT + learner negotiation.
+
+---
+
+## What Changes When We Upgrade
+
+| Dimension | Before | After |
+|-----------|--------|-------|
+| GPT fast path | ✅ Always works | ✅ Unchanged — identical fast path |
+| State hydration | Goal + experiences + skill domains | + concept coverage snapshot, checkpoint evidence, enrichment refs |
+| Content quality | MiraK Gemini synthesis — good but variable | Nexus-enriched atoms from grounded sources when invoked |
+| Experience depth | Steps can feel thin or encyclopedia-like | Atoms + bundles fill steps with independently refreshable units |
+| Enrichment consistency | Depends on lucky conversation turns | GPT dispatches Nexus on gap detection; atoms arrive async |
+| Next experience selection | Based on last GPT conversation | Evidence-driven via `/api/learning/next` + OLM data |
+| Webhook delivery | Hardcoded to Mira endpoint | Target-configurable delivery profiles — Mira is one profile |
+| NotebookLM | Primary grounding engine in Nexus | Unchanged — primary deep-path engine, no longer feature-flagged for Nexus |
+| Nexus / Notes | Not integrated | Optional async content worker; GPT dispatches when needed |
+
+**Nothing slows down.** The fast path is identical. The learner never waits for a pipeline they didn't ask for. Enrichment arrives asynchronously and enriches experiences in place, exactly like MiraK already does.
+
+---
+
+## Human-in-the-Loop Exception Escalation
+
+HITL is a narrow exception mechanism, not a teaching philosophy. It fires when autonomy creates real product risk.
+
+| Trigger | Example | Action |
+|---------|---------|--------|
+| Ambiguous knowledge-base mutation | Atom contradicts existing knowledge unit — delete or coexist? | Surface to user for decision |
+| Publish-level curriculum decision | New outline scope crosses into a new skill domain | Flag for explicit user approval |
+| Low-confidence enrichment delivery | Nexus run confidence below threshold or source quality flagged | Hold delivery pending review |
+| Schema-changing or mass-update action | "Update all steps in outline X to heavy resolution" | Require explicit confirmation |
+
+**What HITL does NOT do:**
+- ❌ Interrupt normal teaching with approval prompts
+- ❌ Gate step advancement on human review
+- ❌ Require approval for individual atom delivery
+- ❌ Block research runs waiting for user sign-off
+
+The everyday learner flow runs autonomously. Exception escalation fires only where a mutation is ambiguous, large-scale, or demonstrably low-confidence. Rule of thumb: if the action is reversible and scoped, don't escalate. If it's irreversible or affects many records at once, escalate.
+
+---
+
+## Prioritized Action Plan
+
+### Tier 0 — Do This Week (Pure Add, Zero Risk)
+
+| # | Action | Effort | Impact |
+|---|--------|--------|--------|
+| 0.1 | **Markdown rendering** in LessonStep | 1 day | Instant visual upgrade to all existing content |
+| 0.2 | **Genkit dev UI** — add `dev:genkit` script | 30 min | All AI flows become observable |
+| 0.3 | **Source attribution badges** on steps with knowledge_links | 2 hrs | Makes grounding visible to user |
+
+### Tier 1 — NotebookLM as Optional Synthesis Engine (Weeks 1-2)
+
+| # | Action | Effort | Impact | Fast Path? |
+|---|--------|--------|--------|-----------|
+| 1.1 | **Install `notebooklm-py`** in `c:/mirak`, evaluate API | 1 day | Gates all NotebookLM work | N/A |
+| 1.2 | **Nexus Auth Configuration** in MiraK `.env` | 1 hr | Ensures stable local-tunnel grounding | ✅ Preserved |
+| 1.3 | **Stage 1: Bulk import** (Nexus) | 2 days | Sources in indexed workspace | ✅ Preserved |
+| 1.4 | **Stage 2: Semantic queries** (Nexus) | 2 days | Better grounding, lower cost | ✅ Preserved |
+| 1.5 | **Stage 3: Audio + Quiz assets** (Nexus) | 3 days | Multi-modal knowledge units | ✅ Preserved |
+| 1.6 | **Stylistic enforcement** — custom prompt | 1 hr | Output matches Mira voice | ✅ Preserved |
+
+### Tier 2 — LearnIO Components (Selective, Weeks 3-4)
+
+| # | Action | Effort | Impact | Fast Path? |
+|---|--------|--------|--------|-----------|
+| 2.1 | **Hint Ladder** component (opt-in on steps with `hints[]`) | 2 days | Progressive scaffolding | ✅ Only when authored |
+| 2.2 | **Practice Queue** on home Focus Today card | 3 days | Return visits, review | ✅ Recommendation only |
+| 2.3 | **Surgical Coach** — enrich tutorChatFlow context | 2 days | Better coaching when data exists | ✅ Graceful fallback |
+| 2.4 | **Deterministic read models** — derive mastery from events | 3 days | Replayable progress | ✅ Backend only |
+| 2.5 | **PDCA soft sequencing** (heavy resolution only, skippable) | 3 days | Earned progression feel | ✅ Always skippable |
+
+### Tier 3 — Content Compiler (Optional Deep Path, Weeks 5-6)
+
+| # | Action | Effort | Impact | Fast Path? |
+|---|--------|--------|--------|-----------|
+| 3.1 | **Staged compiler flow** (Genkit: research → skeleton → blocks → validate) | 5 days | Systematized content quality | ✅ GPT can still author directly |
+| 3.2 | **Content quality validator** — advisory warnings, not blockers | 2 days | Catches thin content | ✅ Warnings, not gates |
+| 3.3 | **GPT instructions update** — teach GPT about compiler as option | 1 day | GPT chooses deep path when appropriate | ✅ Choice, not mandate |
+
+### Deferred — Not Yet (Needs More Validation)
+
+| # | Action | Why Deferred |
+|---|--------|-------------|
+| D.1 | **Semantic PR validation** via Core Engineering Notebook + Claude Code | Depends on two unofficial integrations. Current review process works. |
+| D.2 | **Cinematic Video Overviews** (Veo 3) | Unclear cost, tier requirements. Audio Overviews are safer first. |
+| D.3 | **Full PDCA hard-gating** | GPT explicitly flagged this as a drag risk. Soft-gating first, evaluate. |
+| D.4 | **State hydration** into research notebooks | Adds complexity. Evaluate after basic NotebookLM integration works. |
+| D.5 | **GEMMAS evaluation metrics** — Information Diversity Score, Unnecessary Path Ratio | Process-level metrics for pipeline optimization. Measures semantic variation across agent outputs and detects redundant reasoning paths. Important for cost efficiency at scale but not blocking initial integration. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §7.2. |
+| D.6 | **Model Armor content safety** via NotebookLM Enterprise API | Enforces inspect-and-block policies on prompts and responses. Requires migration to official Enterprise API. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.2. |
+| D.7 | **NotebookLM Enterprise API migration** | Official Google Cloud Discovery Engine v1alpha REST endpoints. Backup path if `notebooklm-py` becomes unstable. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.1. |
+| D.8 | **Block-based content curation editor** (shadcn-editor / Edra) | Rich editing of AI-generated atoms for human-in-the-loop review. Add after block model is live. See Lever 2 § Block Editor Library. |
+| D.9 | **Agentic Knowledge Graphs** — real-time visual reasoning | Dynamic knowledge graphs constructed in real time by the agent as it processes information (vs. static pre-defined graphs). Nodes and edges generated on demand to reflect the AI's evolving mental model. Transforms the UI from an opaque black box into a transparent, living visualization of reasoning. Useful for the Studio concept but requires significant frontend investment. See [research.md](file:///c:/notes/research.md) §Agentic Knowledge Graphs. |
+| D.10 | **GitHub Models API** — unified inference gateway for cost optimization | GitHub Models provides a centralized inference gateway with standardized REST endpoints and token-unit billing ($0.00001/unit). Enables routing high-volume background tasks (log parsing, state compression, syntax checking) to low-cost models (GPT-4o mini, Llama) while reserving premium multipliers for pedagogical reasoning. Relevant when inference costs become a scaling concern. See [research.md](file:///c:/notes/research.md) §Infrastructure Economics. |
+| D.11 | **TraceCapsules** — shared execution intelligence across agent handoffs | When Agent A completes and hands off to Agent B, Agent B inherits the complete execution history (models attempted, costs incurred, failures encountered). Prevents repeating expensive mistakes across isolated agents. Integrate with OpenTelemetry tracing once multi-agent orchestration is live in Mira. See [research.md](file:///c:/notes/research.md) §Dynamic Routing. |
+
+---
+
+## Decisions Resolved (by GPT Self-Assessment)
+
+| Question | Resolution | Rationale |
+|---------|-----------|-----------|
+| **PDCA enforcement strictness?** | **Soft-gating always.** "I understand, let me continue" override. | *"If PDCA becomes too rigid, it could make the system feel less flexible."* |
+| **NotebookLM required or optional?** | **Nexus primary engine.** GPT can still author directly (fast path). | Nexus pipeline proven: 23 atoms, 1,139 citations, fail-fast auth policy. Fast Path Guarantee preserved: GPT can still author directly without NLM. NLM is the deep path engine, not a gate on the fast path. |
+| **Compiler mandatory on all step creation?** | **No.** GPT can still author steps directly. Compiler is the deep path. | *"One of my best abilities is improvisational structuring."* |
+| **Semantic PR review priority?** | **Deferred to Tier D.** | *"Too much validation / too many layers: possible drag if it slows execution."* |
+| **Content quality validator blocking or advisory?** | **Advisory.** Warnings in dev console, not blocking creation. | Follows the augmenting-not-replacing principle. |
+
+## Decisions Resolved (by Nexus Validation — 2026-04-04)
+
+| Question | Resolution | Evidence |
+|---------|-----------|----------|
+| **`notebooklm-py` stability?** | **GO for local/tunnel production.** NO-GO for Cloud Run (Playwright headless restriction). | Full API surface tested: notebook CRUD, source ingestion, multi-query, artifact generation. Auth via `python -m notebooklm login` persists in `~/.notebooklm/storage_state.json`. |
+| **Multi-modal asset storage?** | **Supabase Storage bucket (`nexus-audio`).** Audio assets stored as files, referenced by atom/run metadata. | Audio overview generation confirmed working. `SKIP_AUDIO=true` flag prevents long generation during dev iteration. |
+| **Gemini fallback architecture?** | **REMOVED.** Nexus enforces NLM-only grounding with fail-fast on auth errors. | Gemini fallback module gutted (`service/grounding/fallback.py` now raises errors). `USE_NOTEBOOKLM` feature flag removed. |
+
+## Decisions Still Open
+
+1. **Audio Overview UX surface** — Inline player in KnowledgeCompanion? Library tab? Step type? Decide after first audio is delivered to Mira via enrichment pipeline.
+
+2. **Practice Queue surface** — Extend Focus Today card or dedicated `/practice` route? Decide after basic queue logic works.
+
+3. **Notebook lifecycle** — Auto-archive topic notebooks after delivery? Manual cleanup? Evaluate after running 10+ research cycles and seeing real notebook volume.
+
+4. **Enterprise API migration timeline** — When/if to migrate from `notebooklm-py` to the official Google Cloud NotebookLM Enterprise API (Discovery Engine v1alpha). Current path works; migrate only if the unofficial library breaks or if Model Armor / CMEK features are needed.
+
+---
+
+## The Bottom Line
+
+**MiraOS is not a rewrite. It is the current live system plus stronger subsystems, governed by two non-negotiable laws.**
+
+| Law | What It Means |
+|-----|---------------|
+| **Fast Path Guarantee** | GPT can always author directly. No new layer may block the main loop. |
+| **Store Atoms, Render Molecules** | Every generator writes the smallest useful object. Every object is independently refreshable. |
+
+| What's Happening | Implementation Stance | Granularity |
+|-----------------|---------------------|-------------|
+| Rendering fixes | Pure add. No risk. | Block-level markdown rendering |
+| NotebookLM synthesis | **Primary grounding engine.** Gemini fallback removed. Deployed via local tunnel. | Outputs components, not lessons |
+| LearnIO mechanics | **Opt-in components** at block level. Never mandatory. | PDCA/hints target blocks, not courses |
+| Data model evolution | **Additive.** Blocks, assets, facets alongside existing steps. | Each unit independently refreshable |
+| Content compiler | **Deep path** GPT can invoke. Direct authoring still works. | Produces blocks, not monoliths |
+| Nexus integration | **Proven async content worker.** Pipeline validated: 23 atoms, 1,139 citations. Mira owns all learner memory. | Atoms + bundles delivered via mira_adapter profile |
+| Evidence + OLM | **Additive tables.** Supabase remains canonical store. | Learner evidence + concept coverage fully atomic |
+| Pipeline evaluation | **Deferred.** GEMMAS metrics (D.5) for process-level optimization. | Information Diversity Score, Unnecessary Path Ratio |
+| Content safety | **Deferred.** Model Armor (D.6) via Enterprise API. | Inspect-and-block on prompts/responses |
+| Semantic PR review | **Deferred.** Current review works. | N/A |
+
+The system keeps **speed** (fast direct path for improvisation), **depth** (enhanced path for high-value content via proven NLM pipeline), and **evolvability** (every part can be improved without regenerating the whole). GPT decides which path to use. The user never waits for a pipeline they didn't ask for. No lesson ever requires full regeneration to fix one section.
+
+---
+
+*Document revised: 2026-04-04 · Sources: [dr.md](file:///c:/mira/dr.md), GPT self-assessment + granularity critique, NotebookLM 2026 API research, LearnIO codebase (`c:/learnio`), Mira Studio codebase (`c:/mira`), Nexus/Notes architecture review (`c:/notes`), [agenticcontent.md](file:///c:/notes/agenticcontent.md) (deep research on agentic educational frameworks), [research.md](file:///c:/notes/research.md) (deep research on memory, telemetry, inference economics, and agentic knowledge graphs)*
+
+```
+
+### next-env.d.ts
+
+```typescript
+/// <reference types="next" />
+/// <reference types="next/image-types/global" />
+
+// NOTE: This file should not be edited
+// see https://nextjs.org/docs/app/building-your-application/configuring/typescript for more information.
+
+```
+
+### printcode.sh
+
+```bash
+#!/bin/bash
+# =============================================================================
+# printcode.sh — Smart project dump for AI chat contexts
+# =============================================================================
+#
+# Outputs project structure and source code to numbered markdown dump files
+# (dump00.md … dump09.md). Running with NO arguments dumps the whole repo
+# exactly as before. With CLI flags you can target specific areas, filter by
+# extension, slice line ranges, or just list files.
+#
+# Upload this script to a chat session so the agent can tell you which
+# arguments to run to get exactly the context it needs.
+#
+# Usage: ./printcode.sh [OPTIONS]
+# Run ./printcode.sh --help for full details and examples.
+# =============================================================================
+
+set -e
+
+# ---------------------------------------------------------------------------
+# Defaults
+# ---------------------------------------------------------------------------
+OUTPUT_PREFIX="dump"
+LINES_PER_FILE=""          # empty = auto-calculate to fit MAX_DUMP_FILES
+MAX_DUMP_FILES=10
+MAX_FILES=""               # empty = unlimited
+MAX_BYTES=""               # empty = unlimited
+SHOW_STRUCTURE=true
+LIST_ONLY=false
+SLICE_MODE=""              # head | tail | range
+SLICE_N=""
+SLICE_A=""
+SLICE_B=""
+
+declare -a AREAS=()
+declare -a INCLUDE_PATHS=()
+declare -a USER_EXCLUDES=()
+declare -a EXT_FILTER=()
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ---------------------------------------------------------------------------
+# Area → glob mappings
+# ---------------------------------------------------------------------------
+# Returns a newline-separated list of globs for a given area name.
+globs_for_area() {
+    case "$1" in
+        backend)   echo "backend/**" ;;
+        frontend)
+            if [[ -d "$PROJECT_ROOT/frontend" ]]; then
+                echo "frontend/**"
+            elif [[ -d "$PROJECT_ROOT/web" ]]; then
+                echo "web/**"
+            else
+                echo "frontend/**"
+            fi
+            ;;
+        docs)      printf '%s\n' "docs/**" "*.md" ;;
+        scripts)   echo "scripts/**" ;;
+        plugins)   echo "plugins/**" ;;
+        tests)     echo "tests/**" ;;
+        config)    printf '%s\n' "*.toml" "*.yaml" "*.yml" "*.json" "*.ini" ".env*" ;;
+        *)
+            echo "Error: unknown area '$1'" >&2
+            echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
+            exit 1
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Help
+# ---------------------------------------------------------------------------
+show_help() {
+cat <<'EOF'
+printcode.sh — Smart project dump for AI chat contexts
+
+USAGE
+  ./printcode.sh [OPTIONS]
+
+With no arguments the entire repo is dumped into dump00.md … dump09.md
+(same as original behavior). Options let you target specific areas,
+filter by extension, slice line ranges, or list files without code.
+
+AREA PRESETS (--area, repeatable)
+  backend   backend/**
+  frontend  frontend/** (or web/**)
+  docs      docs/** *.md
+  scripts   scripts/**
+  plugins   plugins/**
+  tests     tests/**
+  config    *.toml *.yaml *.yml *.json *.ini .env*
+
+OPTIONS
+  --area <name>          Include only files matching the named area (repeatable).
+  --path <glob>          Include only files matching this glob (repeatable).
+  --exclude <glob>       Add extra exclude glob on top of defaults (repeatable).
+  --ext <ext[,ext,…]>   Include only files with these extensions (comma-sep).
+
+  --head <N>             Keep only the first N lines of each file.
+  --tail <N>             Keep only the last N lines of each file.
+  --range <A:B>          Keep only lines A through B of each file.
+                         (Only one of head/tail/range may be used at a time.)
+
+  --list                 Print only the file list / project structure (no code).
+  --no-structure         Skip the project-structure tree section.
+  --lines-per-file <N>  Override auto-calculated lines-per-dump-file split.
+  --max-files <N>        Stop after selecting N files (safety guard).
+  --max-bytes <N>        Stop once cumulative selected size exceeds N bytes.
+  --output-prefix <pfx>  Change dump file prefix (default: "dump").
+
+  --help                 Show this help and exit.
+
+EXAMPLES
+  # 1) Default — full project dump (original behavior)
+  ./printcode.sh
+
+  # 2) Backend only
+  ./printcode.sh --area backend
+
+  # 3) Backend + docs, last 200 lines of each file
+  ./printcode.sh --area backend --area docs --tail 200
+
+  # 4) Only specific paths
+  ./printcode.sh --path "backend/agent/**" --path "backend/services/**"
+
+  # 5) Only Python and Markdown files
+  ./printcode.sh --ext py,md
+
+  # 6) List-only mode for docs area (no code blocks)
+  ./printcode.sh --list --area docs
+
+  # 7) Range slicing on agent internals
+  ./printcode.sh --path "backend/agent/**" --range 80:220
+
+  # 8) Backend Python files, first 120 lines each
+  ./printcode.sh --area backend --ext py --head 120
+
+  # 9) Config files only, custom output prefix
+  ./printcode.sh --area config --output-prefix config_dump
+
+  # 10) Everything except tests, cap at 50 files
+  ./printcode.sh --exclude "tests/**" --max-files 50
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --area)
+            [[ -z "${2:-}" ]] && { echo "Error: --area requires a value" >&2; exit 1; }
+            case "$2" in
+                backend|frontend|docs|scripts|plugins|tests|config) ;;
+                *) echo "Error: unknown area '$2'" >&2
+                   echo "Valid areas: backend frontend docs scripts plugins tests config" >&2
+                   exit 1 ;;
+            esac
+            AREAS+=("$2"); shift 2
+            ;;
+        --path)
+            [[ -z "${2:-}" ]] && { echo "Error: --path requires a value" >&2; exit 1; }
+            INCLUDE_PATHS+=("$2"); shift 2
+            ;;
+        --exclude)
+            [[ -z "${2:-}" ]] && { echo "Error: --exclude requires a value" >&2; exit 1; }
+            USER_EXCLUDES+=("$2"); shift 2
+            ;;
+        --ext)
+            [[ -z "${2:-}" ]] && { echo "Error: --ext requires a value" >&2; exit 1; }
+            IFS=',' read -ra EXT_FILTER <<< "$2"; shift 2
+            ;;
+        --head)
+            [[ -z "${2:-}" ]] && { echo "Error: --head requires a number" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --head with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="head"; SLICE_N="$2"; shift 2
+            ;;
+        --tail)
+            [[ -z "${2:-}" ]] && { echo "Error: --tail requires a number" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --tail with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="tail"; SLICE_N="$2"; shift 2
+            ;;
+        --range)
+            [[ -z "${2:-}" ]] && { echo "Error: --range requires A:B" >&2; exit 1; }
+            [[ -n "$SLICE_MODE" ]] && { echo "Error: cannot combine --range with --$SLICE_MODE" >&2; exit 1; }
+            SLICE_MODE="range"
+            SLICE_A="${2%%:*}"
+            SLICE_B="${2##*:}"
+            if [[ -z "$SLICE_A" || -z "$SLICE_B" || "$2" != *":"* ]]; then
+                echo "Error: --range format must be A:B (e.g. 80:220)" >&2; exit 1
+            fi
+            shift 2
+            ;;
+        --list)
+            LIST_ONLY=true; shift
+            ;;
+        --no-structure)
+            SHOW_STRUCTURE=false; shift
+            ;;
+        --lines-per-file)
+            [[ -z "${2:-}" ]] && { echo "Error: --lines-per-file requires a number" >&2; exit 1; }
+            LINES_PER_FILE="$2"; shift 2
+            ;;
+        --max-files)
+            [[ -z "${2:-}" ]] && { echo "Error: --max-files requires a number" >&2; exit 1; }
+            MAX_FILES="$2"; shift 2
+            ;;
+        --max-bytes)
+            [[ -z "${2:-}" ]] && { echo "Error: --max-bytes requires a number" >&2; exit 1; }
+            MAX_BYTES="$2"; shift 2
+            ;;
+        --output-prefix)
+            [[ -z "${2:-}" ]] && { echo "Error: --output-prefix requires a value" >&2; exit 1; }
+            OUTPUT_PREFIX="$2"; shift 2
+            ;;
+        *)
+            echo "Error: unknown option '$1'" >&2
+            echo "Run ./printcode.sh --help for usage." >&2
+            exit 1
+            ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Build include patterns from areas + paths
+# ---------------------------------------------------------------------------
+declare -a INCLUDE_PATTERNS=()
+
+for area in "${AREAS[@]}"; do
+    while IFS= read -r glob; do
+        INCLUDE_PATTERNS+=("$glob")
+    done < <(globs_for_area "$area")
+done
+
+for p in "${INCLUDE_PATHS[@]}"; do
+    INCLUDE_PATTERNS+=("$p")
+done
+
+# ---------------------------------------------------------------------------
+# Default excludes (always applied)
+# ---------------------------------------------------------------------------
+DEFAULT_EXCLUDES=(
+    "*/__pycache__/*"
+    "*/.git/*"
+    "*/node_modules/*"
+    "*/dist/*"
+    "*/.next/*"
+    "*/build/*"
+    "*/data/*"
+    "*/cache/*"
+    "*/shards/*"
+    "*/results/*"
+    "*/.venv/*"
+    "*/venv/*"
+    "*_archive/*"
+)
+
+# Merge user excludes
+ALL_EXCLUDES=("${DEFAULT_EXCLUDES[@]}" "${USER_EXCLUDES[@]}")
+
+# ---------------------------------------------------------------------------
+# Default included extensions (when no filters are active)
+# ---------------------------------------------------------------------------
+# Original extensions: py sh md yaml yml ts tsx css
+# Added toml json ini for config area support
+DEFAULT_EXTS=(py sh md yaml yml ts tsx css toml json ini)
+
+# ---------------------------------------------------------------------------
+# Language hint from extension
+# ---------------------------------------------------------------------------
+lang_for_ext() {
+    case "$1" in
+        py)       echo "python" ;;
+        sh)       echo "bash" ;;
+        md)       echo "markdown" ;;
+        yaml|yml) echo "yaml" ;;
+        ts)       echo "typescript" ;;
+        tsx)      echo "tsx" ;;
+        css)      echo "css" ;;
+        toml)     echo "toml" ;;
+        json)     echo "json" ;;
+        ini)      echo "ini" ;;
+        js)       echo "javascript" ;;
+        jsx)      echo "jsx" ;;
+        html)     echo "html" ;;
+        sql)      echo "sql" ;;
+        *)        echo "" ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Priority ordering (same as original)
+# ---------------------------------------------------------------------------
+priority_for_path() {
+    local rel_path="$1"
+    case "$rel_path" in
+        AI_WORKING_GUIDE.md|\
+        MIGRATION.md|\
+        README.md|\
+        app/layout.tsx|\
+        app/page.tsx|\
+        package.json)
+            echo "00"
+            ;;
+        app/*|\
+        components/*|\
+        lib/*|\
+        hooks/*)
+            echo "20"
+            ;;
+        *)
+            echo "50"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
+# Temp files
+# ---------------------------------------------------------------------------
+TEMP_FILE=$(mktemp)
+FILE_LIST=$(mktemp)
+_TMPFILES=("$TEMP_FILE" "$FILE_LIST")
+trap 'rm -f "${_TMPFILES[@]}"' EXIT
+
+# Helper: convert a file glob to a grep-compatible regex.
+# Steps: escape dots → ** marker → * to [^/]* → marker to .*
+glob_to_regex() {
+    echo "$1" | sed 's/\./\\./g; s/\*\*/\x00/g; s/\*/[^\/]*/g; s/\x00/.*/g'
+}
+
+# ---------------------------------------------------------------------------
+# Build the find command
+# ---------------------------------------------------------------------------
+# Exclude clauses — only default excludes go into find (they use */ prefix)
+FIND_EXCLUDES=()
+for pat in "${DEFAULT_EXCLUDES[@]}"; do
+    FIND_EXCLUDES+=( ! -path "$pat" )
+done
+# Always exclude dump output files, lock files, binary data
+FIND_EXCLUDES+=(
+    ! -name "*.pyc"
+    ! -name "*.parquet"
+    ! -name "*.pth"
+    ! -name "*.lock"
+    ! -name "package-lock.json"
+    ! -name "continuous_contract.json"
+    ! -name "dump*.md"
+    ! -name "dump*[0-9]"
+)
+
+# Determine which extensions to match
+ACTIVE_EXTS=()
+if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
+    ACTIVE_EXTS=("${EXT_FILTER[@]}")
+elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
+    # No area/path filter and no ext filter → use defaults
+    ACTIVE_EXTS=("${DEFAULT_EXTS[@]}")
+fi
+# When area/path filters are active but --ext is not, include all extensions
+# (the path filter itself narrows things down).
+
+# Build extension match clause for find
+EXT_CLAUSE=()
+if [[ ${#ACTIVE_EXTS[@]} -gt 0 ]]; then
+    EXT_CLAUSE+=( "(" )
+    first=true
+    for ext in "${ACTIVE_EXTS[@]}"; do
+        if $first; then first=false; else EXT_CLAUSE+=( -o ); fi
+        EXT_CLAUSE+=( -name "*.${ext}" )
+    done
+    EXT_CLAUSE+=( ")" )
+fi
+
+# Run find to collect candidate files
+find "$PROJECT_ROOT" -type f \
+    "${FIND_EXCLUDES[@]}" \
+    "${EXT_CLAUSE[@]}" \
+    2>/dev/null \
+    | sed "s|$PROJECT_ROOT/||" \
+    | sort > "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# Apply user --exclude patterns (on relative paths)
+# ---------------------------------------------------------------------------
+if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+    EXCLUDE_REGEXES=()
+    for pat in "${USER_EXCLUDES[@]}"; do
+        EXCLUDE_REGEXES+=( -e "$(glob_to_regex "$pat")" )
+    done
+    grep -v -E "${EXCLUDE_REGEXES[@]}" "$FILE_LIST" > "${FILE_LIST}.tmp" || true
+    mv "${FILE_LIST}.tmp" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Apply include-pattern filtering (areas + paths)
+# ---------------------------------------------------------------------------
+if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]]; then
+    FILTERED=$(mktemp)
+    _TMPFILES+=("$FILTERED")
+    for pat in "${INCLUDE_PATTERNS[@]}"; do
+        regex="^$(glob_to_regex "$pat")$"
+        grep -E "$regex" "$FILE_LIST" >> "$FILTERED" 2>/dev/null || true
+    done
+    # Deduplicate (patterns may overlap)
+    sort -u "$FILTERED" > "${FILTERED}.tmp"
+    mv "${FILTERED}.tmp" "$FILTERED"
+    mv "$FILTERED" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Apply --max-files and --max-bytes guards
+# ---------------------------------------------------------------------------
+if [[ -n "$MAX_FILES" ]]; then
+    head -n "$MAX_FILES" "$FILE_LIST" > "${FILE_LIST}.tmp"
+    mv "${FILE_LIST}.tmp" "$FILE_LIST"
+fi
+
+if [[ -n "$MAX_BYTES" ]]; then
+    CUMULATIVE=0
+    CAPPED=$(mktemp)
+    _TMPFILES+=("$CAPPED")
+    while IFS= read -r rel_path; do
+        fsize=$(wc -c < "$PROJECT_ROOT/$rel_path" 2>/dev/null || echo 0)
+        CUMULATIVE=$((CUMULATIVE + fsize))
+        if (( CUMULATIVE > MAX_BYTES )); then
+            echo "(max-bytes $MAX_BYTES reached, stopping)" >&2
+            break
+        fi
+        echo "$rel_path"
+    done < "$FILE_LIST" > "$CAPPED"
+    mv "$CAPPED" "$FILE_LIST"
+fi
+
+# ---------------------------------------------------------------------------
+# Sort by priority
+# ---------------------------------------------------------------------------
+SORTED_LIST=$(mktemp)
+_TMPFILES+=("$SORTED_LIST")
+while IFS= read -r rel_path; do
+    printf "%s\t%s\n" "$(priority_for_path "$rel_path")" "$rel_path"
+done < "$FILE_LIST" \
+    | sort -t $'\t' -k1,1 -k2,2 \
+    | cut -f2 > "$SORTED_LIST"
+mv "$SORTED_LIST" "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# Counts for summary
+# ---------------------------------------------------------------------------
+SELECTED_COUNT=$(wc -l < "$FILE_LIST")
+
+# ---------------------------------------------------------------------------
+# Write header + selection summary
+# ---------------------------------------------------------------------------
+{
+    echo "# Mira + Nexus Project Code Dump"
+    echo "Generated: $(date)"
+    echo ""
+    echo "## Selection Summary"
+    echo ""
+    if [[ ${#AREAS[@]} -gt 0 ]]; then
+        echo "- **Areas:** ${AREAS[*]}"
+    else
+        echo "- **Areas:** (all)"
+    fi
+    if [[ ${#INCLUDE_PATHS[@]} -gt 0 ]]; then
+        echo "- **Path filters:** ${INCLUDE_PATHS[*]}"
+    fi
+    if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+        echo "- **Extra excludes:** ${USER_EXCLUDES[*]}"
+    fi
+    if [[ ${#EXT_FILTER[@]} -gt 0 ]]; then
+        echo "- **Extensions:** ${EXT_FILTER[*]}"
+    elif [[ ${#INCLUDE_PATTERNS[@]} -eq 0 ]]; then
+        echo "- **Extensions:** ${DEFAULT_EXTS[*]} (defaults)"
+    else
+        echo "- **Extensions:** (all within selected areas)"
+    fi
+    if [[ -n "$SLICE_MODE" ]]; then
+        case "$SLICE_MODE" in
+            head)  echo "- **Slicing:** first $SLICE_N lines per file" ;;
+            tail)  echo "- **Slicing:** last $SLICE_N lines per file" ;;
+            range) echo "- **Slicing:** lines $SLICE_A–$SLICE_B per file" ;;
+        esac
+    else
+        echo "- **Slicing:** full files"
+    fi
+    if [[ -n "$MAX_FILES" ]]; then
+        echo "- **Max files:** $MAX_FILES"
+    fi
+    if [[ -n "$MAX_BYTES" ]]; then
+        echo "- **Max bytes:** $MAX_BYTES"
+    fi
+    echo "- **Files selected:** $SELECTED_COUNT"
+    if $LIST_ONLY; then
+        echo "- **Mode:** list only (no code)"
+    fi
+    echo ""
+} > "$TEMP_FILE"
+
+# ---------------------------------------------------------------------------
+# Compact project overview (always included for agent context)
+# ---------------------------------------------------------------------------
+{
+    echo "## Project Overview"
+    echo ""
+    echo "Mira is a Next.js (App Router) AI tutoring platform integrated with Google AI Studio."
+    echo "It uses Tailwind CSS, Lucide React, and Framer Motion for the UI."
+    echo "The dump also includes the Nexus content worker (c:/notes/service) — a Python/FastAPI"
+    echo "agent workbench providing NotebookLM-grounded research, atomic content generation,"
+    echo "and delivery via webhooks and delivery profiles."
+    echo ""
+    echo "| Area | Path | Description |"
+    echo "|------|------|-------------|"
+    echo "| **app** | app/ | Next.js App Router (pages, layout, api) |"
+    echo "| **components** | components/ | React UI components (shadcn/ui style) |"
+    echo "| **lib** | lib/ | Shared utilities and helper functions |"
+    echo "| **hooks** | hooks/ | Custom React hooks |"
+    echo "| **docs** | *.md | Migration, AI working guide, README |"
+    echo "| **nexus** | c:/notes/service/ | Python/FastAPI content worker (agents, grounding, synthesis, delivery, cache) |"
+    echo ""
+    echo "Key paths: \`app/page.tsx\` (main UI), \`app/layout.tsx\` (root wrapper), \`AI_WORKING_GUIDE.md\`"
+    echo "Nexus key paths: \`service/main.py\`, \`service/grounding/notebooklm.py\`, \`service/synthesis/extractor.py\`"
+    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK + Python FastAPI + notebooklm-py"
+    echo ""
+    echo "To dump specific code for chat context, run:"
+    echo "\`\`\`bash"
+    echo "./printcode.sh --help                              # see all options"
+    echo "./printcode.sh --area backend --ext py --head 120  # backend Python, first 120 lines"
+    echo "./printcode.sh --list --area docs                  # just list doc files"
+    echo "\`\`\`"
+    echo ""
+} >> "$TEMP_FILE"
+
+# ---------------------------------------------------------------------------
+# Project structure section
+# ---------------------------------------------------------------------------
+if $SHOW_STRUCTURE; then
+    echo "## Project Structure" >> "$TEMP_FILE"
+    echo '```' >> "$TEMP_FILE"
+    if [[ ${#INCLUDE_PATTERNS[@]} -gt 0 ]] || [[ ${#EXT_FILTER[@]} -gt 0 ]] || [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+        # Show only selected/filtered files in structure
+        cat "$FILE_LIST" >> "$TEMP_FILE"
+    else
+        # Show full tree (original behavior)
+        find "$PROJECT_ROOT" -type f \
+            "${FIND_EXCLUDES[@]}" \
+            2>/dev/null \
+            | sed "s|$PROJECT_ROOT/||" \
+            | sort >> "$TEMP_FILE"
+    fi
+    echo '```' >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+fi
+
+# ---------------------------------------------------------------------------
+# If --list mode, we are done (no code blocks)
+# ---------------------------------------------------------------------------
+if $LIST_ONLY; then
+    # In list mode, just output the temp file directly
+    total_lines=$(wc -l < "$TEMP_FILE")
+    echo "Total lines: $total_lines (list-only mode)"
+
+    # Remove old dump files
+    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
+    rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
+
+    cp "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}00.md"
+    echo "Done! Created:"
+    ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Source files section
+# ---------------------------------------------------------------------------
+echo "## Source Files" >> "$TEMP_FILE"
+echo "" >> "$TEMP_FILE"
+
+while IFS= read -r rel_path; do
+    file="$PROJECT_ROOT/$rel_path"
+    [[ -f "$file" ]] || continue
+
+    ext="${rel_path##*.}"
+    lang=$(lang_for_ext "$ext")
+    total_file_lines=$(wc -l < "$file")
+
+    # Build slice header annotation
+    slice_note=""
+    case "$SLICE_MODE" in
+        head)  slice_note=" (first $SLICE_N lines of $total_file_lines)" ;;
+        tail)  slice_note=" (last $SLICE_N lines of $total_file_lines)" ;;
+        range) slice_note=" (lines ${SLICE_A}–${SLICE_B} of $total_file_lines)" ;;
+    esac
+
+    echo "### ${rel_path}${slice_note}" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+    echo "\`\`\`$lang" >> "$TEMP_FILE"
+
+    # Output content (full or sliced)
+    case "$SLICE_MODE" in
+        head)
+            sed -n "1,${SLICE_N}p" "$file" >> "$TEMP_FILE"
+            ;;
+        tail)
+            tail -n "$SLICE_N" "$file" >> "$TEMP_FILE"
+            ;;
+        range)
+            sed -n "${SLICE_A},${SLICE_B}p" "$file" >> "$TEMP_FILE"
+            ;;
+        *)
+            cat "$file" >> "$TEMP_FILE"
+            ;;
+    esac
+
+    echo "" >> "$TEMP_FILE"
+    echo "\`\`\`" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+done < "$FILE_LIST"
+
+# ---------------------------------------------------------------------------
+# Nexus Content Worker dump (c:/notes — separate repo)
+# ---------------------------------------------------------------------------
+NEXUS_DIR="/c/notes"
+if [[ -d "$NEXUS_DIR" ]]; then
+    echo "## Nexus Content Worker (c:/notes)" >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+    echo "Nexus is a Python/FastAPI agent workbench and content worker on Cloudflare Tunnel." >> "$TEMP_FILE"
+    echo "It provides NotebookLM-grounded research, atomic content generation, and delivery." >> "$TEMP_FILE"
+    echo "Separate repo, integrated with Mira via webhooks and delivery profiles." >> "$TEMP_FILE"
+    echo "" >> "$TEMP_FILE"
+
+    # --- Root-level context files ---
+    NEXUS_ROOT_FILES=(
+        "agents.md"
+        "README.md"
+        "nexus_gpt_action.yaml"
+        "start.sh"
+        "roadmap.md"
+    )
+
+    for nf in "${NEXUS_ROOT_FILES[@]}"; do
+        nexus_file="$NEXUS_DIR/$nf"
+        if [[ -f "$nexus_file" ]]; then
+            ext="${nf##*.}"
+            lang=$(lang_for_ext "$ext")
+            echo "### nexus/${nf}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`$lang" >> "$TEMP_FILE"
+            cat "$nexus_file" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+    done
+
+    # --- Service code (walk all .py files in service tree) ---
+    NEXUS_SERVICE_DIRS=(
+        "service"
+        "service/agents"
+        "service/grounding"
+        "service/synthesis"
+        "service/delivery"
+        "service/cache"
+    )
+
+    for sdir in "${NEXUS_SERVICE_DIRS[@]}"; do
+        full_dir="$NEXUS_DIR/$sdir"
+        [[ -d "$full_dir" ]] || continue
+        for sfile in "$full_dir"/*.py "$full_dir"/*.txt; do
+            [[ -f "$sfile" ]] || continue
+            rel="${sfile#$NEXUS_DIR/}"
+            ext="${rel##*.}"
+            lang=$(lang_for_ext "$ext")
+            echo "### nexus/${rel}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`$lang" >> "$TEMP_FILE"
+            cat "$sfile" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        done
+    done
+
+    # --- Dockerfile and dockerignore ---
+    for df in "service/Dockerfile" "service/.dockerignore"; do
+        nexus_file="$NEXUS_DIR/$df"
+        if [[ -f "$nexus_file" ]]; then
+            echo "### nexus/${df}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            cat "$nexus_file" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+    done
+fi
+
+
+# ---------------------------------------------------------------------------
+# Split into dump files
+# ---------------------------------------------------------------------------
+total_lines=$(wc -l < "$TEMP_FILE")
+
+if [[ -z "$LINES_PER_FILE" ]]; then
+    TARGET_LINES=8000
+    if (( total_lines > (TARGET_LINES * MAX_DUMP_FILES) )); then
+        # Too big for 10 files at 8k lines each -> increase chunk size to fit exactly 10 files
+        LINES_PER_FILE=$(( (total_lines + MAX_DUMP_FILES - 1) / MAX_DUMP_FILES ))
+    else
+        # Small enough -> use fixed 8k chunk size (resulting in 1-10 files)
+        LINES_PER_FILE=$TARGET_LINES
+    fi
+fi
+
+echo "Total lines: $total_lines"
+echo "Lines per file: $LINES_PER_FILE (targeting $MAX_DUMP_FILES files)"
+echo "Files selected: $SELECTED_COUNT"
+
+# Remove old dump files
+rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md
+rm -f "$PROJECT_ROOT"/${OUTPUT_PREFIX}[0-9]*
+
+# Split (use 2-digit suffix)
+split -l "$LINES_PER_FILE" -d -a 2 "$TEMP_FILE" "$PROJECT_ROOT/${OUTPUT_PREFIX}"
+
+# Rename to .md and remove empty files
+for f in "$PROJECT_ROOT"/${OUTPUT_PREFIX}*; do
+    if [[ ! "$f" =~ \.md$ ]]; then
+        if [[ -s "$f" ]]; then
+            mv "$f" "${f}.md"
+        else
+            rm -f "$f"
+        fi
+    fi
+done
+
+echo "Done! Created:"
+ls -la "$PROJECT_ROOT"/${OUTPUT_PREFIX}*.md 2>/dev/null || echo "No files created"
+
+```
+
+### public/openapi.yaml
+
+```yaml
+openapi: 3.1.0
+info:
+  title: Mira Studio API
+  description: Gateway for the Mira experience engine and Goal OS. GPT operations go through 7 endpoints. All /create and /update payloads are FLAT (no nesting under a "payload" key).
+  version: 2.2.0
+servers:
+  - url: https://mira-maddyup.vercel.app/  
+    description: Mira Studio Backend
+
+paths:
+  /api/gpt/state:
+    get:
+      operationId: getGPTState
+      summary: Get user state on re-entry
+      description: Returns compressed state with active experiences, re-entry prompts, friction signals, knowledge summary, and curriculum progress. Call this first on every conversation.
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+            default: "a0000000-0000-0000-0000-000000000001"
+          description: User ID. Defaults to the dev user.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  latestExperiences:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  activeReentryPrompts:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  frictionSignals:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  suggestedNext:
+                    type: array
+                    items:
+                      type: string
+                  proposedExperiences:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  knowledgeSummary:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  goal:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  skill_domains:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  curriculum:
+                    type: object
+                    properties:
+                      active_outlines:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      recent_completions:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+
+  /api/gpt/plan:
+    post:
+      operationId: planCurriculum
+      summary: Scoping and planning operations
+      description: Create curriculum outlines, dispatch research, assess gaps, or read mind maps. Flat payload — all fields alongside action.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [create_outline, dispatch_research, assess_gaps, read_map]
+                  description: The planning action to perform.
+                topic:
+                  type: string
+                  description: The learning topic (required for create_outline and dispatch_research).
+                domain:
+                  type: string
+                  description: Optional broad domain grouping.
+                subtopics:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      title:
+                        type: string
+                      description:
+                        type: string
+                      order:
+                        type: integer
+                  description: Optional subtopic breakdown for create_outline.
+                pedagogicalIntent:
+                  type: string
+                  enum: [build_understanding, develop_skill, explore_concept, problem_solve]
+                  description: The learning intent.
+                outlineId:
+                  type: string
+                  description: Required for assess_gaps. The outline to analyze.
+                goalId:
+                  type: string
+                  description: Optional. Links the outline to a goal. If provided, auto-activates the goal.
+                userId:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
+                boardId:
+                  type: string
+                  description: For action=read_map — the board UUID to read.
+      responses:
+        '200':
+          description: Success
+        '201':
+          description: Outline created
+        '400':
+          description: Validation error
+
+  /api/gpt/create:
+    post:
+      operationId: createEntity
+      summary: Create experiences, ideas, goals, steps, knowledge, skill domains, or map objects
+      description: |
+        FLAT payload — all fields alongside `type`. Do NOT nest under a `payload` key.
+        Call GET /api/gpt/discover?capability=<type> for the exact schema.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type:
+                  type: string
+                  enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge, map_cluster]
+                  description: The entity type to create.
+                templateId:
+                  type: string
+                  description: UUID of the experience template. Call discover?capability=templates for valid IDs.
+                userId:
+                  type: string
+                  default: "a0000000-0000-0000-0000-000000000001"
+                title:
+                  type: string
+                  description: Title of the experience, idea, or step.
+                goal:
+                  type: string
+                  description: For experiences — what the user will achieve.
+                description:
+                  type: string
+                  description: For goals — what you want to accomplish. For map nodes — short summary.
+                resolution:
+                  type: object
+                  properties:
+                    depth:
+                      type: string
+                      enum: [light, medium, heavy]
+                    mode:
+                      type: string
+                      enum: [illuminate, practice, challenge, build, reflect, study]
+                    timeScope:
+                      type: string
+                      enum: [immediate, session, multi_day, ongoing]
+                    intensity:
+                      type: string
+                      enum: [low, medium, high]
+                reentry:
+                  type: object
+                  properties:
+                    trigger:
+                      type: string
+                      enum: [time, completion, inactivity, manual]
+                    prompt:
+                      type: string
+                    contextScope:
+                      type: string
+                      enum: [minimal, full, focused]
+                steps:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [lesson, challenge, reflection, questionnaire, essay_tasks, plan_builder, checkpoint]
+                      title:
+                        type: string
+                      payload:
+                        type: object
+                        additionalProperties: true
+                        description: Step-specific payload. Call discover?capability=step_payload&step_type=X for the exact shape.
+                      blocks:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                        description: Granular blocks for the step. If provided, blocks take precedence over sections or content.
+                  description: Array of steps for the experience.
+                curriculum_outline_id:
+                  type: string
+                  description: Optional. Links to a curriculum outline.
+                previousExperienceId:
+                  type: string
+                  description: Optional. Links to a prior experience for chaining.
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  description: For goals — optional string array. Auto-creates skill domains (best-effort).
+                goalId:
+                  type: string
+                  description: For skill_domain — REQUIRED existing goal UUID.
+                name:
+                  type: string
+                  description: For skill_domain — REQUIRED domain name.
+                rawPrompt:
+                  type: string
+                  description: For ideas — the raw user prompt.
+                gptSummary:
+                  type: string
+                  description: For ideas — GPT's summary of the concept.
+                experienceId:
+                  type: string
+                  description: For steps — the experience instance to add the step to.
+                instanceId:
+                  type: string
+                  description: For steps — alias for experienceId.
+                boardId:
+                  type: string
+                  description: Optional UUID of the think board for map nodes/edges.
+                label:
+                  type: string
+                  description: For map nodes — label text.
+                content:
+                  type: string
+                  description: For map nodes — long-form elaboration text (can be paragraphs).
+                color:
+                  type: string
+                  description: For map nodes — color (hex or tailwind).
+                position_x:
+                  type: number
+                  description: For map nodes — X coordinate.
+                position_y:
+                  type: number
+                  description: For map nodes — Y coordinate.
+                sourceNodeId:
+                  type: string
+                  description: For map edges — source node UUID.
+                targetNodeId:
+                  type: string
+                  description: For map edges — target node UUID.
+                centerNode:
+                  type: object
+                  description: For map clusters — central hub node.
+                  properties:
+                    label:
+                      type: string
+                    description:
+                      type: string
+                    content:
+                      type: string
+                    color:
+                      type: string
+                    position_x:
+                      type: number
+                    position_y:
+                      type: number
+                childNodes:
+                  type: array
+                  description: For map clusters — children of the center node.
+                  items:
+                    type: object
+                    properties:
+                      label:
+                        type: string
+                      description:
+                        type: string
+                      content:
+                        type: string
+                      color:
+                        type: string
+                step_type:
+                  type: string
+                  enum: [lesson, challenge, reflection, questionnaire, essay_tasks, plan_builder, checkpoint]
+                  description: For steps — the type of step to create.
+                stepType:
+                  type: string
+                  description: Alias for step_type.
+                sections:
+                  type: array
+                  items:
+                    type: object
+                  description: For lesson or plan_builder steps.
+                prompts:
+                  type: array
+                  items:
+                    type: object
+                  description: For reflection steps.
+                questions:
+                  type: array
+                  items:
+                    type: object
+                  description: For questionnaire or checkpoint steps.
+                tasks:
+                  type: array
+                  items:
+                    type: object
+                  description: For essay_tasks steps.
+                knowledge_unit_id:
+                  type: string
+                  description: For checkpoint steps — UUID of the knowledge unit.
+                passing_threshold:
+                  type: integer
+                  description: For checkpoint steps.
+                on_fail:
+                  type: string
+                  description: For checkpoint steps.
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Optional explicit wrapper for step payload if the agent prefers nested over flat.
+                blocks:
+                  type: array
+                  description: "Granular blocks for the step (Sprint 22). If provided, blocks take precedence over sections or content. Each block must have a 'type' (content, prediction, exercise, checkpoint, hint_ladder, callout, media) and its corresponding fields."
+                  items:
+                    type: object
+                    required: [type]
+                    properties:
+                      id:
+                        type: string
+                      type:
+                        type: string
+                        enum: [content, prediction, exercise, checkpoint, hint_ladder, callout, media]
+                      content:
+                        type: string
+                        description: Markdown for 'content' or 'callout' blocks.
+                      question:
+                        type: string
+                        description: Question for 'prediction' or 'checkpoint' blocks.
+                      reveal_content:
+                        type: string
+                        description: Content to show after prediction for 'prediction' blocks.
+                      title:
+                        type: string
+                        description: Title for 'exercise' blocks.
+                      instructions:
+                        type: string
+                        description: Instructions for 'exercise' blocks.
+                      validation_criteria:
+                        type: string
+                        description: Criteria for 'exercise' blocks.
+                      expected_answer:
+                        type: string
+                        description: Answer key for 'checkpoint' blocks.
+                      explanation:
+                        type: string
+                        description: Explanation for 'checkpoint' blocks.
+                      hints:
+                        type: array
+                        items:
+                          type: string
+                        description: Array of hints for 'hint_ladder' blocks.
+                      intent:
+                        type: string
+                        enum: [info, warning, tip, success]
+                        description: Intent for 'callout' blocks.
+                      media_type:
+                        type: string
+                        enum: [image, video, audio]
+                        description: Media type for 'media' blocks.
+                      url:
+                        type: string
+                        description: Remote URL for 'media' blocks.
+                      caption:
+                        type: string
+                        description: Caption for 'media' blocks.
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation error — includes field-level details
+
+  /api/gpt/update:
+    post:
+      operationId: updateEntity
+      summary: Edit steps, transition status, link knowledge, update nodes
+      description: |
+        FLAT payload — all fields alongside `action`. Do NOT nest under a "payload" key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal]
+                  description: The mutation action to perform.
+                experienceId:
+                  type: string
+                  description: The experience instance ID (required for transition, reorder, delete).
+                transitionAction:
+                  type: string
+                  enum: [approve, publish, activate, start, pause, complete, archive]
+                  description: "Lifecycle transition to apply. For action=transition (experience) use approve|publish|activate|start|complete|archive. For action=transition_goal use activate|pause|complete|archive."
+                stepId:
+                  type: string
+                  description: For action=update_step or delete_step — the step to modify.
+                stepPayload:
+                  type: object
+                  additionalProperties: true
+                  description: For action=update_step — the updated step payload.
+                stepOrder:
+                  type: array
+                  items:
+                    type: string
+                  description: For action=reorder_steps — array of step IDs in desired order.
+                knowledgeUnitId:
+                  type: string
+                  description: For action=link_knowledge — the knowledge unit to link.
+                linkType:
+                  type: string
+                  enum: [teaches, tests, deepens, pre_support, enrichment]
+                  description: For action=link_knowledge — the type of link.
+                unitId:
+                  type: string
+                  description: For action=update_knowledge — the knowledge unit to update.
+                updates:
+                  type: object
+                  additionalProperties: true
+                  description: For action=update_knowledge or update_skill_domain — the patch updates.
+                domainId:
+                  type: string
+                  description: For action=update_skill_domain — the domain ID to update or link to.
+                nodeId:
+                  type: string
+                  description: For action=update_map_node or delete_map_node — the node UUID.
+                edgeId:
+                  type: string
+                  description: For action=delete_map_edge — the edge UUID.
+                label:
+                  type: string
+                  description: For action=update_map_node — optional new label.
+                description:
+                  type: string
+                  description: For action=update_map_node — optional new hover summary.
+                content:
+                  type: string
+                  description: For action=update_map_node — optional long-form content update.
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: For action=update_map_node — optional metadata (linkedEntityId, linkedEntityType).
+                nodeType:
+                  type: string
+                  description: For action=update_map_node — optional nodeType override (e.g. 'exported').
+                goalId:
+                  type: string
+                  description: For action=transition_goal — the goal UUID to transition.
+      responses:
+        '200':
+          description: Updated
+        '400':
+          description: Validation error
+
+  /api/gpt/changes:
+    get:
+      operationId: getChangeReports
+      summary: View user-reported UI/UX changes and bugs
+      description: Returns all open feedback, bugs, and change requests reported by the user via the Changes floater. Use this to help the user scope the next version, track UI issues, or answer questions about the app's current state. Includes the exact URL/page they were on when they reported it.
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  changes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        type:
+                          type: string
+                          enum: [bug, ux, idea, change, comment]
+                        url:
+                          type: string
+                        content:
+                          type: string
+                        status:
+                          type: string
+                          enum: [open, resolved]
+                        createdAt:
+                          type: string
+        '500':
+          description: Server Error
+
+  /api/gpt/discover:
+    get:
+      operationId: discoverCapability
+      summary: Learn schemas and valid values at runtime
+      description: Progressive disclosure — ask how to perform any action and get the exact schema, examples, and related capabilities. ALWAYS call this before your first create or update of a given type.
+      parameters:
+        - name: capability
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge"
+        - name: step_type
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "Optional filter for step_payload (e.g. lesson, checkpoint, challenge)"
+      responses:
+        '200':
+          description: Schema, examples, and usage guidance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  capability:
+                    type: string
+                  endpoint:
+                    type: string
+                  description:
+                    type: string
+                  schema:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  example:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  when_to_use:
+                    type: string
+        '400':
+          description: Unknown capability (returns list of valid capabilities)
+
+  /api/knowledge:
+    get:
+      operationId: readKnowledge
+      summary: Read knowledge base content
+      description: Returns full knowledge units with content, thesis, key ideas, and metadata. Use this to read research results and reference them when building experiences.
+      parameters:
+        - name: domain
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by domain (e.g. "AI Business Strategy", "SaaS Strategy")
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by topic
+      responses:
+        '200':
+          description: Knowledge units grouped by domain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  units:
+                    type: object
+                    description: Units grouped by domain
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          title:
+                            type: string
+                          thesis:
+                            type: string
+                          content:
+                            type: string
+                            description: Full research content — read this to understand the topic deeply
+                          key_ideas:
+                            type: array
+                            items:
+                              type: string
+                          unit_type:
+                            type: string
+                            enum: [foundation, playbook]
+                          topic:
+                            type: string
+                          domain:
+                            type: string
+                  total:
+                    type: integer
+                  domains:
+                    type: object
+                    additionalProperties:
+                      type: integer
+
+```
+
+### roadmap.md
+
+```markdown
+# Mira Studio — Product Roadmap
+
+> Living document. The vision is large; the sprints are small.
+
+---
+
+## Core Thesis
+
+**Mira is a system that generates temporary realities for the user to live inside.**
+
+The user talks to a Custom GPT. The GPT proposes *Experiences* — structured, typed modules that the user lives through inside the app. A coding agent *realizes* those experiences against typed schemas and pushes them through a review pipeline. Supabase is the canonical runtime memory. GitHub is the realization substrate. The frontend renders experiences from schema, not from hardcoded pages.
+
+The central noun is **Experience**, not PR, not Issue, not Project.
+
+Sometimes the system explains why it's creating an experience. Sometimes it just drops you in. The **resolution object** controls which.
+
+---
+
+## The Paradigm Shift: Multi-Agent Experience Engine
+
+Mira is actively moving away from the saturated "AI Chatbot" space (which suffers from "chat contamination") and into a **Multi-Agent Experience Engine**. It acts as an orchestrator: taking messy human intent (via Custom GPT), mapping it into a durable structured workspace (the App + Supabase), and tagging in heavy-lifters (the Genkit internal intelligence layer or GitHub SWE Coder) when complexity exceeds text generation.
+
+### High-Impact Modes
+1. **The "Zero-to-One" Project Incubator**: Takes a messy brain-dump, scaffolds a structured multi-phase experience, and escalates to a SWE agent to build live infrastructure (e.g., scaffolding a Next.js landing page).
+2. **Adaptive Deep-Learning**: Multi-pass construction of daily educational modules (Education, Challenge, Reflection) with hybrid escalation (e.g., inline live tutoring inside a broken repo).
+3. **Cognitive & Executive Scaffolding**: Avoids heavy task lists for overwhelmed users. Heavy reliance on ephemeral experiences, synthesis snapshots, and proactive low-friction state reconstruction.
+
+---
+
+## Where We Are Today
+
+### ✅ Sprint 1 — Local Control Plane (Complete)
+
+Idea capture, 6-step drill, promote/ship lifecycle, JSON file persistence via `lib/storage.ts` → `.local-data/studio.json`, inbox events, dev harness.
+
+### ✅ Sprint 2 — GitHub Factory (Complete, Lane 6 integration pending)
+
+Real Octokit adapter (`lib/adapters/github-adapter.ts`), signature-verified webhook pipeline (`lib/github/`), issue creation, PR creation, coding agent assignment (Copilot), workflow dispatch, factory/sync services, action upgrades with GitHub-aware state machine. Lanes 1–5 all TSC-clean. Lane 6 (integration proof) still open.
+
+### ✅ Sprint 3 — Foundation Pivot: DB + Experience Types (Complete)
+
+Supabase is live (project `bbdhhlungcjqzghwovsx`). 16 Mira-specific tables deployed. Storage adapter pattern in place (`lib/storage-adapter.ts`) with JSON fallback. Experience type system (`types/experience.ts`, `types/interaction.ts`, `types/synthesis.ts`), experience state machine, services (experience, interaction, synthesis), and all API routes operational. GPT re-entry endpoint (`/api/gpt/state`) returns compressed state packets. 6 Tier 1 templates seeded. Dev user seeded. All verification criteria pass.
+
+### ✅ Sprint 4 — Experience Renderer + Library (Complete)
+
+Renderer registry (`lib/experience/renderer-registry.tsx`), workspace page (`/workspace/[instanceId]`), library page (`/library`), experience cards, step renderers (Questionnaire, Lesson, Challenge, Plan Builder, Reflection, Essay+Tasks), interaction recording via `useInteractionCapture` hook, resolution-driven chrome levels, re-entry engine, persistent experience lifecycle (proposed → active → completed), and home page surfaces for active/proposed experiences. All verification criteria pass.
+
+### ✅ Sprint 5B — Experience Workspace Hardening (Complete)
+
+Field-tested the 18-step "AI Operator Brand" experience and exposed 10 hard failures (R1–R10). Built contracts (Gate 0), experience graph, timeline, profile, validators, and progression engine across 6 parallel lanes.
+
+### ✅ Sprint 6 — Experience Workspace: Navigation, Drafts, Renderers, Steps API, Scheduling (Complete)
+
+Transformed experiences from linear form-wizards into navigable workspaces. R1–R10 upgrades shipped:
+- **R1** Non-linear step navigation — sidebar (heavy), top bar (medium), hidden (light)
+- **R2** Checkpoint text input — lessons with writing prompts now render textareas
+- **R3** Essay writing surface — per-task textareas with word counts
+- **R4** Expandable challenge workspaces — objectives expand into mini-workspaces
+- **R5** Plan builder notes — items expand to show detail areas
+- **R6** Multi-pass enrichment — step CRUD, reorder, insert APIs for GPT to update steps after creation
+- **R9** Experience overview dashboard — visual grid of all steps with progress stats
+- **R10** Draft persistence — auto-save to artifacts table, hydration on revisit, "Last saved" indicator
+- **Migration 004** — step status, scheduled_date, due_date, estimated_minutes, completed_at on experience_steps
+- **OpenAPI schema updated** — 5 new endpoints: step CRUD, reorder, progress, drafts
+
+### ✅ Sprint 7 — Genkit Intelligence Layer (Complete)
+
+Replaced naive string summaries and keyword-splitting with AI-powered intelligence via Genkit + Gemini 2.5 Flash:
+- **Intelligent Synthesis** — `synthesizeExperienceFlow` extracts narrative summary, behavioral signals, friction assessment, and next candidates from experience interactions
+- **Smart Facet Extraction** — `extractFacetsFlow` semantically identifies interests, skills, goals, preferred modes, depth preferences, and friction patterns with confidence scores and evidence strings
+- **Context-Aware Suggestions** — `suggestNextExperienceFlow` produces personalized next-experience recommendations based on user profile, completion history, and friction level
+- **GPT State Compression** — `compressGPTStateFlow` condenses the raw GPT state packet into a token-efficient narrative with priority signals and a suggested opening topic
+- **Completion Wiring** — `completeExperienceWithAI()` orchestrates synthesis + facet extraction + friction update on every experience completion
+- **Graceful Degradation** — `runFlowSafe()` wrapper ensures all AI flows fall back to existing mechanical behavior when `GEMINI_API_KEY` is unavailable
+- **Migration 005** — `evidence` column added to `profile_facets` for AI-generated extraction justification
+
+### 🟢 Board Truth — Sprint Completion Status
+
+| Sprint | Status | What Shipped |
+|--------|--------|------|
+| Sprints 1–9 | ✅ Complete | Local control plane, GitHub factory, Supabase foundation, experience renderer + library, workspace hardening (R1-R10), genkit intelligence (4 flows), knowledge tab + MiraK integration, content density + agent thinking rails |
+| Sprint 10 | ✅ Complete | Curriculum-aware experience engine: curriculum outlines (table + service + types), GPT gateway (5 endpoints: state/plan/create/update/discover), discover registry (9 capabilities), coach API (3 routes), Genkit tutor + grading flows, step-knowledge-link service, OpenAPI rewrite, migration 007 |
+| Sprint 11 | ✅ Complete | MiraK enrichment loop: enrichment webhook mode (experience_id), flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance. |
+| Sprint 12 | ✅ Complete | Learning Loop Productization: Visible Track UI, Checkpoint renderer, Coach Triggers, Synthesis Completion, Pre/In/Post Knowledge. The "three emotional moments" are fully functional. |
+| Sprint 13 | ✅ Complete | Goal OS + Skill Map: Goal entity, skill domains array, mastery computation engine, deep intake protocol mapping. |
+| Sprint 14 | ✅ Complete | Mastery Visibility & Intelligence Wiring: Skill Tree UI completion, Profile synthesis integration, Coach contextual triggers. |
+| Sprint 15 | ✅ Complete | Chained Experiences + Spontaneity: Experience graph wiring, ephemeral injection, Re-entry hardening, Timeline feed upgrades. |
+
+### 🔄 Current Phase — Coder Pipeline (Sprint 16+)
+
+The curriculum infrastructure and learning loops are now fully productized, visible, and functioning. The system can plan a curriculum, link knowledge, render checkpoints, provide coaching, and celebrate synthesis natively in the browser.
+
+The next structural challenge is **Containerization**: Users need a top-level anchor for their multi-week journeys. Right now, curricula float freely. The **Goal OS** will introduce the "Goal" entity as the highest-level object, grouping curriculum tracks, knowledge domains, and timeline events into coherent, long-term operating systems.
+
+The GPT Custom instructions and OpenAPI schema are defined in `gpt-instructions.md` / `public/openapi.yaml`. The app runs on `localhost:3000` with a Cloudflare tunnel at `https://mira.mytsapi.us`. The GPT has 6 endpoints:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/gpt/state` | GET | User state, active experiences, curriculum progress, friction signals, re-entry prompts |
+| `/api/gpt/plan` | POST | Curriculum outlines, research dispatch, gap assessment |
+| `/api/gpt/create` | POST | Experiences (persistent/ephemeral), ideas, steps |
+| `/api/gpt/update` | POST | Step edits, reorder, transitions, knowledge linking |
+| `/api/gpt/discover` | GET | Progressive disclosure — schemas, examples, valid values |
+| `/api/knowledge` | GET | Read full knowledge base content |
+
+Additionally, MiraK is a separate GPT Action (`POST /generate_knowledge`) for fire-and-forget deep research.
+
+### What the product can actually do today
+
+**Already built and functional:**
+- Curriculum-aware planning (outlines → subtopics → linked experiences)
+- GPT gateway with progressive discovery (9 capabilities, flat payloads)
+- Coach/tutor API (contextual Q&A, semantic checkpoint grading)
+- Knowledge enrichment into existing experiences (MiraK → webhook → step appending + knowledge linking)
+- Knowledge reading via GPT (`readKnowledge` endpoint)
+- Experience enrichment via `experience_id` passthrough
+- Step-knowledge links (teaches/tests/deepens/pre_support/enrichment types)
+- Curriculum outline service with gap assessment
+- 4 Genkit intelligence flows (synthesis, facets, suggestions, GPT compression)
+- 2 Genkit tutor flows (tutor chat, checkpoint grading)
+- Knowledge enrichment flow (refine-knowledge-flow)
+- Non-linear workspace navigation, draft persistence, step scheduling
+- 6 step renderers (lesson, challenge, reflection, questionnaire, plan_builder, essay_tasks)
+- MiraK 3-stage research pipeline (strategist + 3 readers + synthesizer + playbook builder)
+
+**Operational close pending (Sprint 11):**
+- MiraK Cloud Run redeploy with enrichment code
+- Vercel deploy (git push)
+- GPT Action schema update in ChatGPT settings
+- End-to-end production enrichment verification
+
+**Newly Productized (Sprint 12):**
+- Visible curriculum tracks and outline UI (`/library` and home page)
+- "Your Path" and "Focus Today" on the home page
+- Research status visibility (pending/in-progress/landed)
+- Synthesis and growth feedback on experience completion (CompletionScreen)
+- Visible knowledge timing inside steps (pre-support, in-step, post-step cards)
+- Checkpoint step renderer with semantic grading
+- Proactive coach surfacing triggers on failed checkpoints or high dwell time
+- Mastery automatically earned/promoted through semantic checkpoint grading
+- Welcome-back session reconstruction context on the home page
+
+This successfully bridges the intelligence layer into the felt UX. The next gap is containerization (Goal OS).
+
+### Current Architecture
+
+```
+Custom GPT ("Mira" — persona + 6 endpoints + MiraK action)
+  ↓ Flat OpenAPI (gateway + progressive discovery)
+  ↓ via Cloudflare tunnel (mira.mytsapi.us) or Vercel (mira-maddyup.vercel.app)
+Mira Studio (Next.js 14, App Router)
+  ├── workspace/    ← navigable experience workspace (overview + step grid + sidebar/topbar)
+  ├── knowledge/    ← durable reference + mastery (3-tab: Learn | Practice | Links)
+  ├── library/      ← all experiences: active, completed, proposed
+  ├── timeline/     ← chronological event feed
+  ├── profile/      ← compiled user direction (AI-powered facets)
+  └── api/
+        ├── gpt/     ← 5 gateway endpoints (state/plan/create/update/discover)
+        ├── coach/   ← 3 frontend-facing routes (chat/grade/mastery)
+        ├── webhook/ ← GPT, GitHub, Vercel, MiraK receivers
+        └── */*      ← existing CRUD routes (experiences, knowledge, etc.)
+        ↕
+Genkit Intelligence Layer (7 flows)
+  ├── synthesize-experience-flow     → narrative + behavioral signals on completion
+  ├── suggest-next-experience-flow   → personalized recommendations
+  ├── extract-facets-flow            → semantic profile facet mining
+  ├── compress-gpt-state-flow       → token-efficient GPT state packets
+  ├── refine-knowledge-flow          → polish + cross-pollinate MiraK output
+  ├── tutor-chat-flow               → contextual Q&A within active step
+  └── grade-checkpoint-flow          → semantic grading of checkpoint answers
+        ↕
+MiraK (Python/FastAPI on Cloud Run — c:/mirak)
+  ├── POST /generate_knowledge → 202 Accepted immediately
+  ├── 3-stage pipeline: strategist (search+scrape) → 3 readers → synthesizer + playbook
+  ├── Webhook delivery: local tunnel primary → Vercel fallback
+  └── Enrichment mode: experience_id → enrich existing experience
+        ↕
+Supabase (runtime truth — 18+ tables)
+  ├── experience_instances  (lifecycle state machine, curriculum_outline_id)
+  ├── experience_steps      (per-step payload + status + scheduling)
+  ├── curriculum_outlines   (topic scoping, subtopic tracking)
+  ├── step_knowledge_links  (step ↔ knowledge unit connections)
+  ├── knowledge_units       (research content from MiraK)
+  ├── knowledge_progress    (mastery tracking per user per unit)
+  ├── interaction_events    (telemetry: 7 event types)
+  ├── synthesis_snapshots   (AI-enriched completion analysis)
+  ├── profile_facets        (interests, skills, goals, preferences)
+  ├── artifacts             (draft persistence)
+  ├── timeline_events       (inbox/event feed)
+  └── experience_templates  (6 Tier 1 seeded)
+        ↕
+GitHub (realization substrate — deferred)
+  ├── webhook at /api/webhook/github
+  └── factory services ready but not in active use
+```
+
+### Two Parallel Truths
+
+| Layer | Source of Truth | What It Stores |
+|-------|---------------|----------------|
+| **Runtime truth** | Supabase | What the user saw, clicked, answered, completed, skipped. Experience state, interaction events, artifacts produced, synthesis snapshots, profile facets. |
+| **Realization truth** | GitHub | What the coder built or changed. Issues, PRs, workflow runs, check results, release history. |
+
+The app reads runtime state from Supabase and realization state from GitHub. Neither replaces the other.
+
+---
+
+## Key Concepts
+
+### The Resolution Object
+
+Every experience carries a resolution that makes it intentional rather than arbitrary.
+
+```ts
+resolution = {
+  depth:      'light' | 'medium' | 'heavy'
+  mode:       'illuminate' | 'practice' | 'challenge' | 'build' | 'reflect'
+  timeScope:  'immediate' | 'session' | 'multi_day' | 'ongoing'
+  intensity:  'low' | 'medium' | 'high'
+}
+```
+
+The resolution controls:
+- What the renderer shows (light = minimal chrome, heavy = full scaffolding)
+- How the coder authors the experience (depth + mode = spec shape)
+- Whether GPT explains why or just drops you in (light+immediate = immerse, heavy+ongoing = explain)
+- How chaining works (light chains to light, heavy chains to progression)
+
+Stored on `experience_instances.resolution` (JSONB).
+
+### GPT Entry Modes
+
+Controlled by resolution, not hardcoded:
+
+| Resolution Profile | GPT Behavior | User Experience |
+|-------------------|-------------|----------------|
+| `depth: light`, `timeScope: immediate` | Drops you in, no explanation | World you step into |
+| `depth: medium`, `timeScope: session` | Brief framing, then in | Teacher with context |
+| `depth: heavy`, `timeScope: multi_day` | Full rationale + preview | Guided curriculum |
+
+This is NOT a boolean. It's a spectrum driven by the resolution object.
+
+### Persistent vs. Ephemeral Experiences
+
+| Dimension | Persistent | Ephemeral |
+|-----------|-----------|-----------|
+| Pipeline | Proposal → Realization → Review → Publish | GPT creates directly via endpoint |
+| Storage | Full instance + steps + events | Instance record + events (lightweight) |
+| Review | Required before going live | Skipped — instant render |
+| Lifespan | Long-lived, revisitable | Momentary, archivable |
+| Examples | Course, plan builder, research sprint | "Write 3 hooks now", "React to this trend", "Try this one thing today" |
+
+Ephemeral experiences add **soft spontaneity** — interruptions, nudges, micro-challenges that make the system feel alive rather than pipeline-like.
+
+```ts
+experience_instances.instance_type = 'persistent' | 'ephemeral'
+```
+
+Rules:
+- Ephemeral skips the realization pipeline entirely
+- GPT can create ephemeral experiences directly via endpoint
+- Frontend renders them instantly
+- Still logs interaction events (telemetry is never skipped)
+- Can be upgraded to persistent if the user wants to return
+
+### The Re-Entry Contract
+
+Every experience defines how it creates its own continuation.
+
+```ts
+reentry = {
+  trigger:      'time' | 'completion' | 'inactivity' | 'manual'
+  prompt:       string   // what GPT should say/propose next
+  contextScope: 'minimal' | 'full' | 'focused'
+}
+```
+
+Stored on `experience_instances.reentry` (JSONB).
+
+Examples:
+- After a challenge: `{ trigger: "completion", prompt: "reflect on what surprised you", contextScope: "focused" }`
+- After a plan builder: `{ trigger: "time", prompt: "check in on milestone progress in 3 days", contextScope: "full" }`
+- After an ephemeral: `{ trigger: "manual", prompt: "want to go deeper on this?", contextScope: "minimal" }`
+
+Without re-entry contracts, GPT re-entry is generic. With them, every experience creates its own continuation thread.
+
+### Experience Graph
+
+Lightweight linking — no graph DB needed. Just two fields on `experience_instances`:
+
+```ts
+previous_experience_id:   string | null
+next_suggested_ids:       string[]
+```
+
+This unlocks:
+- **Chaining:** Questionnaire → Plan Builder → Challenge
+- **Loops:** Weekly reflection → same template, new instance
+- **Branching:** "You could do A or B next"
+- **Backtracking:** "Return to where you left off"
+
+---
+
+## Entity Model
+
+### Core Experience Entities
+
+| Entity | Purpose | Key Fields |
+|--------|---------|------------|
+| `experience_templates` | Reusable shapes the system can render | `id`, `slug`, `name`, `class`, `renderer_type`, `schema_version`, `config_schema`, `status` |
+| `experience_instances` | Actual generated experience for a user | `id`, `user_id`, `idea_id`, `template_id`, `title`, `goal`, `instance_type` (persistent/ephemeral), `status`, `resolution` (JSONB), `reentry` (JSONB), `previous_experience_id`, `next_suggested_ids` (JSONB), `friction_level`, `source_conversation_id`, `generated_by`, `realization_id`, `created_at`, `published_at` |
+| `experience_steps` | What the user sees/does within an experience | `id`, `instance_id`, `step_order`, `step_type`, `title`, `payload` (JSONB), `completion_rule` |
+| `interaction_events` | Raw telemetry — no interpretation | `id`, `instance_id`, `step_id`, `event_type`, `event_payload` (JSONB), `created_at` |
+| `artifacts` | Anything the user produces during an experience | `id`, `instance_id`, `artifact_type`, `title`, `content`, `metadata` (JSONB) |
+| `synthesis_snapshots` | Compressed packets for GPT re-entry | `id`, `user_id`, `source_type`, `source_id`, `summary`, `key_signals` (JSONB), `next_candidates` (JSONB), `created_at` |
+| `profile_facets` | Structured long-lived user direction | `id`, `user_id`, `facet_type`, `value`, `confidence`, `source_snapshot_id`, `updated_at` |
+
+### Preserved Entities (migrated from JSON → Supabase)
+
+| Entity | Current Location | Migration |
+|--------|-----------------|-----------| 
+| `ideas` | `.local-data/studio.json` | Move to Supabase `ideas` table |
+| `projects` | `.local-data/studio.json` | Evolve into `realizations` table |
+| `tasks` | `.local-data/studio.json` | Fold into `experience_steps` or keep as `realization_tasks` |
+| `prs` | `.local-data/studio.json` | Evolve into `realization_reviews` table |
+| `inbox` | `.local-data/studio.json` | Evolve into `timeline_events` table |
+| `drill_sessions` | `.local-data/studio.json` | Move to Supabase `drill_sessions` table |
+| `agent_runs` | `.local-data/studio.json` | Move to Supabase `agent_runs` table |
+| `external_refs` | `.local-data/studio.json` | Move to Supabase `external_refs` table |
+
+### New Supporting Entities
+
+| Entity | Purpose |
+|--------|---------|
+| `users` | Single-user now, multi-user ready. Profile anchor. |
+| `conversations` | GPT conversation sessions with metadata |
+| `realizations` | Internal realization object replacing "project" in code-execution contexts. Not "build" — because we're realizing experiences, not building features. |
+| `realization_reviews` | Approval surface. User sees "Approve Experience" — maps internally to PR/realization review. |
+
+### Friction Signal
+
+A computed field on `experience_instances` — **recorded during synthesis only, never interpreted in-app**:
+
+```ts
+friction_level: 'low' | 'medium' | 'high' | null
+```
+
+Computed from interaction events:
+- High skip rate → high friction
+- Long dwell + completion → low friction
+- Abandonment mid-step → medium/high friction
+
+The app does NOT act on this. GPT reads it during re-entry and adjusts future proposals accordingly.
+
+---
+
+## Experience Classes
+
+### Tier 1 — Ship First
+
+| Class | Renderer | User Sees |
+|-------|----------|-----------|
+| **Questionnaire** | Multi-step form with branching | Questions → answers → summary |
+| **Lesson** | Scrollable content with checkpoints | Sections → reading → knowledge checks |
+| **Challenge** | Task list with completion tracking | Objectives → actions → proof |
+| **Plan Builder** | Editable structured document | Goals → milestones → resources → timeline |
+| **Reflection Check-in** | Prompt → free response → synthesis | Prompts → writing → GPT summary |
+| **Essay + Tasks** | Long-form content with embedded tasks | Reading → doing → artifacts |
+
+### Tier 2 — Ship Next
+
+| Class | Example Mapping |
+|-------|-----------------|
+| **Trend Injection** | "Here's what's happening in X — react" |
+| **Research Sprint** | Curated sources → analysis → brief |
+| **Social Practice** | Scenarios → responses → feedback |
+| **Networking Adventure** | Outreach targets → scripts → tracking |
+| **Content Week Planner** | Topics → calendar → production tasks |
+
+### How Ideas Map to Experience Chains
+
+| Idea | Experience Chain | Resolution Profile |
+|------|-----------------|-------------------|
+| "Make better videos" | Lesson → Content Week Planner → Challenge | `medium / practice / multi_day / medium` |
+| "Start a company" | Questionnaire → Plan Builder → Research Sprint | `heavy / build / ongoing / high` |
+| "Better social life" | Reflection Check-in → Social Practice → Adventure | `medium / practice / multi_day / medium` |
+| "Get a better job" | Questionnaire → Plan Builder → Networking Adventure | `heavy / build / multi_day / high` |
+| "Learn options trading" | Lesson → Challenge → Reflection Check-in | `medium / illuminate / session / medium` |
+| *GPT micro-nudge* | Ephemeral Challenge | `light / challenge / immediate / low` |
+| *Trend alert* | Ephemeral Trend Injection | `light / illuminate / immediate / low` |
+
+---
+
+## Experience Lifecycle
+
+### Persistent Experiences (full pipeline)
+
+```
+Phase A: Conversation
+  User talks to GPT → GPT fetches state → GPT proposes experience
+
+Phase B: Proposal
+  GPT emits typed proposal via endpoint:
+    { experienceType, goal, resolution, reentry, sections, taskCount, whyNow }
+  → Saved as proposed experience in Supabase (instance_type = 'persistent')
+
+Phase C: Realization
+  Coder receives proposal + repo context
+  → Creates/instantiates template + frontend rendering
+  → Pushes through GitHub if needed (PR, workflow)
+  → Creates realization record linking experience to GitHub PR
+
+Phase D: Review
+  User sees: Draft → Ready for Review → Approved → Published
+  Buttons: Preview Experience · Approve · Request Changes · Publish
+  Internal mapping: Draft→PR open, Approve→approval flag, Publish→merge+activate
+
+Phase E: Runtime
+  User lives the experience in /workspace
+  App records: what shown, clicked, answered, completed, skipped
+  → interaction_events + artifacts in Supabase
+
+Phase F: Re-entry
+  Re-entry contract fires (on completion, time, inactivity, or manual)
+  Next GPT session fetches compressed packet from /api/synthesis:
+    latest experiences, outcomes, artifacts, friction signals, re-entry prompts
+  → GPT resumes with targeted awareness, not generic memory
+```
+
+### Ephemeral Experiences (instant pipeline)
+
+```
+GPT calls /api/experiences/inject
+  → Creates experience_instance (instance_type = 'ephemeral')
+  → Skips realization pipeline entirely
+  → Frontend renders instantly
+  → Still logs interaction events
+  → Re-entry contract can escalate to persistent if user engages deeply
+```
+
+---
+
+## User-Facing Approval Language
+
+| Internal State | User Sees | Button |
+|---------------|-----------|--------|
+| PR open / draft | Drafted | — |
+| PR ready | Ready for Review | Preview Experience |
+| PR approved | Approved | Publish |
+| PR merged + experience activated | Published | — |
+| New version supersedes | Superseded | — |
+| Changes requested | Needs Changes | Request Changes / Reopen |
+
+---
+
+## Frontend Surface Map
+
+| Surface | Route | Purpose | Status |
+|---------|-------|---------|--------|
+| **Workspace** | `/workspace/[instanceId]` | Lived experience surface. Renders typed modules. Handles both persistent and ephemeral. | 🔲 New |
+| **Library** | `/library` | All experiences: active, completed, paused, suggested, ephemeral history | 🔲 New |
+| **Timeline** | `/timeline` | Chronological feed: proposals, realizations, completions, ephemerals, suggestions | 🔲 New (evolves from `/inbox`) |
+| **Profile** | `/profile` | Compiled direction view: goals, interests, efforts, patterns | 🔲 New |
+| **Review** | `/review/[id]` | Approve/publish experiences (internally maps to PR/realization review) | ✅ Exists, needs language refactor |
+| **Send** | `/send` | Idea capture from GPT | ✅ Preserved |
+| **Drill** | `/drill` | 6-step idea clarification | ✅ Preserved |
+| **Arena** | `/arena` | Active work surface (evolves to show active realizations + experiences) | ✅ Preserved, evolves |
+| **Icebox** | `/icebox` | Deferred ideas + experiences | ✅ Preserved |
+| **Archive** | `/shipped`, `/killed` | Completed / removed | ✅ Preserved |
+
+---
+
+## Coder-Context Strategy (Deferred — Sprint 8+)
+
+> Directionally correct but not critical path. The experience system, renderer, DB, and re-entry are the priority. Coder intelligence evolves later once there's runtime data to compile from.
+
+Generated markdown summaries derived from DB — not hand-maintained prose:
+
+| File | Source | Purpose |
+|------|--------|---------|
+| `docs/coder-context/user-profile.md` | `profile_facets` + `synthesis_snapshots` | Who is this user |
+| `docs/coder-context/current-goals.md` | Active `experience_instances` + `profile_facets` | What's in flight |
+| `docs/coder-context/capability-map.md` | Renderer registry + endpoint contracts | What the system can do |
+
+These are a nice-to-have once the experience loop is running. Do not over-invest here in early sprints.
+
+---
+
+## GitHub Usage Rules
+
+### Use GitHub For
+- Implementation work (PRs, branches)
+- Workflow runs (Actions)
+- Realization validation (checks)
+- PR review (approval gate)
+- Release history
+- Durable realization automation
+
+### Use Issues Only When
+- Realization is large and needs decomposition
+- Agent assignment / tracking is needed
+- Cross-session execution visibility required
+
+### Do NOT Use Issues For
+- Every questionnaire or user answer
+- Every experience runtime event
+- Every content module instance
+- Ephemeral experiences (they never touch GitHub)
+
+**Rule: DB for runtime · GitHub for realization lifecycle · Studio UI for human-facing continuity.**
+
+---
+
+## Strategic UX & Utility Upgrades (The "Glass Box")
+To make the orchestration transparent and powerful, these UX paradigms guide future development:
+
+1. **The Spatial "Split-Brain" Interface**: A dual-pane UI where the left pane is the "Stream" (ephemeral chat) and the right pane is the "Scaffold" (the durable Workspace). Users watch the GPT extract goals and snap them into beautifully rendered Modules in real-time.
+2. **Visualizing the "Multi-Pass" Engine**: Do not hide generation behind spinners. Expose stages dynamically: _"Inferring constraints..."_ → _"Scaffolding timeline..."_ → _"Injecting challenges..."_
+3. **The "Glass Box" Profile Surfacing**: An "Inferred Profile" dashboard showing exactly what the system thinks the user's constraints, means, and skill levels are, tightly coupled to the `profile_facets` table. Manual overrides instantly re-align GPT strategy.
+4. **Coder Escalation as a Hero Moment**: When the SWE agent is invoked, the UI dims and a "Realization Work" widget appears in plain-English showing real-time GitHub Actions infrastructure being built.
+5. **Hidden Scratchpad Actions**: The GPT quietly upserts user insights into Supabase before generating modules, preventing prompt context overload.
+6. **Micro-Regeneration**: Ability to highlight a specific module inside an App Workspace and click **"Tune."** Opens a micro-chat only for that module to break it down further.
+7. **"Interrupt & Re-Route" Safety Valve**: An unstructured brain-dump button when life derails a plan. The GPT dynamically rewrites remaining runtime state to adapt without inducing failure states.
+8. **Escalation Ledger to Template Factory**: Strip PII from highly-used SWE Coder escalations (e.g. "build calendar sync") and turn them into reusable "Starter Kit Modules".
+
+---
+
+## Sprint Roadmap
+
+### ✅ Sprint 1 — Local Control Plane (Complete)
+
+Idea capture, drill, promote, ship lifecycle. Local JSON persistence. Inbox events. Dev harness.
+
+### ✅ Sprint 2 — GitHub Factory (Complete, Lane 6 pending)
+
+Real GitHub API integration. Webhook pipeline. Issue/PR/workflow routes. Agent assignment. Factory/sync services.
+
+### ✅ Sprint 3 — Foundation Pivot: DB + Experience Types (Complete)
+
+Supabase live. 16 Mira tables deployed. Storage adapter pattern. Experience type system. All API routes. GPT re-entry endpoint. 6 templates + dev user seeded.
+
+### ✅ Sprint 4 — Experience Renderer + Library (Complete)
+
+Renderer registry. Workspace page. Library page. 6 step renderers. Interaction recording. Resolution-driven chrome. Re-entry engine. Persistent lifecycle. Home page surfaces.
+
+---
+
+### ✅ Sprint 5 — Data-First Experience Testing (Complete)
+
+> **Goal:** Prove the GPT-created experience loop works. The system must create durable, stateful, action-producing experiences that feel meaningfully better than plain chat.
+
+> **Result:** Structure ✅ State ✅ Behavior ✅ — but field-testing exposed 10 hard renderer failures (Sprint 5B). The GPT authored an excellent 18-step curriculum; the renderers couldn't support it. Led directly to Sprint 6 workspace upgrades.
+
+#### Phase 5A — GPT Connection
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | Custom GPT instructions | Written. See `openschema.md` Part 1. Defines Mira's personality, the 6 experience types, step payload formats, re-entry behavior, resolution semantics. |
+| 2 | OpenAPI schema | Written. See `openschema.md` Part 2. 7 endpoints: `getGPTState`, `injectEphemeral`, `createPersistentExperience`, `listExperiences`, `captureIdea`, `getLatestSynthesis`, `recordInteraction`. |
+| 3 | GPT configuration | Create the Custom GPT on ChatGPT, paste instructions + schema, point at `https://mira.mytsapi.us`. |
+| 4 | Verification | GPT calls `getGPTState` successfully. GPT creates an ephemeral experience that renders in the app. |
+
+#### Phase 5B — Experience Quality Testing
+
+Run 3 flows and score each on 5 criteria:
+
+**Flow 1: Planning** — Take a vague idea → see if it becomes a real experience with shape.
+- Looking for: compression, clarity, sequence, persistence
+
+**Flow 2: Execution** — Use it to actually do something in the real world.
+- Looking for: friction reduction, accountability, next-step quality, movement
+
+**Flow 3: Re-entry** — Leave, do something, come back later.
+- Looking for: memory continuity, state reconstruction, intelligent next move, aliveness
+
+**5-point scorecard (per flow):**
+1. Was it more useful than plain chat?
+2. Did it create a real object or path?
+3. Did it make me do something?
+4. Did re-entry feel continuous?
+5. Did it generate momentum?
+
+#### Failure modes to watch for
+
+| Mode | Description |
+|------|-------------|
+| Chat with extra steps | Looks structured, but nothing really changed |
+| Pretty persistence | Stuff is saved, but not meaningfully used |
+| Question treadmill | Keeps asking good questions instead of creating action |
+| Flat re-entry | Remembers facts, but not momentum |
+| No bite | Helps, but never pushes |
+
+#### Phase 5C — Quality Signal → Next Sprint Decision
+
+Based on testing results:
+
+| Signal | Next Move |
+|--------|-----------|
+| Structure ✅ State ✅ Behavior ✅ | Move to Sprint 6 (Chaining + Spontaneity) |
+| Structure ✅ State ✅ Behavior ❌ | Focus sprint on: stronger escalation logic, better next-action generation, challenge/pressure mechanics, more assertive re-entry |
+| Structure ✅ State ❌ | Fix synthesis/re-entry engine before moving forward |
+| Structure ❌ | Fix renderer/step quality before anything else |
+
+The coder gets involved when:
+- GPT-authored experiences are proven useful
+- Coder would create experiences that are genuinely impossible for GPT alone (complex branching, real-time data, multi-media, interactive simulations)
+- The coder has enough context to participate (user profile, capability map, experience history)
+
+---
+
+### ✅ Sprint 7 — Genkit Intelligence Layer (Complete)
+
+Replaced naive string summaries with AI-powered intelligence via Genkit + Gemini 2.5 Flash: `synthesizeExperienceFlow`, `extractFacetsFlow`, `suggestNextExperienceFlow`, `compressGPTStateFlow`. Graceful degradation via `runFlowSafe()`. Completion wiring. Migration 005.
+
+---
+
+### ✅ Sprint 8 — Knowledge Tab + MiraK Integration (Complete)
+
+Option B Webhook Handoff architecture. 3-tab study workspace (Learn/Practice/Links), domain-organized grid, home page "Continue Learning" dashboard. Knowledge metadata integrated into Genkit synthesis and suggestion flows. All 6 lanes verified.
+
+---
+
+### ✅ Sprint 9 — Content Density & Agent Thinking Rails (Complete)
+
+Real 3-stage MiraK agent pipeline (strategist + 3 readers + synthesizer + playbook builder). Genkit enrichment flow (refine-knowledge-flow). GPT thinking rails protocol. Multi-unit Knowledge Tab UI. Full pipeline: ~247s, 3-5 units per call.
+
+**Sprint 9 Bug Log (Historical Reference):**
+- `audio_script` 400 error: webhook timeout caused Vercel fallback, which lacked the new constant. Root cause was tunnel latency, not webhook logic.
+- Content truncation: Fixed by having `webhook_packager` produce metadata only, then programmatically injecting full synthesizer/playbook output into the webhook payload.
+
+---
+
+### ✅ Sprint 10 — Curriculum-Aware Experience Engine (Complete)
+
+> **What shipped:** The full curriculum infrastructure. 7 parallel lanes completed.
+
+| Component | Status |
+|---|---|
+| Curriculum outlines table + service + types + validator | ✅ Migration 007 applied |
+| GPT gateway (5 endpoints: state/plan/create/update/discover) | ✅ All routes live |
+| Discover registry (9 capabilities, progressive disclosure) | ✅ Functional |
+| Gateway router (discriminated dispatch to services) | ✅ Functional |
+| Coach API (chat/grade/mastery routes) | ✅ All 3 routes live |
+| Genkit flows (tutorChatFlow + gradeCheckpointFlow) | ✅ Compiled, graceful degradation |
+| Step-knowledge-link service (linkStepToKnowledge, getLinksForStep) | ✅ Functional |
+| KnowledgeCompanion TutorChat mode | ✅ Dual-mode (read/tutor) |
+| GPT instructions rewrite (44 lines, flat payloads) | ✅ |  
+| OpenAPI schema consolidation (5 gateway + MiraK) | ✅ |
+| Curriculum outline service (CRUD + linking + gap assessment) | ✅ |
+
+**Still unbuilt from Sprint 10 backlog (carries to Sprint 12):**
+- `CheckpointStep.tsx` renderer (component NOT created — W1/W2 in Lane 4)
+- Checkpoint registration in renderer-registry (no `checkpoint` entry)
+- Step API knowledge linking (steps route doesn't handle `knowledge_unit_id` on create/GET)
+
+---
+
+### ✅ Sprint 11 — MiraK Enrichment Loop + Gateway Fixes (Code Complete)
+
+> **What shipped (code complete):** MiraK enrichment webhook mode, flat OpenAPI for GPT Actions, Cloud Run stabilization, readKnowledge endpoint, gateway payload tolerance.
+
+| Component | Status |
+|---|---|
+| Flat OpenAPI schemas (no nested `payload` objects) | ✅ |
+| Gateway payload tolerance (all 3 routes handle flat + nested) | ✅ |
+| MiraK `experience_id` in request model + webhook | ✅ |
+| Enrichment webhook mode (append steps + link knowledge) | ✅ |
+| `readKnowledge` endpoint for GPT | ✅ |
+| Discover `dispatch_research` capability | ✅ |
+| GPT instructions enrichment workflow (3-step protocol) | ✅ |
+| MiraK Cloud Run CPU throttling fix | ✅ |
+| MiraK `.dockerignore` + env var mapping | ✅ |
+
+**Operational close (deployment only — no code changes needed):**
+- [ ] MiraK Cloud Run redeploy with enrichment code
+- [ ] Vercel deploy (git push)
+- [ ] GPT Action schema update in ChatGPT settings
+- [ ] End-to-end production enrichment verification
+
+---
+
+### 🔲 Sprint 12 — Learning Loop Productization
+
+> **Goal:** Make the already-built curriculum/coach/knowledge infrastructure visible and coherent in the UI. The test: the three emotional moments work — **Opening the app** (user sees their path and what to focus on), **Stuck in a step** (coach surfaces proactively), **Finishing an experience** (user sees synthesis, growth, and what's next).
+>
+> **Core principle:** The app surfaces stored intelligence; GPT and Coach deepen it. No new backend capability — surface what exists.
+
+#### What Sprint 12 must deliver
+
+| # | Lane | Work |
+|---|---|---|
+| 1 | **CheckpointStep renderer + registration** | Build `CheckpointStep.tsx` (free text + choice inputs, difficulty badges, submit → grade). Register in renderer-registry. Wire step API to handle `knowledge_unit_id` on step create/GET. This is the missing Sprint 10 Lane 4 work. |
+| 2 | **Visible track/outline UI** | Promote curriculum outlines to a first-class UI surface. Home page "Your Path" section: active outlines with subtopics, linked experiences, and `% complete` indicator. Library gets a "Tracks" section. This replaces the generic "Suggested for You." |
+| 3 | **Home page context reconstruction** | "Focus Today" section: most recently active experience + next uncompleted step + direct "Resume Step N →" link. "Research Status" badges: pending/in-progress/landed states for MiraK dispatches. "Welcome back" context: time since last visit, new knowledge units since then. |
+| 4 | **Completion synthesis surfacing** | Experience completion screen shows synthesis results: 2-3 sentence summary (from `synthesis_snapshots.summary`), key signals, growth indicators (facets created/strengthened), and top 1-2 next suggestions (from `next_candidates`). Replace the static congratulations card. |
+| 5 | **Knowledge timing inside steps** | Step renderers use `step_knowledge_links` to show: (1) pre-support card above step content — "Before you start: review [Unit Title]", (2) in-step companion using actual link table (not domain string matching), (3) post-step reveal — "Go deeper: [Unit Title]." |
+| 6 | **Coach surfacing triggers + mastery wiring** | Non-intrusive coach triggers: after failed checkpoint ("Need help? →"), after extended dwell without interaction, after opening a step linked to unread knowledge ("Review [Unit] first →"). Wire checkpoint grades into `knowledge_progress` — auto-promote mastery on good scores, keep honest on struggles. |
+| 7 | **Integration + Browser QA** | Three-moment verification: (1) Open app → see path + focus + research status, (2) Get stuck on a step → coach surfaces, (3) Complete an experience → see synthesis + growth + next step. Full browser walkthrough. |
+
+#### Default Experience Rhythm (Kolb + Deliberate Practice)
+
+Every serious experience should default to this step shape:
+1. **Primer** — short teaching step (lesson, light resolution)
+2. **Workbook / Practice** — applied exercise (challenge or questionnaire)
+3. **Checkpoint** — test understanding (graded checkpoint step)
+4. **Reflection / Synthesis** — consolidate what was done
+5. *(optional)* **Deep dive knowledge** — extended reading or linked unit
+
+#### Async Research UX Rule (Mandatory)
+
+Research dispatch must be visible immediately in the UI:
+- **Pending**: MiraK dispatch acknowledged, research not started yet
+- **In-progress**: Research pipeline running (show on home page)
+- **Landed**: Knowledge units arrived, experience enriched (show badge/notification)
+
+The user must never wonder "did my research request go anywhere?" This eliminates "spinner psychology."
+
+#### Sprint 12 Verification
+
+- User opens the app and sees "Your Path" with active curriculum outlines + progress
+- Home page shows "Focus Today" with resume link to last active step
+- At least one step shows pre-support knowledge card from `step_knowledge_links`
+- Checkpoint step renders, grades answers via Genkit, updates `knowledge_progress`
+- Coach surfaces after checkpoint failure without user action
+- Completion screen shows synthesis summary, growth signals, and next suggestions
+- Research dispatch shows visible status on home page
+- Navigation re-prioritized for learning-first identity
+
+---
+
+### ✅ Sprint 13 — Goal OS + Skill Map
+
+> **Goal:** Give the user a persistent Goal and a visual Skill Tree that makes their position and trajectory visible. Turn "a pile of experiences in a track" into "a growth system with a destination."
+>
+> **Prerequisite:** Sprint 12 must prove the productized learning loop works. The skill map is only useful once experiences visibly track progress.
+
+#### Lanes
+
+| # | Lane | Work |
+|---|---|---|
+| 1 | **Goal entity** | Lightweight `goals` table. Curriculum outlines become children of a goal. |
+| 2 | **Skill domains** | `skill_domains` table with mastery scale: `undiscovered → aware → beginner → practicing → proficient → expert`. Progress computed from linked experience completions. |
+| 3 | **Goal intake protocol** | GPT deep interview → `createGoal` endpoint → dispatch MiraK for domain research. |
+| 4 | **Skill Tree UI** | Visual domain cards with mastery level and progress bar. "What's next" per domain. |
+| 5 | **MiraK goal research pass** | Dispatch MiraK with full goal description. Webhook delivers domain-organized knowledge units. |
+| 6 | **Integration** | Outlines belong to goals. Experiences belong to outlines. `getGPTState` returns goal + domain mastery. |
+
+#### Explicit Deferrals from Sprint 13
+
+- Gamification animations, XP, streaks, level-up effects
+- "Fog of war" / progressive domain discovery UI
+- Mentor archetypes / coach stances
+- Leaderboards or social features
+- Audio/TTS rendering
+
+#### Sprint 11 Verification
+
+- User can create a Goal through GPT intake conversation
+- App shows the Skill Tree with all domains at `undiscovered` on creation
+- Completing an experience updates domain mastery level
+- MiraK research for a goal delivers domain-organized knowledge units
+- `getGPTState` includes active goal + domain mastery levels
+- GPT uses goal context in re-entry and suggests the highest-leverage next domain
+
+---
+
+### ✅ Sprint 14 — Mastery Visibility & Intelligence Wiring
+
+> **Goal:** Surface the mastery engine and ensure the system reacts intelligently to user progress.
+
+- **Skill Tree Upgrades:** Mastery badges, progress bars, and linked experience/knowledge statistics.
+- **Coach Triggers:** Contextual AI surfacing when a user fails a checkpoint or dwells too long.
+- **Completion Retrospective:** Goal trajectory updates, "What Moved" mastery changes, and domain-linked path suggestions.
+- **Intelligent Focus:** Home priority heuristic based on leverage rather than strict recency.
+- **Schema Truth Pass:** Aligned validators, discovery registries, and step payload definitions.
+
+---
+
+### ✅ Sprint 15 — Chained Experiences + Spontaneity
+
+> **Goal:** Make the app feel alive. Experiences chain, loop, interrupt, and progress the user forward.
+
+- **Experience Chaining UI:** Workspace banners for context, "Start Next" post-completion, and dynamic graph wiring.
+- **Ephemeral Injection System:** Real-time urgency toasts forcing low-friction micro-challenges or checks to break linear rigidity. 
+- **Re-Entry Engine Hardening:** Support for interval/manual triggers and high-priority surfacing of "unfinished business" on the home page.
+- **Friction + Weekly Loops:** Automated multi-pass iteration (creating a `loop_record`) when user encounters high friction.
+- **Timeline Evolution:** Event categorization (system, user, knowledge, ephemeral) for full observability. 
+- **Profile Redesign:** Facet cards displaying confidence/evidence linked directly to synthesis snapshots, acting as a clear system-state dashboard.
+
+---
+
+### 🔲 Sprint 16 — Proposal → Realization → Coder Pipeline (Deferred)
+
+> **Goal:** When results from Sprint 5 testing show that GPT-only experiences are too limited, bring the coder into the loop. Generated experiences go through a reviewable pipeline. Ephemeral experiences bypass entirely.
+>
+> **Prerequisite:** Sprint 5 testing proves the experience loop works but identifies specific gaps that only a coder can fill.
+>
+> **Key insight:** The GPT doesn't just "assign" work to the coder — it writes a living spec that IS the coder's instructions. The spec lives as a GitHub Issue. The frontend can also edit it. This makes the issue a contract between GPT, user, and coder.
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | Proposal endpoint | `app/api/experiences/propose/route.ts` — GPT calls this with `{ experienceType, goal, resolution, reentry, sections, taskCount, whyNow }`. Creates a proposed experience instance (persistent). |
+| 2 | Realization record | When coder picks up a proposal, a `realization` record is created linking `experience_instance_id` to GitHub PR (if applicable). |
+| 3 | **Coder instruction issue** | GPT creates a GitHub Issue that serves as the coder's custom instructions. The issue body contains: experience schema, step payloads, resolution constraints, rendering requirements, and acceptance criteria. This is the coder's "prompt" — structured, not free-form. |
+| 4 | **Issue-as-living-spec** | The frontend surfaces the instruction issue in the review UI. The user can edit it before the coder starts (add constraints, change resolution, tweak step content). GPT can also update it mid-flight if the user refines their request. The issue is a 3-way contract: GPT writes it, user refines it, coder executes it. |
+| 5 | **Coder schema contract** | Define a structured schema for the issue body — not free-text markdown. Something parseable: YAML front-matter or a JSON code block that the coder agent can read programmatically. This is effectively a "coder OpenAPI" — the coder knows exactly what fields to read, what to build, and what to validate against. |
+| 6 | Review UI evolution | Refactor `/review/[id]` to support both legacy PR reviews and new experience reviews. User-facing buttons: Preview Experience · Approve · Request Changes · Publish. |
+| 7 | Publish flow | "Publish" = merge PR (if GitHub-backed) + set experience status to `published` + activate in workspace + fire re-entry contract registration. |
+| 8 | Supersede/versioning | When a new version of an experience is published, old version moves to `superseded`. User sees latest in library. |
+| 9 | Realization status tracking | `realization_reviews` table tracks: `drafted → ready_for_review → approved → published`. Maps to PR states internally. |
+| 10 | Arena evolution | `/arena` shows both active realizations and active experiences. Two panes or unified view. |
+| 11 | Coder context generation | Give the coder enough context to participate: user profile, capability map, experience history. See Sprint 9. |
+
+#### Coder Instruction Flow (New Architecture)
+
+```
+GPT conversation
+  ↓ "User wants a complex interactive experience"
+  ↓
+GPT calls propose endpoint
+  ↓ Creates experience_instance (status: proposed)
+  ↓ Creates GitHub Issue with structured spec
+  ↓
+┌──────────────────────────────────────────────────────┐
+│  GitHub Issue = Coder Instructions                    │
+│                                                       │
+│  --- coder-spec ---                                   │
+│  experience_type: challenge                           │
+│  template_id: b0000000-...                            │
+│  resolution:                                          │
+│    depth: heavy                                       │
+│    mode: build                                        │
+│    timeScope: multi_day                               │
+│    intensity: high                                    │
+│  steps:                                               │
+│    - type: lesson                                     │
+│      title: "Understanding the domain"                │
+│      rendering: "needs custom visualization"          │
+│    - type: challenge                                  │
+│      title: "Build a prototype"                       │
+│      rendering: "needs code editor widget"            │
+│  acceptance_criteria:                                 │
+│    - All steps render without fallback                │
+│    - Custom visualizations load real data             │
+│    - Interaction events fire correctly                │
+│  --- end spec ---                                     │
+│                                                       │
+│  Context: [link to user profile]                      │
+│  Capability map: [link to renderer registry]          │
+│  Related experiences: [links]                         │
+└──────────────────────────────────────────────────────┘
+  ↓                          ↑
+  ↓ Coder reads spec         ↑ User edits via frontend
+  ↓ Builds experience        ↑ GPT updates if user refines
+  ↓ Opens PR                 ↑
+  ↓                          ↑
+  ↓ PR links back to issue   ↑
+  ↓ Review in app UI         ↑
+  ↓ Approve → Publish        ↑
+  ↓                          ↑
+  → Experience goes live ←───┘
+```
+
+#### Issue as state and memory (not just instructions)
+
+> **Note:** We don't know the best shape for this yet. The core idea is that the GitHub Issue isn't just a one-shot spec — it's the coder's **working memory** during execution. The issue body starts as instructions, but the coder can update it as it works:
+>
+> - Append a "progress" section as steps are built
+> - Log which renderers it created, which step payloads it validated
+> - Flag blockers or questions for the user/GPT to answer
+> - Mark acceptance criteria as met/unmet
+>
+> This turns the issue into a **live contract** — the coder writes to it, the GPT reads from it, the user can see what's happening in real-time.
+>
+> We may also be able to **trigger GitHub Actions workflows** or **dispatch events** to the coder when the user approves/modifies/requests changes. The webhook pipeline from Sprint 2 already supports `dispatch-workflow` — the question is how to wire it so the coder gets kicked off automatically when a spec is ready.
+>
+> The best implementation pattern is TBD. Could be: issue comments for progress, issue body for state, labels for status. Could be something else entirely. This will become clearer once Sprint 5 testing is done and we know what the coder actually needs to do.
+
+#### DB-aware coder workflows
+
+> **Key idea:** The coder doesn't have to work blind. Supabase secrets (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) are already stored in GitHub Actions environment secrets. This means a GitHub Actions workflow can query the live database during execution.
+>
+> This opens up a powerful pattern: **"based on what's in the database, do this."**
+>
+> Examples:
+> - Coder reads the user's existing experiences from Supabase to understand what renderers and step types have already been used → avoids duplicating work, builds on existing patterns
+> - Coder reads the spec issue + checks the `experience_templates` table to validate that the requested step types actually exist, and falls back or creates new ones if needed
+> - Coder reads `interaction_events` to understand how users have engaged with similar experiences → tailors the new experience based on real usage data
+> - Coder reads `synthesis_snapshots` to understand the user's current goals/direction → makes the experience feel personally relevant
+> - On completion, coder writes the new experience instance + steps directly to Supabase (not just a PR with code) → the experience goes live without a deploy
+>
+> This makes the coder a **living participant** in the system, not just a code generator. It can read the DB, understand context, build something appropriate, and write results back — all within a single GitHub Actions run.
+>
+> **Infrastructure already in place:**
+> - ✅ Supabase secrets in GitHub Actions env
+> - ✅ `dispatch-workflow` endpoint exists (`/api/github/dispatch-workflow`)
+> - ✅ Webhook handlers for `workflow_run` events exist (`lib/github/handlers/handle-workflow-run-event.ts`)
+> - 🔲 Workflow YAML that actually uses the secrets to query Supabase
+> - 🔲 Coder agent that knows how to read/write experience data
+
+#### Why issue-as-instructions matters
+
+1. **The coder never guesses.** Every experience spec is an explicit, parseable contract.
+2. **The user has agency.** They can see and edit the spec before the coder starts.
+3. **The GPT can iterate.** If the user says "actually make it harder," GPT updates the issue body.
+4. **Traceability.** The issue history shows every change to the spec — who changed what and when.
+5. **The coder can have its own "schema."** Just like the GPT has an OpenAPI schema for API calls, the coder can have a structured spec schema for what it reads from issues. Both are typed contracts.
+6. **The issue is working memory.** The coder can write progress back to it. The GPT and user can read it. The issue becomes the shared context for the entire realization.
+
+#### Sprint 16 Verification
+- GPT can POST a proposal that creates both an experience instance AND a GitHub Issue with structured spec
+- User can view and edit the coder spec from the frontend review UI
+- GPT can update the issue body via API when the user refines their request
+- Coder agent can parse the structured spec from the issue body
+- Proposal can be approved and published via the UI
+- Published experience appears in library and workspace with active re-entry contract
+- Legacy PR merge flow still works
+- Ephemeral experiences are confirmed to NOT appear in review queue
+
+### 🔲 Sprint 17 — GitHub Hardening + GitHub App
+
+> **Goal:** Make the realization side production-serious. Migrate from PAT to GitHub App for proper auth.
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | Typed realization workflows | GitHub Actions for: validate experience schema, deploy preview, sync realization status. |
+| 2 | Schema checks | CI check that validates `config_schema` against step renderer contract. |
+| 3 | PR comment summaries | Auto-comment on PRs with experience summary + resolution profile + preview link. |
+| 4 | Selective issue creation | Issues only for large realizations. Small experiences skip issues entirely. Ephemeral never touches GitHub. |
+| 5 | **GitHub App implementation** | Replace PAT with a proper GitHub App. Per-installation trust model. This is required for production — PAT auth doesn't scale and is a security liability. The App gets its own permissions scope (issues, PRs, webhooks, Actions dispatch) and can be installed on specific repos. `lib/github/client.ts` is already designed as the auth boundary — only that file changes. |
+| 6 | **Webhook migration** | Currently using Cloudflare tunnel + raw HMAC webhook. In production, the webhook receiver needs to handle GitHub App webhook format. The signature verification in `lib/github/signature.ts` may need updates for App-style payloads. |
+
+---
+
+### 🔲 Sprint 17 — Personalization + Coder Knowledge
+
+> **Goal:** Vectorize the user through action history and give the coder compiled intelligence.
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | Compressed snapshots | Automated synthesis snapshot generation after each experience completion. |
+| 2 | Facet extraction | Extract `profile_facets` from interaction patterns (interests, skills, effort areas, preferred resolution profiles). |
+| 3 | Preference drift tracking | Compare facets over time to detect shifting interests/goals. |
+| 4 | Experience recommendation layer | Rule-based recommendation: given current facets + completion history + friction signals, suggest next experiences. |
+| 5 | GPT context budget | Compress synthesis packets to fit within GPT context limits while preserving maximum signal. |
+| 6 | Coder-context generation | `lib/services/coder-context-service.ts` — generates `docs/coder-context/*.md` from DB state. Only now, when there's real data to compile from. |
+| 7 | Capability map | `docs/coder-context/capability-map.md` — what renderers exist, what step types are supported, what endpoints are available. |
+
+---
+
+### 🔲 Sprint 18 — Production Deployment
+
+> **Goal:** Deploy Mira Studio to Vercel for real use. Replace the local dev tunnel with production infrastructure. This is where the webhook, auth, and edge function questions get answered.
+>
+> **Reality check:** Right now everything runs on `localhost:3000` with a Cloudflare tunnel (`mira.mytsapi.us`). That works for dev and GPT testing, but for real use we need:
+> - The app hosted somewhere permanent (Vercel)
+> - Webhooks that don't depend on a local machine being on
+> - Auth that isn't a hardcoded user ID
+> - The GPT pointing at a real URL, not a tunnel
+
+| # | Work Item | Detail |
+|---|-----------|--------|
+| 1 | **Vercel deployment** | Deploy Next.js app to Vercel. Environment variables for Supabase, GitHub token/app credentials. Vercel project setup, domain config. |
+| 2 | **GPT server URL update** | Update the OpenAPI schema `servers` URL from `https://mira.mytsapi.us` to the production Vercel URL. Re-configure the Custom GPT. |
+| 3 | **Webhook endpoint hardening** | `/api/webhook/github` currently expects to receive events via tunnel. In production it receives events directly from GitHub. May need to update signature verification, handle GitHub App webhook format. The existing `app/api/webhook/vercel/route.ts` stub needs to be implemented if Vercel deploy hooks are needed. |
+| 4 | **Edge function evaluation** | Determine if any API routes need to run as Vercel Edge Functions or Supabase Edge Functions. Candidates: `/api/gpt/state` (latency-sensitive, called at every GPT conversation start), `/api/experiences/inject` (needs to be fast for ephemeral experiences), `/api/interactions` (high-volume telemetry). Trade-off: edge functions have limitations (no Node.js APIs, different runtime) vs. serverless functions (slower cold starts). |
+| 5 | **Supabase Edge Functions** | If the coder pipeline needs server-side orchestration that can't run in Vercel serverless (long-running, needs to call GitHub API + Supabase in sequence), a Supabase Edge Function may be the right place. Use case: "on experience approval, dispatch coder workflow, create realization record, update issue status" — that's a multi-step side effect that shouldn't block the UI. |
 | 6 | **Auth system** | Replace `DEFAULT_USER_ID` with real auth. Options: Supabase Auth (email/magic link), or just a simple API key for the GPT. The GPT needs to authenticate somehow — either a shared secret header or OAuth. |
 | 7 | **Environment parity** | Ensure local dev still works after production deploy. The Cloudflare tunnel setup should remain for local GPT testing. `.env.local` vs `.env.production` split. |
 | 8 | **GitHub App webhook registration** | If Sprint 8 migrated to a GitHub App, the App's webhook URL needs to point at the Vercel production URL, not the tunnel. This is a one-time config change in the GitHub App settings. |
@@ -1371,11 +6283,12 @@ export type InteractionEventType =
   | 'experience_completed'
   | 'draft_saved'
   | 'checkpoint_graded'
-  | 'checkpoint_graded_batch';
+  | 'checkpoint_graded_batch'
+  | 'practice_attempt';
 
 export interface InteractionEvent {
   id: string;
-  instance_id: string;
+  instance_id: string | null;
   step_id: string | null;
   event_type: InteractionEventType;
   event_payload: any; // JSONB
@@ -3085,4916 +7998,3 @@ paths:
           in: path
           required: true
           schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                target_type:
-                  type: string
-                config:
-                  type: object
-                pipeline_id:
-                  type: string
-      responses:
-        "200":
-          description: Returns updated DeliveryProfile
-    delete:
-      operationId: deleteDeliveryProfile
-      summary: Delete a delivery profile
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  # ─── NOTEBOOKS ───────────────────────────────────────────
-  /notebooks:
-    get:
-      operationId: listNotebooks
-      summary: List all notebooks (falls back to Supabase if NLM unavailable)
-      responses:
-        "200":
-          description: Returns array of Notebook
-    post:
-      operationId: createNotebook
-      summary: Create a new NotebookLM workspace
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-              required: [name]
-      responses:
-        "200":
-          description: Returns { id, name }
-
-  /notebooks/{id}/sources:
-    get:
-      operationId: listSources
-      summary: List sources for a notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns array of source objects
-    post:
-      operationId: addSources
-      summary: Add content URLs to a Notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sources:
-                  type: array
-                  items:
-                    type: string
-              required: [sources]
-      responses:
-        "200":
-          description: OK
-
-  /notebooks/{id}/sources/{source_id}:
-    delete:
-      operationId: removeSource
-      summary: Remove a source from a notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: source_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  /notebooks/{id}/query:
-    post:
-      operationId: queryNotebook
-      summary: Query a notebook for grounded answers
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                query:
-                  type: string
-              required: [query]
-      responses:
-        "200":
-          description: Returns { answer, citations }
-
-  # ─── RESEARCH ────────────────────────────────────────────
-  /research:
-    post:
-      operationId: fullResearch
-      summary: Trigger the standalone discovery→synthesis research pipeline
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                topic:
-                  type: string
-                  description: The research topic to investigate
-                user_id:
-                  type: string
-                  default: default_user
-              required: [topic]
-      responses:
-        "200":
-          description: Returns { run_id, status }
-
-  # ─── CHAT ───────────────────────────────────────────────
-  /chat:
-    post:
-      operationId: nexusChat
-      summary: Pipeline-level conversational assistant powered by Gemini
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                pipeline_id:
-                  type: string
-              required: [message]
-      responses:
-        "200":
-          description: Returns { reply }
-
-components:
-  schemas:
-    AgentTemplateCreate:
-      type: object
-      properties:
-        name:
-          type: string
-        model:
-          type: string
-          default: gemini-2.5-flash
-        instruction:
-          type: string
-        tools:
-          type: array
-          items:
-            type: string
-        prompt_buckets:
-          type: object
-          properties:
-            persona:
-              type: string
-            task:
-              type: string
-            anti_patterns:
-              type: string
-      required: [name, instruction]
-
-    AgentTemplateUpdate:
-      type: object
-      properties:
-        name:
-          type: string
-        model:
-          type: string
-        instruction:
-          type: string
-        tools:
-          type: array
-          items:
-            type: string
-        temperature:
-          type: number
-        swarm_multiplier:
-          type: integer
-        output_schema:
-          type: object
-
-    LearningAtom:
-      type: object
-      properties:
-        id:
-          type: string
-        atom_type:
-          type: string
-          enum: [concept_explanation, worked_example, analogy, misconception_correction, practice_item, reflection_prompt, checkpoint_block, content_bundle]
-        concept_id:
-          type: string
-        content:
-          type: object
-        source_bundle_hash:
-          type: string
-        level:
-          type: string
-          enum: [beginner, intermediate, advanced]
-        pipeline_run_id:
-          type: string
-      required: [id, atom_type, concept_id, content, source_bundle_hash, level]
-
-    DeliveryProfileCreate:
-      type: object
-      properties:
-        name:
-          type: string
-        target_type:
-          type: string
-          enum: [none, generic_webhook, mira_adapter, asset_store_only]
-        config:
-          type: object
-          properties:
-            endpoint:
-              type: string
-            secret_header:
-              type: string
-            payload_mapper:
-              type: string
-            retry_policy:
-              type: object
-              properties:
-                max_retries:
-                  type: integer
-                  default: 3
-                backoff_ms:
-                  type: integer
-                  default: 1000
-            idempotency_key:
-              type: string
-        pipeline_id:
-          type: string
-      required: [name, target_type]
-
-```
-
-### nexus/start.sh
-
-```bash
-#!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────────────
-# start.sh — Nexus Dev Launcher
-# Kills any lingering processes on ports 3000 (Next.js) and 8002 (FastAPI),
-# then starts both services with color-coded output.
-# ─────────────────────────────────────────────────────────────────────────────
-
-set -e
-
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-cd "$ROOT"
-
-# ── Colors ──────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-CYAN='\033[0;36m'
-YELLOW='\033[1;33m'
-MAGENTA='\033[0;35m'
-NC='\033[0m' # No Color
-
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${CYAN}  ⚡  Nexus Dev Launcher${NC}"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-# ── Step 1: Kill existing processes ─────────────────────────────────────────
-echo -e "${YELLOW}⏹  Shutting down existing services...${NC}"
-
-# Kill anything on port 3000 (Next.js)
-PIDS_3000=$(netstat -ano 2>/dev/null | grep ':3000 ' | grep 'LISTENING' | awk '{print $5}' | sort -u)
-if [ -n "$PIDS_3000" ]; then
-    for pid in $PIDS_3000; do
-        echo -e "  ${RED}✖ Killing PID $pid on port 3000${NC}"
-        taskkill //F //PID "$pid" 2>/dev/null || true
-    done
-else
-    echo -e "  ${GREEN}✓ Port 3000 is clear${NC}"
-fi
-
-# Kill anything on port 8002 (FastAPI)
-PIDS_8002=$(netstat -ano 2>/dev/null | grep ':8002 ' | grep 'LISTENING' | awk '{print $5}' | sort -u)
-if [ -n "$PIDS_8002" ]; then
-    for pid in $PIDS_8002; do
-        echo -e "  ${RED}✖ Killing PID $pid on port 8002${NC}"
-        taskkill //F //PID "$pid" 2>/dev/null || true
-    done
-else
-    echo -e "  ${GREEN}✓ Port 8002 is clear${NC}"
-fi
-
-# Kill any existing cloudflared tunnel
-if taskkill //F //IM cloudflared.exe 2>/dev/null >/dev/null; then
-    echo -e "  ${RED}✖ Killed cloudflared process${NC}"
-else
-    echo -e "  ${GREEN}✓ No cloudflared running${NC}"
-fi
-
-# Small pause to let OS release ports
-sleep 1
-echo ""
-
-# ── Step 2: Start FastAPI Service ───────────────────────────────────────────
-echo -e "${MAGENTA}🐍  Starting FastAPI service (port 8002)...${NC}"
-
-# Create venv if it doesn't exist
-if [ ! -d "$ROOT/service/venv" ]; then
-    echo -e "  ${YELLOW}📦  Creating Python venv...${NC}"
-    python -m venv "$ROOT/service/venv"
-fi
-
-# Activate venv
-if [ -d "$ROOT/service/venv/Scripts" ]; then
-    source "$ROOT/service/venv/Scripts/activate"
-elif [ -d "$ROOT/service/venv/bin" ]; then
-    source "$ROOT/service/venv/bin/activate"
-fi
-
-# Install dependencies if needed (check for pydantic as sentinel)
-if ! python -c "import pydantic" 2>/dev/null; then
-    echo -e "  ${YELLOW}📦  Installing Python dependencies...${NC}"
-    pip install -q -r "$ROOT/service/requirements.txt"
-fi
-
-cd "$ROOT"
-python -m service.main 2>&1 | sed "s/^/  [FastAPI] /" &
-FASTAPI_PID=$!
-echo -e "  ${GREEN}✓ FastAPI started (PID: $FASTAPI_PID)${NC}"
-
-# ── Step 3: Start Next.js UI ───────────────────────────────────────────────
-echo -e "${CYAN}⚛  Starting Next.js UI (port 3000)...${NC}"
-
-cd "$ROOT"
-npm run dev 2>&1 | sed "s/^/  [Next.js] /" &
-NEXTJS_PID=$!
-echo -e "  ${GREEN}✓ Next.js started (PID: $NEXTJS_PID)${NC}"
-
-# ── Step 4: Start Cloudflare Tunnel ────────────────────────────────────────
-echo ""
-echo -e "${YELLOW}🌐  Starting Cloudflare tunnel...${NC}"
-cloudflared tunnel run &
-TUNNEL_PID=$!
-echo -e "  ${GREEN}✓ Tunnel started (PID: $TUNNEL_PID)${NC}"
-
-echo ""
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}  ✅  Nexus is running!${NC}"
-echo -e "  ${CYAN}UI:${NC}      http://localhost:3000"
-echo -e "  ${MAGENTA}API:${NC}     http://localhost:8002"
-echo -e "  ${MAGENTA}Health:${NC}  http://localhost:8002/health"
-echo -e "  ${YELLOW}Tunnel:${NC}  (cloudflared is running in background)"
-echo -e "  ${YELLOW}Stop:${NC}    Ctrl+C"
-echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo ""
-
-# ── Trap Ctrl+C to clean up both processes ──────────────────────────────────
-cleanup() {
-    echo ""
-    echo -e "${YELLOW}⏹  Shutting down Nexus...${NC}"
-    kill $FASTAPI_PID 2>/dev/null || true
-    kill $NEXTJS_PID 2>/dev/null || true
-    kill $TUNNEL_PID 2>/dev/null || true
-    taskkill //F //IM cloudflared.exe 2>/dev/null >/dev/null || true
-    wait $FASTAPI_PID 2>/dev/null || true
-    wait $NEXTJS_PID 2>/dev/null || true
-    echo -e "${GREEN}  ✓ All services stopped.${NC}"
-    exit 0
-}
-
-trap cleanup SIGINT SIGTERM
-
-# Wait for both processes — if either dies, keep the other alive
-wait
-
-```
-
-### nexus/roadmap.md
-
-```markdown
-# Nexus — Agent Workbench Roadmap
-
-> A standalone agentic configuration tool + NotebookLM testbed + conversational agent creator.
-> Custom GPT is the primary driver. UI is the optional mixing board.
-> Evolving toward: **a learning-content worker with structured recall that serves Mira.**
-
----
-
-## What This Project Is
-
-**Nexus** is three things at once — with a fourth emerging:
-
-1. **NotebookLM Lab** — Your first hands-on testbed for `notebooklm-py` integration. Every experiment happens here.
-2. **Conversational Agent Creator** — Design, modify, and dispatch multi-agent pipelines through the Custom GPT or through the 4-pane UI. Agents are created and edited via Genkit flows.
-3. **Pipeline Prototyper** — A standalone staging ground for any project that needs ADK/NotebookLM/Genkit agent orchestration.
-4. **Learning-Content Worker** *(emerging)* — A content orchestration layer that generates, stores, retrieves, and sequences grounded learning atoms based on learner-state memory.
-
-### The Core Insight (From GPT)
-
-> **NotebookLM sits AFTER search/curation agents, not replacing search.**
-> Its job is **grounded transformation of curated source packets into small reusable assets.**
-
-This means the pipeline is NOT "ask NotebookLM for a giant answer." It's:
-
-```
-search agents → source curation → NotebookLM ingestion → structured extraction → small artifacts
-```
-
-Each step produces a bounded, typed output. NotebookLM never does raw web discovery — it receives a clean source bundle and produces grounded components.
-
-### The Strategic Reframe (From Engineer Review — 2026-04-03)
-
-> **The real problem is not "how do we make Notes into memory."**
-> **It is: how do we make Mira feel like a living adaptive learning system instead of a document generator plus a few questions?**
-
-This reframe changes Nexus from a standalone tool to the **bridge layer** between knowledge generation and experience generation:
-
-```
-Not just:                          But:
-  find sources                       gather better source material
-  summarize them                     break it into reusable learning atoms
-  dump a knowledge unit              enrich the knowledge base
-                                     remember what the learner already touched
-                                     use interaction history to decide what comes next
-```
-
-The missing mechanism: **stateful content composition** — turning "content exists" into "the system actually teaches me over time."
-
-### What NOT To Do
-
-| Trap | Why It's Wrong |
-|------|---------------|
-| **"Let's make Notes the whole Life OS"** | Too broad, too early, too easy to drift |
-| **"Let's store agent reasoning as the main memory"** | Not useful substrate for the product. What you need is *useful instructional memory*, not mystical agent memory |
-
----
-
-## The Three-Layer Architecture (Emerging)
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         MIRA (Learner Journey)                       │
-│  Owns: goals, curriculum, progression, experiences, checkpoints,     │
-│        mastery state, user interaction history                        │
-│  Asks: "What should this learner see next, and why?"                 │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │ requests enrichment
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     NEXUS / NOTES (Content Worker)                    │
-│  Owns: research, source curation, grounded synthesis, atom storage,  │
-│        content-side memory (atoms, runs, source bundles, enrichment   │
-│        outputs, cache metadata)                                       │
-│  Does: researches topics → turns sources into grounded atoms →       │
-│        stores reusable concept units / explanations / examples /      │
-│        quiz items / prompts → assembles support bundles →             │
-│        returns best next content pieces                               │
-│  Returns: experience support bundles (not raw atoms)                  │
-└─────────────────────────┬───────────────────────────────────────────┘
-                          │ reads/writes
-                          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    MEMORY LAYER (Learning Evidence)                   │
-│  NOT agent thoughts. NOT NotebookLM as a life brain.                 │
-│  Instead: structured learning memory that records:                    │
-│  • which artifacts were shown                                        │
-│  • which were read (skimmed vs completed)                            │
-│  • which were linked to a step                                       │
-│  • how the learner performed after seeing them                       │
-│  • which concepts are covered vs still weak                          │
-│  • checkpoint misses, repeated confusion on concept X                │
-│  • already saw example Y, practiced but not retained                 │
-│  • ready for challenge vs needs primer                               │
-│                                                                      │
-│  This memory drives what gets assembled next.                        │
-│  memory = learner interaction evidence + content usage history        │
-│         + concept coverage state                                     │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Memory Ownership Rule
-
-> [!IMPORTANT]
-> **Canonical learner memory remains in Mira/Supabase.**
-> **Nexus stores content-side memory: atoms, runs, source bundles, enrichment outputs, and cache metadata.**
-> **If Nexus stores learner evidence, it is a mirrored working set keyed to Mira learner state — not a separate source of truth.**
-
-This protects against building two competing memory systems and then spending months reconciling them.
-
-### The Test
-
-> **Can Notes help Mira answer "what should this learner see next, and why?"**
-> If yes → on track.
-> If it only makes prettier knowledge docs → not enough.
-> If it turns into a vague memory engine disconnected from learning flow → drift.
-
----
-
-## Architecture (Current Operational State)
-
-```
-Custom GPT (ChatGPT)
-   ↓ (simple OpenAPI Actions)
-Nexus Service (FastAPI on Cloud Run)         ← Same pattern as MiraK
-   ↓ (real notebooklm-py + agent logic)      ← Same API keys as MiraK
-NotebookLM + Multi-Agent Orchestration       ← Same Supabase as MiraK
-
-↑ (optional manual testing only)
-Nexus UI (the 4-pane Next.js app)            ← Beautiful but never required
-```
-
-- **Custom GPT** does 95% of the work conversationally.
-- **Nexus Service** (FastAPI) is the real backend — runs locally via Cloudflare Tunnel (Cloud Run NO-GO due to Playwright auth).
-- **Nexus UI** (Next.js) is for you to manually test, visualize, or experiment — never required.
-- **Nexus Chat** — Pipeline-level Gemini-powered conversational assistant embedded in the UI right panel.
-
-### Why FastAPI Backend (Not Just Next.js API Routes)?
-
-Three reasons:
-1. **Custom GPT compatibility** — GPT calls OpenAPI Actions against a clean REST API. FastAPI generates OpenAPI specs automatically.
-2. **Python-native** — NotebookLM (`notebooklm-py`) and ADK (`google-adk`) are Python libraries. Wrestling them through Node.js subprocesses adds fragility.
-3. **MiraK pattern** — You already have a working FastAPI → Cloud Run → webhook pipeline. Nexus follows the same deployment model.
-
-The Next.js frontend talks to the FastAPI service via `lib/nexus-api.ts`. The Custom GPT talks to the same FastAPI service directly.
-
----
-
-## Shared Infrastructure
-
-Nexus shares resources with MiraK. **No new projects, no new keys, no new databases.**
-
-| Resource | Value | Shared With |
-|----------|-------|-------------|
-| **GCP Project** | `ticktalk-472521` | MiraK |
-| **Supabase Project** | `bbdhhlungcjqzghwovsx` | MiraK, Mira |
-| **API Key** | `GEMINI_API_KEY` (mapped → `GOOGLE_API_KEY` for ADK) | MiraK |
-| **Webhook Secret** | `MIRAK_WEBHOOK_SECRET` | MiraK, Mira |
-| **Cloud Run Region** | `us-central1` | MiraK |
-
-### Canonical Storage Decision
-
-> [!IMPORTANT]
-> - **Supabase is the canonical runtime store for Phase 4.** All atoms, evidence, coverage state, cache metadata live here.
-> - **BigQuery is optional later for analytics/warehouse exports** — useful if learner behavior aggregation across many experiences becomes a reporting need, but not on the critical path.
-> - **Cloud SQL is out of scope unless Supabase becomes a proven blocker.**
-
-This prevents conceptual drift into "maybe we need a second database."
-
-### Environment Variables (`c:/notes/.env`)
-
-```bash
-# Shared with MiraK — same key, same value
-GEMINI_API_KEY=<same key as c:/mirak/.env>
-MIRAK_WEBHOOK_SECRET=<same secret as c:/mirak/.env>
-
-# Supabase — same project as Mira
-SUPABASE_URL=https://bbdhhlungcjqzghwovsx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<from Mira's .env.local>
-
-# NotebookLM — new, Nexus-specific
-USE_NOTEBOOKLM=true
-# notebooklm-py auth happens via Google login (one-time browser flow)
-# Cloud path: inject storage_state.json via NOTEBOOKLM_AUTH_JSON secret
-
-# UI mode toggle
-NEXT_PUBLIC_USE_REAL_NEXUS=false  # false = mock data, true = hit FastAPI service
-NEXT_PUBLIC_NEXUS_API_URL=http://localhost:8002  # local dev, Cloud Run URL in prod
-```
-
-> [!CAUTION]
-> **Same SOP as MiraK:** Never cat, print, or rename env vars. Never rename `GEMINI_API_KEY`. See `c:/mirak/AGENTS.md` SOP-M2.
-
----
-
-## The Pipeline Design (GPT's Architecture)
-
-This is the correct pipeline — source acquisition agents, then grounded transformation.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Nexus Research Pipeline                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                      │
-│  Stage 1: DISCOVERY AGENTS (search + scrape)                         │
-│  ├── Search the web across multiple angles                           │
-│  ├── Scrape pages, collect PDFs, YouTube URLs, docs, transcripts     │
-│  ├── Cluster sources by topic or purpose                             │
-│  ├── CHECK RESEARCH CACHE before doing new work                      │
-│  └── Output: curated SOURCE BUNDLE (bounded, not infinite)           │
-│                                                                      │
-│  Stage 2: GROUNDING / INGESTION                                     │
-│  ├── NotebookLM path: create/select notebook → add source bundle     │
-│  ├── Gemini Fallback path: context cache + structured extraction     │
-│  ├── CHECK SYNTHESIS CACHE for repeated long context                 │
-│  └── Output: indexed source context ready for queries                │
-│                                                                      │
-│  Stage 3: GROUNDED SYNTHESIS (multiple specific queries)             │
-│  ├── Extract concepts → JSON array                                   │
-│  ├── Compare sources → comparison matrix                             │
-│  ├── Generate quiz/checkpoint material → quiz items JSON             │
-│  ├── Create slide/summary/audio → asset files                        │
-│  ├── Produce grounded JSON outputs → structured artifacts            │
-│  ├── CHECK ATOM CACHE before regenerating existing atoms             │
-│  └── Output: LEARNING ATOMS — reusable, addressable, typed units     │
-│                                                                      │
-│  Stage 4: DELIVERY                                                   │
-│  ├── Assemble atoms into experience support bundles                  │
-│  ├── Deliver via configured delivery profile                         │
-│  ├── IDEMPOTENCY CHECK — no duplicate deliveries                     │
-│  └── Output: stored atoms + delivery to configured target            │
-│                                                                      │
-│  Stage 5: MEMORY UPDATE (learning evidence)                          │
-│  ├── Record which atoms were generated for which learner/goal        │
-│  ├── Track concept coverage state                                     │
-│  ├── Update content usage history                                     │
-│  └── Output: updated content-side memory state                       │
-│                                                                      │
-│  CRITICAL RULES:                                                     │
-│  1. Agents are SOURCE ACQUISITION agents, not course-authoring.      │
-│  2. Grounding receives bounded packets, returns specific outputs.    │
-│  3. No giant essays. No monolithic lessons. Small reusable atoms.    │
-│  4. Memory = learner interaction evidence, NOT agent reasoning.      │
-│  5. Atoms are the storage unit. Bundles are the delivery unit.       │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Caching Strategy
-
-Four distinct caches. Cache the expensive inputs and reusable atoms — NOT the last-mile personalized decision.
-
-### 1. Research Cache
-
-Cache the output of discovery + source curation.
-
-**Key:** `topic + learner_goal + pipeline_version + source_bundle_hash`
-
-If GPT asks for the same enrichment again, Nexus reuses the curated bundle instead of re-searching the web. This is where the most waste disappears — repeated long-context work is where cloud costs balloon.
-
-### 2. Grounded Synthesis / Context Cache
-
-For the Gemini fallback path, cache the repeated long context sent to the model: source packets, structured summaries, stable system instructions, and notebook-derived structured extracts.
-
-**Key:** `source_bundle_hash + query_type + model_version`
-
-This is the highest-ROI cache from a cost perspective. Same source packet + same query type = same result. No need to re-run the model.
-
-### 3. Learning Atom Cache
-
-If Nexus already generated a high-quality `concept_explanation`, `worked_example`, `misconception_correction`, or `checkpoint_block` for the same concept + level + subject version, do **not** regenerate it unless the source bundle changed.
-
-**Key:** `concept_id + atom_type + source_bundle_hash + level`
-
-The atom cache sits directly on top of the learning atom types defined below. If the source material hasn't changed and the concept is the same, the atom is reusable.
-
-### 4. Delivery / Idempotency Cache
-
-If a pipeline posts to Mira or another webhook target, retries should not duplicate the same lesson atoms or enrichment payloads.
-
-**Key:** `run_id + delivery_target + atom_ids`
-
-Prevents duplicate content from appearing in the learner's experience on retry or redelivery.
-
-### What NOT to Cache
-
-> [!WARNING]
-> Do **not** aggressively cache the final personalized "what should this learner see next?" answer. That depends on fresh learner evidence and must be computed live. Cache the expensive inputs and reusable atoms, not the last-mile decision logic.
-
----
-
-## Delivery Profiles
-
-Each saved pipeline can include a delivery profile — making Nexus a general orchestration product where Mira is just one target configuration, not a special fork.
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| `target_type` | Where to deliver | `none`, `generic_webhook`, `mira_adapter`, `asset_store_only` |
-| `payload_mapper` | How to transform atoms into target format | `mira_block_mapper`, `raw_json`, `custom` |
-| `endpoint` | Target URL or internal handler | `https://mira.vercel.app/api/webhook` |
-| `secret_header` | Auth header config | `X-Webhook-Secret: ${MIRAK_WEBHOOK_SECRET}` |
-| `retry_policy` | Retry on failure | `{ max_retries: 3, backoff_ms: 1000 }` |
-| `idempotency_key` | How to prevent duplicate delivery | `run_id + atom_ids` |
-| `success_handler` | What to do on success | `mark_atoms_delivered`, `update_run_status` |
-| `failure_handler` | What to do on failure | `log_error`, `queue_retry`, `alert` |
-
-> **Key insight:** Nexus is a general orchestration product. Mira is a saved delivery profile, not a hardcoded integration. Any future consumer (Flowlink, external apps, etc.) becomes another delivery profile.
-
----
-
-## Learning Atoms & Experience Support Bundles
-
-### Atoms = Storage Unit
-
-Learning atoms are the smallest reusable content pieces Nexus generates and stores.
-
-| Atom Type | Description | Example |
-|-----------|-------------|---------|
-| `concept_explanation` | Clear explanation of one concept | "Feed ranking uses three signal categories..." |
-| `worked_example` | Step-by-step walkthrough | "Here's how to analyze a LinkedIn post's reach..." |
-| `analogy` | Concept mapped to familiar domain | "Feed ranking is like a restaurant host deciding seating order..." |
-| `misconception_correction` | Common wrong belief + fix | "Myth: Posting frequency matters most. Reality: Dwell time dominates." |
-| `practice_item` | Exercise or challenge | "Given this post data, predict which gets more reach and why..." |
-| `reflection_prompt` | Self-assessment question | "How does this change your understanding of content strategy?" |
-| `checkpoint_block` | Quiz item with answer | Multiple choice, true/false, or open-ended |
-| `content_bundle` | Grouped atoms for a specific gap | "Primer: 3 atoms covering the basics of dwell time" |
-
-### Bundles = Delivery Unit
-
-Raw atoms are not what Mira receives. Nexus **assembles** atoms into experience support bundles based on learner state, concept coverage, and current experience context.
-
-| Bundle Type | Purpose | Contents |
-|-------------|---------|----------|
-| `primer_bundle` | Prepare learner for new concept | 1-2 concept_explanations + 1 analogy |
-| `worked_example_bundle` | Show how to apply a concept | 1-2 worked_examples + 1 practice_item |
-| `checkpoint_bundle` | Assess understanding | 3-5 checkpoint_blocks targeting weak concepts |
-| `deepen_after_step_bundle` | Enrich after learner completes a step | 1 reflection_prompt + 1 misconception_correction |
-| `misconception_repair_bundle` | Fix identified confusion | 1-2 misconception_corrections + 1 worked_example |
-
-> **Rule:** Atoms are the storage unit. Bundles are the delivery unit. Mira asks for bundles, Nexus assembles them from cached/generated atoms.
-
----
-
-## NotebookLM Status
-
-### Current Verdict
-
-**Local Experimentation: GO ✅**
-**Autonomous Production via Local Tunnel: GO ✅**
-**Cloud Run Deployment: 🔴 NO-GO** (Playwright auth cannot run headlessly)
-
-The `notebooklm-py` library has been **proven in production**: 23 atoms, 1,139 citations generated in golden path validation. Gemini fallback has been **removed** — Nexus enforces a strict NLM-only grounding policy with fail-fast on auth errors.
-
-### Deployment Path
-
-**Cloudflare Tunnel** (same pattern as Mira's `start.sh`):
-- Nexus runs locally with full browser-based NLM auth
-- Exposed to Custom GPT and Mira via Cloudflare Tunnel
-- `start.sh` handles tunnel + FastAPI startup
-
-### Cloud Migration Path (Future)
-
-If `notebooklm-py` stability degrades, the official **Google Cloud NotebookLM Enterprise API** (Discovery Engine v1alpha REST endpoints) is the migration target. This replaces the unofficial library with official REST/gRPC calls that work headlessly.
-
-See `NOTEBOOKLM_EVAL.md` for full evaluation details.
-
----
-
-## The "Magic Switch" — `lib/nexus-api.ts`
-
-Every UI component calls one abstraction layer. Switch from mock to real with one env var.
-
-```typescript
-export const nexusApi = {
-  // Grounding Vault
-  listNotebooks, createNotebook, addSources, listSources, removeSource,
-
-  // Agent Templates
-  listAgents, getAgent, updateAgent, patchAgent, createAgentFromNL,
-
-  // Pipelines
-  listPipelines, createPipeline, updatePipeline, deletePipeline, dispatchSwarm,
-
-  // Runs & Telemetry
-  listRuns, getRun, subscribeToTelemetry,
-
-  // Assets
-  listAssets,
-
-  // Chat (pipeline-level Gemini conversation)
-  chat,
-};
-```
-
-- **Today** → `NEXT_PUBLIC_USE_REAL_NEXUS=false` → UI works with mock data
-- **When service is ready** → flip to `true` → UI instantly talks to real FastAPI
-- **Custom GPT** → always talks to FastAPI directly, never touches the UI
-
----
-
-## Conversational Agent Creator
-
-You can **create, modify, and compose agents through conversation** — either via the Custom GPT, the Agent Inspector's "Live Modifier" textarea, or the **Nexus Chat** panel.
-
-### Nexus Chat (Pipeline-Level)
-
-The **Nexus Chat** tab in the right panel provides pipeline-level conversation. Unlike the per-agent "Live Modifier" (which only modifies one agent), Nexus Chat can:
-
-- Create new agents by describing what you need
-- Discuss the entire pipeline architecture
-- List and compare existing agents
-- Suggest improvements to agent configurations
-- Guide pipeline composition
-
-Powered by `POST /chat` which sends workspace context (agents, pipelines) to Gemini.
-
-### Genkit Flows for Agent Management
-
-| Flow | Input | Output | Purpose |
-|------|-------|--------|---------|
-| `createAgentFlow` | Natural language description | `AgentTemplate` JSON | Create a new agent from conversation |
-| `modifyAgentFlow` | Existing template + natural language delta | Updated `AgentTemplate` | Modify an agent's behavior conversationally |
-| `composeAgentFlow` | List of agent IDs + pipeline description | `Pipeline` JSON | Compose agents into a pipeline from conversation |
-| `testAgentFlow` | Agent ID + sample input | Agent output + telemetry | Dry-run a single agent |
-| `exportAgentFlow` | Agent/pipeline ID + target format | Python (ADK) or TypeScript (Genkit) code | Export as deployable code |
-
----
-
-## FastAPI Service Endpoints
-
-### Notebooks & Grounding
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/notebooks` | Create a new NotebookLM notebook |
-| `GET` | `/notebooks` | List all notebooks |
-| `POST` | `/notebooks/{id}/sources` | Add sources (URLs, files) to a notebook |
-| `GET` | `/notebooks/{id}/sources` | List sources in a notebook |
-| `DELETE` | `/notebooks/{id}/sources/{source_id}` | Remove a source |
-| `POST` | `/notebooks/{id}/query` | Query a notebook (grounded synthesis) |
-
-### Agents
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/agents` | Create agent template |
-| `POST` | `/agents/create-from-nl` | Create agent from NL description |
-| `GET` | `/agents` | List all agent templates |
-| `GET` | `/agents/{id}` | Get agent details |
-| `PATCH` | `/agents/{id}` | Patch agent fields directly |
-| `PATCH` | `/agents/{id}/modify-from-nl` | Modify agent via NL delta |
-| `DELETE` | `/agents/{id}` | Delete agent template |
-| `POST` | `/agents/{id}/test` | Dry-run agent with sample input |
-| `POST` | `/agents/{id}/export` | Export as Python/TypeScript code |
-
-### Pipelines
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/pipelines` | Create pipeline |
-| `POST` | `/pipelines/compose-from-nl` | Compose pipeline from NL |
-| `GET` | `/pipelines` | List all pipelines |
-| `GET` | `/pipelines/{id}` | Get pipeline details |
-| `PATCH` | `/pipelines/{id}` | Modify pipeline |
-| `DELETE` | `/pipelines/{id}` | Delete pipeline |
-| `POST` | `/pipelines/{id}/dispatch` | Execute pipeline (returns run_id) |
-
-### Runs & Telemetry
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/runs` | List all runs |
-| `GET` | `/runs/{id}` | Get run status + results |
-| `GET` | `/runs/{id}/stream` | SSE stream of live execution events |
-| `GET` | `/runs/{id}/assets` | List generated assets from a run |
-
-### Chat & Research
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/chat` | Pipeline-level Gemini conversation with workspace context |
-| `POST` | `/research` | Full pipeline: discover → ingest → synthesize → deliver |
-
-### Health
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Service status |
-
----
-
-## Sprint Roadmap (Revised — 5 Phases)
-
-### Phase 0 — Foundation ✅ COMPLETE
-
-> UI exists with mock data. Abstraction layer established.
-
-### Phase 1 — NotebookLM Exploration ✅ COMPLETE
-
-> **Verdict: Local Experimentation GO, Autonomous Production NEEDS VIABILITY GATE.**
-> See `NOTEBOOKLM_EVAL.md`. Gemini Grounding Fallback is the current production engine. Cloud viability to be tested in Phase 3.9.
-
-### Phase 2 — Nexus Service (FastAPI Backend) ✅ COMPLETE
-
-> Full CRUD, discovery agents, pipeline runner, SSE telemetry, NL agent creation, chat endpoint. Deployed.
-
-### Phase 3 — Integration & Polish 🟡 IN PROGRESS (Current)
-
-> Connect everything: flip the UI switch, wire the Custom GPT, validate end-to-end.
-
-| # | Task | Status | Notes |
-|---|------|--------|-------|
-| 3.1 | **Flip UI to real mode** | ✅ | `NEXT_PUBLIC_USE_REAL_NEXUS=true` |
-| 3.2 | **Wire Custom GPT Action** | ✅ | `nexus_gpt_action.yaml` updated |
-| 3.3 | **E2E test: dispatch pipeline** | 🟡 | Service runs, needs full dispatch validation |
-| 3.4 | **Browser QA** | 🟡 | Sidebar fix done, node selection fixed, needs clean pass |
-| 3.5 | **Nexus Chat integration** | ✅ | Pipeline-level Gemini chat in right panel |
-| 3.6 | **Unified right sidebar** | ✅ | Runs / Chat / Inspector tabs — no more stacking |
-| 3.7 | **Live Modifier 422 fix** | ✅ | Removed redundant `agent_id` from request body |
-| 3.8 | **Docs cleanup** | ✅ | README updated, scratch files cleaned, `printcode.sh` updated to Nexus |
-| 3.9 | **NotebookLM cloud viability gate** | ✅ | 🔴 NO-GO for Cloud Run. 🟢 GO for Local Tunnel. See verdict above. |
-| 3.10 | **Golden path validation** | ✅ | Full pipeline: research → atoms → bundles → delivery. 23 atoms, 1,139 citations. NLM-only, fail-fast. |
-| 3.11 | **Gemini fallback removal** | ✅ | `fallback.py` gutted. `USE_NOTEBOOKLM` flag removed. Strict NLM-only grounding. |
-
-### Phase 4 — Learning-Content Worker (NEXT — From Engineer Review)
-
-> Transform Nexus from standalone tool into Mira's content orchestration layer with structured learning memory.
-
-> [!IMPORTANT]
-> **Phase 4 starts with the Mira integration contract (4.1).** This must come BEFORE designing tables or building endpoints, because the contract defines what flows between systems and prevents schema drift.
-
-| # | Task | Effort | Notes |
-|---|------|--------|-------|
-| **4.1** | **Mira integration contract** | 3 hr | **FIRST.** Define precisely: what Mira asks Nexus for, when GPT dispatches Nexus, what exact artifact types come back, what gets written back to Mira, what does NOT get written back. This contract shapes everything that follows. |
-| **4.2** | **Define learning atom schema** | 2 hr | Formal types for: concept_explanation, worked_example, analogy, misconception_correction, practice_item, reflection_prompt, checkpoint_block, content_bundle |
-| **4.3** | **Memory layer tables** | 3 hr | Design + migrate in Supabase: `nexus_learning_atoms`, `nexus_learner_evidence` (mirrored working set keyed to Mira state), `nexus_concept_coverage`, `nexus_cache_metadata`. |
-| **4.4** | **Caching infrastructure** | 4 hr | Implement the four caches: research cache, synthesis/context cache, atom cache, delivery idempotency cache. All in Supabase. |
-| **4.5** | **Atom generation pipeline** | 4 hr | Refactor synthesis stage to produce typed learning atoms instead of generic artifacts. Check atom cache before regenerating. |
-| **4.6** | **Experience support bundle assembler** | 4 hr | Given learner state + concept coverage + experience context + requested gap → assemble: `primer_bundle`, `worked_example_bundle`, `checkpoint_bundle`, `deepen_after_step_bundle`, `misconception_repair_bundle`. Atoms = storage, bundles = delivery. |
-| **4.7** | **"What's next?" endpoint** | 4 hr | `POST /learner/{id}/next-content` — given learner state + concept coverage + interaction history, return the best next experience support bundle. This is the **core product differentiator**. |
-| **4.8** | **Interaction evidence recording** | 3 hr | When Mira shows content to a learner, write back to Nexus: viewed/skimmed/completed, checkpoint results, confusion signals, time spent. Nexus stores this as a mirrored working set, NOT the canonical source of truth. |
-| **4.9** | **Concept coverage state** | 3 hr | Track per-learner: which concepts are covered vs thin vs missing. Drive atom selection from gaps, not random generation. |
-| **4.10** | **Delivery profiles** | 3 hr | Make delivery configuration a first-class saved pipeline capability: target type, payload mapper, secret/header config, retry policy, idempotency key. Mira becomes just one saved delivery profile. |
-| **4.11** | **Content sequencing logic** | 4 hr | Beyond "give me the next atom" — primer-before-challenge ordering, spaced repetition signals, prerequisite awareness |
-
-**Exit criteria:** Nexus can answer "what should this learner see next, and why?" based on real learner evidence — not just generate content on demand. It returns *different* content based on what the learner has already seen, struggled with, and mastered.
-
----
-
-## Deferred Platform Work
-
-> [!NOTE]
-> The following are valuable capabilities but are **not on the critical path** and should not distract from the current priority: richer grounded content → reusable atoms → learner-aware next-content selection → Mira delivery.
-
-| Item | Why Deferred |
-|------|-------------|
-| **A2A interoperability** | No external agent consumers yet |
-| **General MCP plugin marketplace** | Current agents are internal; plugin discovery is premature |
-| **Multi-database memory architecture** | Supabase is canonical; adding databases is complexity without proven need |
-| **Full enterprise HITL orchestration** | Single-user product; human-in-the-loop patterns can wait |
-| **NotebookLM as production backbone** | Depends on Phase 3.9 gate; Gemini Fallback covers production today |
-
----
-
-## Key Decisions (Revised)
-
-### 1. FastAPI service vs Next.js API routes?
-
-**FastAPI is the primary backend.** The Next.js UI is a visualization layer, not the execution engine.
-
-### 2. Where does agent creation logic live?
-
-**In the FastAPI service**, using Gemini (`google-genai`) to parse NL descriptions into `AgentTemplate` JSON.
-
-### 3. Storage strategy?
-
-**Supabase is canonical.** Period.
-
-- **Supabase** — All runtime storage: atoms, evidence, coverage, cache metadata, pipelines, runs, assets.
-- **BigQuery** — Optional later for analytics/warehouse exports. Not on critical path.
-- **Cloud SQL** — Out of scope unless Supabase becomes a proven blocker.
-
-### 4. What is the memory layer?
-
-**Narrowly defined instructional memory — NOT general agent memory.**
-
-```
-memory = learner interaction evidence
-       + content usage history
-       + concept coverage state
-
-NOT: everything the agents ever thought
-NOT: NotebookLM as a life brain
-NOT: generic memory OS
-```
-
-**Canonical learner memory stays in Mira.** Nexus stores content-side memory and a mirrored working set of learner evidence.
-
-### 5. How does delivery work?
-
-**Delivery profiles are first-class pipeline configuration.** Nexus is a general orchestration product. Mira is one configured delivery target. Any future consumer is another delivery profile, not a fork.
-
-### 6. What is the content model?
-
-**Atoms are the storage unit. Bundles are the delivery unit.**
-
-Nexus generates and caches atoms. When Mira asks for enrichment, Nexus assembles atoms into experience support bundles based on learner state. Mira never receives raw atoms — it receives assembled, contextualized bundles.
-
-### 7. Two Cloud Run services or one?
-
-**Two services, same GCP project:**
-- `mirak` — production research (MiraK v0.4, port 8001, already deployed)
-- `nexus` — R&D + agent creation + learning-content worker (port 8002)
-
----
-
-## Project Relationships (Revised)
-
-```
-c:/mirak (MiraK v0.4)          c:/notes (Nexus)                 c:/mira (Mira Studio)
-  │ PRODUCTION research          │ R&D workbench +               │ learning platform
-  │ pipeline                     │ content worker                 │
-  │                              │                                │
-  │ Gemini-based synthesis       │ Gemini Fallback (prod) ─────── │ requests enrichment:
-  │                              │ NotebookLM (pending gate)      │ "give me richer content"
-  │                              │                                │ "give me next primer bundle"
-  │                              │                                │ "give me examples for
-  │                              │                                │  struggle area"
-  │                              │                                │ "give me checkpoint bundle"
-  │                              │                                │
-  │ receives validated ←──────── │ exports pipeline upgrades      │
-  │ pipeline upgrades            │                                │
-  │                              │ atom generation + caching ──── │ receives support bundles:
-  │                              │ bundle assembly ──────────────  │ primer, worked_example,
-  │                              │ delivery profiles ─────────────│ checkpoint, deepen, repair
-  │                              │                                │
-  │                              │ content-side memory            │ canonical learner memory
-  │                              │ (mirrored working set) ←────── │ (writes back evidence)
-  │                              │                                │
-  │ Cloud Run :8001              │ Local :3000 (UI) + :8002 (svc) │ Vercel + Supabase
-  │ Python/FastAPI               │ Next.js + Python/FastAPI       │ Next.js + Genkit
-  │ google-adk                   │ google-adk + notebooklm-py     │ Genkit
-  │ GEMINI_API_KEY                │ GEMINI_API_KEY (same key)       │ GOOGLE_AI_API_KEY
-  │                              │                                │
-  ├── Same GCP project ──────── ├── Same GCP project              │
-  ├── Same Supabase ─────────── ├── Same Supabase ────────────── ┤
-  └──────────────────────────────┴────────────────────────────────┘
-```
-
----
-
-## Success Metrics (Revised)
-
-| Metric | Target | Phase |
-|--------|--------|-------|
-| notebooklm-py go/no-go documented | ✅ | Phase 1 |
-| UI works in mock mode through `nexus-api.ts` | ✅ | Phase 0 |
-| FastAPI service runs locally on :8002 | ✅ | Phase 2 |
-| Custom GPT can create an agent via NL description | ✅ | Phase 2 |
-| Gemini Fallback produces grounded artifacts | ✅ | Phase 2 |
-| UI flips to real mode, shows live data | ✅ | Phase 3 |
-| Nexus Chat provides pipeline-level conversation | ✅ | Phase 3 |
-| Unified right sidebar (no stacking) | ✅ | Phase 3 |
-| Browser E2E clean pass | 🟡 | Phase 3 |
-| NotebookLM cloud viability gate completed | ⬜ | Phase 3.9 |
-| Mira integration contract defined | ⬜ | Phase 4.1 |
-| Learning atom schema defined | ⬜ | Phase 4.2 |
-| Caching infrastructure (4 caches) deployed | ⬜ | Phase 4.4 |
-| Experience support bundle assembler working | ⬜ | Phase 4.6 |
-| "What's next?" endpoint returns personalized bundles | ⬜ | Phase 4.7 |
-| Content differs based on learner evidence | ⬜ | Phase 4 exit |
-| Delivery profiles replace hardcoded Mira integration | ⬜ | Phase 4.10 |
-
----
-
-## Non-Goals
-
-- ❌ **Not replacing MiraK production.** MiraK stays live. Nexus is the R&D sandbox.
-- ❌ **Not a full Mira rebuild.** Validated components merge into Mira; the workbench stays separate.
-- ❌ **Not building the UI as the primary interface.** Custom GPT drives 95% of usage. UI is the optional mixing board.
-- ❌ **Not creating new GCP projects or Supabase instances.** Everything runs on existing shared infra.
-- ❌ **Not a general-purpose memory engine.** Memory is narrowly scoped to learning evidence, not agent thoughts or life OS.
-- ❌ **Not a generic Life OS.** Too broad, too early, too easy to drift.
-- ❌ **Not a multi-database architecture.** Supabase is canonical. BigQuery is analytics-only, later.
-- ❌ **Not an A2A/MCP platform.** Deferred until core learning-content loop is validated.
-
----
-
-## Merge Plan (Updated)
-
-### 1. What Moves to `c:/mira`
-- **Enrichment Contract:** Mira learns to *ask* Nexus for support bundles, not generate content locally.
-- **Learning Atom Types:** The atom schema becomes part of Mira's content model.
-- **Bundle Renderer:** Mira's `ExperienceRenderer` learns to consume Nexus support bundles.
-- **Evidence Write-Back:** Mira writes interaction evidence back to Nexus after learner engagement.
-- **Genkit Flow Stubs:** Agent creation and modification flows ported to TypeScript Genkit.
-- **Telemetry Subscriptions:** Real-time feedback UI patterns.
-
-### 2. What Moves to `c:/mirak`
-- **Pipeline Upgrades:** Validated research pipeline with Gemini grounding replaces MiraK v1 synthesis.
-- **Golden Path Pipeline:** `[strategist → deep_readers → synthesizer → packager]` becomes default.
-
-### 3. What Stays in `c:/notes`
-- **The Nexus Workbench UI:** Standalone internal tool for testing.
-- **Template Authoring DB:** `nexus_agent_templates` and `nexus_pipelines`.
-- **Content Worker Runtime:** Atom generation, caching, bundle assembly, delivery profiles.
-- **Content-Side Memory:** `nexus_learning_atoms`, `nexus_concept_coverage`, `nexus_cache_metadata`.
-- **Mirrored Learner Evidence:** `nexus_learner_evidence` (working set, not source of truth).
-- **Nexus Chat:** Pipeline-level conversational interface.
-
----
-
-## Changelog
-
-- **2026-04-04 (Sprint 3B — Golden Path Validated + Docs Finalized):** (1) Golden path fully validated: research → atoms → bundles → delivery. 23 atoms with 1,139 citations produced. (2) Gemini fallback completely removed — strict NLM-only grounding policy with fail-fast. (3) Cloud Viability Gate resolved: 🔴 NO-GO for Cloud Run, 🟢 GO for Local Tunnel. (4) `printcode.sh` updated to dump Nexus service code instead of deprecated MiraK. (5) Phase 3 fully complete — all tasks closed. (6) `mira2.md` updated with Agent Operational Memory, proven NLM status, agentic knowledge graphs, GitHub Models API, TraceCapsules. (7) Architecture updated: Nexus deploys via Cloudflare Tunnel, not Cloud Run.
-- **2026-04-04 (Sprint 3A — Golden Path Attempt):** Attempted full pipeline test. FastAPI startup failure due to Python environment mismatch (`start.sh` venv incident). Diagnosed and resolved.
-- **2026-04-03 (Engineer Follow-Up — Caching + Delivery + Bundles):** 8 roadmap changes integrated. (1) Caching strategy with 4 caches: research, synthesis/context, atom, delivery idempotency. (2) Storage decision locked: Supabase canonical, BigQuery analytics-only later, Cloud SQL out. (3) NotebookLM reclassified from blanket no-go to "needs cloud viability gate" — Phase 3.9 added. (4) Delivery profiles made first-class pipeline config — Mira is a target, not a fork. (5) Memory ownership tightened: canonical learner memory in Mira, content-side memory in Nexus, mirrored working set. (6) Experience support bundles added as the delivery unit between atoms and full experiences. (7) Mira integration contract moved to Phase 4.1 (first, before tables). (8) A2A/MCP/multi-DB deferred from critical path.
-- **2026-04-03 (Engineer Review — Strategic Reframe):** Major strategic reframe. Nexus evolving from standalone workbench to learning-content worker with structured recall. Three-layer architecture defined: Mira (learner journey) → Nexus (content worker) → Memory (learning evidence). Phase 4 added.
-- **2026-04-03 (Sprint 2 Closeout):** Phase 3 near-complete. Unified right sidebar. Nexus Chat added. Live Modifier 422 fixed. Node selection no longer hijacks panel mode. NotebookLM verdict normalized across all docs.
-- **2026-04-03 (Sprint 2):** 7-lane development sprint. All lanes 1-6 complete. Lane 7 (Integration QA) in progress.
-- **2026-04-03 (Sprint 1):** Foundation, service scaffolding, NotebookLM evaluation.
-
----
-
-*Document revised: 2026-04-04 · Sources: Engineer architecture review (x2), deep-research caching analysis, Sprint 2 implementation, NOTEBOOKLM_EVAL.md verdict, GPT pipeline design, Sprint 3 golden path validation, Nexus production readiness assessment*
-
-```
-
-### nexus/service/__init__.py
-
-```python
-# Nexus FastAPI Service Package
-
-```
-
-### nexus/service/config.py
-
-```python
-import os
-from dotenv import load_dotenv
-
-# Load .env relative to this file's directory (service/.env or project root/.env)
-# Using standard search path
-load_dotenv(".env")
-load_dotenv("../.env")
-load_dotenv(".env.local")
-load_dotenv("../.env.local")
-
-# GEMINI_API_KEY is the canonical env var for the Gemini key.
-# Also set GOOGLE_API_KEY for ADK compatibility.
-# Unset any stale GEMINI_API_KEY copy the SDK might pick up differently.
-if os.environ.get('GEMINI_API_KEY'):
-    os.environ['GOOGLE_API_KEY'] = os.environ['GEMINI_API_KEY']
-
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
-MIRAK_WEBHOOK_SECRET = os.environ.get("MIRAK_WEBHOOK_SECRET")
-SUPABASE_URL = os.environ.get("SUPABASE_URL") or os.environ.get("NEXT_PUBLIC_SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY") or os.environ.get("NEXT_PUBLIC_SUPABASE_ANON_KEY")
-PORT = int(os.environ.get("PORT", 8002))
-SKIP_AUDIO = os.environ.get("SKIP_AUDIO", "true").lower() == "true"  # Skip audio in dev; set to false for production
-
-# Verify critical vars
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    print("WARNING: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set.")
-if not GEMINI_API_KEY:
-    print("WARNING: GEMINI_API_KEY not set.")
-
-```
-
-### nexus/service/main.py
-
-```python
-import logging
-import uuid
-import json
-from contextlib import asynccontextmanager
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from supabase import create_client, Client
-
-from .config import PORT, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from .models import (
-    AgentTemplateCreate, AgentTemplateUpdate,
-    AgentTemplateNLCreate, AgentTemplateNLModify,
-    PipelineCreate, PipelineUpdate, PipelineDispatch, PipelineNLCompose,
-    AgentTestRequest, AgentTestResponse,
-    AgentExportRequest, AgentExportResponse,
-    ResearchRequest, NotebookCreate, NotebookAddSources, NotebookQuery,
-    PipelineRun, ChatRequest, ChatResponse, LearningAtom
-)
-from .agents import templates
-from .agents.pipeline_runner import run_pipeline, get_event_generator
-from .synthesis.extractor import extractor # Added
-from .grounding.notebooklm import nlm_manager
-from .delivery import profiles
-from .delivery.profiles import DeliveryProfileCreate, DeliveryProfileUpdate
-
-# Logging setup
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
-    datefmt='%H:%M:%S'
-)
-logger = logging.getLogger("nexus")
-
-# Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Seed templates if table is empty
-    logger.info("Initializing Nexus service...")
-    try:
-        templates.seed_templates_if_empty()
-    except Exception as e:
-        logger.error(f"Failed to seed templates: {e}")
-    yield
-    # Shutdown
-    await nlm_manager.close()
-
-app = FastAPI(
-    title="Nexus — Agent Workbench API",
-    description="Backend for designing, testing, and dispatching multi-agent pipelines.",
-    version="0.1.0",
-    lifespan=lifespan
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/health")
-def health():
-    return {"status": "ok", "service": "nexus", "version": "0.1.0"}
-
-# ─── AGENT TEMPLATES ─────────────────────────────────────────────────────────
-
-@app.post("/agents")
-def create_agent(req: AgentTemplateCreate):
-    return templates.create_template(req)
-
-@app.get("/agents")
-def list_agents():
-    return templates.list_templates()
-
-@app.get("/agents/{id}")
-def get_agent(id: str):
-    agent = templates.get_template(id)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent template not found")
-    return agent
-
-@app.patch("/agents/{id}")
-def update_agent(id: str, req: AgentTemplateUpdate):
-    agent = templates.update_template(id, req)
-    if not agent:
-        raise HTTPException(status_code=404, detail="Agent template not found")
-    return agent
-
-@app.delete("/agents/{id}")
-def delete_agent(id: str):
-    success = templates.delete_template(id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Agent template not found")
-    return {"status": "success"}
-
-# ─── LANE 4: AGENT NL CREATION / MODIFICATION ────────────────────────────────
-
-@app.post("/agents/create-from-nl")
-def create_agent_from_nl(req: AgentTemplateNLCreate):
-    """W1: Create an AgentTemplate from a natural language description via Gemini."""
-    try:
-        return templates.nl_create_agent(req.description)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.patch("/agents/{id}/modify-from-nl")
-def modify_agent_from_nl(id: str, req: AgentTemplateNLModify):
-    """W2: Apply a natural language delta to an existing AgentTemplate."""
-    try:
-        result = templates.nl_modify_agent(id, req.delta)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agents/{id}/test")
-def test_agent_endpoint(id: str, req: AgentTestRequest):
-    """W4: Dry-run an agent with sample input. Instantiates real ADK LlmAgent."""
-    try:
-        result = templates.test_agent(id, req.sample_input)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/agents/{id}/export")
-def export_agent_endpoint(id: str, req: AgentExportRequest):
-    """W5: Export agent as Python (ADK) or TypeScript (Genkit) deployable code."""
-    if req.format not in ("python", "typescript"):
-        raise HTTPException(status_code=400, detail="format must be 'python' or 'typescript'")
-    try:
-        result = templates.export_agent(id, req.format, req.pipeline_id)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ─── LANE 4: NL PIPELINE COMPOSITION ─────────────────────────────────────────
-
-@app.post("/pipelines/compose-from-nl")
-def compose_pipeline_from_nl(req: PipelineNLCompose):
-    """W3: Compose a Pipeline from a natural language description and agent ID list."""
-    try:
-        return templates.nl_compose_pipeline(req.description, req.agent_ids)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ─── PIPELINES ───────────────────────────────────────────────────────────────
-
-@app.post("/pipelines")
-def create_pipeline(req: PipelineCreate):
-    data = req.model_dump()
-    response = supabase.table("nexus_pipelines").insert(data).execute()
-    return response.data[0]
-
-@app.get("/pipelines")
-def list_pipelines():
-    response = supabase.table("nexus_pipelines").select("*").order("created_at").execute()
-    return response.data
-
-@app.get("/pipelines/{id}")
-def get_pipeline(id: str):
-    response = supabase.table("nexus_pipelines").select("*").eq("id", id).execute()
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-    return response.data[0]
-
-@app.patch("/pipelines/{id}")
-def update_pipeline(id: str, req: PipelineUpdate):
-    data = req.model_dump(exclude_unset=True)
-    response = supabase.table("nexus_pipelines").update(data).eq("id", id).execute()
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-    return response.data[0]
-
-@app.delete("/pipelines/{id}")
-def delete_pipeline(id: str):
-    supabase.table("nexus_pipelines").delete().eq("id", id).execute()
-    return {"status": "success"}
-
-# ─── RUNS & DISPATCH ────────────────────────────────────────────────────────
-
-@app.post("/pipelines/{id}/dispatch")
-async def dispatch_pipeline(id: str, req: PipelineDispatch, background_tasks: BackgroundTasks):
-    # Verify pipeline exists
-    pipeline = supabase.table("nexus_pipelines").select("*").eq("id", id).execute()
-    if not pipeline.data:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-    
-    run_id = str(uuid.uuid4())
-    
-    # Create run record
-    supabase.table("nexus_runs").insert({
-        "id": run_id,
-        "pipeline_id": id,
-        "input": {"topic": req.input, "params": req.params},
-        "status": "pending"
-    }).execute()
-    
-    # Start background task
-    background_tasks.add_task(run_pipeline, run_id, id, req.input, "system_user")
-    
-    return {"run_id": run_id, "status": "pending"}
-
-@app.get("/runs")
-def list_runs(pipeline_id: str = None):
-    query = supabase.table("nexus_runs").select("*").order("created_at", desc=True).limit(50)
-    if pipeline_id:
-        query = query.eq("pipeline_id", pipeline_id)
-    return query.execute().data
-
-@app.get("/runs/{id}")
-def get_run(id: str):
-    response = supabase.table("nexus_runs").select("*").eq("id", id).execute()
-    if not response.data:
-        raise HTTPException(status_code=404, detail="Run not found")
-    return response.data[0]
-
-@app.get("/runs/{id}/stream")
-def stream_run(id: str):
-    return StreamingResponse(get_event_generator(id), media_type="text/event-stream")
-
-@app.get("/runs/{id}/assets")
-def get_run_assets(id: str):
-    """W4: Return artifacts stored during a run."""
-    response = supabase.table("nexus_assets").select("*").eq("run_id", id).execute()
-    return response.data
-
-# ─── ATOMS (Lane 1, W3) ───────────────────────────────────────────────────────
-
-@app.get("/atoms")
-def list_atoms(concept_id: str = None, type: str = None, level: str = None):
-    if not supabase: return []
-    query = supabase.table("nexus_learning_atoms").select("*")
-    if concept_id: query = query.eq("concept_id", concept_id)
-    if type: query = query.eq("atom_type", type)
-    if level: query = query.eq("level", level)
-    return query.execute().data
-
-@app.get("/atoms/{id}")
-def get_atom(id: str):
-    if not supabase: raise HTTPException(status_code=404, detail="Atom not found")
-    res = supabase.table("nexus_learning_atoms").select("*").eq("id", id).execute()
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Atom not found")
-    return res.data[0]
-
-@app.post("/atoms")
-def create_atom(req: LearningAtom):
-    if not supabase: return req.model_dump()
-    data = req.model_dump(mode='json')
-    res = supabase.table("nexus_learning_atoms").insert(data).execute()
-    return res.data[0] if res.data else data
-
-@app.delete("/atoms/{id}")
-def delete_atom(id: str):
-    if not supabase: return {"status": "success"}
-    supabase.table("nexus_learning_atoms").delete().eq("id", id).execute()
-    return {"status": "success"}
-
-# ─── BUNDLES (Lane 2) ────────────────────────────────────────────────────────
-
-class BundleAssembleRequest(BaseModel):
-    bundle_type: str  # primer_bundle, worked_example_bundle, checkpoint_bundle, etc.
-    concept_ids: List[str]
-    learner_id: Optional[str] = None
-    coverage_state: Optional[Dict[str, Any]] = None
-
-
-
-@app.post("/bundles/assemble")
-def assemble_bundle_endpoint(req: BundleAssembleRequest):
-    """Assemble a bundle from stored atoms based on type and concept IDs."""
-    from .synthesis.bundle_assembler import assemble_bundle
-    try:
-        result = assemble_bundle(req.bundle_type, req.concept_ids, req.learner_id, req.coverage_state)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Bundle assembly error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ─── NOTEBOOKS ───────────────────────────────────────────────────────────────
-
-@app.post("/notebooks")
-async def create_notebook(req: NotebookCreate):
-    try:
-        nb_id = await nlm_manager.create_notebook(req.name)
-        if supabase:
-            supabase.table("nexus_notebooks").insert({"id": nb_id, "name": req.name}).execute()
-        return {"id": nb_id, "name": req.name}
-    except Exception as e:
-        logger.error(f"Error creating notebook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/notebooks")
-async def list_notebooks():
-    try:
-        return await nlm_manager.list_notebooks()
-    except Exception as e:
-        logger.warning(f"NLM list_notebooks failed, falling back to Supabase: {e}")
-        # Fallback: return notebooks from Supabase
-        if supabase:
-            response = supabase.table("nexus_notebooks").select("*").execute()
-            return response.data
-        return []
-
-@app.post("/notebooks/{id}/sources")
-async def add_sources(id: str, req: NotebookAddSources):
-    try:
-        results = await nlm_manager.add_sources(id, req.sources)
-        return {"id": id, "sources_added": results}
-    except Exception as e:
-        logger.error(f"Error adding sources: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/notebooks/{id}/sources")
-def list_sources(id: str):
-    """Return sources for a notebook from Supabase (or empty list)."""
-    if not supabase:
-        return []
-    try:
-        response = supabase.table("nexus_notebook_sources").select("*").eq("notebook_id", id).execute()
-        return response.data
-    except Exception:
-        return []
-
-@app.delete("/notebooks/{id}/sources/{source_id}")
-def remove_source(id: str, source_id: str):
-    """Remove a source from a notebook."""
-    if supabase:
-        supabase.table("nexus_notebook_sources").delete().eq("id", source_id).execute()
-    return {"status": "success"}
-
-@app.post("/notebooks/{id}/query")
-async def query_notebook(id: str, req: NotebookQuery):
-    try:
-        return await nlm_manager.query_notebook(id, req.query)
-    except Exception as e:
-        logger.error(f"Error querying notebook: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ─── RESEARCH (Standalone Pipeline) ──────────────────────────────────────────
-
-@app.post("/research")
-async def research_endpoint(req: ResearchRequest, background_tasks: BackgroundTasks):
-    """W5: Standalone discovery->ingestion->synthesis research pipeline."""
-    run_id = str(uuid.uuid4())
-    
-    # Create run record — use deterministic UUID for the virtual research pipeline
-    RESEARCH_PIPELINE_ID = "00000000-0000-0000-0000-000000000001"
-    if supabase:
-        supabase.table("nexus_runs").insert({
-            "id": run_id,
-            "pipeline_id": RESEARCH_PIPELINE_ID,
-            "input": {"topic": req.topic},
-            "status": "pending"
-        }).execute()
-    
-    # Start background task
-    background_tasks.add_task(extractor.run_research_pipeline, run_id, req.topic, req.user_id)
-    
-    return {"run_id": run_id, "status": "pending"}
-
-# ─── CACHE MANAGEMENT (Lane 3) ───────────────────────────────────────────────
-
-@app.delete("/cache")
-def flush_cache(type: str = None, older_than_hours: int = None):
-    """W4: Provide manual cache flush via API."""
-    if not supabase:
-        raise HTTPException(status_code=500, detail="Supabase not configured")
-    query = supabase.table("nexus_cache_metadata").delete()
-    if type:
-        query = query.eq("cache_type", type)
-    if older_than_hours is not None:
-        from datetime import datetime, timezone, timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=older_than_hours)
-        query = query.lt("created_at", cutoff.isoformat())
-    
-    try:
-        query.execute()
-        return {"status": "success", "message": "Cache flushed"}
-    except Exception as e:
-        logger.error(f"Cache flush error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ─── DELIVERY PROFILES ───────────────────────────────────────────────────────
-
-@app.post("/delivery-profiles")
-def create_delivery_profile(req: DeliveryProfileCreate):
-    return profiles.create_profile(req)
-
-@app.get("/delivery-profiles")
-def list_delivery_profiles():
-    return profiles.list_profiles()
-
-@app.get("/delivery-profiles/{id}")
-def get_delivery_profile(id: str):
-    profile = profiles.get_profile(id)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Delivery profile not found")
-    return profile
-
-@app.patch("/delivery-profiles/{id}")
-def update_delivery_profile(id: str, req: DeliveryProfileUpdate):
-    profile = profiles.update_profile(id, req)
-    if not profile:
-        raise HTTPException(status_code=404, detail="Delivery profile not found")
-    return profile
-
-@app.delete("/delivery-profiles/{id}")
-def delete_delivery_profile(id: str):
-    success = profiles.delete_profile(id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Delivery profile not found")
-    return {"status": "success"}
-
-# ─── NEXUS CHAT (Pipeline-level Gemini conversation) ────────────────────
-
-@app.post("/chat", response_model=ChatResponse)
-async def nexus_chat(req: ChatRequest):
-    """Pipeline-level conversational assistant powered by Gemini."""
-    from google import genai
-    
-    try:
-        # Gather workspace context
-        agents_list = templates.list_templates()
-        agent_summary = "\n".join([f"- {a.get('name', '?')} ({a.get('model', '?')}): {(a.get('instruction') or '')[:100]}" for a in agents_list[:10]])
-        
-        pipeline_context = ""
-        if req.pipeline_id and supabase:
-            pip = supabase.table("nexus_pipelines").select("*").eq("id", req.pipeline_id).execute()
-            if pip.data:
-                p = pip.data[0]
-                pipeline_context = f"\nActive Pipeline: {p.get('name', 'Unnamed')} with {len(p.get('nodes', []))} nodes and {len(p.get('edges', []))} edges."
-        
-        system_prompt = f"""You are Nexus Assistant, an AI agent workbench copilot. You help users design, configure, and operate multi-agent pipelines.
-
-Workspace context:
-{agent_summary}
-{pipeline_context}
-
-Capabilities you can guide users through:
-- Creating new agents (describe what you want, I’ll scaffold it)
-- Modifying agent configurations (temperature, tools, persona, instructions)
-- Composing pipelines from existing agents
-- Explaining pipeline architecture and agent roles
-- Suggesting improvements to agent configurations
-- Discussing research topics and how to structure discovery pipelines
-
-Be concise, practical, and specific. Use markdown formatting. When suggesting agent creation, provide concrete configurations."""
-        
-        client = genai.Client()
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=f"{system_prompt}\n\nUser: {req.message}"
-        )
-        
-        return ChatResponse(reply=response.text or "I couldn't generate a response. Try rephrasing your question.")
-        
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        return ChatResponse(reply=f"Chat error: {str(e)}. Make sure the service has GEMINI_API_KEY configured.")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("service.main:app", host="0.0.0.0", port=PORT, reload=True)
-
-```
-
-### nexus/service/models.py
-
-```python
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from uuid import UUID
-
-class PromptBuckets(BaseModel):
-    persona: Optional[str] = None
-    task: Optional[str] = None
-    anti_patterns: Optional[str] = None
-
-class AgentTemplateCreate(BaseModel):
-    name: str
-    model: str = "gemini-2.5-flash"
-    instruction: str
-    tools: List[str] = []
-    sub_agents: List[str] = []
-    prompt_buckets: PromptBuckets = Field(default_factory=PromptBuckets)
-    output_schema: Optional[Dict[str, Any]] = None
-    temperature: float = 0.2
-    swarm_multiplier: int = 1
-
-class AgentTemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    model: Optional[str] = None
-    instruction: Optional[str] = None
-    tools: Optional[List[str]] = None
-    sub_agents: Optional[List[str]] = None
-    prompt_buckets: Optional[PromptBuckets] = None
-    output_schema: Optional[Dict[str, Any]] = None
-    temperature: Optional[float] = None
-    swarm_multiplier: Optional[int] = None
-
-class AgentTemplateNLCreate(BaseModel):
-    description: str
-
-class AgentTemplateNLModify(BaseModel):
-    delta: str
-
-class PipelineNode(BaseModel):
-    id: str
-    agent_template_id: str
-    position: Dict[str, float]
-
-class PipelineEdge(BaseModel):
-    id: Optional[str] = None
-    source: str
-    target: str
-
-class PipelineCreate(BaseModel):
-    name: str
-    nodes: List[PipelineNode] = []
-    edges: List[PipelineEdge] = []
-
-class PipelineUpdate(BaseModel):
-    name: Optional[str] = None
-    nodes: Optional[List[PipelineNode]] = None
-    edges: Optional[List[PipelineEdge]] = None
-
-class PipelineDispatch(BaseModel):
-    input: Any = None  # topic string or dict
-    params: Optional[Dict[str, Any]] = None
-
-class NotebookCreate(BaseModel):
-    name: str
-
-class NotebookAddSources(BaseModel):
-    sources: List[str]
-
-class NotebookQuery(BaseModel):
-    query: str
-
-class ResearchRequest(BaseModel):
-    topic: str
-    user_id: str = "default_user"
-    session_id: Optional[str] = None
-    experience_id: Optional[str] = None
-    goal_id: Optional[str] = None
-
-# ── Lane 4: NL Pipeline Composition ──────────────────────────────────────────
-
-class PipelineNLCompose(BaseModel):
-    """Natural language pipeline composition request."""
-    description: str
-    agent_ids: List[str] = []
-
-# ── Lane 4: Agent Test (Dry Run) ──────────────────────────────────────────────
-
-class AgentTestRequest(BaseModel):
-    sample_input: str
-
-class AgentTestResponse(BaseModel):
-    agent_id: str
-    output: str
-    events: List[Dict[str, Any]] = []
-    timing_seconds: float = 0.0
-    error: Optional[str] = None
-
-# ── Lane 4: Agent Export ──────────────────────────────────────────────────────
-
-class AgentExportRequest(BaseModel):
-    format: str = "python"  # "python" | "typescript"
-    pipeline_id: Optional[str] = None
-
-class AgentExportResponse(BaseModel):
-    agent_id: Optional[str] = None
-    pipeline_id: Optional[str] = None
-    format: str
-    code: str
-    filename: str
-class PipelineRun(BaseModel):
-    id: str
-    pipeline_id: str
-    status: str
-    input: Dict[str, Any]
-    output: Optional[Dict[str, Any]] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    events: List[Dict[str, Any]] = []
-
-class ChatRequest(BaseModel):
-    message: str
-    pipeline_id: Optional[str] = None
-
-class ChatResponse(BaseModel):
-    reply: str
-
-# ── Sprint 3A: Gate 0 (Learning-Content Worker Contracts) ────────────────────
-
-# G1: Mira Integration Contract
-class ConceptCoverage(BaseModel):
-    level: str  # 'beginner' | 'intermediate' | 'advanced'
-    recent_failures: Optional[int] = 0
-    last_interaction_at: Optional[datetime] = None
-
-class EnrichmentRequest(BaseModel):
-    learner_id: str
-    goal_id: Optional[str] = None
-    bundle_request: Dict[str, Any]
-    learner_coverage: Optional[Dict[str, ConceptCoverage]] = None
-
-class EvidenceWriteBack(BaseModel):
-    learner_id: str
-    atom_id: str
-    action: str  # 'viewed' | 'completed' | 'abandoned'
-    duration_seconds: Optional[int] = None
-    confusion_signal: bool = False
-    checkpoint_result: Optional[str] = None  # 'pass' | 'fail'
-    recorded_at: datetime = Field(default_factory=datetime.utcnow)
-
-# G2: Atoms and Bundles
-class AtomMetadata(BaseModel):
-    concept_id: str
-    source_bundle_hash: str
-    level: str
-    created_at: datetime
-    cache_hit: Optional[bool] = False
-
-class LearningAtom(BaseModel):
-    id: str
-    atom_type: str
-    concept_id: str
-    content: Dict[str, Any]
-    source_bundle_hash: str
-    level: str
-    pipeline_run_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: Optional[datetime] = None
-    metadata: Optional[AtomMetadata] = None
-
-class ExperienceSupportBundle(BaseModel):
-    id: Optional[str] = None
-    run_id: Optional[str] = None
-    bundle_type: str
-    atoms: List[LearningAtom]
-    telemetry: Optional[Dict[str, Any]] = None
-
-# G3: Caching Strategy
-class CacheMetadata(BaseModel):
-    cache_key: str
-    cache_type: str  # 'research' | 'synthesis' | 'atom' | 'delivery_idempotency'
-    value: Dict[str, Any]
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    ttl_hours: int
-    hit_count: int = 0
-
-# G4: Delivery Profiles
-class RetryPolicy(BaseModel):
-    max_retries: int = 3
-    backoff_ms: int = 1000
-
-class DeliveryProfileConfig(BaseModel):
-    endpoint: Optional[str] = None
-    secret_header: Optional[str] = None
-    payload_mapper: Optional[str] = None
-    retry_policy: Optional[RetryPolicy] = None
-    idempotency_key: Optional[str] = None
-    success_handler: Optional[str] = None
-    failure_handler: Optional[str] = None
-
-class DeliveryProfile(BaseModel):
-    id: str
-    name: str
-    target_type: str  # 'none' | 'generic_webhook' | 'mira_adapter' | 'asset_store_only'
-    config: DeliveryProfileConfig
-    pipeline_id: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-
-```
-
-### nexus/service/requirements.txt
-
-```
-google-adk
-fastapi
-uvicorn[standard]
-python-dotenv
-google-genai
-requests
-supabase
-notebooklm-py
-
-```
-
-### nexus/service/agents/__init__.py
-
-```python
-# service/agents/__init__.py
-
-```
-
-### nexus/service/agents/atom_generator.py
-
-```python
-import logging
-import json
-import uuid
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from ..grounding.notebooklm import nlm_manager, NotebookLMUnavailableError
-from ..models import LearningAtom, AtomMetadata
-from supabase import create_client, Client
-
-logger = logging.getLogger("nexus.atom_generator")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-class AtomGenerator:
-    """Generates typed learning atoms from grounded NotebookLM sources."""
-    def __init__(self):
-        self.manager = nlm_manager
-
-    async def get_or_generate_atom(
-        self, 
-        notebook_id: str, 
-        atom_type: str, 
-        concept_id: str, 
-        source_bundle_hash: str, 
-        level: str, 
-        prompt: str,
-        run_id: Optional[str] = None
-    ) -> LearningAtom:
-        cache_key = f"{concept_id}_{atom_type}_{source_bundle_hash}_{level}"
-        
-        # 1. Check Cache
-        if supabase:
-            try:
-                res = supabase.table("nexus_cache_metadata").select("*").eq("cache_key", cache_key).execute()
-                if res.data:
-                    if run_id:
-                        from ..agents.pipeline_runner import emit_event
-                        await emit_event(run_id, "info", f"Cache hit for atom: {atom_type} ({concept_id})")
-                    
-                    atom_dict = res.data[0].get("value", {})
-                    # Update hit count
-                    supabase.table("nexus_cache_metadata").update({
-                        "hit_count": res.data[0].get("hit_count", 0) + 1
-                    }).eq("cache_key", cache_key).execute()
-                    
-                    atom = LearningAtom(**atom_dict)
-                    if atom.metadata:
-                        atom.metadata.cache_hit = True
-                    return atom
-            except Exception as e:
-                logger.warning(f"Atom cache check failed (ok if table missing): {e}")
-
-        if run_id:
-            from ..agents.pipeline_runner import emit_event
-            await emit_event(run_id, "action", f"Generating atom: {atom_type} ({concept_id})")
-
-        # 2. Generate
-        full_query = prompt + " Return the result as raw JSON only. Do not include markdown formatting or backticks. Just the raw JSON object."
-        try:
-            result = await self.manager.query(notebook_id, full_query)
-            raw_answer = result.get("answer", "")
-        except Exception as e:
-            logger.error(f"Query failed for {atom_type}: {e}")
-            raw_answer = "{}"
-
-        # 3. Parse JSON
-        content_json = {}
-        try:
-            text = raw_answer.strip()
-            if "```json" in text:
-                text = text.split("```json")[-1].split("```")[0].strip()
-            elif "```" in text:
-                text = text.split("```")[-1].split("```")[0].strip()
-            start_idx = text.find('{')
-            end_idx = text.rfind('}')
-            if start_idx != -1 and end_idx != -1:
-                text = text[start_idx:end_idx+1]
-                content_json = json.loads(text)
-            else:
-                logger.warning(f"No JSON object found: {text[:100]}")
-                content_json = {"raw": text}
-        except Exception as e:
-            logger.error(f"Failed to parse JSON for {atom_type}: {e}")
-            content_json = {"raw": raw_answer}
-
-        # 4. Create Model
-        atom = LearningAtom(
-            id=str(uuid.uuid4()),
-            atom_type=atom_type,
-            concept_id=concept_id,
-            content=content_json,
-            source_bundle_hash=source_bundle_hash,
-            level=level,
-            pipeline_run_id=run_id,
-            created_at=datetime.utcnow(),
-            metadata=AtomMetadata(
-                concept_id=concept_id,
-                source_bundle_hash=source_bundle_hash,
-                level=level,
-                created_at=datetime.utcnow(),
-                cache_hit=False
-            )
-        )
-
-        # 5. Store DB & Cache
-        if supabase:
-            try:
-                db_payload = atom.model_dump(mode='json')
-                
-                # Store in primary table
-                supabase.table("nexus_learning_atoms").insert(db_payload).execute()
-                
-                # Store in cache table (ttl_hours = 168 / 7 days)
-                supabase.table("nexus_cache_metadata").insert({
-                    "cache_key": cache_key,
-                    "cache_type": "atom",
-                    "value": db_payload,
-                    "ttl_hours": 168,
-                    "hit_count": 0
-                }).execute()
-            except Exception as e:
-                logger.error(f"DB insertion error for atom: {e}")
-
-        if run_id:
-            from ..agents.pipeline_runner import emit_event
-            await emit_event(run_id, "success", f"Atom saved: {atom_type} ({concept_id})")
-
-        return atom
-
-atom_generator = AtomGenerator()
-
-```
-
-### nexus/service/agents/discovery.py
-
-```python
-# ==============================================================================
-# Nexus Service — Discovery Agents (Lane 5 — W1)
-# ==============================================================================
-# Ported from MiraK v0.4 research_strategist and deep_readers.
-# Uses ADK LlmAgent with GoogleSearchTool and url_context.
-# ==============================================================================
-
-import logging
-from typing import List, Optional
-from google.adk.agents import LlmAgent
-from google.adk.tools import agent_tool
-from google.adk.tools.google_search_tool import GoogleSearchTool
-from google.adk.tools import url_context
-
-logger = logging.getLogger("nexus.discovery")
-
-# ── Strategist Sub-Agents ────────────────────────────────────────────────────
-
-strategist_search = LlmAgent(
-    name='strategist_search',
-    model='gemini-2.5-flash',
-    description='Searches the web.',
-    sub_agents=[],
-    instruction='Use GoogleSearchTool to search the web. Return all results with URLs and snippets.',
-    tools=[GoogleSearchTool()],
-)
-
-strategist_url = LlmAgent(
-    name='strategist_url',
-    model='gemini-2.5-flash',
-    description='Reads URLs to extract their content.',
-    sub_agents=[],
-    instruction='Use UrlContextTool to read and extract the full content of URLs. Return as much content as possible.',
-    tools=[url_context],
-)
-
-# ── Main Research Strategist ─────────────────────────────────────────────────
-
-research_strategist_instruction = '''You are an elite Research Strategist working for a growth engineering team. You do ALL the web work for the pipeline.
-
-STEP 1: PLAN — Identify 5-7 advanced, technical research angles for the topic.
-DO NOT search for beginner tutorials (e.g., "how to make short form videos").
-INSTEAD, search for operator-level mechanics:
-- Algorithmic factors, ranking signals, and feed mechanisms
-- Advanced retention curves and pacing metrics
-- Implementation workflows, batching logic, infrastructure
-- Hard data, benchmarks (e.g., "YouTube Shorts engaged views methodology")
-- Monetization and compliance mechanics
-
-STEP 2: SEARCH — For each angle, run 1-2 highly specific search queries (5-10 total).
-Use technical vocabulary in your queries (e.g., "retention curve methodology" instead of "how to get more watch time").
-
-STEP 3: SELECT — Pick the top 6-8 URLs. Prioritize engineering blogs, platform documentation, technical teardowns, and hard data. Ignore generic SEO marketing blogs.
-
-STEP 4: READ — Use the URL reading tool to scrape/read the URLs. Extract all highly granular, actionable content.
-
-STEP 5: ORGANIZE — Package everything into a curated SOURCE BUNDLE for NotebookLM ingestion.
-Group items by topic cluster or purpose. 
-
-OUTPUT FORMAT:
-
-## Research Results
-
-### Key Questions to Answer
-[5-8 questions the final document must address]
-
-### SOURCE BUNDLE
-**Source: [URL 1]**
-[Extracted content from this page — include ALL useful text, data, quotes]
-
-**Source: [URL 2]**
-[Extracted content]
-
-... [repeat for all sources]
-
-CRITICAL RULES:
-- You MUST read/scrape the URLs, not just list them.
-- Extract as much content as possible from each URL.
-- NotebookLM will ONLY see what you extract — it cannot access the web.
-- Include specific numbers, dates, statistics, quotes from each source.
-- If a URL is inaccessible, note it and use search snippet content instead.'''
-
-research_strategist = LlmAgent(
-    name='research_strategist',
-    model='gemini-2.5-flash',
-    description='Plans research, executes searches, and scrapes top sources.',
-    sub_agents=[],
-    instruction=research_strategist_instruction,
-    tools=[
-        agent_tool.AgentTool(agent=strategist_search),
-        agent_tool.AgentTool(agent=strategist_url),
-    ],
-)
-
-# ── Deep Reader Factory ──────────────────────────────────────────────────────
-
-def make_deep_reader(reader_name: str) -> LlmAgent:
-    """Factory for pure-analysis reader agents (no search tools)."""
-    return LlmAgent(
-        name=reader_name,
-        model='gemini-2.5-flash',
-        description=f'Analyzes pre-scraped source content and extracts structured findings.',
-        sub_agents=[],
-        instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
-
-You receive RAW SCRAPED CONTENT from web sources. You have NO web access.
-
-Your job: Extract brutally concise, high-signal, operator-level mechanics. 
-IGNORE all generic advice, throat-clearing, and beginner "SEO fluff".
-If a source says "Use good lighting and a hook," IGNORE it.
-If a source says "Hooks must be <2s and resolve a 3-second hold proxy," EXTRACT it.
-
-FOCUS EXCLUSIVELY ON:
-1. **Hard Data & Formulas**: Benchmarks, precise dates, statistical thresholds, algorithmic weighting.
-2. **Mental Models & Workflows**: Specific sequential steps (e.g., "Hook → Value → Payoff").
-3. **Platform Mechanics**: Specific UI constraints, discovery algorithms (e.g., "Swipe-based feed ranking").
-4. **KPI Definitions**: How metrics are actually calculated (e.g., "Engaged views vs starts").
-5. **Implementation Specifics**: Naming specific tools, constraints, frameworks, or legal checks.
-
-OUTPUT FORMAT (KEEP UNDER 3000 CHARACTERS):
-## Findings from {reader_name}
-
-### Key Data Points (top 15-20)
-- [specific data point with numbers/dates/source]
-- [specific data point]
-[Prioritize: numbers > frameworks > quotes > general observations]
-
-### Comparison Data
-[Any head-to-head comparisons found (platform vs platform, etc.)]
-
-### Implementation Specifics
-[Concrete settings, workflows, tools, parameters]
-
-### Warnings
-[Top 3-5 mistakes or gotchas with fixes]
-
-Rules:
-- Be SPECIFIC — include numbers, dates, percentages, names.
-- Extract EVERYTHING useful. More is better at this stage.
-- Note contradictions between sources explicitly.
-- Do NOT write a final article — just extract structured findings.''',
-        tools=[],  # NO tools — pure analysis
-    )
-
-# ── Instances (for backward compatibility if needed) ─────────────────────────
-
-deep_reader_1 = make_deep_reader('deep_reader_1')
-deep_reader_2 = make_deep_reader('deep_reader_2')
-deep_reader_3 = make_deep_reader('deep_reader_3')
-
-```
-
-### nexus/service/agents/pipeline_runner.py
-
-```python
-import logging
-import asyncio
-import json
-import uuid
-import time
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-from supabase import create_client, Client
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-
-# ADK imports
-from google.adk.agents import LlmAgent
-from google.adk.tools.google_search_tool import GoogleSearchTool as _GST
-from google.adk.tools import url_context as _url_ctx
-from google.adk import Runner
-import google.adk.sessions
-from google.genai.types import Content, Part
-
-logger = logging.getLogger("nexus.runner")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-# In-memory event queues for SSE
-run_event_queues: Dict[str, asyncio.Queue] = {}
-
-async def run_pipeline(run_id: str, pipeline_id: str, topic: str, user_id: str):
-    """
-    Background task to run a pipeline.
-    W1–W4: Real node traversal, ADK instantiation, telemetry, artifact storage.
-    """
-    logger.info(f"Starting run {run_id} for pipeline {pipeline_id} on topic: {topic}")
-    
-    queue = asyncio.Queue()
-    run_event_queues[run_id] = queue
-    
-    try:
-        # 1. Update status to running
-        supabase.table("nexus_runs").update({
-            "status": "running",
-            "started_at": datetime.utcnow().isoformat()
-        }).eq("id", run_id).execute()
-
-        await emit_event(run_id, "info", f"Loading pipeline configuration: {pipeline_id}")
-
-        # 2. Load Pipeline and Nodes
-        pipeline_resp = supabase.table("nexus_pipelines").select("*").eq("id", pipeline_id).execute()
-        if not pipeline_resp.data:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
-        
-        pipeline = pipeline_resp.data[0]
-        nodes = pipeline.get("nodes") or []
-        edges = pipeline.get("edges") or []
-        
-        if not nodes:
-            raise ValueError("Pipeline has no nodes")
-
-        # 3. Topological Sort (Simple for Sequential Workbench)
-        sorted_nodes = _topological_sort(nodes, edges)
-        await emit_event(run_id, "info", f"Pipeline sorted: {[n['id'] for n in sorted_nodes]}")
-
-        # 4. Iterate and Execute Nodes
-        current_input = topic
-        intermediate_outputs = {}
-
-        for node in sorted_nodes:
-            agent_id = node.get("agent_template_id")
-            node_id = node.get("id")
-            
-            # Load template
-            agent_template = _get_agent_template(agent_id)
-            if not agent_template:
-                await emit_event(run_id, "error", f"Agent template {agent_id} not found for node {node_id}")
-                continue
-
-            agent_name = agent_template.get("name", "unnamed_agent")
-            await emit_event(run_id, "info", f"Starting node: {agent_name} ({node_id})", source=node_id)
-            
-            start_time = time.time()
-            
-            # Execute agent
-            try:
-                output = await _execute_agent_node(run_id, node_id, agent_template, current_input, user_id)
-                elapsed = round(time.time() - start_time, 2)
-                
-                await emit_event(run_id, "success", f"Node {agent_name} completed in {elapsed}s", source=node_id)
-                
-                # Store intermediate output
-                intermediate_outputs[node_id] = output
-                current_input = output # Sequential pass-through
-                
-            except Exception as e:
-                logger.error(f"Node {node_id} execution failed: {e}")
-                await emit_event(run_id, "error", f"Node {agent_name} failed: {str(e)}", source=node_id)
-                raise # Stop pipeline on node failure
-
-        # 5. Store Final Result and Assets
-        final_output = current_input
-        
-        # Save assets to nexus_assets (W4)
-        _store_pipeline_assets(run_id, intermediate_outputs, final_output)
-
-        await emit_event(run_id, "success", "Pipeline execution complete.")
-
-        # Update status to completed
-        supabase.table("nexus_runs").update({
-            "status": "completed",
-            "completed_at": datetime.utcnow().isoformat(),
-            "output": {"message": "Success", "final_output": final_output}
-        }).eq("id", run_id).execute()
-
-        # Handle delivery if attached to pipeline
-        profile_id = pipeline.get("delivery_profile_id")
-        if not profile_id:
-            # Maybe check delivery_profiles by pipeline_id
-            prof_resp = supabase.table("nexus_delivery_profiles").select("id").eq("pipeline_id", pipeline_id).execute()
-            if prof_resp.data:
-                profile_id = prof_resp.data[0].get("id")
-                
-        if profile_id:
-            await emit_event(run_id, "info", f"Executing delivery profile {profile_id}")
-            from ..delivery.webhook import execute_delivery
-            # Assembling a basic payload since bundles/atoms might be used later in Lane 7 integration
-            await execute_delivery(run_id, profile_id, {"run_id": run_id, "output": final_output}, [])
-
-
-    except Exception as e:
-        logger.error(f"Run {run_id} failed: {e}")
-        error_msg = str(e)
-        await emit_event(run_id, "error", f"Pipeline failed: {error_msg}")
-        
-        supabase.table("nexus_runs").update({
-            "status": "failed",
-            "completed_at": datetime.utcnow().isoformat(),
-            "output": {"error": error_msg}
-        }).eq("id", run_id).execute()
-    finally:
-        await queue.put(None)
-
-def _topological_sort(nodes: List[Dict], edges: List[Dict]) -> List[Dict]:
-    """Sort nodes so that dependencies run first (sequential list)."""
-    # map node_id -> node object
-    node_map = {n['id']: n for n in nodes}
-    # map node_id -> list of node IDs that depend on it
-    adj = {n['id']: [] for n in nodes}
-    # map node_id -> count of dependencies
-    in_degree = {n['id']: 0 for n in nodes}
-    
-    for edge in edges:
-        source = edge.get('source')
-        target = edge.get('target')
-        if source in adj and target in in_degree:
-            adj[source].append(target)
-            in_degree[target] += 1
-            
-    queue = [n_id for n_id, degree in in_degree.items() if degree == 0]
-    sorted_ids = []
-    
-    while queue:
-        u = queue.pop(0)
-        sorted_ids.append(u)
-        for v in adj[u]:
-            in_degree[v] -= 1
-            if in_degree[v] == 0:
-                queue.append(v)
-                
-    if len(sorted_ids) != len(nodes):
-        # Cycle detected or unreachable nodes, fall back to original order as a safety
-        logger.warning("Cycle detected or unreachable nodes in pipeline. Falling back to original order.")
-        return nodes
-        
-    return [node_map[n_id] for n_id in sorted_ids]
-
-def _get_agent_template(template_id: str) -> Optional[Dict]:
-    resp = supabase.table("nexus_agent_templates").select("*").eq("id", template_id).execute()
-    return resp.data[0] if resp.data else None
-
-async def _execute_agent_node(run_id: str, node_id: str, template: Dict, user_input: str, user_id: str) -> str:
-    """Instantiate and run an ADK agent for a node."""
-    
-    # 1. Prepare Tools
-    tools = []
-    for t in (template.get("tools") or []):
-        if t == "GoogleSearchTool":
-            tools.append(_GST())
-        elif t == "url_context":
-            tools.append(_url_ctx)
-    
-    # 2. Instantiate Agent
-    agent = LlmAgent(
-        name=template["name"],
-        model=template.get("model", "gemini-2.1-flash"), # Default if empty
-        description=f"Nexus agent: {template['name']}",
-        instruction=template["instruction"],
-        tools=tools,
-        sub_agents=[],
-    )
-    
-    # 3. Setup Runner
-    session_id = f"run_{run_id}_{node_id}"
-    session_service = google.adk.sessions.InMemorySessionService()
-    runner = Runner(
-        app_name="nexus",
-        agent=agent,
-        session_service=session_service,
-        auto_create_session=True,
-    )
-    
-    msg = Content(role="user", parts=[Part.from_text(text=user_input)])
-    all_text = []
-    
-    # 4. Execute and Emit tool events
-    for event in runner.run(user_id=user_id, session_id=session_id, new_message=msg):
-        if hasattr(event, "content") and event.content:
-            if hasattr(event.content, "parts"):
-                for part in event.content.parts:
-                    # Tool call event
-                    if hasattr(part, "function_call") and part.function_call:
-                        tool_name = getattr(part.function_call, "name", "unknown")
-                        await emit_event(run_id, "action", f"Agent calling tool: {tool_name}", source=node_id)
-                    
-                    # Output text
-                    if hasattr(part, "text") and part.text:
-                        all_text.append(part.text)
-    
-    return "\n\n".join(all_text) if all_text else "[No output produced]"
-
-def _store_pipeline_assets(run_id: str, intermediate_outputs: Dict[str, str], final_output: str):
-    """Store final output and intermediate steps as nexus_assets."""
-    assets = []
-    
-    # Store intermediate steps
-    for node_id, output in intermediate_outputs.items():
-        assets.append({
-            "run_id": run_id,
-            "name": f"Step Output: {node_id}",
-            "type": "intermediate_step",
-            "content": {"output": output},
-            "source_node": node_id
-        })
-        
-    # Store final result
-    assets.append({
-        "run_id": run_id,
-        "name": "Final Pipeline Output",
-        "type": "research_brief",
-        "content": {"output": final_output},
-        "source_node": "pipeline_final"
-    })
-    
-    if supabase:
-        try:
-            supabase.table("nexus_assets").insert(assets).execute()
-        except Exception as e:
-            logger.error(f"Failed to store assets: {e}")
-
-async def emit_event(run_id: str, event_type: str, message: str, source: str = "pipeline_runner"):
-    event = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "type": event_type,
-        "message": message,
-        "source": source
-    }
-    
-    # Save to Supabase
-    run = supabase.table("nexus_runs").select("events").eq("id", run_id).execute()
-    if run.data:
-        events = run.data[0].get("events") or []
-        events.append(event)
-        supabase.table("nexus_runs").update({"events": events}).eq("id", run_id).execute()
-    
-    # Send to SSE queue
-    if run_id in run_event_queues:
-        await run_event_queues[run_id].put(event)
-
-async def get_event_generator(run_id: str):
-    if run_id not in run_event_queues:
-        run = supabase.table("nexus_runs").select("events, status").eq("id", run_id).execute()
-        if run.data:
-            events = run.data[0].get("events") or []
-            for e in events:
-                yield f"data: {json.dumps(e)}\n\n"
-        return
-
-    queue = run_event_queues[run_id]
-    try:
-        while True:
-            event = await queue.get()
-            if event is None: # sentinel
-                break
-            yield f"data: {json.dumps(event)}\n\n"
-    finally:
-        pass
-
-```
-
-### nexus/service/agents/templates.py
-
-```python
-import logging
-from typing import List, Optional
-from supabase import create_client, Client
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from ..models import AgentTemplateCreate, AgentTemplateUpdate
-
-logger = logging.getLogger("nexus.templates")
-
-# Initialize Supabase client
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-def list_templates() -> List[dict]:
-    if not supabase: return []
-    response = supabase.table("nexus_agent_templates").select("*").order("created_at").execute()
-    return response.data
-
-def get_template(template_id: str) -> Optional[dict]:
-    if not supabase: return None
-    response = supabase.table("nexus_agent_templates").select("*").eq("id", template_id).execute()
-    return response.data[0] if response.data else None
-
-def create_template(template: AgentTemplateCreate) -> dict:
-    if not supabase: return {}
-    data = template.model_dump()
-    # Convert Pydantic models to dicts for JSONB
-    if isinstance(data.get("prompt_buckets"), dict):
-        pass # already dict
-    
-    response = supabase.table("nexus_agent_templates").insert(data).execute()
-    return response.data[0]
-
-def update_template(template_id: str, template: AgentTemplateUpdate) -> Optional[dict]:
-    if not supabase: return None
-    data = template.model_dump(exclude_unset=True)
-    response = supabase.table("nexus_agent_templates").update(data).eq("id", template_id).execute()
-    return response.data[0] if response.data else None
-
-def delete_template(template_id: str) -> bool:
-    if not supabase: return False
-    supabase.table("nexus_agent_templates").delete().eq("id", template_id).execute()
-    return True
-
-def seed_templates_if_empty():
-    """Seed with MiraK's 7 agents if table is empty."""
-    if not supabase: return
-    existing = list_templates()
-    if existing:
-        logger.info(f"Templates table already has {len(existing)} records. Skipping seed.")
-        return
-
-    logger.info("Seeding MiraK templates...")
-    # NOTE: These are simplified versions of the MiraK instructions
-    mirak_agents = [
-        {
-            "name": "research_strategist",
-            "instruction": "Plans research, executes searches, and scrapes top sources.",
-            "tools": ["GoogleSearchTool", "url_context"]
-        },
-        {
-            "name": "deep_reader_1",
-            "instruction": "Analyzes pre-scraped source content for foundational mechanisms.",
-            "tools": []
-        },
-        {
-            "name": "deep_reader_2",
-            "instruction": "Analyzes pre-scraped source content for practical implementation.",
-            "tools": []
-        },
-        {
-            "name": "deep_reader_3",
-            "instruction": "Analyzes pre-scraped source content for trends and statistics.",
-            "tools": []
-        },
-        {
-            "name": "final_synthesizer",
-            "instruction": "Produces the final comprehensive knowledge-base document.",
-            "tools": []
-        },
-        {
-            "name": "playbook_builder",
-            "instruction": "Produces a practical, tactical playbook from research findings.",
-            "tools": []
-        },
-        {
-            "name": "webhook_packager",
-            "instruction": "Packages research metadata and experience proposals into JSON.",
-            "tools": []
-        }
-    ]
-    
-    for agent_data in mirak_agents:
-        supabase.table("nexus_agent_templates").insert(agent_data).execute()
-    logger.info("Seed complete.")
-
-
-# ==============================================================================
-# Lane 4 — NL Creation & Modification Flows
-# ==============================================================================
-# These functions extend the CRUD above. Do not modify the CRUD section above.
-# Pattern: Direct Gemini structured-output calls (not Genkit) — same approach
-# as roadmap.md §"Where The Flows Live" (Python-primary).
-# ==============================================================================
-
-import json
-import time
-import uuid
-from typing import Optional
-
-import google.genai as genai
-from google.genai import types as genai_types
-from ..config import GEMINI_API_KEY as _GEMINI_KEY
-
-_gemini_client_l4: Optional["genai.Client"] = None
-
-
-def _get_gemini_l4() -> "genai.Client":
-    global _gemini_client_l4
-    if _gemini_client_l4 is None:
-        _gemini_client_l4 = genai.Client(api_key=_GEMINI_KEY)
-    return _gemini_client_l4
-
-
-# ── System prompts ────────────────────────────────────────────────────────────
-
-_CREATE_AGENT_SYSTEM = """You are an expert agent architect for the Nexus agent workbench.
-Convert a plain-English agent description into a well-structured AgentTemplate JSON.
-
-The JSON must conform EXACTLY to this schema:
-{
-  "name": "snake_case_name",
-  "model": "gemini-2.5-flash",
-  "instruction": "<full production-quality system prompt>",
-  "tools": ["GoogleSearchTool"],
-  "sub_agents": [],
-  "prompt_buckets": {
-    "persona": "<who the agent is>",
-    "task": "<step-by-step task>",
-    "anti_patterns": "<what it must never do>"
-  },
-  "output_schema": null
-}
-
-RULES:
-- name: snake_case, short (e.g., "pricing_reader", "trend_aggregator")
-- model: "gemini-2.5-flash" unless description asks for Pro/advanced reasoning
-- instruction: full system prompt — include persona, task steps, output format, critical rules.
-  Production-quality. No placeholders.
-- tools: ["GoogleSearchTool"] for web search, ["url_context"] for scraping, [] for pure analysis
-- prompt_buckets: decompose instruction into 3 buckets for UI Live Modifier
-- output_schema: only if user explicitly requests JSON, else null
-- OUTPUT ONLY VALID JSON. No prose before or after."""
-
-_MODIFY_AGENT_SYSTEM = """You are the Nexus agent modification engine.
-You receive an existing AgentTemplate JSON and a natural language delta.
-Produce the COMPLETE UPDATED AgentTemplate JSON incorporating the delta.
-
-RULES:
-- Rewrite the 'instruction' to reflect the delta (don't just append).
-- Update 'prompt_buckets' to match.
-- Keep all other fields unless the delta implies a change.
-- OUTPUT ONLY VALID JSON of the complete updated template."""
-
-_COMPOSE_PIPELINE_SYSTEM = """You are the Nexus pipeline composer.
-You receive agent definitions and a pipeline description.
-Produce a Pipeline JSON with nodes and edges.
-
-Schema:
-{
-  "name": "descriptive pipeline name",
-  "nodes": [
-    {"id": "node_0", "agent_template_id": "<uuid>", "position": {"x": 0, "y": 0}},
-    {"id": "node_1", "agent_template_id": "<uuid>", "position": {"x": 300, "y": 0}}
-  ],
-  "edges": [
-    {"source": "node_0", "target": "node_1"}
-  ]
-}
-
-RULES:
-- Position nodes left-to-right at x=300n increments, y=0.
-- Edges form a valid directed acyclic graph.
-- Use exact agent_template_id values provided.
-- Name the pipeline from the description.
-- OUTPUT ONLY VALID JSON."""
-
-
-def _call_gemini_json_l4(system_prompt: str, user_prompt: str) -> dict:
-    """Call Gemini with JSON output mode. Returns parsed dict."""
-    client = _get_gemini_l4()
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=user_prompt,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            response_mime_type="application/json",
-            temperature=0.3,
-        ),
-    )
-    raw = response.text.strip()
-    # Strip markdown fences if present
-    if raw.startswith("```"):
-        parts = raw.split("```")
-        raw = parts[1] if len(parts) > 1 else raw
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-    return json.loads(raw)
-
-
-# ── W1: NL → AgentTemplate ────────────────────────────────────────────────────
-
-def nl_create_agent(description: str) -> dict:
-    """
-    W1: Convert a natural language description into a stored AgentTemplate.
-
-    Returns the created row from nexus_agent_templates.
-    """
-    logger.info(f"nl_create_agent: generating from description ({len(description)} chars)")
-
-    template = _call_gemini_json_l4(
-        _CREATE_AGENT_SYSTEM,
-        f"Create an AgentTemplate for:\n\n{description}",
-    )
-
-    # Fill defaults for any missing fields
-    template.setdefault("name", "unnamed_agent")
-    template.setdefault("model", "gemini-2.5-flash")
-    template.setdefault("instruction", description)
-    template.setdefault("tools", [])
-    template.setdefault("sub_agents", [])
-    template.setdefault("prompt_buckets", {"persona": "", "task": "", "anti_patterns": ""})
-    template.setdefault("output_schema", None)
-
-    # Normalize prompt_buckets to PromptBuckets model for Lane 2's create_template
-    from ..models import AgentTemplateCreate, PromptBuckets as _PB
-
-    pb_data = template.get("prompt_buckets") or {}
-    req = AgentTemplateCreate(
-        name=template["name"],
-        model=template["model"],
-        instruction=template["instruction"],
-        tools=template.get("tools", []),
-        sub_agents=template.get("sub_agents", []),
-        prompt_buckets=_PB(**{k: v for k, v in pb_data.items() if k in ("persona", "task", "anti_patterns")}),
-        output_schema=template.get("output_schema"),
-    )
-    stored = create_template(req)
-    logger.info(f"nl_create_agent: stored id={stored.get('id')}, name={template['name']}")
-    return stored
-
-
-# ── W2: NL Modify Agent ───────────────────────────────────────────────────────
-
-def nl_modify_agent(agent_id: str, delta: str) -> dict:
-    """
-    W2: Apply a natural language modification delta to an existing AgentTemplate.
-
-    Returns {'old_instruction', 'new_instruction', 'template'}.
-    """
-    existing = get_template(agent_id)
-    if existing is None:
-        raise ValueError(f"Agent {agent_id} not found")
-
-    logger.info(f"nl_modify_agent: modifying '{existing['name']}' with delta ({len(delta)} chars)")
-
-    updated = _call_gemini_json_l4(
-        _MODIFY_AGENT_SYSTEM,
-        f"EXISTING TEMPLATE:\n{json.dumps(existing, indent=2)}\n\nDELTA:\n{delta}",
-    )
-
-    old_instruction = existing.get("instruction", "")
-
-    from ..models import AgentTemplateUpdate, PromptBuckets as _PB
-    pb_raw = updated.get("prompt_buckets") or {}
-    patch = AgentTemplateUpdate(
-        name=updated.get("name"),
-        model=updated.get("model"),
-        instruction=updated.get("instruction"),
-        tools=updated.get("tools"),
-        sub_agents=updated.get("sub_agents"),
-        prompt_buckets=_PB(**{k: v for k, v in pb_raw.items() if k in ("persona", "task", "anti_patterns")}) if pb_raw else None,
-        output_schema=updated.get("output_schema"),
-    )
-    updated_row = update_template(agent_id, patch)
-    logger.info(f"nl_modify_agent: '{existing['name']}' updated.")
-
-    return {
-        "old_instruction": old_instruction,
-        "new_instruction": updated.get("instruction", ""),
-        "template": updated_row,
-    }
-
-
-# ── W3: NL Compose Pipeline ───────────────────────────────────────────────────
-
-def nl_compose_pipeline(description: str, agent_ids: list) -> dict:
-    """
-    W3: Generate a Pipeline from a natural language description and agent ID list.
-
-    Returns the created row from nexus_pipelines.
-    """
-    # Resolve agent summaries for context
-    agent_details = []
-    for aid in agent_ids:
-        ag = get_template(aid)
-        if ag:
-            agent_details.append({
-                "id": aid,
-                "name": ag["name"],
-                "summary": (ag.get("instruction") or "")[:200],
-            })
-
-    pipeline_def = _call_gemini_json_l4(
-        _COMPOSE_PIPELINE_SYSTEM,
-        f"AGENTS:\n{json.dumps(agent_details, indent=2)}\n\nDESCRIPTION:\n{description}",
-    )
-
-    pipeline_def.setdefault("name", "Composed Pipeline")
-    pipeline_def.setdefault("nodes", [])
-    pipeline_def.setdefault("edges", [])
-
-    result = supabase.table("nexus_pipelines").insert({
-        "name": pipeline_def["name"],
-        "nodes": pipeline_def["nodes"],
-        "edges": pipeline_def["edges"],
-    }).execute()
-    stored = result.data[0]
-    logger.info(f"nl_compose_pipeline: stored '{pipeline_def['name']}' as id={stored.get('id')}")
-    return stored
-
-
-# ── W4: Test Agent (Dry Run) ──────────────────────────────────────────────────
-
-def test_agent(agent_id: str, sample_input: str) -> dict:
-    """
-    W4: Instantiate an ADK LlmAgent from a stored template and run a dry-run.
-
-    Returns dict with output, events, timing_seconds, and error.
-    """
-    template = get_template(agent_id)
-    if template is None:
-        raise ValueError(f"Agent {agent_id} not found")
-
-    logger.info(f"test_agent: dry-run '{template['name']}' ({len(sample_input)} chars input)")
-    start = time.time()
-
-    try:
-        from google.adk.agents import LlmAgent
-        from google.adk.tools.google_search_tool import GoogleSearchTool as _GST
-        from google.adk.tools import url_context as _url_ctx
-        from google.adk import Runner
-        import google.adk.sessions
-        from google.genai.types import Content, Part
-
-        tools = []
-        for t in (template.get("tools") or []):
-            if t == "GoogleSearchTool":
-                tools.append(_GST())
-            elif t == "url_context":
-                tools.append(_url_ctx)
-
-        agent = LlmAgent(
-            name=template["name"],
-            model=template.get("model", "gemini-2.5-flash"),
-            description=f"Nexus agent: {template['name']}",
-            instruction=template["instruction"],
-            tools=tools,
-            sub_agents=[],
-        )
-
-        session_id = f"test_{agent_id[:8]}_{uuid.uuid4().hex[:6]}"
-        session_service = google.adk.sessions.InMemorySessionService()
-        msg = Content(role="user", parts=[Part.from_text(text=sample_input)])
-        runner = Runner(
-            app_name="nexus",
-            agent=agent,
-            session_service=session_service,
-            auto_create_session=True,
-        )
-
-        all_text = []
-        events_log = []
-        for event in runner.run(user_id="nexus_test", session_id=session_id, new_message=msg):
-            author = getattr(event, "author", "?")
-            ev = {"author": author, "type": "event"}
-            if hasattr(event, "content") and event.content:
-                if hasattr(event.content, "parts"):
-                    for part in event.content.parts:
-                        if hasattr(part, "function_call") and part.function_call:
-                            ev["type"] = "tool_call"
-                            ev["tool"] = getattr(part.function_call, "name", "unknown")
-                        if hasattr(part, "text") and part.text and part.text.strip():
-                            all_text.append(part.text)
-                            ev["text_preview"] = part.text[:100]
-            events_log.append(ev)
-
-        output = "\n\n".join(all_text) if all_text else "[No output produced]"
-        elapsed = round(time.time() - start, 2)
-        logger.info(f"test_agent: '{template['name']}' done in {elapsed}s, {len(output)} chars")
-        return {"agent_id": agent_id, "output": output, "events": events_log, "timing_seconds": elapsed, "error": None}
-
-    except Exception as e:
-        elapsed = round(time.time() - start, 2)
-        logger.error(f"test_agent: error for '{template['name']}': {e}")
-        return {"agent_id": agent_id, "output": "", "events": [], "timing_seconds": elapsed, "error": str(e)}
-
-
-# ── W5: Export Agent Code ─────────────────────────────────────────────────────
-
-def export_agent(agent_id: str, fmt: str, pipeline_id: Optional[str] = None) -> dict:
-    """
-    W5: Export an agent as deployable Python (ADK) or TypeScript (Genkit) code.
-
-    Returns dict with code string, filename, format.
-    """
-    template = get_template(agent_id)
-    if template is None:
-        raise ValueError(f"Agent {agent_id} not found")
-
-    agent_name = template["name"]
-
-    if fmt == "typescript":
-        camel = "".join(w.capitalize() for w in agent_name.split("_"))
-        flow_name = f"run{camel}Flow"
-        instr_esc = (template.get("instruction") or "").replace("`", "\\`")
-        code = f'''// ==============================================================================
-// Nexus-generated Genkit Flow: {agent_name}
-// Template ID: {agent_id}
-// Merge target: c:/mira/lib/ai/flows/{agent_name}-flow.ts
-// ==============================================================================
-
-import {{ gemini25Flash }} from "@genkit-ai/googleai";
-import {{ ai }} from "@/lib/ai/genkit";
-import {{ z }} from "zod";
-
-const {agent_name}Prompt = ai.definePrompt(
-  {{
-    name: "{agent_name}Prompt",
-    model: gemini25Flash,
-    input: {{ schema: z.object({{ input: z.string() }}) }},
-    output: {{ format: "text" }},
-  }},
-  async ({{ input }}) => `{instr_esc}\\n\\nUSER INPUT:\\n${{input.input}}`
-);
-
-export const {flow_name} = ai.defineFlow(
-  {{
-    name: "{flow_name}",
-    inputSchema: z.object({{ input: z.string() }}),
-    outputSchema: z.string(),
-  }},
-  async ({{ input }}) => {{
-    const {{ output }} = await {agent_name}Prompt({{ input }});
-    return output ?? "";
-  }}
-);
-'''
-        filename = f"{agent_name}-flow.ts"
-
-    else:  # python (ADK)
-        tools_imports, tools_list_items = [], []
-        for t in (template.get("tools") or []):
-            if t == "GoogleSearchTool":
-                tools_imports.append("from google.adk.tools.google_search_tool import GoogleSearchTool")
-                tools_list_items.append("GoogleSearchTool()")
-            elif t == "url_context":
-                tools_imports.append("from google.adk.tools import url_context")
-                tools_list_items.append("url_context")
-
-        instr_esc = (template.get("instruction") or "").replace('"""', '\\"\\"\\"')
-        tools_str = f"[{', '.join(tools_list_items)}]" if tools_list_items else "[]"
-        code = f'''# ==============================================================================
-# Nexus-generated ADK Agent: {agent_name}
-# Template ID: {agent_id}
-# ==============================================================================
-
-import os
-from dotenv import load_dotenv
-load_dotenv(".env")
-if os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_API_KEY"):
-    os.environ["GOOGLE_API_KEY"] = os.environ["GEMINI_API_KEY"]
-
-from google.adk.agents import LlmAgent
-{chr(10).join(tools_imports)}
-
-agent = LlmAgent(
-    name="{agent_name}",
-    model="{template.get("model", "gemini-2.5-flash")}",
-    description="Nexus agent: {agent_name}",
-    instruction="""{instr_esc}""",
-    tools={tools_str},
-    sub_agents=[],
-)
-
-if __name__ == "__main__":
-    from google.adk import Runner
-    import google.adk.sessions
-    from google.genai.types import Content, Part
-
-    service = google.adk.sessions.InMemorySessionService()
-    runner = Runner(app_name="nexus", agent=agent, session_service=service, auto_create_session=True)
-    msg = Content(role="user", parts=[Part.from_text(text="Test input here.")])
-    for event in runner.run(user_id="user", session_id="s1", new_message=msg):
-        if hasattr(event, "content") and event.content:
-            for part in (event.content.parts or []):
-                if hasattr(part, "text") and part.text:
-                    print(part.text)
-'''
-        filename = f"{agent_name}_agent.py"
-
-    logger.info(f"export_agent: exported '{agent_name}' as {fmt} → {filename}")
-    return {
-        "agent_id": agent_id,
-        "pipeline_id": pipeline_id,
-        "format": fmt,
-        "code": code,
-        "filename": filename,
-    }
-
-
-```
-
-### nexus/service/grounding/__init__.py
-
-```python
-# ==============================================================================
-# Nexus Service — Grounding Engine
-# ==============================================================================
-# NotebookLM is the ONLY grounding engine. There is no fallback.
-# If NLM is unavailable, operations fail explicitly with clear error messages.
-# ==============================================================================
-
-from .notebooklm import nlm_manager, NotebookLMManager, NotebookLMUnavailableError
-
-def get_grounding_manager() -> NotebookLMManager:
-    """Returns the NotebookLM grounding manager. No fallback."""
-    return nlm_manager
-
-__all__ = [
-    "nlm_manager",
-    "get_grounding_manager",
-    "NotebookLMManager",
-    "NotebookLMUnavailableError",
-]
-
-```
-
-### nexus/service/grounding/fallback.py
-
-```python
-# ==============================================================================
-# DEPRECATED — Gemini Fallback (REMOVED)
-# ==============================================================================
-# This module previously contained a Gemini-based fallback grounding engine.
-# It has been removed per the architectural decision:
-#   "Nexus must use NotebookLM or fail explicitly. There is no fallback."
-#
-# If NotebookLM authentication expires, the system will raise a clear
-# NotebookLMUnavailableError telling the user to run `notebooklm login`.
-#
-# This file is preserved as a stub to prevent import errors from any
-# stale code that may still reference it.
-# ==============================================================================
-
-import logging
-
-logger = logging.getLogger("nexus.grounding.fallback")
-
-class _DeprecatedManager:
-    """Stub that raises an error if anyone tries to use the old fallback."""
-    async def create_notebook(self, **kwargs):
-        raise RuntimeError("Gemini fallback has been removed. Use NotebookLM.")
-    async def add_sources(self, *args, **kwargs):
-        raise RuntimeError("Gemini fallback has been removed. Use NotebookLM.")
-    async def query_notebook(self, *args, **kwargs):
-        raise RuntimeError("Gemini fallback has been removed. Use NotebookLM.")
-
-gemini_manager = _DeprecatedManager()
-
-```
-
-### nexus/service/grounding/notebooklm.py
-
-```python
-# ==============================================================================
-# Nexus Service — NotebookLM Grounding Engine
-# ==============================================================================
-# Wraps the notebooklm-py async client for use in the FastAPI pipeline.
-# NO fallback. If NLM is unavailable, we fail explicitly.
-# ==============================================================================
-
-import logging
-import asyncio
-import hashlib
-from typing import List, Dict, Any, Optional
-
-logger = logging.getLogger("nexus.grounding.nlm")
-
-
-class NotebookLMUnavailableError(Exception):
-    """Raised when NotebookLM authentication has expired or is unavailable."""
-    pass
-
-
-class NotebookLMManager:
-    """
-    Manages NotebookLM interactions for Nexus pipeline operations.
-    
-    API surface exposed:
-      - create_notebook(title) -> notebook_id
-      - add_text_sources(notebook_id, sources) -> source_ids
-      - add_url_source(notebook_id, url) -> source_id
-      - query(notebook_id, question) -> {answer, citations}
-      - generate_quiz(notebook_id) -> GenerationStatus
-      - generate_study_guide(notebook_id) -> GenerationStatus
-      - generate_report(notebook_id, format) -> GenerationStatus
-      - generate_audio(notebook_id) -> GenerationStatus
-      - generate_flashcards(notebook_id) -> GenerationStatus
-      - list_artifacts(notebook_id) -> [Artifact]
-      - list_notebooks() -> [Notebook]
-      - get_notebook_summary(notebook_id) -> str
-      - research(notebook_id, query) -> dict
-      - check_auth() -> bool
-    """
-
-    def __init__(self):
-        self._client = None
-        self._notebook_cache: Dict[str, str] = {}  # topic_hash -> notebook_id
-    
-    async def _get_client(self):
-        """Get or create the NLM client. Fails hard if auth is expired."""
-        if self._client and self._client.is_connected:
-            return self._client
-        
-        try:
-            from notebooklm import NotebookLMClient
-            self._client = await NotebookLMClient.from_storage()
-            await self._client.__aenter__()
-            logger.info("NotebookLM client connected successfully")
-            return self._client
-        except Exception as e:
-            error_msg = str(e)
-            if "expired" in error_msg.lower() or "redirect" in error_msg.lower() or "auth" in error_msg.lower():
-                raise NotebookLMUnavailableError(
-                    "NotebookLM authentication expired. "
-                    "Run 'python -m notebooklm login' to re-authenticate."
-                ) from e
-            raise NotebookLMUnavailableError(
-                f"NotebookLM unavailable: {error_msg}. "
-                "Ensure notebooklm-py is installed and run 'python -m notebooklm login'."
-            ) from e
-    
-    async def check_auth(self) -> bool:
-        """Check if NLM authentication is valid."""
-        try:
-            client = await self._get_client()
-            await client.notebooks.list()
-            return True
-        except Exception:
-            return False
-    
-    async def close(self):
-        """Close the client connection."""
-        if self._client:
-            try:
-                await self._client.__aexit__(None, None, None)
-            except Exception:
-                pass
-            self._client = None
-
-    # ── Notebook Operations ──────────────────────────────────────────────
-
-    async def create_notebook(self, title: str) -> str:
-        """Create a new notebook. Returns the notebook ID."""
-        client = await self._get_client()
-        nb = await client.notebooks.create(title)
-        logger.info(f"Created notebook: {nb.title} ({nb.id})")
-        return nb.id
-    
-    async def list_notebooks(self) -> List[Dict[str, Any]]:
-        """List all notebooks."""
-        client = await self._get_client()
-        notebooks = await client.notebooks.list()
-        return [{"id": nb.id, "title": nb.title} for nb in notebooks]
-    
-    async def get_notebook_summary(self, notebook_id: str) -> str:
-        """Get the auto-generated summary for a notebook."""
-        client = await self._get_client()
-        return await client.notebooks.get_summary(notebook_id)
-
-    # ── Source Operations ────────────────────────────────────────────────
-
-    async def add_text_sources(
-        self,
-        notebook_id: str,
-        sources: List[Dict[str, str]],
-        wait: bool = True,
-        timeout: float = 120.0
-    ) -> List[str]:
-        """
-        Add text sources to a notebook.
-        Each source: {"title": "...", "content": "..."}
-        Returns list of source IDs.
-        """
-        client = await self._get_client()
-        source_ids = []
-        
-        for src in sources:
-            try:
-                result = await client.sources.add_text(
-                    notebook_id,
-                    title=src["title"],
-                    content=src["content"]
-                )
-                source_ids.append(result.id)
-                logger.info(f"Added text source: {src['title']} -> {result.id}")
-            except Exception as e:
-                logger.error(f"Failed to add source '{src['title']}': {e}")
-        
-        if wait and source_ids:
-            try:
-                await client.sources.wait_for_sources(
-                    notebook_id, source_ids, timeout=timeout
-                )
-                logger.info(f"All {len(source_ids)} sources ready")
-            except Exception as e:
-                logger.warning(f"Source wait timed out: {e}")
-        
-        return source_ids
-    
-    async def add_url_source(
-        self,
-        notebook_id: str,
-        url: str,
-        wait: bool = True,
-        timeout: float = 120.0
-    ) -> Optional[str]:
-        """Add a URL source to a notebook. Returns source ID or None on failure."""
-        client = await self._get_client()
-        try:
-            result = await client.sources.add_url(notebook_id, url, wait=wait, wait_timeout=timeout)
-            logger.info(f"Added URL source: {url} -> {result.id}")
-            return result.id
-        except Exception as e:
-            logger.error(f"Failed to add URL source '{url}': {e}")
-            return None
-    
-    async def list_sources(self, notebook_id: str) -> List[Dict[str, Any]]:
-        """List all sources in a notebook."""
-        client = await self._get_client()
-        sources = await client.sources.list(notebook_id)
-        return [
-            {"id": s.id, "title": s.title, "source_type": str(s.source_type)}
-            for s in sources
-        ]
-
-    # ── Chat / Query ─────────────────────────────────────────────────────
-
-    async def query(
-        self,
-        notebook_id: str,
-        question: str,
-        source_ids: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Ask a question grounded in notebook sources.
-        Returns {"answer": str, "citations": [{source_id, cited_text}]}
-        """
-        client = await self._get_client()
-        result = await client.chat.ask(notebook_id, question, source_ids=source_ids)
-        
-        citations = []
-        if result.references:
-            for ref in result.references:
-                citations.append({
-                    "source_id": ref.source_id,
-                    "cited_text": ref.cited_text or ""
-                })
-        
-        return {
-            "answer": result.answer,
-            "citations": citations
-        }
-    
-    async def batch_query(
-        self,
-        notebook_id: str,
-        queries: Dict[str, str]
-    ) -> Dict[str, Dict[str, Any]]:
-        """
-        Execute multiple queries against the same notebook.
-        Input: {"key": "question", ...}
-        Returns: {"key": {answer, citations}, ...}
-        """
-        results = {}
-        for key, question in queries.items():
-            try:
-                results[key] = await self.query(notebook_id, question)
-            except Exception as e:
-                logger.error(f"Query '{key}' failed: {e}")
-                results[key] = {"answer": "", "citations": [], "error": str(e)}
-        return results
-
-    # ── Artifact Generation ──────────────────────────────────────────────
-
-    async def generate_quiz(
-        self, 
-        notebook_id: str,
-        source_ids: Optional[List[str]] = None,
-        timeout: float = 120.0
-    ) -> Dict[str, Any]:
-        """Generate a quiz from notebook sources."""
-        client = await self._get_client()
-        status = await client.artifacts.generate_quiz(notebook_id, source_ids=source_ids)
-        if status and status.task_id:
-            await client.artifacts.wait_for_completion(notebook_id, status.task_id, timeout=timeout)
-        return {"type": "quiz", "status": "complete", "task_id": getattr(status, 'task_id', None)}
-    
-    async def generate_flashcards(
-        self, 
-        notebook_id: str,
-        source_ids: Optional[List[str]] = None,
-        timeout: float = 120.0
-    ) -> Dict[str, Any]:
-        """Generate flashcards from notebook sources."""
-        client = await self._get_client()
-        status = await client.artifacts.generate_flashcards(notebook_id, source_ids=source_ids)
-        if status and status.task_id:
-            await client.artifacts.wait_for_completion(notebook_id, status.task_id, timeout=timeout)
-        return {"type": "flashcards", "status": "complete", "task_id": getattr(status, 'task_id', None)}
-    
-    async def generate_study_guide(
-        self, 
-        notebook_id: str,
-        source_ids: Optional[List[str]] = None,
-        timeout: float = 120.0
-    ) -> Dict[str, Any]:
-        """Generate a study guide from notebook sources."""
-        client = await self._get_client()
-        status = await client.artifacts.generate_study_guide(notebook_id, source_ids=source_ids)
-        if status and status.task_id:
-            await client.artifacts.wait_for_completion(notebook_id, status.task_id, timeout=timeout)
-        return {"type": "study_guide", "status": "complete", "task_id": getattr(status, 'task_id', None)}
-    
-    async def generate_report(
-        self, 
-        notebook_id: str,
-        report_format: str = "briefing_doc",
-        custom_prompt: Optional[str] = None,
-        timeout: float = 120.0
-    ) -> Dict[str, Any]:
-        """Generate a report/briefing document from notebook sources."""
-        client = await self._get_client()
-        from notebooklm import ReportFormat
-        fmt = getattr(ReportFormat, report_format.upper(), ReportFormat.BRIEFING_DOC)
-        status = await client.artifacts.generate_report(
-            notebook_id, report_format=fmt, custom_prompt=custom_prompt
-        )
-        if status and status.task_id:
-            await client.artifacts.wait_for_completion(notebook_id, status.task_id, timeout=timeout)
-        return {"type": "report", "format": report_format, "status": "complete", "task_id": getattr(status, 'task_id', None)}
-    
-    async def generate_audio(
-        self, 
-        notebook_id: str,
-        instructions: Optional[str] = None,
-        timeout: float = 600.0
-    ) -> Dict[str, Any]:
-        """Generate an audio overview (podcast-style) from notebook sources."""
-        client = await self._get_client()
-        status = await client.artifacts.generate_audio(notebook_id, instructions=instructions)
-        if status and status.task_id:
-            await client.artifacts.wait_for_completion(notebook_id, status.task_id, timeout=timeout)
-        return {"type": "audio", "status": "complete", "task_id": getattr(status, 'task_id', None)}
-    
-    async def generate_mind_map(self, notebook_id: str) -> Dict[str, Any]:
-        """Generate a mind map from notebook sources."""
-        client = await self._get_client()
-        result = await client.artifacts.generate_mind_map(notebook_id)
-        return {"type": "mind_map", "data": result}
-    
-    async def list_artifacts(self, notebook_id: str) -> List[Dict[str, Any]]:
-        """List all generated artifacts in a notebook."""
-        client = await self._get_client()
-        artifacts = await client.artifacts.list(notebook_id)
-        return [
-            {
-                "id": a.id,
-                "type": str(a.artifact_type),
-                "title": a.title or "(untitled)",
-            }
-            for a in artifacts
-        ]
-
-    # ── Research (NLM's built-in web research) ───────────────────────────
-
-    async def research(
-        self,
-        notebook_id: str,
-        query: str,
-        source: str = "web",
-        mode: str = "fast"
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Use NLM's built-in research feature to search and import sources.
-        Returns research task result or None.
-        """
-        client = await self._get_client()
-        return await client.research.start(notebook_id, query, source=source, mode=mode)
-
-    # ── Pipeline Helpers ─────────────────────────────────────────────────
-
-    async def ingest_and_query(
-        self,
-        topic: str,
-        source_texts: List[Dict[str, str]],
-        queries: Dict[str, str],
-        generate_artifacts: Optional[List[str]] = None
-    ) -> Dict[str, Any]:
-        """
-        Full pipeline: create notebook → inject sources → run queries → generate artifacts.
-        
-        Args:
-            topic: Notebook title
-            source_texts: [{"title": "...", "content": "..."}, ...]
-            queries: {"key": "question", ...}
-            generate_artifacts: Optional list of artifact types to generate
-                                ("quiz", "study_guide", "report", "audio", "flashcards")
-        
-        Returns:
-            {notebook_id, source_ids, query_results, artifacts}
-        """
-        # Create notebook
-        notebook_id = await self.create_notebook(topic)
-        
-        # Inject sources
-        source_ids = await self.add_text_sources(notebook_id, source_texts)
-        
-        # Run queries
-        query_results = await self.batch_query(notebook_id, queries)
-        
-        # Generate artifacts
-        artifacts = {}
-        if generate_artifacts:
-            generators = {
-                "quiz": self.generate_quiz,
-                "flashcards": self.generate_flashcards,
-                "study_guide": self.generate_study_guide,
-                "report": self.generate_report,
-                "audio": self.generate_audio,
-                "mind_map": self.generate_mind_map,
-            }
-            for art_type in generate_artifacts:
-                if art_type in generators:
-                    try:
-                        artifacts[art_type] = await generators[art_type](notebook_id)
-                    except Exception as e:
-                        logger.error(f"Artifact generation '{art_type}' failed: {e}")
-                        artifacts[art_type] = {"error": str(e)}
-        
-        return {
-            "notebook_id": notebook_id,
-            "source_ids": source_ids,
-            "query_results": query_results,
-            "artifacts": artifacts
-        }
-
-    def _topic_hash(self, topic: str) -> str:
-        """Hash a topic for cache key purposes."""
-        return hashlib.sha256(topic.lower().strip().encode()).hexdigest()[:16]
-
-
-# Singleton instance
-nlm_manager = NotebookLMManager()
-
-```
-
-### nexus/service/grounding/store_atoms.py
-
-```python
-"""
-Store NLM test results as learning atoms in Supabase.
-
-Takes the output from test_nlm_full.py and writes structured
-learning atoms to nexus_learning_atoms so they're visible in
-the DB and usable by Mira or any downstream consumer.
-
-Run from project root:
-    python -m service.grounding.store_atoms
-"""
-
-import json
-import uuid
-import os
-import sys
-from datetime import datetime
-
-# Add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from service.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from supabase import create_client
-
-supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-
-RESULTS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "nlm_test_results.json")
-
-
-def store_atoms():
-    with open(RESULTS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    
-    notebook_id = data["notebook_id"]
-    notebook_title = data["notebook_title"]
-    source_count = data["source_count"]
-    timestamp = data["timestamp"]
-    
-    # Create a run record first
-    run_id = str(uuid.uuid4())
-    supabase.table("nexus_runs").insert({
-        "id": run_id,
-        "pipeline_id": None,
-        "status": "completed",
-        "started_at": timestamp,
-        "completed_at": datetime.utcnow().isoformat(),
-        "output": {
-            "topic": "Viral Reels & Carousels",
-            "notebook_id": notebook_id,
-            "source_count": source_count,
-            "atom_count": len(data["query_results"]),
-            "artifact_count": len(data.get("artifacts", {}))
-        }
-    }).execute()
-    print(f"✅ Created run: {run_id}")
-    
-    # Map each query result to an atom type
-    atom_type_map = {
-        "core_thesis": "concept_explanation",
-        "concept_explanation": "concept_explanation",
-        "worked_example": "worked_example",
-        "practice_quiz": "practice_item",
-        "analogy": "analogy",
-        "misconceptions": "misconception",
-        "action_plan": "worked_example",
-    }
-    
-    atoms_stored = 0
-    for key, val in data["query_results"].items():
-        answer = val.get("answer", "")
-        citations = val.get("citations", [])
-        elapsed = val.get("elapsed_s", 0)
-        
-        if not answer:
-            print(f"  ⚠️ Skipping {key}: empty answer")
-            continue
-        
-        atom_id = str(uuid.uuid4())
-        atom_type = atom_type_map.get(key, "concept_explanation")
-        
-        # Try to parse as JSON if the answer contains structured data
-        content_json = None
-        try:
-            # Check if the answer is valid JSON
-            stripped = answer.strip()
-            if stripped.startswith('[') or stripped.startswith('{'):
-                content_json = json.loads(stripped)
-        except json.JSONDecodeError:
-            pass
-        
-        # If not JSON, store as structured text with metadata
-        if content_json is None:
-            content_json = {
-                "text": answer,
-                "format": "markdown",
-                "query_key": key,
-            }
-        
-        atom = {
-            "id": atom_id,
-            "atom_type": atom_type,
-            "concept_id": f"viral_content_{key}",
-            "content": content_json,
-            "source_bundle_hash": notebook_id[:12],
-            "level": "intermediate",
-            "pipeline_run_id": run_id,
-            "created_at": datetime.utcnow().isoformat(),
-            "metadata": {
-                "notebook_id": notebook_id,
-                "notebook_title": notebook_title,
-                "query_key": key,
-                "citation_count": len(citations),
-                "latency_s": elapsed,
-                "source_count": source_count,
-                "grounding_engine": "notebooklm",
-            }
-        }
-        
-        supabase.table("nexus_learning_atoms").insert(atom).execute()
-        atoms_stored += 1
-        print(f"  ✅ Stored atom: {atom_type} / {key} ({len(answer)} chars, {len(citations)} citations)")
-    
-    # Also store as an asset bundle for the run dashboard
-    supabase.table("nexus_assets").insert({
-        "run_id": run_id,
-        "title": f"Viral Reels & Carousels — {atoms_stored} Atoms",
-        "asset_type": "content_bundle",
-        "content": {
-            "topic": "Viral Reels & Carousels",
-            "atom_count": atoms_stored,
-            "notebook_id": notebook_id,
-            "artifacts_generated": list(data.get("artifacts", {}).keys()),
-        },
-        "metadata": {"source_node": "test_nlm_full"}
-    }).execute()
-    
-    print(f"\n{'='*50}")
-    print(f"✅ Stored {atoms_stored} atoms + 1 asset bundle")
-    print(f"   Run ID: {run_id}")
-    print(f"   View in Supabase: nexus_learning_atoms table")
-    print(f"{'='*50}")
-
-
-if __name__ == "__main__":
-    store_atoms()
-
-```
-
-### nexus/service/grounding/test_nlm.py
-
-```python
-import sys
-import os
-import asyncio
-import time
-from datetime import datetime
-# Avoid shadowing the library with the local notebooklm.py file
-sys.path = [p for p in sys.path if p and os.path.abspath(p) != os.path.dirname(os.path.abspath(__file__))]
-
-from notebooklm import NotebookLMClient, RPCError
-
-async def evaluate_nlm():
-    print(f"[{datetime.now()}] --- STARTING NOTEBOOKLM EVALUATION ---")
-    
-    # Check if we can find authentication
-    try:
-        from_storage = await NotebookLMClient.from_storage()
-    except Exception as e:
-        print(f"Error initializing client from storage: {e}")
-        print("NOTE: You will need to run 'notebooklm login' in your local terminal.")
-        print("Go to https://github.com/teng-lin/notebooklm-py#cli-login for details.")
-        return
-
-    async with from_storage as client:
-        try:
-            # 1. Timing: Create notebook
-            start_time = time.time()
-            nb_name = f"Test Research {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            print(f"1. Creating notebook: {nb_name}")
-            nb = await client.notebooks.create(nb_name)
-            create_duration = time.time() - start_time
-            print(f"   - Created NB ID: {nb.id} in {create_duration:.2f}s")
-
-            # 2. Add Sources evaluation
-            sources = [
-                "https://blog.youtube/news-and-events/youtube-shorts-creators-monetization/",
-                "https://engineering.googleblog.com/2022/10/youtube-shorts-retention-metrics.html", # hypothetical technical link
-                "https://blog.youtube/inside-youtube/how-youtube-shorts-algorithm-works/"
-            ]
-            print(f"2. Adding {len(sources)} sources...")
-            start_time = time.time()
-            for url in sources:
-                try:
-                    await client.sources.add_url(nb.id, url)
-                    print(f"   - Added source: {url}")
-                except RPCError as e:
-                    print(f"   - Failed to add source {url}: {e}")
-            
-            add_duration = time.time() - start_time
-            print(f"   - Finished adding sources in {add_duration:.2f}s")
-
-            # 3. Query evaluation (Structured extraction)
-            print("3. Running structured queries...")
-            queries = [
-                "Extract the core thesis of these sources in one sentence.",
-                "Extract 3 key technical ideas with definitions and why they matter. Format as JSON list: [{\"concept\": \"...\", \"definition\": \"...\", \"why\": \"...\"}]",
-                "What are the top 3 common misconceptions about the Shorts algorithm mentioned in these sources?"
-            ]
-            
-            results = {}
-            for query in queries:
-                start_time = time.time()
-                print(f"   - Query: {query}")
-                result = await client.chat.ask(nb.id, query)
-                query_duration = time.time() - start_time
-                print(f"   - Answer ({query_duration:.2f}s): {result.answer[:150]}...")
-                results[query] = result.answer
-
-            # 4. Artifact generation (Audio overview & Quiz)
-            print("4. Testing artifact generation...")
-            
-            # Audio
-            print("   - Generating Audio Overview (Deep Dive)...")
-            start_time = time.time()
-            try:
-                status = await client.artifacts.generate_audio(nb.id)
-                print(f"   - Audio generation task started: {status.task_id}")
-                # We won't wait for completion in this test to save time, but will log task ID
-            except RPCError as e:
-                print(f"   - Audio generation failed: {e}")
-
-            # Quiz
-            print("   - Generating Quiz (JSON)...")
-            try:
-                status = await client.artifacts.generate_quiz(nb.id)
-                print(f"   - Quiz generation task started: {status.task_id}")
-            except RPCError as e:
-                print(f"   - Quiz generation failed: {e}")
-
-            print(f"[{datetime.now()}] --- EVALUATION COMPLETE ---")
-            
-        except RPCError as e:
-            print(f"Fatal RPC Error: {e}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-
-if __name__ == "__main__":
-    asyncio.run(evaluate_nlm())
-
-```
-
-### nexus/service/grounding/test_nlm_full.py
-
-```python
-"""
-Nexus — Full NotebookLM Integration Test
-==========================================
-Exercises the COMPLETE notebooklm-py API surface to verify we have
-ultimate control over content creation. Test topic: "Creating Viral
-Reels & Carousels."
-
-Run from project root:
-    python -m service.grounding.test_nlm_full
-
-Requires: `notebooklm login` to have been run recently.
-"""
-
-import sys
-import os
-import asyncio
-import json
-import time
-from datetime import datetime
-
-# Avoid shadowing the library with the local notebooklm.py file
-sys.path = [p for p in sys.path if p and os.path.abspath(p) != os.path.dirname(os.path.abspath(__file__))]
-
-from notebooklm import NotebookLMClient, RPCError
-
-# ── Test content to inject as text sources ──────────────────────────────────
-# Instead of relying on URLs that may fail, we inject curated text directly.
-# This is the KEY insight: you can use add_text() to inject ANY content.
-
-INJECTED_SOURCES = [
-    {
-        "title": "Viral Short-Form Video Mechanics (2025–2026 Research)",
-        "content": """
-# Viral Short-Form Video: The Operating System
-
-## Hook Architecture
-- The first 0.5–1.5s determines 80% of retention
-- Three hook types that work: Pattern Interrupt, Open Loop, Identity Call-out
-- Pattern Interrupt: start with an unexpected visual or statement that breaks the scroll reflex
-- Open Loop: pose a question or half-statement that demands resolution ("Most creators get this wrong about...")
-- Identity Call-out: directly address a specific viewer type ("If you're a solopreneur trying to grow on IG...")
-
-## The 3-Second Hold Proxy
-- Platforms use "3-second hold" as the primary signal that content is worth distributing
-- If >50% of viewers stay past 3s, the algorithm pushes to a wider audience
-- This means your hook + first visual MUST create curiosity before 3 seconds
-
-## Retention Curve Methodology
-- YouTube Shorts measures "engaged views" (views where user stays >specific threshold)
-- Instagram Reels uses loop completion rate (full watches / impressions)
-- TikTok uses "qualified views" — weighted by watch-through and replay behavior
-- Best-performing content maintains >60% retention at the midpoint
-
-## Content Structure Frameworks
-1. **Hook → Value → Payoff (HVP)**: Most reliable for educational content
-2. **Hook → Story → Lesson → CTA**: Best for personal brand building
-3. **Hook → Controversy → Evidence → Resolution**: Highest engagement but riskier
-
-## Algorithm Ranking Signals (2026)
-- Watch-through rate (most important)
-- Share rate (second most important — "dark social" shares count)
-- Save rate (indicates reference value)
-- Comment-to-view ratio
-- Profile visits after viewing (indicates creator interest)
-- Replay rate (indicates re-watch value)
-
-## Posting Cadence Research
-- 3-5x/week for Reels, 4-7x/week for TikTok, 2-3x/week for Shorts
-- Consistency > frequency — posting 3x/week for 12 weeks outperforms 7x/week for 4 weeks
-- "Batch creation" workflow: film 5-10 videos in one session, edit in batches
-"""
-    },
-    {
-        "title": "Carousel Design: The Complete Playbook",
-        "content": """
-# Carousel Design for Maximum Engagement
-
-## Why Carousels Outperform Single Images
-- Average engagement rate 3-5x higher than single image posts
-- LinkedIn carousels get 2.5x the reach of text posts
-- Instagram carousels have 1.4x higher reach than single images (2025 data)
-- Swipe-through rate is the #1 signal for carousel distribution
-
-## The 10-Slide Framework
-1. **Slide 1 (The Hook)**: Bold claim, question, or pattern interrupt. This is your thumbnail — treat it like a video hook.
-2. **Slide 2 (Context/Problem)**: Establish why this matters. Create an emotional gap.
-3. **Slides 3-8 (Value Delivery)**: One idea per slide. Use large fonts. Minimize text. Add visual hierarchy.
-4. **Slide 9 (Summary/Synthesis)**: Recap the key takeaways in a scannable format.
-5. **Slide 10 (CTA)**: Clear action — save, share, follow, comment, link in bio.
-
-## Design Principles
-- **Font size**: Minimum 24pt for body, 36pt+ for headlines
-- **Contrast ratio**: 4.5:1 minimum (WCAG AA standard)
-- **Color consistency**: Use 2-3 colors max across all slides
-- **White space**: At least 20% of each slide should be empty
-- **Brand elements**: Consistent placement of handle/logo on every slide
-
-## Content Types That Work
-1. **Listicles** ("7 tools every creator needs") — highest save rate
-2. **Before/After** — highest share rate
-3. **Step-by-step tutorials** — highest completion (swipe-through) rate
-4. **Myth-busting** ("Stop doing X, do Y instead") — highest comment rate
-5. **Data visualizations** — highest credibility signal
-
-## Copywriting for Carousels
-- Each slide = one complete thought
-- Use "bridge sentences" at the bottom of each slide to pull readers to the next
-- Example bridges: "But here's the problem..." / "The fix is simpler than you think..." / "Slide 5 is the game-changer..."
-- Caption should add context, not repeat slide content
-- Use bullet points, not paragraphs
-
-## Common Mistakes
-1. Too much text per slide (>40 words kills it)
-2. No visual consistency between slides
-3. Weak first slide (treating it like a blog title instead of a hook)
-4. No CTA on the last slide
-5. Not optimizing the caption for saves and shares
-"""
-    },
-    {
-        "title": "Monetization & Growth Mechanics for Content Creators",
-        "content": """
-# Creator Economy: Monetization Mechanics
-
-## Revenue Streams (Ranked by $/effort for short-form creators)
-1. **Sponsorships**: $500–$50,000 per post depending on niche and audience size
-2. **Digital Products**: Courses, templates, presets — 70-90% margin
-3. **Affiliate Marketing**: 5-30% commission per sale
-4. **Platform Ad Revenue**: YouTube Shorts Fund, IG Reels bonuses (declining)
-5. **Memberships/Community**: Recurring revenue via Discord, Skool, Patreon
-
-## Growth Flywheel
-Content → Reach → Trust → Audience → Monetization → Reinvest → Better Content
-
-## Key Metrics to Track
-- **Reach Rate**: Impressions / Followers (healthy: 30-80% for Reels)
-- **Engagement Rate**: (Likes + Comments + Saves + Shares) / Reach × 100
-- **Follower Conversion Rate**: New followers / Reach × 100
-- **Revenue Per 1000 Views (RPM)**: Total revenue / views × 1000
-- **Content Velocity**: Pieces published per week
-
-## The "1000 True Fans" Threshold
-- You don't need millions of followers
-- 1,000 people willing to pay you $100/year = $100,000/year
-- Focus on depth of connection, not breadth of reach
-- Short-form content = top-of-funnel. Long-form/community = conversion.
-
-## Platform-Specific Tactics (2026)
-### Instagram
-- Reels + Carousels + Stories = the "content trifecta"
-- Reels for reach, Carousels for saves, Stories for retention
-- Collaborate feature boosts reach 50-100% when used with accounts of similar size
-
-### TikTok
-- "Series" feature for sequential long-form content
-- Live shopping integration growing 300% YoY
-- Comment replies as content (creates engagement loops)
-
-### YouTube Shorts
-- Shorts → Long-form funnel is the most effective monetization path
-- Community tab + Shorts = engagement flywheel
-- Shorts RPM is now $0.04-$0.08 (up from $0.01-$0.02 in 2024)
-"""
-    }
-]
-
-
-async def run_full_test():
-    """Full end-to-end NLM test with rich content generation."""
-    
-    print(f"\n{'='*70}")
-    print(f"  NEXUS — NotebookLM Full Integration Test")
-    print(f"  Topic: Creating Viral Reels & Carousels")
-    print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*70}\n")
-    
-    # ── Phase 0: Auth Check ──────────────────────────────────────────────
-    print("📋 Phase 0: Checking authentication...")
-    try:
-        client = await NotebookLMClient.from_storage()
-    except Exception as e:
-        print(f"  ❌ Auth failed: {e}")
-        print("  → Run: python -m notebooklm login")
-        return
-    
-    async with client:
-        print(f"  ✅ Authenticated. Connected: {client.is_connected}")
-        
-        # ── Phase 1: Create Notebook ─────────────────────────────────────
-        print(f"\n{'─'*50}")
-        print("📓 Phase 1: Creating notebook...")
-        t0 = time.time()
-        
-        nb_title = f"Viral Reels & Carousels — {datetime.now().strftime('%H:%M')}"
-        nb = await client.notebooks.create(nb_title)
-        print(f"  ✅ Created: '{nb.title}' (ID: {nb.id}) [{time.time()-t0:.1f}s]")
-        
-        # ── Phase 2: Inject Text Sources ─────────────────────────────────
-        # This is the KEY capability — we inject pre-curated content directly
-        print(f"\n{'─'*50}")
-        print("📥 Phase 2: Injecting text sources (add_text)...")
-        
-        source_ids = []
-        for src in INJECTED_SOURCES:
-            t0 = time.time()
-            try:
-                result = await client.sources.add_text(
-                    nb.id,
-                    title=src["title"],
-                    content=src["content"]
-                )
-                source_ids.append(result.id)
-                print(f"  ✅ Added: '{src['title']}' (ID: {result.id}) [{time.time()-t0:.1f}s]")
-            except RPCError as e:
-                print(f"  ❌ Failed: '{src['title']}': {e}")
-        
-        # Wait for sources to be processed
-        if source_ids:
-            print(f"\n  ⏳ Waiting for {len(source_ids)} sources to finish processing...")
-            try:
-                ready_sources = await client.sources.wait_for_sources(
-                    nb.id, source_ids, timeout=120
-                )
-                print(f"  ✅ All {len(ready_sources)} sources ready")
-            except Exception as e:
-                print(f"  ⚠️ Wait timed out or failed: {e}")
-                # Continue anyway — sources may still work
-        
-        # Also test URL source if we want supplemental content
-        print(f"\n  📎 Adding a URL source for supplemental data...")
-        try:
-            url_src = await client.sources.add_url(
-                nb.id,
-                "https://blog.youtube/inside-youtube/the-four-rs-of-responsibility-raise-reduce-remove-restrict/"
-            )
-            print(f"  ✅ URL source added: {url_src.id}")
-        except Exception as e:
-            print(f"  ⚠️ URL source failed (non-critical): {e}")
-        
-        # ── Phase 3: Structured Queries (Learning Atoms) ─────────────────
-        print(f"\n{'─'*50}")
-        print("🧠 Phase 3: Querying for structured learning atoms...")
-        
-        queries = {
-            "core_thesis": "Based on all the sources, what is the single most important thesis about creating viral short-form content? Give a clear, definitive one-sentence answer.",
-            
-            "concept_explanation": 'Explain the "3-Second Hold Proxy" concept in detail. What is it, why does it matter, and how do algorithms use it? Include specific metrics.',
-            
-            "worked_example": """Give me a step-by-step worked example of creating a viral Instagram carousel about "5 Mistakes New Creators Make." Walk through each slide — what goes on it, the copy, the design choices, and WHY each choice matters. Be extremely specific.""",
-            
-            "practice_quiz": """Create a 5-question multiple choice quiz testing understanding of short-form video algorithm mechanics. For each question: provide the question, 4 options (A-D), the correct answer, and a brief explanation of why. Format as structured JSON: [{"question": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "answer": "X", "explanation": "..."}]""",
-            
-            "analogy": """Create a compelling analogy that explains how the short-form content algorithm works. Make it relatable to everyday life. Then explain why the analogy works and where it breaks down.""",
-            
-            "misconceptions": """What are the top 3 most common misconceptions about going viral with reels and carousels? For each, state the myth, explain the reality, and give the evidence from the sources.""",
-            
-            "action_plan": """Based on all sources, create a concrete 30-day action plan for someone who wants to start creating viral reels and carousels from scratch. Break it into Week 1, Week 2, Week 3, Week 4 with specific daily activities."""
-        }
-        
-        results = {}
-        for key, query in queries.items():
-            t0 = time.time()
-            print(f"\n  🔍 [{key}] Querying...")
-            try:
-                result = await client.chat.ask(nb.id, query)
-                elapsed = time.time() - t0
-                answer_preview = result.answer[:200].replace('\n', ' ')
-                citation_count = len(result.references) if result.references else 0
-                print(f"     ✅ [{elapsed:.1f}s] {citation_count} citations")
-                print(f"     📝 {answer_preview}...")
-                results[key] = {
-                    "answer": result.answer,
-                    "citations": [
-                        {"source_id": r.source_id, "text": r.cited_text or ""}
-                        for r in (result.references or [])
-                    ],
-                    "elapsed_s": elapsed
-                }
-            except Exception as e:
-                print(f"     ❌ Query failed: {e}")
-                results[key] = {"answer": "", "citations": [], "error": str(e)}
-        
-        # ── Phase 4: Artifact Generation ─────────────────────────────────
-        print(f"\n{'─'*50}")
-        print("🎨 Phase 4: Generating artifacts...")
-        
-        artifacts_generated = {}
-        
-        # 4a. Quiz
-        print(f"\n  📝 Generating quiz...")
-        try:
-            t0 = time.time()
-            quiz_status = await client.artifacts.generate_quiz(nb.id)
-            if quiz_status and quiz_status.task_id:
-                print(f"     ⏳ Quiz task started: {quiz_status.task_id}")
-                final = await client.artifacts.wait_for_completion(
-                    nb.id, quiz_status.task_id, timeout=120
-                )
-                print(f"     ✅ Quiz generated [{time.time()-t0:.1f}s]")
-                artifacts_generated["quiz"] = {"task_id": quiz_status.task_id, "status": "complete"}
-            else:
-                print(f"     ✅ Quiz generated (instant) [{time.time()-t0:.1f}s]")
-                artifacts_generated["quiz"] = {"status": "complete"}
-        except Exception as e:
-            print(f"     ❌ Quiz generation failed: {e}")
-            artifacts_generated["quiz"] = {"error": str(e)}
-        
-        # 4b. Study Guide
-        print(f"\n  📖 Generating study guide...")
-        try:
-            t0 = time.time()
-            guide_status = await client.artifacts.generate_study_guide(nb.id)
-            if guide_status and guide_status.task_id:
-                final = await client.artifacts.wait_for_completion(
-                    nb.id, guide_status.task_id, timeout=120
-                )
-                print(f"     ✅ Study guide generated [{time.time()-t0:.1f}s]")
-                artifacts_generated["study_guide"] = {"task_id": guide_status.task_id, "status": "complete"}
-            else:
-                print(f"     ✅ Study guide generated (instant) [{time.time()-t0:.1f}s]")
-                artifacts_generated["study_guide"] = {"status": "complete"}
-        except Exception as e:
-            print(f"     ❌ Study guide failed: {e}")
-            artifacts_generated["study_guide"] = {"error": str(e)}
-        
-        # 4c. Briefing Doc (Report)
-        print(f"\n  📋 Generating briefing document...")
-        try:
-            from notebooklm import ReportFormat
-            t0 = time.time()
-            report_status = await client.artifacts.generate_report(
-                nb.id, report_format=ReportFormat.BRIEFING_DOC
-            )
-            if report_status and report_status.task_id:
-                final = await client.artifacts.wait_for_completion(
-                    nb.id, report_status.task_id, timeout=120
-                )
-                print(f"     ✅ Briefing doc generated [{time.time()-t0:.1f}s]")
-                artifacts_generated["briefing_doc"] = {"task_id": report_status.task_id, "status": "complete"}
-            else:
-                print(f"     ✅ Briefing doc generated (instant) [{time.time()-t0:.1f}s]")
-                artifacts_generated["briefing_doc"] = {"status": "complete"}
-        except Exception as e:
-            print(f"     ❌ Briefing doc failed: {e}")
-            artifacts_generated["briefing_doc"] = {"error": str(e)}
-        
-        # 4d. Audio Overview
-        print(f"\n  🔊 Generating audio overview...")
-        try:
-            t0 = time.time()
-            audio_status = await client.artifacts.generate_audio(nb.id)
-            if audio_status and audio_status.task_id:
-                print(f"     ⏳ Audio task: {audio_status.task_id} (this takes a while...)")
-                final = await client.artifacts.wait_for_completion(
-                    nb.id, audio_status.task_id, timeout=600
-                )
-                print(f"     ✅ Audio overview generated [{time.time()-t0:.1f}s]")
-                artifacts_generated["audio"] = {"task_id": audio_status.task_id, "status": "complete"}
-            else:
-                print(f"     ✅ Audio generated (instant) [{time.time()-t0:.1f}s]")
-                artifacts_generated["audio"] = {"status": "complete"}
-        except Exception as e:
-            print(f"     ⚠️ Audio generation failed (non-critical): {e}")
-            artifacts_generated["audio"] = {"error": str(e)}
-        
-        # ── Phase 5: List All Generated Artifacts ────────────────────────
-        print(f"\n{'─'*50}")
-        print("📦 Phase 5: Listing all artifacts in notebook...")
-        try:
-            all_artifacts = await client.artifacts.list(nb.id)
-            for art in all_artifacts:
-                print(f"  • {art.artifact_type}: {art.title or '(untitled)'} [ID: {art.id}]")
-        except Exception as e:
-            print(f"  ⚠️ Could not list artifacts: {e}")
-        
-        # ── Phase 6: Get Notebook Summary ────────────────────────────────
-        print(f"\n{'─'*50}")
-        print("📊 Phase 6: Getting notebook summary...")
-        try:
-            summary = await client.notebooks.get_summary(nb.id)
-            print(f"  📝 Summary ({len(summary)} chars):")
-            print(f"     {summary[:300]}...")
-        except Exception as e:
-            print(f"  ⚠️ Could not get summary: {e}")
-        
-        # ── Phase 7: Output Results ──────────────────────────────────────
-        print(f"\n{'='*70}")
-        print("📊 TEST RESULTS SUMMARY")
-        print(f"{'='*70}")
-        
-        print(f"\n  Notebook: {nb.title}")
-        print(f"  Sources injected: {len(source_ids)}")
-        print(f"  Queries executed: {len(results)}")
-        
-        success_q = sum(1 for v in results.values() if v.get("answer"))
-        fail_q = sum(1 for v in results.values() if v.get("error"))
-        print(f"  Query results: {success_q} success, {fail_q} failed")
-        
-        success_a = sum(1 for v in artifacts_generated.values() if v.get("status") == "complete")
-        fail_a = sum(1 for v in artifacts_generated.values() if v.get("error"))
-        print(f"  Artifacts: {success_a} generated, {fail_a} failed")
-        
-        # Save full results to file
-        output = {
-            "notebook_id": nb.id,
-            "notebook_title": nb.title,
-            "timestamp": datetime.now().isoformat(),
-            "source_count": len(source_ids),
-            "query_results": results,
-            "artifacts": artifacts_generated
-        }
-        
-        output_path = os.path.join(os.path.dirname(__file__), "..", "..", "nlm_test_results.json")
-        output_path = os.path.abspath(output_path)
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(output, f, indent=2, ensure_ascii=False, default=str)
-        print(f"\n  💾 Full results saved to: {output_path}")
-        
-        # Print the richest query result as a demo
-        if results.get("worked_example", {}).get("answer"):
-            print(f"\n{'─'*50}")
-            print("📖 SAMPLE OUTPUT: Worked Example (Carousel Creation)")
-            print(f"{'─'*50}")
-            print(results["worked_example"]["answer"][:2000])
-        
-        if results.get("action_plan", {}).get("answer"):
-            print(f"\n{'─'*50}")
-            print("📅 SAMPLE OUTPUT: 30-Day Action Plan")
-            print(f"{'─'*50}")
-            print(results["action_plan"]["answer"][:2000])
-        
-        print(f"\n{'='*70}")
-        print(f"  ✅ Test complete. Notebook '{nb.title}' preserved on NotebookLM.")
-        print(f"  🔗 View at: https://notebooklm.google.com/notebook/{nb.id}")
-        print(f"{'='*70}\n")
-
-
-if __name__ == "__main__":
-    asyncio.run(run_full_test())
-
-```
-
-### nexus/service/synthesis/asset_generator.py
-
-```python
-# ==============================================================================
-# Nexus Service — Asset Generation (Lane 5 — W5)
-# ==============================================================================
-# Generates media assets (audio, quiz, study guide, etc.) via NotebookLM.
-# Uses the full notebooklm-py artifact API.
-# ==============================================================================
-
-import logging
-from typing import List, Dict, Any, Optional
-from ..grounding.notebooklm import nlm_manager
-
-logger = logging.getLogger("nexus.assets")
-
-async def generate_audio_overview(notebook_id: str, instructions: Optional[str] = None) -> Dict[str, Any]:
-    """Generate a deep-dive audio overview for the grounded research."""
-    logger.info(f"Generating audio overview for notebook: {notebook_id}")
-    try:
-        result = await nlm_manager.generate_audio(notebook_id, instructions=instructions)
-        logger.info(f"Audio generated: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Audio generation failed: {str(e)}")
-        return {"error": str(e)}
-
-async def generate_quiz_artifacts(notebook_id: str) -> Dict[str, Any]:
-    """Generate a quiz artifact via NotebookLM's dedicated quiz API."""
-    logger.info(f"Generating quiz via NotebookLM artifact API for notebook: {notebook_id}")
-    try:
-        result = await nlm_manager.generate_quiz(notebook_id)
-        logger.info(f"Quiz generated: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Quiz generation failed: {str(e)}")
-        return {"error": str(e)}
-
-async def generate_study_guide(notebook_id: str) -> Dict[str, Any]:
-    """Generate a study guide via NotebookLM's dedicated API."""
-    logger.info(f"Generating study guide for notebook: {notebook_id}")
-    try:
-        result = await nlm_manager.generate_study_guide(notebook_id)
-        logger.info(f"Study guide generated: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Study guide generation failed: {str(e)}")
-        return {"error": str(e)}
-
-async def generate_flashcards(notebook_id: str) -> Dict[str, Any]:
-    """Generate flashcards via NotebookLM's dedicated API."""
-    logger.info(f"Generating flashcards for notebook: {notebook_id}")
-    try:
-        result = await nlm_manager.generate_flashcards(notebook_id)
-        logger.info(f"Flashcards generated: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Flashcards generation failed: {str(e)}")
-        return {"error": str(e)}
-
-async def generate_report(notebook_id: str, report_format: str = "briefing_doc") -> Dict[str, Any]:
-    """Generate a report (briefing doc, etc.) via NotebookLM's dedicated API."""
-    logger.info(f"Generating {report_format} report for notebook: {notebook_id}")
-    try:
-        result = await nlm_manager.generate_report(notebook_id, report_format=report_format)
-        logger.info(f"Report generated: {result}")
-        return result
-    except Exception as e:
-        logger.error(f"Report generation failed: {str(e)}")
-        return {"error": str(e)}
-
-```
-
-### nexus/service/synthesis/bundle_assembler.py
-
-```python
-import logging
-from typing import List, Dict, Any, Optional
-import uuid
-
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from supabase import create_client, Client
-from ..models import ExperienceSupportBundle, ConceptCoverage, LearningAtom
-
-logger = logging.getLogger("nexus.bundle_assembler")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-def _filter_concepts(concept_ids: List[str], coverage_state: Optional[Dict[str, Any]]) -> List[str]:
-    """Filters and prioritizes concept IDs based on learner coverage."""
-    if not coverage_state:
-        return concept_ids
-    
-    filtered = []
-    for cid in concept_ids:
-        cov = coverage_state.get(cid)
-        if cov:
-            # Skip concepts already mastered
-            if cov.get("level") == "advanced" and cov.get("recent_failures", 0) == 0:
-                continue
-            # Prioritize low coverage or recent failures
-        filtered.append(cid)
-    
-    # Sort: put ones with recent_failures or beginner level first
-    def sort_key(cid: str):
-        c = coverage_state.get(cid, {})
-        level_score = {"beginner": 2, "intermediate": 1, "advanced": 0}.get(c.get("level", "beginner"), 2)
-        failures = c.get("recent_failures", 0)
-        return -(level_score + failures)  # Higher is first
-    
-    filtered.sort(key=sort_key)
-    return filtered
-
-def _fetch_atoms(concept_ids: List[str], atom_types: List[str]) -> List[Dict[str, Any]]:
-    if not supabase or not concept_ids:
-        return []
-        
-    try:
-        response = supabase.table("nexus_learning_atoms").select("*").in_("concept_id", concept_ids).in_("atom_type", atom_types).execute()
-        return response.data
-    except Exception as e:
-        logger.error(f"Failed to fetch atoms: {e}")
-        return []
-
-def _generate_missing_atoms_mock(concept_ids: List[str], atom_type: str):
-    # TODO: This will call Lane 1's atom generation logic once complete
-    logger.info(f"Mock: would generate missing atoms of type {atom_type} for concepts {concept_ids}")
-
-def assemble_primer_bundle(concept_ids: List[str], coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    target_concepts = _filter_concepts(concept_ids, coverage_state)
-    atoms = _fetch_atoms(target_concepts, ["concept_explanation", "analogy"])
-    _generate_missing_atoms_mock(target_concepts, "concept_explanation")
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "bundle_type": "primer_bundle",
-        "atoms": atoms,
-    }
-
-def assemble_worked_example_bundle(concept_ids: List[str], coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    target_concepts = _filter_concepts(concept_ids, coverage_state)
-    atoms = _fetch_atoms(target_concepts, ["worked_example", "practice_item"])
-    _generate_missing_atoms_mock(target_concepts, "worked_example")
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "bundle_type": "worked_example_bundle",
-        "atoms": atoms,
-    }
-
-def assemble_checkpoint_bundle(weak_concepts: List[str], coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    target_concepts = _filter_concepts(weak_concepts, coverage_state)
-    atoms = _fetch_atoms(target_concepts, ["checkpoint_block"])
-    _generate_missing_atoms_mock(target_concepts, "checkpoint_block")
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "bundle_type": "checkpoint_bundle",
-        "atoms": atoms,
-    }
-
-def assemble_deepen_bundle(completed_step_concepts: List[str], coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    target_concepts = _filter_concepts(completed_step_concepts, coverage_state)
-    atoms = _fetch_atoms(target_concepts, ["reflection_prompt", "misconception_correction"])
-    _generate_missing_atoms_mock(target_concepts, "reflection_prompt")
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "bundle_type": "deepen_after_step_bundle",
-        "atoms": atoms,
-    }
-
-def assemble_misconception_repair_bundle(confused_concepts: List[str], coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    target_concepts = _filter_concepts(confused_concepts, coverage_state)
-    atoms = _fetch_atoms(target_concepts, ["misconception_correction", "worked_example"])
-    _generate_missing_atoms_mock(target_concepts, "misconception_correction")
-    
-    return {
-        "id": str(uuid.uuid4()),
-        "bundle_type": "misconception_repair_bundle",
-        "atoms": atoms,
-    }
-
-def assemble_bundle(bundle_type: str, concept_ids: List[str], learner_id: Optional[str] = None, coverage_state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    if bundle_type == "primer_bundle":
-        return assemble_primer_bundle(concept_ids, coverage_state)
-    elif bundle_type == "worked_example_bundle":
-        return assemble_worked_example_bundle(concept_ids, coverage_state)
-    elif bundle_type == "checkpoint_bundle":
-        return assemble_checkpoint_bundle(concept_ids, coverage_state)
-    elif bundle_type == "deepen_after_step_bundle":
-        return assemble_deepen_bundle(concept_ids, coverage_state)
-    elif bundle_type == "misconception_repair_bundle":
-        return assemble_misconception_repair_bundle(concept_ids, coverage_state)
-    else:
-        raise ValueError(f"Unknown bundle type: {bundle_type}")
-
-```
-
-### nexus/service/synthesis/extractor.py
-
-```python
-# ==============================================================================
-# Nexus Service — Synthesis Extractor (Lane 5 — W2, W3)
-# ==============================================================================
-# Ingests source bundles into NotebookLM and extracts specific typed artifacts.
-# NO FALLBACK. If NLM is unavailable, operations fail explicitly.
-# ==============================================================================
-
-import json
-import logging
-import re
-from datetime import datetime
-from typing import List, Dict, Any, Optional
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from ..grounding.notebooklm import nlm_manager, NotebookLMUnavailableError
-from supabase import create_client, Client
-
-logger = logging.getLogger("nexus.extractor")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-class ResearchExtractor:
-    """Orchestrates source ingestion and synthesis of grounded artifacts."""
-
-    def __init__(self):
-        self.manager = nlm_manager
-
-    async def ingest_sources(self, topic: str, sources: List[str]) -> str:
-        """Create a notebook and ingest URL sources. Fails hard if NLM is unavailable."""
-        logger.info(f"Ingesting {len(sources)} sources for topic: {topic}")
-        
-        notebook_id = await self.manager.create_notebook(title=f"Research: {topic}")
-        
-        for url in sources:
-            source_id = await self.manager.add_url_source(notebook_id, url)
-            if source_id:
-                logger.info(f"Added URL source: {url}")
-            else:
-                logger.warning(f"Failed to add URL source: {url}")
-        
-        return notebook_id
-
-    async def ingest_text_sources(self, topic: str, texts: List[Dict[str, str]]) -> str:
-        """Create a notebook and ingest pre-scraped text sources."""
-        logger.info(f"Ingesting {len(texts)} text sources for topic: {topic}")
-        
-        notebook_id = await self.manager.create_notebook(title=f"Research: {topic}")
-        source_ids = await self.manager.add_text_sources(notebook_id, texts)
-        logger.info(f"Ingested {len(source_ids)} text sources")
-        return notebook_id
-
-    async def _safe_query(self, notebook_id: str, query: str) -> str:
-        """Perform a grounded query and handle errors gracefully."""
-        try:
-            result = await self.manager.query(notebook_id, query)
-            return result.get("answer", "")
-        except NotebookLMUnavailableError:
-            raise  # Let auth errors propagate up
-        except Exception as e:
-            logger.error(f"Query failed: {str(e)}")
-            return ""
-
-    async def _extract_json(self, notebook_id: str, query: str) -> List[Dict[str, Any]]:
-        """Query for JSON content and parse the result."""
-        raw_answer = await self._safe_query(notebook_id, query + " Return the result as raw JSON only.")
-        
-        # Cleanup JSON formatting
-        text = raw_answer.strip()
-        if "```json" in text:
-            text = text.split("```json")[-1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[-1].split("```")[0].strip()
-
-        start_idx = text.find('[')
-        if start_idx == -1:
-            start_idx = text.find('{')
-            
-        end_idx = text.rfind(']')
-        if end_idx == -1:
-            end_idx = text.rfind('}')
-
-        if start_idx != -1 and end_idx != -1:
-            text = text[start_idx:end_idx+1]
-
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse JSON from synthesis output: {text[:200]}...")
-            return []
-
-    async def extract_atoms(self, notebook_id: str, topic: str, source_bundle_hash: str, run_id: str) -> List[Dict[str, Any]]:
-        from ..agents.atom_generator import atom_generator
-        
-        logger.info(f"Extracting learning atoms for notebook: {notebook_id} (hash: {source_bundle_hash})")
-        level = "intermediate"
-
-        # 1. Identify Core Concepts
-        concepts_res = await self._extract_json(
-            notebook_id, 
-            "Identify the top 3 core concepts from this research. Return JSON list: [{'concept_id': 'snake_case_id', 'description': '...'}]"
-        )
-        if not isinstance(concepts_res, list) or not concepts_res:
-            concepts_res = [{"concept_id": "core_thesis", "description": topic}]
-        else:
-            concepts_res = concepts_res[:3]
-
-        atoms = []
-        for concept in concepts_res:
-            cid = concept.get("concept_id", "")
-            if not cid: continue
-            cid = cid.replace(" ", "_").lower()
-            
-            # concept_explanation
-            atom_ex = await atom_generator.get_or_generate_atom(
-                notebook_id=notebook_id,
-                atom_type="concept_explanation",
-                concept_id=cid,
-                source_bundle_hash=source_bundle_hash,
-                level=level,
-                prompt=f"Explain {cid}. Return JSON: {{'title': '...', 'explanation': '...', 'key_points': ['...']}}",
-                run_id=run_id
-            )
-            atoms.append(atom_ex)
-
-            # analogy
-            atom_an = await atom_generator.get_or_generate_atom(
-                notebook_id=notebook_id,
-                atom_type="analogy",
-                concept_id=cid,
-                source_bundle_hash=source_bundle_hash,
-                level=level,
-                prompt=f"Provide an analogy for {cid}. Return JSON: {{'target_concept': '{cid}', 'analogy': '...', 'why_it_works': '...'}}",
-                run_id=run_id
-            )
-            atoms.append(atom_an)
-
-            # worked_example
-            atom_we = await atom_generator.get_or_generate_atom(
-                notebook_id=notebook_id,
-                atom_type="worked_example",
-                concept_id=cid,
-                source_bundle_hash=source_bundle_hash,
-                level=level,
-                prompt=f"Provide a step-by-step worked example demonstrating {cid}. Return JSON: {{'scenario': '...', 'steps': ['...'], 'conclusion': '...'}}",
-                run_id=run_id
-            )
-            atoms.append(atom_we)
-
-            # practice_item
-            atom_pi = await atom_generator.get_or_generate_atom(
-                notebook_id=notebook_id,
-                atom_type="practice_item",
-                concept_id=cid,
-                source_bundle_hash=source_bundle_hash,
-                level=level,
-                prompt=f"Create a multiple choice practice item (quiz) for {cid}. Return JSON: {{'question': '...', 'options': ['...'], 'answer': '...', 'explanation': '...'}}",
-                run_id=run_id
-            )
-            atoms.append(atom_pi)
-        
-        return atoms
-
-    async def run_research_pipeline(self, run_id: str, topic: str, user_id: str):
-        """Full standalone pipeline: discovery -> ingestion -> synthesis -> atom storage."""
-        
-        from ..agents.pipeline_runner import emit_event
-        import hashlib
-        
-        logger.info("=" * 60)
-        logger.info(f"NEXUS RESEARCH START: {topic} (Run: {run_id})")
-        logger.info("=" * 60)
-
-        try:
-            # 1. DISCOVERY (Stage 1)
-            from ..agents.discovery import research_strategist
-            from google.adk import Runner
-            import google.adk.sessions
-            from google.genai.types import Content, Part
-            
-            # CACHE CHECK: Research Cache
-            from ..cache.research_cache import get_research_cache, set_research_cache
-            goal_id = "default_goal"  # TODO: pass from request when learner goals are wired
-            pipeline_version = "v1"
-            
-            cached_bundle = get_research_cache(topic, goal_id, pipeline_version, "")
-            
-            if cached_bundle:
-                await emit_event(run_id, "action", f"Research cache HIT for topic: {topic}")
-                urls = cached_bundle.get("urls", [])
-                strategist_output = cached_bundle.get("strategist_output", "")
-                # Update global stats if possible (we can just emit)
-                await emit_event(run_id, "info", json.dumps({"type": "cache_hit", "cache_type": "research", "key": topic}))
-            else:
-                await emit_event(run_id, "info", json.dumps({"type": "cache_miss", "cache_type": "research", "key": topic}))
-                await emit_event(run_id, "info", f"Executing Stage 1: Discovery for topic: {topic}")
-                
-                runner = Runner(
-                    app_name="nexus",
-                    agent=research_strategist,
-                    session_service=google.adk.sessions.InMemorySessionService(),
-                    auto_create_session=True
-                )
-                
-                msg = Content(role="user", parts=[Part.from_text(text=f"Research topic: {topic}")])
-                strategist_output = ""
-                for event in runner.run(user_id=user_id, session_id=f"research_{run_id}", new_message=msg):
-                    if hasattr(event, "content") and event.content and hasattr(event.content, "parts"):
-                        for part in event.content.parts:
-                            if hasattr(part, "text") and part.text:
-                                strategist_output += part.text
-
-            # 2. EXTRACT URLs for Ingestion
-            if not cached_bundle:
-                urls = list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[^\s\)]+', strategist_output)))
-                if not urls:
-                    urls = ["https://en.wikipedia.org/wiki/Main_Page"] # Fallback if none found
-                set_research_cache(topic, goal_id, pipeline_version, "", {"urls": urls, "strategist_output": strategist_output})
-            await emit_event(run_id, "info", f"Discovery found {len(urls)} URLs for grounding.")
-            
-            source_bundle_hash = hashlib.md5("".join(sorted(urls)).encode()).hexdigest()[:12]
-
-            # 3. INGESTION & SYNTHESIS (Stages 2 & 3)
-            await emit_event(run_id, "info", "Executing Stage 2: Ingestion & Grounding...")
-            nb_id = await self.ingest_sources(topic, urls)
-            
-            await emit_event(run_id, "info", "Executing Stage 3: Grounded Atom Synthesis...")
-            atoms = await self.extract_atoms(nb_id, topic, source_bundle_hash, run_id)
-            
-            # 4. ASSET GENERATION (Optional Multi-modal)
-            audio_url = None
-            from ..config import SKIP_AUDIO
-            if SKIP_AUDIO:
-                await emit_event(run_id, "info", "Skipping audio generation (SKIP_AUDIO=true)")
-            else:
-                try:
-                    from ..synthesis.asset_generator import generate_audio_overview
-                    await emit_event(run_id, "action", "Generating audio overview via NotebookLM...")
-                    audio_tmp = await generate_audio_overview(nb_id)
-                    if audio_tmp:
-                        audio_url = audio_tmp
-                        await emit_event(run_id, "success", "Audio asset generated successfully.")
-                except Exception as e:
-                    logger.warning(f"Optional asset generation failed: {e}")
-
-            # 5. UI ASSET STORAGE (For Nexus Dashboard)
-            await emit_event(run_id, "info", "Finalizing assets for UI...")
-            
-            if supabase:
-                # Store a summary asset for the UI run dashboard
-                supabase.table("nexus_assets").insert([{
-                    "run_id": run_id,
-                    "title": f"Generated Atoms ({len(atoms)})",
-                    "asset_type": "content_bundle",
-                    "content": {"count": len(atoms), "atoms": [a.id for a in atoms]},
-                    "metadata": {"source_node": "research_pipeline"}
-                }]).execute()
-                
-            # Finalize run
-            await emit_event(run_id, "success", f"Nexus Research completed for {topic}")
-            
-            if supabase:
-                cache_stats = {"research_hits": 1 if cached_bundle else 0, "synthesis_hits": 0, "atom_hits": 0, "total_saved_ms": 1500 if cached_bundle else 0}
-                supabase.table("nexus_runs").update({
-                    "status": "completed",
-                    "completed_at": datetime.utcnow().isoformat(),
-                    "output": {"message": "Standalone research complete", "atom_count": len(atoms), "cache_stats": cache_stats}
-                }).eq("id", run_id).execute()
-
-        except Exception as e:
-            logger.error(f"Research pipeline failed: {e}")
-            await emit_event(run_id, "error", f"Research pipeline failed: {str(e)}")
-            if supabase:
-                supabase.table("nexus_runs").update({
-                    "status": "failed",
-                    "completed_at": datetime.utcnow().isoformat(),
-                    "output": {"error": str(e)}
-                }).eq("id", run_id).execute()
-
-# Singleton instance
-extractor = ResearchExtractor()
-
-```
-
-### nexus/service/delivery/mapper.py
-
-```python
-# ==============================================================================
-# Nexus Service — Mira Mapping Logic (Lane 5 — W4)
-# ==============================================================================
-# Maps Nexus extracted artifacts to the MiraK/Mira² webhook payload shape.
-# ==============================================================================
-
-import logging
-from typing import Dict, Any, List, Optional
-
-logger = logging.getLogger("nexus.mapper")
-
-def map_artifacts_to_mira_payload(
-    topic: str,
-    session_id: str,
-    artifacts: Dict[str, Any],
-    user_id: str,
-    experience_id: Optional[str] = None,
-    goal_id: Optional[str] = None
-) -> Dict[str, Any]:
-    """Map synthesis artifacts to the MiraK webhook payload structure."""
-    
-    # ── Foundation Unit ───────────────────────────────────────────────────────
-    # Primary research unit for Mira's grounding vault.
-    foundation_unit = {
-        "unit_type": "foundation",
-        "title": f"Foundation: {topic}",
-        "thesis": artifacts.get("thesis", f"Grounded research on {topic}."),
-        "content": artifacts.get("summary", ""),
-        "key_ideas": artifacts.get("key_ideas", []),
-        "citations": artifacts.get("citations", []) # Typically passed from the manager
-    }
-    
-    # ── Playbook Unit ─────────────────────────────────────────────────────────
-    # Tactical implementation unit.
-    # Note: If artifacts["comparison"] exists, we can enrich this.
-    playbook_content = "### Strategy Comparison\n\n"
-    comp = artifacts.get("comparison", {})
-    if isinstance(comp, dict):
-        clusters = comp.get("clusters", [])
-        patterns = comp.get("patterns", [])
-        playbook_content += f"**Clusters:** {', '.join(clusters)}\n\n"
-        playbook_content += f"**Patterns:** {', '.join(patterns)}\n\n"
-    
-    playbook_unit = {
-        "unit_type": "playbook",
-        "title": f"Tactical Playbook: {topic}",
-        "thesis": artifacts.get("thesis", ""),
-        "content": playbook_content + "\n\n### Implementation Insights\n" + artifacts.get("summary", ""),
-        "key_ideas": artifacts.get("key_ideas", [])
-    }
-
-    # ── Experience Proposal (Kolb's 4-step cycle) ─────────────────────────────
-    # Maps directly to Mira Studio's experience_step data structure.
-    # 1. Orientation (Lesson)
-    # 2. Understanding (Challenge)
-    # 3. Execution (Reflection)
-    # 4. Retention (Plan Builder)
-    
-    steps = [
-        {
-            "step_type": "lesson",
-            "title": f"Understanding {topic}",
-            "payload": {
-                "sections": [
-                    {"heading": "Orientation", "body": artifacts.get("summary", ""), "type": "text"}
-                ]
-            }
-        },
-        {
-            "step_type": "challenge",
-            "title": f"Application Challenge",
-            "payload": {
-                "objectives": [
-                    {"id": "obj1", "description": f"Identify 3 key {topic} mechanics from the research.", "proof": "screenshot_or_link"}
-                ]
-            }
-        },
-        {
-            "step_type": "reflection",
-            "title": "Synthesis Reflection",
-            "payload": {
-                "prompts": [
-                    {"id": "p1", "text": f"What was the most surprising algorithmic factor in {topic}?", "format": "free_text"}
-                ]
-            }
-        },
-        {
-            "step_type": "plan_builder",
-            "title": f"Action Plan: {topic}",
-            "payload": {
-                "sections": [
-                    {"type": "goals", "items": [{"id": "g1", "text": f"Implement {topic} optimization in next project."}]}
-                ]
-            }
-        }
-    ]
-
-    # ── Full Payload ─────────────────────────────────────────────────────────
-    return {
-        "topic": topic,
-        "domain": "Strategic Growth", # Default
-        "session_id": session_id,
-        "user_id": user_id,
-        "units": [foundation_unit, playbook_unit],
-        "experience_proposal": {
-            "title": f"Project: {topic}",
-            "goal": f"Master the mechanics of {topic}.",
-            "template_id": "b0000000-0000-0000-0000-000000000002", # Standard heavy build
-            "resolution": { "depth": "heavy", "mode": "build", "timeScope": "multi_day", "intensity": "medium" },
-            "steps": steps
-        },
-        "experience_id": experience_id,
-        "goal_id": goal_id
-    }
-
-```
-
-### nexus/service/delivery/profiles.py
-
-```python
-from typing import List, Dict, Any, Optional
-from supabase import create_client, Client
-from pydantic import BaseModel
-import os
-from ..config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from ..models import DeliveryProfile, DeliveryProfileConfig
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-class DeliveryProfileCreate(BaseModel):
-    name: str
-    target_type: str
-    config: DeliveryProfileConfig
-    pipeline_id: Optional[str] = None
-
-class DeliveryProfileUpdate(BaseModel):
-    name: Optional[str] = None
-    target_type: Optional[str] = None
-    config: Optional[DeliveryProfileConfig] = None
-    pipeline_id: Optional[str] = None
-
-def create_profile(req: DeliveryProfileCreate) -> dict:
-    if not supabase:
-        raise ValueError("Supabase not configured")
-    data = req.model_dump()
-    resp = supabase.table("nexus_delivery_profiles").insert(data).execute()
-    return resp.data[0]
-
-def list_profiles() -> list:
-    if not supabase:
-        return []
-    resp = supabase.table("nexus_delivery_profiles").select("*").execute()
-    return resp.data
-
-def get_profile(id: str) -> Optional[dict]:
-    if not supabase:
-        return None
-    resp = supabase.table("nexus_delivery_profiles").select("*").eq("id", id).execute()
-    return resp.data[0] if resp.data else None
-
-def update_profile(id: str, req: DeliveryProfileUpdate) -> Optional[dict]:
-    if not supabase:
-        return None
-    data = req.model_dump(exclude_unset=True)
-    resp = supabase.table("nexus_delivery_profiles").update(data).eq("id", id).execute()
-    return resp.data[0] if resp.data else None
-
-def delete_profile(id: str) -> bool:
-    if not supabase:
-        return False
-    resp = supabase.table("nexus_delivery_profiles").delete().eq("id", id).execute()
-    return True
-
-```
-
-### nexus/service/delivery/webhook.py
-
-```python
-# ==============================================================================
-# Nexus Service — Delivery Profiles & Webhooks (Lane 4)
-# ==============================================================================
-# Refactored to support generic webhook, mira_adapter, idempotency and retries.
-# ==============================================================================
-
-import logging
-import requests
-import os
-import asyncio
-from typing import Dict, Any, List, Optional
-from ..config import MIRAK_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-from supabase import create_client, Client
-
-logger = logging.getLogger("nexus.webhook")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) if SUPABASE_URL else None
-
-VERCEL_WEBHOOK_URL = os.environ.get("VERCEL_WEBHOOK_URL")
-
-async def execute_delivery(run_id: str, profile_id: str, payload: Dict[str, Any], atom_ids: List[str]) -> bool:
-    """Execute a delivery using a profile, tracking idempotency and retries."""
-    if not supabase:
-        logger.error("Supabase not configured, cannot deliver.")
-        return False
-        
-    # Load profile
-    resp = supabase.table("nexus_delivery_profiles").select("*").eq("id", profile_id).execute()
-    if not resp.data:
-        logger.error(f"Delivery profile {profile_id} not found.")
-        return False
-    
-    profile = resp.data[0]
-    config = profile.get("config", {}) or {}
-    
-    # Check Idempotency Cache
-    # Key: run_id + delivery_target + atom_ids
-    target_type = profile.get("target_type")
-    idemp_key = f"{run_id}_{target_type}_{'-'.join(atom_ids)}"
-    
-    # Try to check nexus_cache_metadata
-    try:
-        cache_resp = supabase.table("nexus_cache_metadata").select("*").eq("cache_key", idemp_key).execute()
-        if cache_resp.data:
-            val = cache_resp.data[0].get("value", {})
-            if val.get("status") == "delivered":
-                logger.info(f"Delivery skipped (idempotency cache hit for {idemp_key}).")
-                _update_run_delivery_status(run_id, "delivered")
-                return True
-    except Exception as e:
-        logger.warning(f"Idempotency cache check failed: {e}")
-        cache_resp = type('obj', (object,), {'data': []})() # empty dummy obj
-
-    # Setup Retry Policy
-    retry_policy = config.get("retry_policy", {})
-    max_retries = retry_policy.get("max_retries", 3) if isinstance(retry_policy, dict) else 3
-    backoff_ms = retry_policy.get("backoff_ms", 1000) if isinstance(retry_policy, dict) else 1000
-    
-    _update_run_delivery_status(run_id, "pending")
-    success = False
-    
-    for attempt in range(max_retries + 1):
-        try:
-            if target_type == "mira_adapter":
-                success = await _deliver_mira_adapter(config, payload)
-            elif target_type == "generic_webhook":
-                success = await _deliver_generic_webhook(config, payload)
-            elif target_type == "asset_store_only":
-                success = True
-            elif target_type == "none":
-                success = True

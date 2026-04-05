@@ -1,5 +1,5 @@
 # Mira + Nexus Project Code Dump
-Generated: Sat, Apr  4, 2026 10:26:19 PM
+Generated: Sat, Apr  4, 2026 10:59:03 PM
 
 ## Selection Summary
 
@@ -613,6 +613,8 @@ export default async function HomePage() {
             totalSteps={focusExperience.totalSteps}
             lastActivityAt={focusExperience.lastActivityAt}
             focusReason={focusExperience.focusReason}
+            outlineTitle={focusExperience.outlineTitle}
+            outlineProgress={focusExperience.outlineProgress}
           />
         </section>
 
@@ -656,19 +658,27 @@ export default async function HomePage() {
         {reentryPrompts.length > 0 && (
           <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <h2 className="text-xs font-bold text-amber-500 uppercase tracking-widest">
-              Pick Up Where You Left Off
+              {COPY.home.reentry.heading}
             </h2>
             <div className="grid grid-cols-1 gap-4">
-              {reentryPrompts.slice(0, 3).map((prompt) => (
-                <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
-              ))}
-              {reentryPrompts.length > 3 && (
-                <Link 
-                  href={`${ROUTES.library}?filter=reentry`}
-                  className="text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors"
-                >
-                  View {reentryPrompts.length - 3} more re-entry points →
-                </Link>
+              <ReentryPromptCard prompt={reentryPrompts[0]} />
+              
+              {reentryPrompts.length > 1 && (
+                <details className="group/details">
+                  <summary className="list-none cursor-pointer text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors">
+                    <span className="group-open/details:hidden">
+                      {COPY.home.reentry.viewMore.replace('{count}', String(reentryPrompts.length - 1))}
+                    </span>
+                    <span className="hidden group-open/details:inline">
+                      {COPY.home.reentry.hideMore}
+                    </span>
+                  </summary>
+                  <div className="mt-4 grid grid-cols-1 gap-4">
+                    {reentryPrompts.slice(1).map((prompt) => (
+                      <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           </section>
@@ -1471,6 +1481,7 @@ export async function POST(request: Request) {
 import { NextResponse } from 'next/server';
 import { runFlowSafe } from '@/lib/ai/safe-flow';
 import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+import { syncKnowledgeMastery } from '@/lib/experience/skill-mastery-engine';
 
 /**
  * POST /api/coach/grade
@@ -1537,7 +1548,6 @@ export async function POST(request: Request) {
     const instanceId = step?.instance_id;
 
     if (instanceId) {
-      const { promoteKnowledgeProgress } = await import('@/lib/services/knowledge-service');
       const { recordInteraction } = await import('@/lib/services/interaction-service');
       const { getLinksForStep } = await import('@/lib/services/step-knowledge-link-service');
       const { DEFAULT_USER_ID } = await import('@/lib/constants');
@@ -1551,15 +1561,21 @@ export async function POST(request: Request) {
 
         const links = await getLinksForStep(stepId);
         // Promote units linked with type 'tests'
-        const testLinks = links.filter(l => l.linkType === 'tests');
+        const testLinks = links.filter((l: any) => l.linkType === 'tests');
         
         for (const link of testLinks) {
-          await promoteKnowledgeProgress(ownerId, link.knowledgeUnitId);
+          await syncKnowledgeMastery(ownerId, link.knowledgeUnitId, { 
+            type: 'checkpoint_pass', 
+            correct: true 
+          });
         }
         
         // Fallback to knowledgeUnitId from body if no link-table entry exists (backward comp)
         if (testLinks.length === 0 && knowledgeUnitId) {
-          await promoteKnowledgeProgress(ownerId, knowledgeUnitId);
+          await syncKnowledgeMastery(ownerId, knowledgeUnitId, { 
+            type: 'checkpoint_pass', 
+            correct: true 
+          });
         }
       }
 
@@ -3238,7 +3254,7 @@ export async function POST(request: Request) {
       instance_type: 'ephemeral',
       status: 'injected',
       resolution: normalized.resolution,
-      reentry: null, // Ephemeral doesn't typically have reentry contracts yet
+      reentry: normalized.reentry,
       previous_experience_id: null,
       next_suggested_ids: [],
       friction_level: null,
@@ -4272,7 +4288,9 @@ import { NextResponse } from 'next/server';
 import {
   createCurriculumOutline,
   getCurriculumOutline,
+  findActiveOutlineByTopic,
 } from '@/lib/services/curriculum-outline-service';
+import { createEnrichmentRequest } from '@/lib/services/enrichment-service';
 import { DEFAULT_USER_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -4390,10 +4408,35 @@ export async function POST(request: Request) {
     // Action: dispatch_research
     // ------------------------------------------------------------------
     if (action === 'dispatch_research') {
-      const { outlineId, topic } = payload;
+      let { outlineId, topic } = payload;
 
-      // Stub — real MiraK dispatch wired in a future sprint
-      console.log(`[plan/route] dispatch_research requested. outlineId=${outlineId}, topic=${topic}`);
+      if (!topic && outlineId) {
+        const o = await getCurriculumOutline(outlineId);
+        if (o) topic = o.topic;
+      }
+
+      // W1: Auto-link to existing outline if none provided
+      if (!outlineId && topic) {
+        const existingOutline = await findActiveOutlineByTopic(userId, topic);
+        if (existingOutline) {
+          outlineId = existingOutline.id;
+          console.log(`[plan/route] Auto-linked research dispatch for "${topic}" to outline ${outlineId}`);
+        }
+      }
+
+      // W1: Log the enrichment request
+      if (topic) {
+        try {
+          await createEnrichmentRequest({
+            userId,
+            requestedGap: topic,
+            requestContext: { outlineId, source: 'gpt_dispatch' },
+            status: 'dispatched', // Mark as dispatched manually as it's a stub
+          });
+        } catch (err) {
+          console.error('[plan/route] Failed to log enrichment request:', err);
+        }
+      }
 
       return NextResponse.json({
         action: 'dispatch_research',
@@ -4528,8 +4571,9 @@ import { NextResponse } from 'next/server'
 import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
 import { getKnowledgeSummaryForGPT } from '@/lib/services/knowledge-service'
 import { getCurriculumSummaryForGPT } from '@/lib/services/curriculum-outline-service'
-import { getActiveGoal, getGoalsForUser } from '@/lib/services/goal-service'
+import { getGoalsForUser, getActiveGoal } from '@/lib/services/goal-service'
 import { getSkillDomainsForGoal, getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
+import { getEnrichmentSummaryForState } from '@/lib/services/enrichment-service'
 import { getGraphSummaryForGPT } from '@/lib/services/graph-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
@@ -4538,12 +4582,13 @@ export async function GET(request: Request) {
   const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
-    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary] = await Promise.all([
+    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments] = await Promise.all([
       buildGPTStatePacket(userId),
       getKnowledgeSummaryForGPT(userId),
       getCurriculumSummaryForGPT(userId),
       getActiveGoal(userId),
-      getGraphSummaryForGPT(userId)
+      getGraphSummaryForGPT(userId),
+      getEnrichmentSummaryForState(userId)
     ])
 
     // SOP-40: If no active goal, fall back to most recent intake goal
@@ -4571,8 +4616,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       ...packet, 
-      knowledgeSummary, 
+      knowledgeSummary: {
+        domains: knowledgeSummary.domains,
+        total: knowledgeSummary.totalUnits,
+        masteredCount: knowledgeSummary.masteredCount
+      }, 
       curriculum,
+      pending_enrichments: enrichments,
       goal: goal ? {
         id: goal.id,
         title: goal.title,
@@ -4780,8 +4830,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { instanceId, stepId, eventType, eventPayload } = body
 
-    if (!instanceId || !eventType) {
-      return NextResponse.json({ error: 'Missing required fields: instanceId, eventType' }, { status: 400 })
+    if (!eventType) {
+      return NextResponse.json({ error: 'Missing required field: eventType' }, { status: 400 })
     }
 
     const event = await recordInteraction({
@@ -4878,6 +4928,46 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+/**
+ * POST /api/knowledge/[id]
+ * Records a practice attempt and syncs mastery.
+ * Body: { correct: boolean, userId: string }
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const { correct, userId } = body;
+    const ownerId = userId || DEFAULT_USER_ID;
+
+    // 1. Record interaction in generic log
+    const { recordInteraction } = await import('@/lib/services/interaction-service');
+    await recordInteraction({
+      instanceId: null,
+      eventType: 'practice_attempt',
+      eventPayload: {
+        unit_id: params.id,
+        correct: !!correct
+      }
+    });
+
+    // 2. Sync mastery logic (Lane 6 - Evidence thresholds)
+    const { syncKnowledgeMastery } = await import('@/lib/experience/skill-mastery-engine');
+    await syncKnowledgeMastery(ownerId, params.id, {
+      type: 'practice_attempt',
+      correct: !!correct
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(`[api/knowledge/${params.id}] Error recording practice:`, error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
 
 ```
 
@@ -7223,6 +7313,7 @@ export default async function KilledPage() {
 
 ```tsx
 import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+import { getInteractionsByUnit } from '@/lib/services/interaction-service';
 import { AppShell } from '@/components/shell/app-shell';
 import KnowledgeUnitView from '@/components/knowledge/KnowledgeUnitView';
 import { notFound } from 'next/navigation';
@@ -7237,6 +7328,8 @@ interface KnowledgeUnitPageProps {
 
 export default async function KnowledgeUnitPage({ params }: KnowledgeUnitPageProps) {
   const unit = await getKnowledgeUnitById(params.unitId);
+  const interactions = await getInteractionsByUnit(params.unitId);
+  const practiceCount = interactions.filter(i => i.event_payload?.correct === true).length;
 
   if (!unit) {
     notFound();
@@ -7245,7 +7338,7 @@ export default async function KnowledgeUnitPage({ params }: KnowledgeUnitPagePro
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto py-12">
-        <KnowledgeUnitView unit={unit} />
+        <KnowledgeUnitView unit={unit} practiceCount={practiceCount} />
       </div>
     </AppShell>
   );
@@ -7905,96 +7998,3 @@ export default async function ProfilePage() {
 import { useState } from 'react'
 import { UserProfile, FacetType } from '@/types/profile'
 import { FacetCard } from '@/components/profile/FacetCard'
-import { COPY } from '@/lib/studio-copy'
-
-interface ProfileClientProps {
-  profile: UserProfile
-}
-
-type FilterType = 'all' | FacetType
-
-export function ProfileClient({ profile }: ProfileClientProps) {
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all')
-
-  const filteredFacets = activeFilter === 'all' 
-    ? profile.facets 
-    : profile.facets.filter(f => f.facet_type === activeFilter)
-
-  const FILTERS: { label: string; value: FilterType }[] = [
-    { label: 'All', value: 'all' },
-    { label: COPY.profilePage.sections.interests, value: 'interest' },
-    { label: COPY.profilePage.sections.skills, value: 'skill' },
-    { label: COPY.profilePage.sections.goals, value: 'goal' },
-    { label: 'Effort', value: 'effort_area' },
-    { label: 'Preferences', value: 'preferred_mode' },
-  ]
-
-  if (profile.facets.length === 0) return null
-
-  return (
-    <div className="space-y-8">
-      {/* Activity Section */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <ActivityCard 
-          label="Total Journeys" 
-          value={profile.experienceCount.total} 
-          subValue={`${profile.experienceCount.active} active`}
-        />
-        <ActivityCard 
-          label="Completion Rate" 
-          value={`${profile.experienceCount.completionRate.toFixed(0)}%`} 
-          subValue={`${profile.experienceCount.completed} completed`}
-          color="text-emerald-400"
-        />
-        <ActivityCard 
-          label="Top Focus" 
-          value={profile.experienceCount.mostActiveClass || 'None'} 
-          subValue="Most active class"
-          color="text-indigo-400"
-          isUppercase
-        />
-        <ActivityCard 
-          label="Avg Friction" 
-          value={profile.experienceCount.averageFriction.toFixed(1)} 
-          subValue="Scale 1-3"
-          color={profile.experienceCount.averageFriction > 2 ? 'text-amber-400' : 'text-slate-400'}
-        />
-      </div>
-
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-center gap-2">
-          {FILTERS.map(filter => (
-            <button
-              key={filter.value}
-              onClick={() => setActiveFilter(filter.value)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                activeFilter === filter.value
-                  ? 'bg-white text-slate-900 shadow-lg'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-
-        {filteredFacets.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {filteredFacets.map(facet => (
-              <FacetCard key={facet.id} facet={facet} />
-            ))}
-          </div>
-        ) : (
-          <div className="py-12 text-center text-slate-500 italic">
-            No facets found for this category.
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ActivityCard({ 
-  label, 
-  value, 
-  subValue, 

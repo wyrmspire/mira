@@ -221,3 +221,220 @@ These don't all need to ship at once. The gap analyst alone would dramatically i
 14. MiraK gap analyst agent (#14)
 
 The core theme: **the intelligence is computed but not shown**. Most of these suggestions are about *surfacing* — letting the user see the growth the system is already tracking. The backend is ahead of the frontend. Close that gap and the app stops feeling like "a place I do assignments" and starts feeling like "a system that's helping me master something."
+
+---
+
+## Easy Wins — Tactical UX Fixes (April 2026)
+
+> Concrete, file-level fixes that don't require new features or architecture changes. Sorted by impact-to-effort ratio. Most are under 30 minutes each.
+
+---
+
+### EW-1. Zero Loading States Across 25 Pages
+
+**Problem:** Every page uses `export const dynamic = 'force-dynamic'` but none have a `loading.tsx` sibling. Users see a blank white flash (or stuck previous page) while server components fetch data.
+
+**Affected routes:** Every route — home, arena, library, skills, knowledge, inbox, profile, workspace, drill, review, timeline, shipped, icebox, killed, send, map, and all dynamic segments like `[projectId]`, `[unitId]`, `[instanceId]`, `[domainId]`, `[prId]`.
+
+**Fix:** Create `loading.tsx` for each route segment. Start with the 5 most-visited:
+- `app/loading.tsx` (home)
+- `app/workspace/[instanceId]/loading.tsx`
+- `app/library/loading.tsx`
+- `app/knowledge/loading.tsx`
+- `app/skills/loading.tsx`
+
+A minimal skeleton is fine — even a centered spinner with the page title is better than a blank screen. Reuse one `<LoadingSkeleton />` component with a `title` prop.
+
+**Effort:** 1-2 hours for all 25.
+
+---
+
+### EW-2. Zero Error Boundaries Across 25 Pages
+
+**Problem:** No route has an `error.tsx`. A failed Supabase query, a network timeout, or a malformed response crashes the entire page with a Next.js default error screen.
+
+**Fix:** Create a shared `error.tsx` component and place it in at least:
+- `app/error.tsx` (root fallback)
+- `app/workspace/[instanceId]/error.tsx` (most complex data dependencies)
+- `app/knowledge/[unitId]/error.tsx` (depends on external MiraK content)
+- `app/arena/[projectId]/error.tsx` (depends on GitHub state)
+
+Pattern:
+```tsx
+'use client'
+export default function Error({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+      <p className="text-sm text-red-400">Something went wrong loading this page.</p>
+      <button onClick={reset} className="px-4 py-2 text-sm bg-slate-800 rounded-lg">
+        Try again
+      </button>
+    </div>
+  )
+}
+```
+
+**Effort:** 30 minutes.
+
+---
+
+### EW-3. 33 Console Statements Leaking to Production
+
+**Problem:** `console.log`, `console.error`, and `console.warn` calls scattered across components surface internal implementation details in the browser DevTools. Not a user-facing issue per se, but unprofessional if anyone opens the console — and some mask real errors that should show toast feedback instead.
+
+**Key offenders:**
+- `components/think/think-canvas.tsx` — 7 console statements for failed node/edge operations
+- `components/experience/KnowledgeCompanion.tsx` — 3 console errors swallowed silently
+- `components/experience/CompletionScreen.tsx` — 2 errors hidden from user
+- `app/library/page.tsx` — debug logs left in (`console.log` of adapter stats)
+- `app/workspace/[instanceId]/WorkspaceClient.tsx` — 3 warnings for failed auto-activate/resume
+
+**Fix:** For user-facing failures (save failed, fetch failed), replace with inline error state or toast. For debug logging, remove or gate behind `process.env.NODE_ENV === 'development'`.
+
+**Effort:** 1 hour.
+
+---
+
+### EW-4. Modals Missing Escape Key Handling
+
+**Problem:** `stale-idea-modal.tsx` and `confirm-dialog.tsx` don't close on Escape. The command bar and node context menu handle this correctly — the pattern exists in the codebase, it's just not applied everywhere.
+
+**Fix:** Add a `useEffect` with a `keydown` listener for `Escape` in both components. The pattern from `node-context-menu.tsx` can be copied directly.
+
+**Effort:** 15 minutes.
+
+---
+
+### EW-5. No `prefers-reduced-motion` Respect
+
+**Problem:** Animations throughout the app (`animate-in`, `slide-in-from-right-full`, `fade-in`, `duration-500`, `transition-all`) run unconditionally. Users with vestibular disorders or motion sensitivity preferences set in their OS get no relief.
+
+**Affected components:** EphemeralToast, home page section reveals, QuestionnaireStep, drill progress transitions, and ~20 other components using `transition-all`.
+
+**Fix:** Add to `globals.css`:
+```css
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+**Effort:** 5 minutes.
+
+---
+
+### EW-6. No Per-Page Titles (SEO + Tab Clarity)
+
+**Problem:** Only the root layout sets metadata (`Mira Studio`). Every page shows the same browser tab title. If a user has 3 Mira tabs open (skills, workspace, knowledge), they're all labeled identically.
+
+**Fix:** Export `metadata` from each page:
+```tsx
+export const metadata = { title: 'Skills — Mira' }
+```
+
+Priority pages: home, workspace, skills, knowledge, library, profile.
+
+**Effort:** 30 minutes.
+
+---
+
+### EW-7. Text at 8px Is Unreadable
+
+**Problem:** Two components use `text-[8px]`:
+- `KnowledgeCompanion.tsx` — badge labels
+- `KnowledgeUnitView.tsx` — status spans
+
+8px text is below WCAG minimum readable size (roughly 10-12px depending on font). Even `text-[9px]` (used in TrackCard status badges) is borderline.
+
+**Fix:** Bump all `text-[8px]` to `text-[10px]`. Audit `text-[9px]` usage and bump where the text carries meaning (not just decorative labels).
+
+**Effort:** 5 minutes.
+
+---
+
+### EW-8. Mobile Nav Touch Targets May Be Too Small
+
+**Problem:** Mobile nav labels use `text-[10px]` and the nav bar is only 16px tall as noted in the code. The tap target for individual nav items may fall below the 44x44px recommended minimum, making it frustrating on phones.
+
+**Fix:** Verify tap targets with browser DevTools mobile emulation. If too small, increase the nav item `py-` padding to ensure 44px minimum height per item. The labels can stay 10px — it's the tappable area that matters.
+
+**Effort:** 15 minutes to verify + fix.
+
+---
+
+### EW-9. Confirm Dialog Lacks Enter-to-Confirm
+
+**Problem:** `confirm-dialog.tsx` requires a mouse click to confirm destructive actions. Users who triggered the dialog via keyboard (or who just want to move fast) can't press Enter to confirm or Escape to cancel.
+
+**Fix:** Add `onKeyDown` handler: Enter → confirm, Escape → close. Auto-focus the cancel button (safer default for destructive dialogs).
+
+**Effort:** 10 minutes.
+
+---
+
+### EW-10. Missing `aria-hidden` on Decorative SVGs
+
+**Problem:** Icon SVGs inside labeled buttons (e.g., the X icon in EphemeralToast's dismiss button) don't have `aria-hidden="true"`. Screen readers may try to announce the SVG path data.
+
+**Fix:** Add `aria-hidden="true"` to all SVG elements inside buttons that already have `aria-label`. Quick grep for `<svg` inside `<button` elements with `aria-label`.
+
+**Effort:** 15 minutes.
+
+---
+
+### EW-11. Think Board Errors Are Silent
+
+**Problem:** The mind map canvas (`think-canvas.tsx`) has 7 `console.error` / `console.warn` calls for failed operations (save position, delete node, create edge, etc.) but shows nothing to the user. A failed save means the user thinks their work is persisted when it isn't.
+
+**Fix:** Add a simple error state at the top of the canvas: "Failed to save — your last change may not have been persisted. [Retry]". This is the highest-stakes silent failure in the codebase because the user is actively editing and expects persistence.
+
+**Effort:** 30 minutes.
+
+---
+
+### EW-12. Home Page "Needs Attention" Section Lacks Differentiation
+
+**Problem:** The home page groups captured ideas and unhealthy projects into a single "Needs Attention" section. Both use similar card styling. A user with 3 captured ideas and 2 unhealthy projects sees 5 items with no visual priority hierarchy.
+
+**Fix:** Add a subtle left border color to differentiate: amber for stale/unhealthy, indigo for captured ideas awaiting definition. The data already carries the distinction — surface it visually.
+
+**Effort:** 15 minutes.
+
+---
+
+### EW-13. Scroll Containers Clip Content Without Indicator
+
+**Problem:** TrackCard's subtopic list (`max-h-[180px] overflow-y-auto scrollbar-none`) hides the scrollbar entirely. If 8 subtopics exist but only 4 are visible, the user has no clue there's more content below.
+
+**Fix:** Either:
+- (a) Show a thin styled scrollbar (remove `scrollbar-none`, add `scrollbar-thin scrollbar-thumb-slate-700`), or
+- (b) Add a gradient fade at the bottom of the container when content overflows, signaling more below.
+
+**Effort:** 10 minutes.
+
+---
+
+### Summary: Easy Win Priority Order
+
+| # | Fix | Impact | Effort |
+|---|-----|--------|--------|
+| EW-1 | Loading states for top 5 pages | High — eliminates blank flashes | 1 hr |
+| EW-2 | Root + critical error boundaries | High — prevents crash screens | 30 min |
+| EW-5 | Reduced-motion CSS | High — accessibility compliance | 5 min |
+| EW-11 | Think board error feedback | High — prevents silent data loss | 30 min |
+| EW-3 | Clean up console statements | Medium — professionalism | 1 hr |
+| EW-4 | Escape key on modals | Medium — keyboard users | 15 min |
+| EW-7 | Bump 8px text to 10px | Medium — readability | 5 min |
+| EW-6 | Per-page titles | Medium — tab clarity | 30 min |
+| EW-9 | Enter-to-confirm on dialogs | Low-Medium — power users | 10 min |
+| EW-8 | Mobile touch targets | Low-Medium — verify first | 15 min |
+| EW-13 | Scroll overflow indicators | Low — discoverability | 10 min |
+| EW-12 | Needs Attention visual hierarchy | Low — visual polish | 15 min |
+| EW-10 | aria-hidden on decorative SVGs | Low — screen reader polish | 15 min |
+
+**Total estimated effort: ~5 hours for all 13 fixes.**
+
+The first 4 items (loading states, error boundaries, reduced-motion, think board errors) cover 80% of the user-facing impact in about 2 hours.

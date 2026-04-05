@@ -238,7 +238,7 @@ Lane 8 (Acceptance QA):   [W1 full test.md battery] → [W2 browser walkthrough]
 | 1 | ✅ | ✅ | W1 (Create), W2 (Hydrate), W3 (Fires) — Test state: Hydration success, prompt trigger success |
 | 2 | ✅ | ✅ | Step surgery pipeline: create response enrichment and surgery logic |
 | 3 | ✅ | ✅ | State enrichment: linking, status, counts |
-| 4 | ⬜ | ⬜ | Proactive coach |
+| 4 | ✅ | ✅ | Proactive coach: checkpoint fail, dwell, unread triggers |
 | 5 | ✅ | ✅ | Completion synthesis: summary, level-ups, next-cards |
 | 6 | ✅ | ✅ | Mastery evidence: checkpoint grade + practice count thresholds |
 | 7 | ✅ | ✅ | Home coherence: focus story, reentry priority, path narrative |
