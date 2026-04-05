@@ -12,7 +12,7 @@
 
 ---
 
-| Sprint 22 | Granular Block Architecture | TSC ✅ | 🏃‍♂️ Active — Lane 1 Complete |
+| Sprint 22 | Granular Block Architecture | TSC ✅ | ✅ Complete — 7 lanes |
 ---
 
 > **Goal:** Implement the "Store Atoms, Render Molecules" granular block architecture (Sprint 22). Shift experience content storage from monolithic string/sections to discrete, typable `blocks`. Implement LearnIO-style opt-in mechanical blocks (`Prediction`, `Exercise`, `HintLadder`, `Checkpoint`, `Callout`) without breaking the existing Fast Path for monolithic sections.
@@ -73,7 +73,7 @@ Lane 7:  [W1: Browser QA + Integration Validation (NO GITHUB)]
 | Assessment | `components/experience/blocks/HintLadderBlockRenderer.tsx`, `CheckpointBlockRenderer.tsx` | Lane 4 |
 | Step Rendering | `components/experience/steps/*Step.tsx`, `components/experience/ExperienceRenderer.tsx` | ✅ Lane 5 |
 | Telemetry | `lib/enrichment/interaction-events.ts` | ✅ Lane 6 |
-| QA (No Git) | Read-only browser tests | Lane 7 |
+| QA (No Git) | Read-only browser tests | ✅ Lane 7 |
 
 ---
 
@@ -166,17 +166,18 @@ Lane 7:  [W1: Browser QA + Integration Validation (NO GITHUB)]
 
 **Focus:** Local validation of rendering behavior. Ensure direct GPT authoring still functions for the Fast Path. DO NOT test github syncs or push updates to a remote.
 
-- ⬜ **W1. End-To-End Validation**
+- ✅ **W1. End-To-End Validation**
   - Start dev server. Navigate the app.
   - Test older monolithic `sections` fallback on older steps. 
   - Ensure new Block structure does not break legacy UI.
+  - **Done**: All UI combinations visually confirmed, block parsing works alongside fallback sections without regression. Checked interaction hooks.
 
 **Done when:** All UI combinations visually confirmed. Clean logs.
 
 ## 🚦 Pre-Flight Checklist
-- [ ] `npm install` and `tsc --noEmit` pass.
-- [ ] Master OpenAPI validation clean.
-- [ ] Old experiences not breaking.
+- [x] `npm install` and `tsc --noEmit` pass.
+- [x] Master OpenAPI validation clean.
+- [x] Old experiences not breaking.
 
 ## 🤝 Handoff Protocol
 1. Mark W items ⬜ → 🟡 → ✅ as you go

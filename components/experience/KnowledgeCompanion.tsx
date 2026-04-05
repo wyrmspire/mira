@@ -104,7 +104,7 @@ export function KnowledgeCompanion({
     }
   }, [conversation]);
 
-  if (!domain && !knowledgeUnitId && initialLinks.length === 0) return null;
+  if (!domain && !knowledgeUnitId && initialLinks.length === 0 && mode !== 'tutor') return null;
 
   const isTutorMode = mode === 'tutor';
 

@@ -33,30 +33,36 @@ const VALIDATORS: Record<StepType, (payload: any) => ValidationResult> = {
 
   lesson: (p) => {
     const errors: string[] = []
-    if (!Array.isArray(p?.sections)) errors.push('missing `sections` array (renderer uses sections, not content)')
-    else p.sections.forEach((s: any, i: number) => {
-      if (!s.heading && !s.body) errors.push(`sections[${i}] needs at least \`heading\` or \`body\``)
-    })
+    if (!Array.isArray(p?.sections) && !Array.isArray(p?.blocks)) errors.push('missing `sections` or `blocks` array')
+    if (Array.isArray(p?.sections)) {
+      p.sections.forEach((s: any, i: number) => {
+        if (!s.heading && !s.body) errors.push(`sections[${i}] needs at least \`heading\` or \`body\``)
+      })
+    }
     return { valid: errors.length === 0, errors }
   },
 
   reflection: (p) => {
     const errors: string[] = []
-    if (!Array.isArray(p?.prompts)) errors.push('missing `prompts` array (renderer uses prompts[], not prompt string)')
-    else p.prompts.forEach((pr: any, i: number) => {
-      if (!pr.id) errors.push(`prompts[${i}] missing \`id\``)
-      if (!pr.text) errors.push(`prompts[${i}] missing \`text\``)
-    })
+    if (!Array.isArray(p?.prompts) && !Array.isArray(p?.blocks)) errors.push('missing `prompts` or `blocks` array')
+    if (Array.isArray(p?.prompts)) {
+      p.prompts.forEach((pr: any, i: number) => {
+        if (!pr.id) errors.push(`prompts[${i}] missing \`id\``)
+        if (!pr.text) errors.push(`prompts[${i}] missing \`text\``)
+      })
+    }
     return { valid: errors.length === 0, errors }
   },
 
   challenge: (p) => {
     const errors: string[] = []
-    if (!Array.isArray(p?.objectives)) errors.push('missing `objectives` array')
-    else p.objectives.forEach((o: any, i: number) => {
-      if (!o.id) errors.push(`objectives[${i}] missing \`id\``)
-      if (!o.description) errors.push(`objectives[${i}] missing \`description\``)
-    })
+    if (!Array.isArray(p?.objectives) && !Array.isArray(p?.blocks)) errors.push('missing `objectives` or `blocks` array')
+    if (Array.isArray(p?.objectives)) {
+      p.objectives.forEach((o: any, i: number) => {
+        if (!o.id) errors.push(`objectives[${i}] missing \`id\``)
+        if (!o.description) errors.push(`objectives[${i}] missing \`description\``)
+      })
+    }
     return { valid: errors.length === 0, errors }
   },
 
@@ -337,6 +343,46 @@ export async function POST() {
           }
         ],
         on_fail: 'tutor_redirect' // to verify CoachTrigger
+      },
+      completion_rule: null,
+    })
+
+    // Step 7: Block-based Lesson
+    await createValidatedStep({
+      instance_id: persistent.id,
+      step_order: 7,
+      step_type: 'lesson',
+      title: 'Block Architecture Preview',
+      payload: {
+        blocks: [
+          {
+            id: 'b1',
+            type: 'content',
+            content: 'This step is built using the new **Granular Block Architecture**. Interactive components are now interleaved natively.',
+            style: 'standard'
+          },
+          {
+            id: 'b2',
+            type: 'prediction',
+            question: 'Will this telemetry log properly?',
+            reveal_content: 'Yes! The hooks are correctly wrapped.'
+          },
+          {
+            id: 'b3',
+            type: 'exercise',
+            title: 'Test Ground',
+            instructions: 'Write a short message to verify this interactive exercise works.',
+            validation_criteria: 'Any non-empty string'
+          },
+          {
+            id: 'b4',
+            type: 'hint_ladder',
+            hints: [
+              'Hint 1: You are almost at the end of the sprint.',
+              'Hint 2: Run the browser subagent to verify.',
+            ]
+          }
+        ]
       },
       completion_rule: null,
     })
