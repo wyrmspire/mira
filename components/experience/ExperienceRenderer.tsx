@@ -6,6 +6,8 @@ import type { ExperienceInstance, ExperienceStep } from '@/types/experience';
 import { COPY } from '@/lib/studio-copy';
 import type { StepStatus } from './StepNavigator';
 import ExperienceOverview from './ExperienceOverview';
+import Link from 'next/link';
+import { ROUTES } from '@/lib/routes';
 
 // Import all step renderers
 import QuestionnaireStep from './steps/QuestionnaireStep';
@@ -200,6 +202,27 @@ export default function ExperienceRenderer({
             onDraft={onDraftStep}
             {...extraProps}
           />
+          
+          {/* Source Attribution Badges */}
+          {currentStep.knowledge_links && currentStep.knowledge_links.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {currentStep.knowledge_links.length === 1 ? (
+                <Link 
+                  href={ROUTES.knowledgeUnit(currentStep.knowledge_links[0].knowledgeUnitId)}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 inline-flex items-center gap-1 transition-colors"
+                >
+                  <span>📖 Grounded Source</span>
+                </Link>
+              ) : (
+                <Link
+                  href={ROUTES.knowledge}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 inline-flex items-center gap-1 transition-colors"
+                >
+                  <span>📖 {currentStep.knowledge_links.length} Sources</span>
+                </Link>
+              )}
+            </div>
+          )}
           
           {/* Lane 5: Knowledge Companion */}
           <KnowledgeCompanion 

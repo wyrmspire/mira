@@ -38,6 +38,7 @@ Mira is an experience engine disguised as a studio. Users talk to a Custom GPT (
 | Supabase | `@supabase/supabase-js` via `lib/supabase/client.ts` |
 | AI Intelligence | Genkit + `@genkit-ai/google-genai` via `lib/ai/genkit.ts` |
 | Research Engine | **MiraK** — Python/FastAPI microservice on Cloud Run (`c:/mirak` repo) |
+| Enrichment | **Nexus** — async content worker via enrichment endpoints |
 
 ### MiraK Microservice (Separate Repo: `c:/mirak`)
 
@@ -82,6 +83,7 @@ Mira Studio webhook receiver validates + persists to Supabase:
 
 **Environment variables (both repos must share):**
 - `MIRAK_WEBHOOK_SECRET` in `c:/mira/.env.local` AND `c:/mirak/.env`
+- `NEXUS_WEBHOOK_SECRET` in `c:/mira/.env.local` AND the Nexus content worker
 
 **MiraK-specific env (in `c:/mirak/.env` only):**
 - `GEMINI_SEARCH` — Dedicated API key for MiraK's ADK agents. Do NOT rename this var. See `c:/mirak/AGENTS.md` for full context.
@@ -159,6 +161,9 @@ app/
       [id]/suggestions/   ← GET next-experience suggestions
     interactions/        ← Event telemetry
     synthesis/           ← Compressed state for GPT
+    enrichment/          ← Nexus enrichment loop (ingest, request)
+      ingest/route.ts    ← POST: deliver atoms from Nexus
+      request/route.ts   ← POST: request topic enrichment
     actions/
       promote-to-arena/  ← POST
       move-to-icebox/    ← POST
@@ -228,7 +233,8 @@ lib/
   supabase/
     client.ts            ← Server-side Supabase client
     browser.ts           ← Browser-side Supabase client
-    migrations/          ← SQL migration files (001–006+)
+    migrations/          ← SQL migration files (001–012)
+      012_enrichment_tables.sql ← Nexus enrichment tables
   ai/
     genkit.ts            ← Genkit initialization + Google AI plugin
     schemas.ts           ← Shared Zod schemas for AI flow outputs
@@ -247,6 +253,9 @@ lib/
   experience/
     renderer-registry.tsx← Step renderer registry (maps step_type → component)
     reentry-engine.ts    ← Re-entry contract evaluation (completion + inactivity triggers)
+  enrichment/            ← Nexus translation layer
+    atom-mapper.ts       ← Maps Nexus atoms to Mira knowledge units
+    nexus-bridge.ts      ← Orchestrates enrichment delivery
     interaction-events.ts← Event type constants + payload builder
     progression-engine.ts← Step scoring + friction calculator
     progression-rules.ts ← Canonical experience chain map + suggestion logic
@@ -270,11 +279,11 @@ lib/
   services/              ← ideas, projects, tasks, prs, inbox, drill, materialization,
                            agent-runs, external-refs, github-factory, github-sync,
                            experience, interaction, synthesis, graph, timeline, facet,
-                           draft, knowledge, curriculum-outline, goal, skill-domain,
+                           draft, knowledge, enrichment, curriculum-outline, goal, skill-domain,
                            home-summary, mind-map services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
-  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal validators
+  validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal, enrichment-validator
   view-models/           ← arena, icebox, inbox, review VMs
 
 types/
@@ -283,6 +292,7 @@ types/
   experience.ts, interaction.ts, synthesis.ts,
   graph.ts, timeline.ts, profile.ts,
   knowledge.ts           ← KnowledgeUnit, KnowledgeProgress, MiraKWebhookPayload
+  enrichment.ts          ← Nexus atom types + delivery contracts
   curriculum.ts          ← CurriculumOutline, StepKnowledgeLink
   goal.ts                ← Goal, GoalRow, GoalStatus (Sprint 13)
   skill.ts               ← SkillDomain, SkillDomainRow, SkillMasteryLevel (Sprint 13)
@@ -733,3 +743,5 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - **2026-03-30 (Sprint 18)**: Refined Mind Map logic to cluster large batch operations and minimize UI lag. Fixed double-click node creation (SOP-36). Fixed OpenAPI enum drift for mind map actions (SOP-37). Added two-way metadata binding on node export. Added entity badge rendering on exported nodes. Updated GPT instructions with spatial layout rails and `read_map` protocol. Added mind-map components to repo map.
 - **2026-03-31 (Gateway Schema Fix)**: Fixed 3 critical GPT-to-runtime mismatches. (1) Experience creation completely broken — camelCase→snake_case normalization added to `gateway-router.ts` persistent create path, `instance_type`/`status` defaults added, inline `steps` creation supported. (2) Skill domain creation failing silently — pre-flight validation for `userId`/`goalId`/`name` added with actionable error messages. (3) Goal domain auto-create isolation — per-domain try/catch so one failure doesn't break the goal create. Error reporting improved: validation errors return 400 (not 500) with field-level messages. OpenAPI v2.2.0 aligned to flat payloads. Discover registry de-nested. GPT instructions rewritten with operational doctrine (7,942 chars, under 8k limit). Added **⚠️ PROTECTED FILES** section to `AGENTS.md` — these 4 files (`gpt-instructions.md`, `openapi.yaml`, `discover-registry.ts`, `gateway-router.ts`) must not be regressed without explicit user approval.
 - **2026-04-01 (Flowlink Execution Audit)**: Discovered 6 systemic issues preventing Flowlink system from operating. (1) `buildGPTStatePacket` returned oldest 5 experiences, hiding new Flowlink sprints (SOP-39). (2) `getActiveGoal` filtered for `active` only, hiding `intake` goals (SOP-40). (3) Skill domains orphaned — auto-created with phantom goal ID from a failed retry. (4) Standalone step creation leaking metadata into payloads (SOP-41). (5) Duplicate Sprint 01 shells from multiple creation attempts. (6) Board nodes at (0,0) with no nodeType. Sprint 20 created: 3 lanes — State Visibility, Data Integrity, Content Enrichment.
+- **2026-04-01 (Sprint 20 complete)**: All 3 lanes done. Fixed GPT state packet slicing (sorted by created_at desc, limit 10). Fixed goal intake fallback. Re-parented 5 orphaned skill domains. Superseded 6 duplicate experience shells. Fixed standalone step creation payload leak. Enriched 3 Flowlink sprints to 5 steps each. No new SOPs — existing SOPs 39-41 covered all issues.
+- **2026-04-04 (Sprint 21 prep)**: Mira² First Vertical Slice. Added enrichment contract endpoints, Nexus atom mapper, markdown rendering, source badges. New files: `lib/enrichment/`, `types/enrichment.ts`, `app/api/enrichment/`, `app/api/webhooks/nexus/`, `lib/validators/enrichment-validator.ts`, `lib/services/enrichment-service.ts`, migration 012. Added `NEXUS_WEBHOOK_SECRET` env var pattern. Added `react-markdown` + `@tailwindcss/typography` deps.

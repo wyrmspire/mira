@@ -30,7 +30,7 @@ FAST PATH (always available, never gated):
   GPT inspects state → creates outline → creates experience → writes steps directly → done
 
 DEEP PATH (optional, used when quality or depth matters):
-  GPT inspects state → creates outline → triggers compiler/NotebookLM → validated steps → done
+  GPT inspects state → creates outline → triggers Nexus/NotebookLM → validated steps → done
 ```
 
 Every new capability is an **augmentation** that GPT can choose to invoke when the result would be better. Never a mandatory pipeline that all actions must pass through.
@@ -201,8 +201,9 @@ Nexus is:
 Nexus is NOT:
 - The canonical learner runtime (Mira is)
 - The new source of truth for learner state or mastery
-- A replacement for the MiraK research pipeline (which continues to work as the current default)
-- A mandatory prerequisite for experience authoring
+- A primary async content worker that Custom GPT can invoke when Mira needs deeper research or richer content than the fast path provides
+- A grounded engine using NotebookLM (Gemini fallback removed)
+- A mandatory prerequisite for experience authoring (only when deep grounding is required)
 
 ### The No-Fork Principle
 
@@ -411,11 +412,11 @@ Even good content looks bad because of rendering gaps:
 
 ```
 MiraK Research Run:
-  ├── DEFAULT: Current Gemini pipeline (always works)
-  │     strategist → 3 Deep Readers → Synthesizer → Packager → webhook
+  ├── FAST PATH: GPT direct structural authoring (always works)
+  │     GPT inspects state → creates outline → writes experiences/steps directly (no grounding wait)
   │
-  └── ENHANCED (feature flag: USE_NOTEBOOKLM=true):
-        strategist → NotebookLM notebook → semantic queries → multi-modal assets → Packager → webhook
+  └── NEXUS DEEP PATH: NotebookLM-grounded research (primary grounding)
+        strategist → NotebookLM notebook → semantic queries → multi-modal atoms/bundles → webhook
 ```
 
 **The webhook_packager → Mira flow stays identical either way.** Mira doesn't know or care which synthesis engine produced the knowledge unit. The output contract is the same.
@@ -435,13 +436,13 @@ MiraK Research Run:
 | **Custom Prompts + Style Override** | Enforce dense/analytical tone |
 | **Compartmentalized notebooks** | Isolated contexts prevent cross-domain pollution |
 
-### Stage-by-Stage MiraK Integration (Behind Feature Flag)
+### Stage-by-Stage MiraK Integration (Nexus Deep Path)
 
 #### Stage 1: Ingestion (Strategist → NotebookLM Workspace)
 
 ```python
 # c:/mirak/main.py — after strategist scrapes URLs
-# Only runs when USE_NOTEBOOKLM=true
+# Triggered via Nexus/MiraK research pipeline
 
 async def create_research_workspace(topic: str, url_clusters: dict) -> str:
     notebook = await notebooklm.create_notebook(title=f"Research: {topic}")
@@ -769,14 +770,12 @@ GPT already generates markdown. Mira just throws it away. This fix unlocks all e
 │  │  Research → compile atoms/bundles/assets                       │  │
 │  │  mira_adapter delivery profile → /api/enrichment/ingest        │  │
 │  │  GPT dispatches; Mira remains the runtime + memory owner       │  │
-│  │  Fallback: MiraK + Gemini pipeline (always works)              │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 │                           │ optionally powered by ↓                  │
-│  ┌─── Cognitive Layer (NotebookLM — feature-flagged) ────────────┐  │
+│  ┌─── Cognitive Layer (NotebookLM — Nexus deep path) ────────────┐  │
 │  │  Outputs COMPONENTS, not finished lessons                     │  │
 │  │  thesis │ key_ideas │ misconceptions │ examples │ quiz_items   │  │
 │  │  audio │ infographic — each a separate, mapped asset          │  │
-│  │  Fallback: current Gemini pipeline (always available)         │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 │                           │ connected via ↓                          │
 │  ┌─── Gateway Layer (unchanged) ─────────────────────────────────┐  │
@@ -1090,7 +1089,7 @@ The OLM is an **advisory surface** for both learner and GPT. GPT reads it via `G
 | Enrichment consistency | Depends on lucky conversation turns | GPT dispatches Nexus on gap detection; atoms arrive async |
 | Next experience selection | Based on last GPT conversation | Evidence-driven via `/api/learning/next` + OLM data |
 | Webhook delivery | Hardcoded to Mira endpoint | Target-configurable delivery profiles — Mira is one profile |
-| NotebookLM | Optional synthesis in MiraK | Unchanged — still optional, still behind `USE_NOTEBOOKLM` flag |
+| NotebookLM | Primary grounding engine in Nexus | Unchanged — primary deep-path engine, no longer feature-flagged for Nexus |
 | Nexus / Notes | Not integrated | Optional async content worker; GPT dispatches when needed |
 
 **Nothing slows down.** The fast path is identical. The learner never waits for a pipeline they didn't ask for. Enrichment arrives asynchronously and enriches experiences in place, exactly like MiraK already does.
@@ -1133,10 +1132,10 @@ The everyday learner flow runs autonomously. Exception escalation fires only whe
 | # | Action | Effort | Impact | Fast Path? |
 |---|--------|--------|--------|-----------|
 | 1.1 | **Install `notebooklm-py`** in `c:/mirak`, evaluate API | 1 day | Gates all NotebookLM work | N/A |
-| 1.2 | **Feature flag** `USE_NOTEBOOKLM` in MiraK `.env` | 1 hr | Clean fallback to Gemini | ✅ Preserved |
-| 1.3 | **Stage 1: Bulk import** behind flag | 2 days | Sources in indexed workspace | ✅ Preserved |
-| 1.4 | **Stage 2: Semantic queries** behind flag | 2 days | Better grounding, lower cost | ✅ Preserved |
-| 1.5 | **Stage 3: Audio + Quiz assets** behind flag | 3 days | Multi-modal knowledge units | ✅ Preserved |
+| 1.2 | **Nexus Auth Configuration** in MiraK `.env` | 1 hr | Ensures stable local-tunnel grounding | ✅ Preserved |
+| 1.3 | **Stage 1: Bulk import** (Nexus) | 2 days | Sources in indexed workspace | ✅ Preserved |
+| 1.4 | **Stage 2: Semantic queries** (Nexus) | 2 days | Better grounding, lower cost | ✅ Preserved |
+| 1.5 | **Stage 3: Audio + Quiz assets** (Nexus) | 3 days | Multi-modal knowledge units | ✅ Preserved |
 | 1.6 | **Stylistic enforcement** — custom prompt | 1 hr | Output matches Mira voice | ✅ Preserved |
 
 ### Tier 2 — LearnIO Components (Selective, Weeks 3-4)
@@ -1180,7 +1179,7 @@ The everyday learner flow runs autonomously. Exception escalation fires only whe
 | Question | Resolution | Rationale |
 |---------|-----------|-----------|
 | **PDCA enforcement strictness?** | **Soft-gating always.** "I understand, let me continue" override. | *"If PDCA becomes too rigid, it could make the system feel less flexible."* |
-| **NotebookLM required or optional?** | ~~**Optional, feature-flagged.** Current pipeline is the fallback.~~ **UPDATED: NotebookLM is the primary grounding engine. No fallback.** See Nexus validation update below. | ~~*"The system should operate even if NotebookLM is unavailable."*~~ Nexus pipeline proven: 23 atoms, 1,139 citations, fail-fast auth policy. Fast Path Guarantee preserved: GPT can still author directly without NLM. NLM is the deep path engine, not a gate on the fast path. |
+| **NotebookLM required or optional?** | **Nexus primary engine.** GPT can still author directly (fast path). | Nexus pipeline proven: 23 atoms, 1,139 citations, fail-fast auth policy. Fast Path Guarantee preserved: GPT can still author directly without NLM. NLM is the deep path engine, not a gate on the fast path. |
 | **Compiler mandatory on all step creation?** | **No.** GPT can still author steps directly. Compiler is the deep path. | *"One of my best abilities is improvisational structuring."* |
 | **Semantic PR review priority?** | **Deferred to Tier D.** | *"Too much validation / too many layers: possible drag if it slows execution."* |
 | **Content quality validator blocking or advisory?** | **Advisory.** Warnings in dev console, not blocking creation. | Follows the augmenting-not-replacing principle. |

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
 import { StepKnowledgeCard } from '../StepKnowledgeCard';
 
 interface ChallengePayload {
@@ -115,11 +116,11 @@ export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: Cha
                   {isDone ? '✓' : idx + 1}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-lg font-medium transition-all ${
-                    isDone ? 'text-emerald-400/70 line-through' : 'text-[#e2e8f0]'
+                  <div className={`prose prose-invert prose-indigo max-w-none prose-p:text-lg prose-p:font-medium prose-p:leading-normal prose-strong:text-amber-300 prose-code:text-amber-300 transition-all ${
+                    isDone ? 'prose-p:text-emerald-400/70 prose-p:line-through' : 'prose-p:text-[#e2e8f0]'
                   }`}>
-                    {obj.description}
-                  </p>
+                    <ReactMarkdown>{obj.description}</ReactMarkdown>
+                  </div>
                   
                   {isExpanded && (
                     <div 
@@ -129,7 +130,9 @@ export default function ChallengeStep({ step, onComplete, onSkip, onDraft }: Cha
                       {obj.proof && (
                         <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl">
                           <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-1">Requirement</p>
-                          <p className="text-sm text-[#94a3b8] italic">{obj.proof}</p>
+                          <div className="prose prose-invert prose-indigo max-w-none prose-p:text-sm prose-p:text-[#94a3b8] prose-p:italic prose-strong:text-amber-300 prose-code:text-amber-200">
+                            <ReactMarkdown>{obj.proof}</ReactMarkdown>
+                          </div>
                         </div>
                       )}
                       

@@ -5,6 +5,9 @@
   "description": "Your ideas, shaped and shipped.",
   "scripts": {
     "dev": "next dev",
+    "dev:next": "next dev",
+    "dev:genkit": "npx genkit start -- npx tsx --watch lib/ai/genkit.ts",
+    "dev:all": "concurrently \"npm run dev:next\" \"npm run dev:genkit\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
@@ -13,17 +16,20 @@
     "@genkit-ai/google-genai": "^1.30.1",
     "@octokit/rest": "^22.0.1",
     "@supabase/supabase-js": "^2.100.0",
+    "@tailwindcss/typography": "^0.5.19",
     "@xyflow/react": "^12.10.2",
     "genkit": "^1.30.1",
     "next": "14.2.29",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "react-markdown": "^10.1.0"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "concurrently": "^9.2.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.29",
     "postcss": "^8",

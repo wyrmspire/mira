@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
 
 interface EssayTasksPayload {
   content: string;
@@ -73,8 +74,8 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
         
         <div className="animate-in fade-in duration-500">
           <div className="prose prose-invert max-w-none">
-            <div className="text-[#94a3b8] leading-[1.8] text-lg whitespace-pre-wrap font-serif italic border-l-2 border-[#1e1e2e] pl-6 py-2">
-              {content || 'Detailed instructions are being prepared.'}
+            <div className="prose prose-invert prose-indigo max-w-none prose-p:text-[#94a3b8] prose-p:leading-[1.8] prose-p:text-lg prose-p:font-serif prose-p:italic border-l-2 border-[#1e1e2e] pl-6 py-2">
+              <ReactMarkdown>{content || 'Detailed instructions are being prepared.'}</ReactMarkdown>
             </div>
           </div>
         </div>
@@ -101,11 +102,11 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
                 }`}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <span className={`text-lg font-bold transition-all ${
-                    isTaskDone ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
+                  <div className={`prose prose-invert prose-indigo max-w-none prose-p:text-lg prose-p:font-bold prose-strong:text-rose-300 prose-code:text-amber-300 transition-all ${
+                    isTaskDone ? 'prose-p:text-emerald-400/60 prose-p:line-through' : 'prose-p:text-[#f1f5f9]'
                   }`}>
-                    {task.description}
-                  </span>
+                    <ReactMarkdown>{task.description}</ReactMarkdown>
+                  </div>
                   <div className="flex items-center gap-4">
                     <span className="text-[10px] font-mono text-[#475569]">{wordCount} WORDS</span>
                     <button

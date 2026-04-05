@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
 
 interface PlanBuilderPayload {
   sections: Array<{
@@ -177,11 +178,11 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
                         </button>
                         
                         <div className="flex-1 min-w-0">
-                          <p className={`font-semibold transition-all ${
-                            checked[key] ? 'text-emerald-400/60 line-through' : 'text-[#f1f5f9]'
+                          <div className={`prose prose-invert prose-indigo max-w-none prose-p:font-semibold transition-all ${
+                            checked[key] ? 'prose-p:text-emerald-400/60 prose-p:line-through' : 'prose-p:text-[#f1f5f9]'
                           }`}>
-                            {label}
-                          </p>
+                            <ReactMarkdown>{label}</ReactMarkdown>
+                          </div>
                           {subtitle && (
                             <p className="text-sm text-[#475569] mt-0.5">{subtitle}</p>
                           )}

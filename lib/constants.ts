@@ -142,3 +142,24 @@ export const MASTERY_THRESHOLDS: Record<SkillMasteryLevel, number> = {
   expert: 20,
 }
 
+// --- Sprint 21: Enrichment Loop ---
+
+export const ENRICHMENT_REQUEST_STATUSES = [
+  'pending',
+  'dispatched',
+  'delivered',
+  'failed',
+  'cancelled',
+] as const
+
+export type EnrichmentRequestStatus = (typeof ENRICHMENT_REQUEST_STATUSES)[number]
+
+export const ENRICHMENT_DELIVERY_STATUSES = [
+  'received',
+  'processed',
+  'rejected',
+  'failed',
+] as const
+
+export type EnrichmentDeliveryStatus = (typeof ENRICHMENT_DELIVERY_STATUSES)[number]
+

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
 import { StepKnowledgeCard } from '../StepKnowledgeCard';
 
 interface LessonPayload {
@@ -119,9 +120,9 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
                 {section.heading && (
                   <h3 className="text-indigo-300 font-bold uppercase tracking-wider text-xs mb-4">Key Insight</h3>
                 )}
-                <p className="text-xl leading-relaxed text-[#e2e8f0] font-medium">
-                  {section.body}
-                </p>
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-[#e2e8f0] prose-p:leading-relaxed prose-p:text-xl prose-p:font-medium prose-strong:text-indigo-300 prose-code:text-amber-300 prose-blockquote:border-indigo-500/30">
+                  <ReactMarkdown>{section.body}</ReactMarkdown>
+                </div>
               </div>
             ) : section.type === 'checkpoint' ? (
               <div className={`p-8 rounded-2xl border transition-all duration-500 ${
@@ -130,7 +131,9 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
                   : 'bg-[#12121a] border-[#1e1e2e]'
               }`}>
                 {section.heading && <h3 className="text-xl font-bold text-[#f1f5f9] mb-4">{section.heading}</h3>}
-                <p className="text-lg text-[#94a3b8] mb-8 leading-relaxed">{section.body}</p>
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-lg prose-p:text-[#94a3b8] prose-p:leading-relaxed mb-8 prose-strong:text-indigo-300 prose-code:text-amber-300 prose-blockquote:border-indigo-500/30">
+                  <ReactMarkdown>{section.body}</ReactMarkdown>
+                </div>
                 
                 <div className="flex flex-col items-center gap-6">
                   {checkpoints[idx] ? (
@@ -196,9 +199,9 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
                 {section.heading && (
                   <h3 className="text-2xl font-bold text-[#e2e8f0] tracking-tight">{section.heading}</h3>
                 )}
-                <p className="text-xl leading-[1.8] text-[#94a3b8] whitespace-pre-wrap font-serif">
-                  {section.body}
-                </p>
+                <div className="prose prose-invert prose-lg prose-indigo max-w-none prose-headings:text-[#e2e8f0] prose-p:text-[#94a3b8] prose-p:leading-[1.8] prose-strong:text-indigo-300 prose-code:text-amber-300 prose-a:text-indigo-400 prose-blockquote:border-indigo-500/30 prose-li:text-[#94a3b8]">
+                  <ReactMarkdown>{section.body}</ReactMarkdown>
+                </div>
               </div>
             )}
           </div>

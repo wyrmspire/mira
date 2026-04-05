@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { ExperienceStep } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
 
 interface ReflectionPayload {
   prompts: Array<{
@@ -53,9 +54,9 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
         <div className="space-y-16">
           {prompts.map((p) => (
             <div key={p.id} className="space-y-6">
-              <label className="block text-xl font-bold text-[#475569] leading-relaxed">
-                {p.text}
-              </label>
+              <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-bold prose-p:text-[#475569] prose-p:leading-relaxed">
+                <ReactMarkdown>{p.text}</ReactMarkdown>
+              </div>
               <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
                 <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
                   "{responses[p.id] || 'No reflection logged.'}"
@@ -90,9 +91,9 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
               style={{ animationDelay: `${idx * 150}ms`, animationFillMode: 'both' }}
             >
               <div className="flex justify-between items-end">
-                <label className="block text-xl font-semibold text-[#e2e8f0] leading-relaxed max-w-[80%]">
-                  {prompt.text}
-                </label>
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-semibold prose-p:text-[#e2e8f0] prose-p:leading-relaxed max-w-[80%]">
+                  <ReactMarkdown>{prompt.text}</ReactMarkdown>
+                </div>
                 <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded transition-colors ${
                   wordCount > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-[#475569] bg-[#1a1a2e]'
                 }`}>
