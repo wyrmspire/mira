@@ -367,7 +367,7 @@ paths:
                 transitionAction:
                   type: string
                   enum: [approve, publish, activate, start, pause, complete, archive]
-                  description: Lifecycle transition to apply (for action=transition or action=transition_goal). experience transitions: approve|publish|activate|start|complete|archive. goal transitions: activate|pause|complete|archive.
+                  description: "Lifecycle transition to apply. For action=transition (experience) use approve|publish|activate|start|complete|archive. For action=transition_goal use activate|pause|complete|archive."
                 stepId:
                   type: string
                   description: For action=update_step or delete_step — the step to modify.

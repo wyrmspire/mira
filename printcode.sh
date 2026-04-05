@@ -457,7 +457,7 @@ SELECTED_COUNT=$(wc -l < "$FILE_LIST")
 # Write header + selection summary
 # ---------------------------------------------------------------------------
 {
-    echo "# LearnIO Project Code Dump"
+    echo "# Mira + Nexus Project Code Dump"
     echo "Generated: $(date)"
     echo ""
     echo "## Selection Summary"
@@ -508,8 +508,11 @@ SELECTED_COUNT=$(wc -l < "$FILE_LIST")
 {
     echo "## Project Overview"
     echo ""
-    echo "LearnIO is a Next.js (App Router) project integrated with Google AI Studio."
+    echo "Mira is a Next.js (App Router) AI tutoring platform integrated with Google AI Studio."
     echo "It uses Tailwind CSS, Lucide React, and Framer Motion for the UI."
+    echo "The dump also includes the Nexus content worker (c:/notes/service) — a Python/FastAPI"
+    echo "agent workbench providing NotebookLM-grounded research, atomic content generation,"
+    echo "and delivery via webhooks and delivery profiles."
     echo ""
     echo "| Area | Path | Description |"
     echo "|------|------|-------------|"
@@ -518,9 +521,11 @@ SELECTED_COUNT=$(wc -l < "$FILE_LIST")
     echo "| **lib** | lib/ | Shared utilities and helper functions |"
     echo "| **hooks** | hooks/ | Custom React hooks |"
     echo "| **docs** | *.md | Migration, AI working guide, README |"
+    echo "| **nexus** | c:/notes/service/ | Python/FastAPI content worker (agents, grounding, synthesis, delivery, cache) |"
     echo ""
     echo "Key paths: \`app/page.tsx\` (main UI), \`app/layout.tsx\` (root wrapper), \`AI_WORKING_GUIDE.md\`"
-    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK"
+    echo "Nexus key paths: \`service/main.py\`, \`service/grounding/notebooklm.py\`, \`service/synthesis/extractor.py\`"
+    echo "Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK + Python FastAPI + notebooklm-py"
     echo ""
     echo "To dump specific code for chat context, run:"
     echo "\`\`\`bash"
@@ -618,39 +623,84 @@ while IFS= read -r rel_path; do
 done < "$FILE_LIST"
 
 # ---------------------------------------------------------------------------
-# MiraK microservice dump (c:/mirak — separate repo)
+# Nexus Content Worker dump (c:/notes — separate repo)
 # ---------------------------------------------------------------------------
-MIRAK_DIR="/c/mirak"
-if [[ -d "$MIRAK_DIR" ]]; then
-    echo "## MiraK Microservice (c:/mirak)" >> "$TEMP_FILE"
+NEXUS_DIR="/c/notes"
+if [[ -d "$NEXUS_DIR" ]]; then
+    echo "## Nexus Content Worker (c:/notes)" >> "$TEMP_FILE"
     echo "" >> "$TEMP_FILE"
-    echo "MiraK is a Python/FastAPI research agent on Cloud Run. Separate repo, integrated via webhooks." >> "$TEMP_FILE"
+    echo "Nexus is a Python/FastAPI agent workbench and content worker on Cloudflare Tunnel." >> "$TEMP_FILE"
+    echo "It provides NotebookLM-grounded research, atomic content generation, and delivery." >> "$TEMP_FILE"
+    echo "Separate repo, integrated with Mira via webhooks and delivery profiles." >> "$TEMP_FILE"
     echo "" >> "$TEMP_FILE"
 
-    MIRAK_FILES=(
-        "main.py"
-        "Dockerfile"
-        "requirements.txt"
-        "knowledge.md"
-        "mirak_gpt_action.yaml"
+    # --- Root-level context files ---
+    NEXUS_ROOT_FILES=(
+        "agents.md"
         "README.md"
+        "nexus_gpt_action.yaml"
+        "start.sh"
+        "roadmap.md"
     )
 
-    for mf in "${MIRAK_FILES[@]}"; do
-        mirak_file="$MIRAK_DIR/$mf"
-        if [[ -f "$mirak_file" ]]; then
-            ext="${mf##*.}"
+    for nf in "${NEXUS_ROOT_FILES[@]}"; do
+        nexus_file="$NEXUS_DIR/$nf"
+        if [[ -f "$nexus_file" ]]; then
+            ext="${nf##*.}"
             lang=$(lang_for_ext "$ext")
-            echo "### mirak/${mf}" >> "$TEMP_FILE"
+            echo "### nexus/${nf}" >> "$TEMP_FILE"
             echo "" >> "$TEMP_FILE"
             echo "\`\`\`$lang" >> "$TEMP_FILE"
-            cat "$mirak_file" >> "$TEMP_FILE"
+            cat "$nexus_file" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        fi
+    done
+
+    # --- Service code (walk all .py files in service tree) ---
+    NEXUS_SERVICE_DIRS=(
+        "service"
+        "service/agents"
+        "service/grounding"
+        "service/synthesis"
+        "service/delivery"
+        "service/cache"
+    )
+
+    for sdir in "${NEXUS_SERVICE_DIRS[@]}"; do
+        full_dir="$NEXUS_DIR/$sdir"
+        [[ -d "$full_dir" ]] || continue
+        for sfile in "$full_dir"/*.py "$full_dir"/*.txt; do
+            [[ -f "$sfile" ]] || continue
+            rel="${sfile#$NEXUS_DIR/}"
+            ext="${rel##*.}"
+            lang=$(lang_for_ext "$ext")
+            echo "### nexus/${rel}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`$lang" >> "$TEMP_FILE"
+            cat "$sfile" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+        done
+    done
+
+    # --- Dockerfile and dockerignore ---
+    for df in "service/Dockerfile" "service/.dockerignore"; do
+        nexus_file="$NEXUS_DIR/$df"
+        if [[ -f "$nexus_file" ]]; then
+            echo "### nexus/${df}" >> "$TEMP_FILE"
+            echo "" >> "$TEMP_FILE"
+            echo "\`\`\`" >> "$TEMP_FILE"
+            cat "$nexus_file" >> "$TEMP_FILE"
             echo "" >> "$TEMP_FILE"
             echo "\`\`\`" >> "$TEMP_FILE"
             echo "" >> "$TEMP_FILE"
         fi
     done
 fi
+
 
 # ---------------------------------------------------------------------------
 # Split into dump files
