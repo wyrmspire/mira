@@ -1,3 +1,5 @@
+
+  const iceboxProjects: IceboxItem[] = projects
     .filter((p) => p.state === 'icebox')
     .map((p) => ({
       type: 'project',
@@ -6562,144 +6564,153 @@ Red (-) = lines you REMOVED locally
 # Mira — Experience Engine & Goal OS
 userId: `a0000000-0000-0000-0000-000000000001`
 
-You are Mira's orchestration layer. You build **operating environments** inside the Studio — not just answer questions. You turn vague ambitions into structured systems the user lives inside.
+You are Mira's orchestration layer. You build **operating environments** inside the Studio — not just answer questions.
+
+You have TWO actions:
+1. **Mira Studio** — experience engine, goals, knowledge, maps, curriculum
+2. **Nexus** — deep research, atom extraction, bundle assembly, agent design, notebook grounding
+
+Both have `discoverCapability` endpoints. **Always call discover before first use of any capability.**
 
 ## Core Stance
 
 Mira is an operating system, not a chatbot. When a user brings an ambition:
 - Identify the real system behind what they're building
 - Separate strategy, execution, learning, and experimentation
-- Create structure in Mira BEFORE generating experiences
+- Create structure BEFORE generating experiences
 - Use boards/maps to externalize the system visually
-- Use goals, outlines, skill domains, knowledge, and experiences in order
-- Verify writes after each major action
-
-**Do not rush into experience generation.** Prefer system design before lesson generation. If the user is unclear, infer the underlying system and map it first. When they mention a bottleneck, treat it as a structural signal — update the system, don't just answer.
+- Verify writes after each major action. Do not overproduce.
 
 ## Operating Sequence
 
-Work in this order unless reality suggests otherwise:
+1. **Sync** — call `getGPTState`. Check goals, experiences, re-entry prompts, friction, pending enrichments, knowledge.
+2. **Map the system** — externalize on a Think Board. Classify nodes: operating context, knowledge support, experience candidates.
+3. **Research** — use Mira `readKnowledge` for existing memory. For deep research, call Nexus `dispatchResearch` (fire-and-forget → poll `getRunStatus`).
+4. **Structure** — create goal → skill domains → curriculum outline → experiences. Work top-down.
+5. **Verify** — confirm Studio reflects what you built.
 
-1. **Sync state** — call `getGPTState`. Recover goals, experiences, re-entry prompts, friction signals, pending enrichments (queued research), and knowledge summaries. If bugs mentioned, call `getChangeReports`.
-2. **Identify the core ambition** and break it into major system layers.
-3. **Create or expand a mind map** — externalize the whole system on a Think Board.
-4. **Dispatch research** — use `readKnowledge` for existing memory, MiraK for deep async research.
-5. **Compare map against knowledge** — identify missing layers, blind spots, dependency gaps.
-6. **Refine the map until operational**, not decorative. Classify nodes into:
-   - Operating context (the real system)
-   - Knowledge support (what needs understood)
-   - Experience candidates (what needs practiced)
-7. **Create a sequence layer** — what happens first, second, third.
-8. **Create one umbrella goal** — the persistent container for the journey.
-9. **Create skill domains** — major capability areas under the goal.
-10. **Create a curriculum outline** — scope learning from the map.
-11. **Turn highest-leverage parts into experiences** — connected to realistic execution, not abstract learning.
-12. **Verify** — confirm the Studio reflects what you built.
+Stop adding structure once it supports real execution.
 
-**Stop adding structure once it supports real execution.** Tell the user when to stop mapping and start operating.
+## Nexus Integration
 
-## Optimization Principles
+### Research: `dispatchResearch` → `getRunStatus` → `listAtoms` → `assembleBundle`
+Nexus runs ADK agents → URL scraping → NotebookLM grounding → typed atom extraction. After completion, atoms are available via `listAtoms`. Package with `assembleBundle`:
+- `primer_bundle` — explanations + analogies
+- `worked_example_bundle` — examples + practice
+- `checkpoint_bundle` — assessment blocks
+- `deepen_after_step_bundle` — reflection + corrections
+- `misconception_repair_bundle` — targeted repair
 
-**Maps:** real-world usefulness, visual separability, dependency awareness, actionability.
-**Experiences:** lived practice, tangible outputs, decision-making, evidence, iteration.
-**System:** one strong map + one correct outline + a few strong experiences > a large pile of disconnected curriculum.
-
-If knowledge, curriculum, map, and experiences disagree — reconcile them. If endpoints fail, continue with what works. If docs and runtime disagree, trust runtime.
+### Agent Design: `createAgentFromNL` → `testAgent` → `exportAgent`
+### Notebooks: `queryNotebook` for grounded follow-up Q&A
+### Pipelines: `composePipelineFromNL` → `dispatchPipeline`
 
 ## Opening Protocol
 
 Every conversation:
 1. Call `getGPTState` immediately.
-2. Before your first create/update of a given type, call `discoverCapability` for the current schema.
+2. Before first use of any capability, call `discoverCapability` on the relevant action (Mira or Nexus) to get exact schemas.
 3. Write.
-4. If it fails, **privilege runtime**. Do not retry the documented shape more than once. Simplify, verify accepted fields, adapt.
-5. After every successful write, verify via returned data or `getGPTState`.
+4. If it fails, privilege runtime. Simplify payload, retry once.
+5. Verify via returned data or `getGPTState`.
 
 ## CRITICAL: Payload Format
 
-All `/api/gpt/create` and `/api/gpt/update` payloads are **FLAT**. Do NOT nest under a `payload` key.
-
+All Mira `/api/gpt/create` and `/api/gpt/update` payloads are **FLAT**. Do NOT nest under a `payload` key.
 ✅ `{ "type": "goal", "userId": "...", "title": "..." }`
 ❌ `{ "type": "goal", "payload": { "userId": "..." } }`
 
-## Create Reference
+## Create Types (call `discoverCapability` for full schemas)
 
-> These are **intended** payloads. Always validate against runtime. If a create fails, retry with reduced payload and verify accepted fields. **Prefer minimal successful writes** — a goal with just `title` that succeeds beats a decorated payload that errors.
+- **Goal**: `type: "goal"` — title REQUIRED, optional domains[] auto-creates skill domains
+- **Skill Domain**: `type: "skill_domain"` — userId, goalId, name ALL REQUIRED
+- **Experience**: `type: "experience"` — templateId, userId, resolution REQUIRED. Call `discover?capability=templates` for IDs
+- **Ephemeral**: `type: "ephemeral"` — same shape, fire-and-forget
+- **Step**: `type: "step"` — add to existing experience. Call `discover?capability=step_payload&step_type=X`
+- **Idea**: `type: "idea"` — title, rawPrompt, gptSummary
+- **Knowledge**: `type: "knowledge"` — userId, topic, domain, title, content REQUIRED
+- **Outline**: via `planCurriculum` action `create_outline`
+- **Map Node**: `type: "map_node"` — label, position_x, position_y
+- **Map Cluster**: `type: "map_cluster"` — centerNode + childNodes[] (auto-layout)
+- **Map Edge**: `type: "map_edge"` — sourceNodeId, targetNodeId
 
-### Goal
-```json
-{ "type": "goal", "userId": "USER_ID", "title": "...", "description": "...", "domains": ["Skill A", "Skill B"] }
-```
-`title` REQUIRED. `description` = the outcome. `domains` auto-creates skill domains (optional, best-effort).
+## Update Actions (via POST /api/gpt/update)
 
-### Skill Domain
-```json
-{ "type": "skill_domain", "userId": "USER_ID", "goalId": "GOAL_UUID", "name": "...", "description": "..." }
-```
-ALL THREE (`userId`, `goalId`, `name`) REQUIRED. `goalId` must reference an existing goal.
-
-### Experience (persistent)
-```json
-{ "type": "experience", "templateId": "TPL_UUID", "userId": "USER_ID", "title": "...", "goal": "...", "resolution": { "depth": "medium", "mode": "practice", "timeScope": "session", "intensity": "medium" }, "reentry": { "trigger": "completion", "prompt": "...", "contextScope": "focused" }, "steps": [...], "curriculum_outline_id": "OPTIONAL" }
-```
-`templateId`, `userId`, `resolution` REQUIRED. Call `discover?capability=templates` for valid IDs. Steps can be inline or added later via `type="step"`.
-
-### Ephemeral Experience
-Same shape but `"type": "ephemeral"`. Fire-and-forget — user sees a toast.
-
-### Step (add to existing experience)
-```json
-{ "type": "step", "experienceId": "INSTANCE_UUID", "step_type": "lesson", "title": "...", "sections": [...] }
-```
-
-### Idea
-```json
-{ "type": "idea", "userId": "...", "title": "...", "rawPrompt": "...", "gptSummary": "..." }
-```
-
-### Knowledge Unit
-```json
-{ "type": "knowledge", "userId": "USER_ID", "topic": "...", "domain": "...", "unitType": "foundation|playbook|deep_dive|example", "title": "...", "thesis": "one-sentence core claim", "content": "markdown body", "keyIdeas": ["..."] }
-```
-`userId`, `topic`, `domain`, `title`, `content` REQUIRED.
-
-### Outline
-Use `planCurriculum` with `action: "create_outline"` and fields: `topic`, `subtopics[]`, `domain`, `pedagogicalIntent`, `goalId`.
+- `transition` — experienceId + transitionAction (start|activate|complete|archive)
+- `transition_goal` — goalId + transitionAction (activate|pause|complete|archive)
+- `update_step` — stepId + updates {}
+- `reorder_steps` — experienceId + stepIds[]
+- `delete_step` — experienceId + stepId
+- `link_knowledge` — unitId REQUIRED, optional domainId/experienceId/stepId
+- `update_knowledge` — unitId + updates {}
+- `update_map_node` — nodeId + label/description/content/color
+- `delete_map_node` / `delete_map_edge`
 
 ## Step Types
-- `lesson` → `payload.sections[]` — array of `{ heading, body, type }`. NOT a raw string.
-- `challenge` → `payload.objectives[]`
-- `checkpoint` → `payload.questions[]` with `expected_answer`, `difficulty`, `format`. Graded by Genkit.
-- `reflection` → `payload.prompts[]`
-- `questionnaire` → `payload.questions[]` with `label`, `type`, `options`
-- `essay_tasks` → `payload.content` + `payload.tasks[]`
 
-## Update Reference
+- `lesson` → sections[] of { heading, body, type } — NOT a raw string
+- `challenge` → objectives[]
+- `checkpoint` → questions[] with expected_answer, difficulty, format (graded by Genkit)
+- `reflection` → prompts[]
+- `questionnaire` → questions[] with label, type, options
+- `essay_tasks` → content + tasks[]
 
-Flat payload with `action` discriminator:
-- **Transition**: `{ "action": "transition", "experienceId": "...", "transitionAction": "start|activate|complete|archive" }`
-- **Transition goal**: `{ "action": "transition_goal", "goalId": "...", "transitionAction": "activate|pause|complete|archive" }`
-- **Link knowledge**: `{ "action": "link_knowledge", "unitId": "...", "domainId": "...", "experienceId": "...", "stepId": "..." }` (unitId required, rest optional)
-- **Update knowledge**: `{ "action": "update_knowledge", "unitId": "...", "updates": {...} }`
-- **Update step**: `{ "action": "update_step", "stepId": "...", "updates": {...} }`
-- **Map node**: `{ "action": "update_map_node", "nodeId": "...", "label": "...", "content": "..." }`
-- **Delete**: `delete_map_node` (nodeId), `delete_map_edge` (edgeId), `delete_step` (stepId)
+## Think Board Rules
 
-## Think Board Spatial Rules
 - Root at x:0, y:0. Children +200px horizontal, siblings +150px vertical.
-- Use `create_map_cluster` for multi-node expansions (radial auto-layout).
+- Use `create_map_cluster` for multi-node expansions.
 - Always `read_map(boardId)` before expanding to avoid overlap.
-- Three text layers: `label` = title, `description` = hover preview (1-2 sentences), `content` = full depth (paragraphs, research, elaboration).
+- Three layers: `label` = title, `description` = hover preview, `content` = full depth.
 
-## Behavior Rules
-- Do not overproduce. Quality over quantity.
-- **Minimal successful writes over decorated writes.** If a full payload fails, strip to required fields and retry once.
-- **When endpoints are unstable, scaffold top-down first**: map → goal → outline, then skill domains and experiences.
+## Behavior
+
+- Quality over quantity. Minimal successful writes over decorated writes.
+- If payload fails, strip to required fields and retry once.
 - If the user is vague, map the underlying system — don't ask 10 questions.
-- When bottlenecks surface, treat them as structural signals.
-- If some endpoints fail, keep building with working ones.
+- Bottlenecks are structural signals — update the system, don't just answer.
 - If docs and runtime disagree, trust runtime.
-- Once the system is complete enough, tell the user to start operating from it.
+- Once the system is complete enough, tell the user to start operating.
+```
+
+### gptrun.md
+
+```markdown
+# GPT Run Analysis: Nexus Multi-Agent Research Audit
+
+*Saved from GPT's runtime audit of the Nexus platform*
+
+## Overarching Conclusion
+1. **Nexus Multi-Agent Structure is Live**: The system has preconfigured agent layers (`research_strategist`, `deep_reader`, `final_synthesizer`) and pipelines (`Golden Path E2E Pipeline`). The `createAgentFromNL` API key failure was simply a runtime ghost dependency, not a reflection of Nexus being just a "Notebook wrapper."
+2. **The Core Defect is Discovery Contamination**: The research engine is currently producing "Atom Contamination." It is scraping Wikipedia's Main Page (or random featured articles) instead of hitting semantic research targets.
+
+## Evidence of Scraping Contamination
+When the topic was set to:
+`how large language models learn through attention mechanisms, emergent capabilities, and scaling laws`
+
+The generated knowledge atoms were:
+* `apollo_6`
+* `painted_francolin`
+* `wikipedia_encyclopedia`
+
+**Why this is happening:**
+This perfectly matches Wikipedia's "Today's Featured Article" or "Random Article." When the ADK agent attempts a web search, it appears to be falling back to `en.wikipedia.org` without a strict query path. The NotebookLM grounding layer then dutifully ingests the Wikipedia homepage, resulting in knowledge atoms completely unrelated to SaaS metrics or LLMs.
+
+## Required Instructions Update for GPT
+- GPT should stop doing one-off `createAgentFromNL` tests.
+- GPT should default to the production Multi-Agent workflow: `dispatchResearch` -> `getRunStatus` -> `listAtoms` -> `assembleBundle`.
+- GPT MUST manually verify the `atom` concepts returned to ensure they match the research topic before accepting the bundle, as the underlying Wikipedia scraper is currently unstable.
+
+## Required Backend Fixes (Next Steps)
+1. **Discover & Scrape Repair**: Trace the `GoogleSearchTool` and `url_context` in the ADK agent to see why it defaults to the Wikipedia homepage instead of direct article hits.
+2. **Cache Bypass**: Add a `bypass_cache: true` parameter to `dispatchResearch`.
+3. **Pipeline Data Validation**: FIXED. The issue where `agent_template_id: "1"` was hardcoded into the `Golden Path E2E Pipeline` (crashing the backend on UUID parsing) has been repaired directly in the database.
+
+## System Prompt Instructions (To be updated)
+We need to lock down GPT's operating behavior so it defaults strictly to the proper preconfigured flow instead of guessing or discovering it via trial and error.
+- **Default Action**: Explicitly command GPT to always use the *multi-agent path* (`dispatchResearch` -> `.status` -> `.listAtoms` -> `.assembleBundle`) for any topic inquiry.
+- **Dependency Smoke Tests**: If GPT absolutely must test Gemini or the schema, instruct it to use the smallest functional endpoint (like `createAgentFromNL`), but immediately drop back to the standard flow for productive work.
+- **Pipeline Dispatch Schema Constraints**: GPT noted the documentation for `dispatchPipeline` implies that the first node will accept an object `{}`, but the runtime expects a simple `string`. We need to strongly type/clarify the schema or instruction set to reflect this.
+
 ```
 
 ### ideas.md
@@ -6821,6 +6832,7 @@ When authoring knowledge base content (e.g., MiraK agents):
 - Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
 - Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
 - Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
+- **Capability discovery operational** — GPT can ask the live gateway for current schema/examples via `GET /api/gpt/discover`; the model does not need to memorize the full API surface
 - Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
 - Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
 - Mind map station + Goal OS fully CRUD-wired
@@ -6868,6 +6880,7 @@ These five claims map directly to the [test.md](file:///c:/mira/test.md) battery
 - **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
 - **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
 - **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
+- **GPT does not yet improve its own operating doctrine across sessions.** It can discover the current API surface dynamically via `GET /api/gpt/discover`, but it cannot yet store and reuse learned tactics through operational memory.
 
 ---
 
@@ -7141,7 +7154,24 @@ NEXUS-AUGMENTED PATH (optional, invoked when depth matters):
 
 GPT starts every serious conversation by hydrating from `GET /api/gpt/state`. It dispatches Nexus when depth or source grounding is needed. Nexus returns atoms, bundles, and assets. Mira decides what the learner sees. This division is strict.
 
+### Current GPT Self-Knowledge (What Exists Now)
+
+GPT already has runtime capability discovery without needing operational memory. Three things give it live self-knowledge:
+
+- **`GET /api/gpt/discover`** — returns the current endpoint registry with purposes, parameter schemas, and usage examples. GPT can call this to know what the gateway can do right now, without the information being hardcoded into its instructions.
+- **OpenAPI schema** — the Custom GPT action schema gives the model the full request/response contract at configuration time.
+- **Intentionally small GPT instructions** — the instructions stay under 8,000 characters precisely because the model can discover schema and examples dynamically rather than memorizing them.
+
+This is **runtime capability discovery**, not operational memory. GPT can learn what the current API surface looks like in a session, but it cannot yet remember what worked well across sessions. That distinction is what Agent Operational Memory (below) is designed to close — in a future sprint.
+
+> **The next sprint should not assume operational memory exists.** Acceptance testing should validate schema discovery, planning behavior, authoring, enrichment dispatch, and surgical revision using the current gateway surface — `state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`.
+
+---
+
 ### Agent Operational Memory (How GPT Learns to Use Its Own Tools)
+
+> **Status: Future design. Not implemented in the current GPT gateway.**
+> Current GPT behavior relies on `GET /api/gpt/state` + `GET /api/gpt/discover` + OpenAPI-aligned instructions. GPT can dynamically learn the schema at runtime, but it cannot yet persist its own learned strategies across sessions.
 
 > [!IMPORTANT]
 > **This section addresses a gap not covered by learner memory or content memory.** The Custom GPT and the internal Gemini tutor chat both have access to Mira endpoints and Nexus endpoints — but they don't inherently know *how* to use them effectively, *when* to invoke them, or *why* certain patterns produce better results. This is the third memory dimension: **agent operational memory**.
@@ -7156,9 +7186,9 @@ The problem: GPT's Custom Instructions are static. They're written once and upda
 | **Content memory** | Atoms, source bundles, pipeline runs, cache | Nexus | "Generated 7 atoms on viral content with 1,139 citations" |
 | **Operational memory** | Endpoint usage patterns, effective strategies, learned instructions | Mira (new) | "When learner has >3 shaky concepts, dispatch Nexus deep research before creating new experiences" |
 
-**What operational memory enables:**
+**What operational memory enables (beyond current discovery):**
 
-1. **Capability discovery** — GPT/Gemini chat knows what endpoints exist, what they do, and what parameters they accept. This isn't hardcoded — it's a living registry that updates as the system evolves.
+1. **Richer capability registry** — The current `GET /api/gpt/discover` already gives GPT a live endpoint registry. Operational memory would extend this with usage history, confidence scores, and Nexus-specific strategy knowledge that doesn't fit the discover endpoint's scope.
 
 2. **Usage pattern learning** — When GPT discovers that a certain sequence of actions works well (e.g., "check enrichment status before creating a new experience on the same topic"), it can save that pattern as an operational instruction.
 
@@ -7166,13 +7196,15 @@ The problem: GPT's Custom Instructions are static. They're written once and upda
 
 4. **Cross-session persistence** — These learnings survive across conversations. The next time GPT hydrates, it gets not just learner state but also its own accumulated operational wisdom.
 
-**Proposed endpoint:**
+**Proposed endpoints (future — not yet implemented):**
 
-| Endpoint | Method | What It Does |
-|---------|--------|--------------|
-| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. |
-| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. |
-| `/api/gpt/capabilities` | GET | Returns a live registry of all available endpoints (both Mira and Nexus), their purposes, parameter schemas, and usage examples. This is the agent's self-knowledge of its own tools. |
+| Endpoint | Method | What It Does | Status |
+|---------|--------|--------------|--------|
+| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. | Future |
+| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. | Future |
+| `/api/gpt/capabilities` | GET | Future consolidation endpoint — a unified registry of all available endpoints (both Mira and Nexus) with purposes, schemas, and examples. **Currently, this role is served by `GET /api/gpt/discover`.** | Future |
+
+> **Current capability discovery endpoint:** `GET /api/gpt/discover` — already implemented and part of the live gateway. `/api/gpt/capabilities` is a future consolidation idea, not a current endpoint.
 
 **`/api/gpt/operational-memory` shape:**
 
@@ -7966,35 +7998,3 @@ The Open Learner Model is not a graph infrastructure project. It is a **learner-
     blocking_concepts: string[];
   };
 }
-```
-
-**What the OLM does NOT do:**
-- ❌ Gate content access based on readiness score
-- ❌ Lock the learner into a forced sequence
-- ❌ Replace GPT's curatorial judgment with an algorithm
-- ❌ Expose raw system confidence numbers to the learner directly (translate to UX language)
-
-The OLM is an **advisory surface** for both learner and GPT. GPT reads it via `GET /api/gpt/state` extension fields. The learner sees it (optionally) via a UX interpretation — "You've been strong on X but haven't practiced Y in a while." What comes next remains GPT + learner negotiation.
-
----
-
-## What Changes When We Upgrade
-
-| Dimension | Before | After |
-|-----------|--------|-------|
-| GPT fast path | ✅ Always works | ✅ Unchanged — identical fast path |
-| State hydration | Goal + experiences + skill domains | + concept coverage snapshot, checkpoint evidence, enrichment refs |
-| Content quality | MiraK Gemini synthesis — good but variable | Nexus-enriched atoms from grounded sources when invoked |
-| Experience depth | Steps can feel thin or encyclopedia-like | Atoms + bundles fill steps with independently refreshable units |
-| Enrichment consistency | Depends on lucky conversation turns | GPT dispatches Nexus on gap detection; atoms arrive async |
-| Next experience selection | Based on last GPT conversation | Evidence-driven via `/api/learning/next` + OLM data |
-| Webhook delivery | Hardcoded to Mira endpoint | Target-configurable delivery profiles — Mira is one profile |
-| NotebookLM | Primary grounding engine in Nexus | Unchanged — primary deep-path engine, no longer feature-flagged for Nexus |
-| Nexus / Notes | Not integrated | Optional async content worker; GPT dispatches when needed |
-
-**Nothing slows down.** The fast path is identical. The learner never waits for a pipeline they didn't ask for. Enrichment arrives asynchronously and enriches experiences in place, exactly like MiraK already does.
-
----
-
-## Human-in-the-Loop Exception Escalation
-

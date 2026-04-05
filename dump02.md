@@ -1,3 +1,4 @@
+          
           <div className="flex flex-col items-end gap-3">
             {!isComplete && (
                <p className="text-[10px] text-violet-400/70 font-mono tracking-widest">
@@ -7915,19 +7916,20 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
 
   dispatch_research: () => ({
     capability: 'dispatch_research',
-    endpoint: 'MiraK GPT Action — POST /generate_knowledge',
-    description: 'Dispatch deep research on a topic via MiraK. This is a SEPARATE GPT Action (not a Mira endpoint). Fire-and-forget — results arrive asynchronously via webhook.',
+    endpoint: 'Nexus GPT Action — POST /research (dispatchResearch)',
+    description: 'Dispatch deep research on a topic via Nexus. This is a SEPARATE GPT Action (not a Mira endpoint). Nexus runs ADK discovery agents → URL scraping → NotebookLM grounding → typed atom extraction. Fire-and-forget — poll getRunStatus for completion.',
     schema: {
       topic: 'string — the research topic',
       user_id: 'string — defaults to dev user',
-      experience_id: 'optional string — if provided, MiraK will enrich this experience with research results instead of creating a new one',
+      experience_id: 'optional string — if provided, Nexus can enrich this experience with research results',
+      goal_id: 'optional string — links research to a learning goal',
     },
     example: {
       topic: 'SaaS unit economics: CAC, LTV, churn, payback period',
       user_id: 'a0000000-0000-0000-0000-000000000001',
       experience_id: '<ID from POST /api/gpt/create response>',
     },
-    when_to_use: 'After creating an experience. Pass experience_id so MiraK enriches it with deep research. Do NOT wait for results — tell the user research is underway and they can start the experience now.',
+    when_to_use: 'After creating an experience or outline. Nexus produces learning atoms (concept explanations, analogies, worked examples, practice items). Poll getRunStatus to check completion. After research finishes, use listAtoms and assembleBundle (Nexus actions) to retrieve and package results.',
     relatedCapabilities: ['create_experience', 'create_outline']
   }),
  
@@ -7974,7 +7976,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
   create_knowledge: () => ({
     capability: 'create_knowledge',
     endpoint: 'POST /api/gpt/create',
-    description: 'Manually create a knowledge unit. Use when you have high-quality content that doesn\'t require MiraK research.',
+    description: 'Manually create a knowledge unit. Use when you have high-quality content that doesn\'t require Nexus research.',
     schema: {
       type: 'knowledge',
       userId: 'UUID from state',
@@ -7996,5 +7998,3 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       unit_type: 'foundation',
       title: 'The Golden Ratio: 3:1 LTV/CAC',
       thesis: 'A healthy SaaS business maintains a lifetime value at least 3x its customer acquisition cost.',
-      content: '# The 3:1 Rule\n\nIn venture-backed SaaS...',
-      key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']

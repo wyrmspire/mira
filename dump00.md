@@ -1,12 +1,12 @@
 # Mira + Nexus Project Code Dump
-Generated: Sat, Apr  4, 2026 11:49:38 PM
+Generated: Sun, Apr  5, 2026  2:17:42 AM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 356
+- **Files selected:** 357
 
 ## Project Overview
 
@@ -258,6 +258,7 @@ gitr.sh
 gitrdif.sh
 gitrdiff.md
 gpt-instructions.md
+gptrun.md
 ideas.md
 lib/adapters/github-adapter.ts
 lib/adapters/gpt-adapter.ts
@@ -7997,4 +7998,3 @@ export default async function ProfilePage() {
 
 import { useState } from 'react'
 import { UserProfile, FacetType } from '@/types/profile'
-import { FacetCard } from '@/components/profile/FacetCard'

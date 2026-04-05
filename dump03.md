@@ -1,3 +1,5 @@
+      content: '# The 3:1 Rule\n\nIn venture-backed SaaS...',
+      key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']
     },
     when_to_use: 'To persist self-generated research or core curriculum concepts.',
     relatedCapabilities: ['read_knowledge', 'dispatch_research', 'link_knowledge']
@@ -7996,5 +7998,3 @@ export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): Icebox
       isStale: daysSince(i.created_at) >= STALE_ICEBOX_DAYS,
       createdAt: i.created_at,
     }))
-
-  const iceboxProjects: IceboxItem[] = projects

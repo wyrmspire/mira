@@ -1,3 +1,35 @@
+```
+
+**What the OLM does NOT do:**
+- ❌ Gate content access based on readiness score
+- ❌ Lock the learner into a forced sequence
+- ❌ Replace GPT's curatorial judgment with an algorithm
+- ❌ Expose raw system confidence numbers to the learner directly (translate to UX language)
+
+The OLM is an **advisory surface** for both learner and GPT. GPT reads it via `GET /api/gpt/state` extension fields. The learner sees it (optionally) via a UX interpretation — "You've been strong on X but haven't practiced Y in a while." What comes next remains GPT + learner negotiation.
+
+---
+
+## What Changes When We Upgrade
+
+| Dimension | Before | After |
+|-----------|--------|-------|
+| GPT fast path | ✅ Always works | ✅ Unchanged — identical fast path |
+| State hydration | Goal + experiences + skill domains | + concept coverage snapshot, checkpoint evidence, enrichment refs |
+| Content quality | MiraK Gemini synthesis — good but variable | Nexus-enriched atoms from grounded sources when invoked |
+| Experience depth | Steps can feel thin or encyclopedia-like | Atoms + bundles fill steps with independently refreshable units |
+| Enrichment consistency | Depends on lucky conversation turns | GPT dispatches Nexus on gap detection; atoms arrive async |
+| Next experience selection | Based on last GPT conversation | Evidence-driven via `/api/learning/next` + OLM data |
+| Webhook delivery | Hardcoded to Mira endpoint | Target-configurable delivery profiles — Mira is one profile |
+| NotebookLM | Primary grounding engine in Nexus | Unchanged — primary deep-path engine, no longer feature-flagged for Nexus |
+| Nexus / Notes | Not integrated | Optional async content worker; GPT dispatches when needed |
+
+**Nothing slows down.** The fast path is identical. The learner never waits for a pipeline they didn't ask for. Enrichment arrives asynchronously and enriches experiences in place, exactly like MiraK already does.
+
+---
+
+## Human-in-the-Loop Exception Escalation
+
 HITL is a narrow exception mechanism, not a teaching philosophy. It fires when autonomy creates real product risk.
 
 | Trigger | Example | Action |
@@ -5323,11 +5355,21 @@ See [`roadmap.md`](./roadmap.md) for full project details, strategic reframe, an
 ```yaml
 openapi: 3.1.0
 info:
-  title: Nexus Agent Workbench
+  title: Nexus — Content Worker & Agent Workbench
   description: |
-    API for designing, testing, and dispatching multi-agent research pipelines.
-    Nexus is a standalone agent workbench — it assembles frameworks, not end-user experiences.
-  version: 0.3.0
+    Nexus is the deep research and content engine. It runs multi-agent pipelines grounded 
+    by NotebookLM to produce learning atoms — small typed artifacts (concept explanations, 
+    analogies, worked examples, practice items, checkpoints). Atoms are assembled into 
+    bundles for delivery to Mira Studio.
+
+    Key capabilities:
+    - Deep research via ADK agents + NotebookLM grounding (replaces MiraK)
+    - Learning atom storage/retrieval by concept and type
+    - Bundle assembly (primer, worked_example, checkpoint, deepen, misconception_repair)
+    - Agent template design, testing, and export
+    - Pipeline composition and dispatch
+    - NotebookLM notebook management and grounded Q&A
+  version: 0.4.0
 servers:
   - url: https://nexus.mytsapi.us
     description: Production (Cloudflare Tunnel → localhost:8002)
@@ -5341,7 +5383,185 @@ paths:
         "200":
           description: OK
 
-  # ─── AGENTS ──────────────────────────────────────────────
+  /discover:
+    get:
+      operationId: discoverCapability
+      summary: Self-documenting capability registry
+      description: Returns schema, examples, and when_to_use for any capability. Call without params for the full list.
+      parameters:
+        - name: capability
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [research, atoms, bundles, agents, pipelines, notebooks, runs, delivery_profiles, chat, cache]
+          description: Capability name to look up. Omit for index.
+      responses:
+        "200":
+          description: Returns capability details or full index
+
+  # ─── RESEARCH (Primary GPT action — replaces MiraK) ────────
+  /research:
+    post:
+      operationId: dispatchResearch
+      summary: Trigger deep research pipeline on a topic
+      description: Runs ADK discovery agents, scrapes URLs, ingests into NotebookLM, and extracts typed learning atoms. Fire-and-forget — returns run_id. Poll GET /runs/{id} for status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [topic]
+              properties:
+                topic:
+                  type: string
+                  description: The research topic to investigate deeply.
+                user_id:
+                  type: string
+                  default: default_user
+                session_id:
+                  type: string
+                  description: Optional. Group multiple research runs into a session.
+                experience_id:
+                  type: string
+                  description: Optional. If provided, results can enrich an existing Mira experience.
+                goal_id:
+                  type: string
+                  description: Optional. Links research to a learning goal.
+      responses:
+        "200":
+          description: Returns { run_id, status }
+
+  # ─── ATOMS (Learning content units) ─────────────────────────
+  /atoms:
+    get:
+      operationId: listAtoms
+      summary: List learning atoms with optional filters
+      parameters:
+        - name: concept_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by concept (e.g. "retention_curves")
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [concept_explanation, worked_example, analogy, misconception_correction, practice_item, reflection_prompt, checkpoint_block, content_bundle]
+          description: Filter by atom type
+        - name: level
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [beginner, intermediate, advanced]
+      responses:
+        "200":
+          description: Returns array of LearningAtom
+    post:
+      operationId: createAtom
+      summary: Create a learning atom manually
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LearningAtom"
+      responses:
+        "200":
+          description: Returns the created LearningAtom
+
+  /atoms/{id}:
+    get:
+      operationId: getAtom
+      summary: Get a single learning atom by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns LearningAtom
+    delete:
+      operationId: deleteAtom
+      summary: Delete a learning atom
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  # ─── BUNDLES (Assembled content for delivery) ───────────────
+  /bundles/assemble:
+    post:
+      operationId: assembleBundle
+      summary: Assemble a content bundle from stored atoms
+      description: Fetches atoms by concept and type, filters by learner coverage, and packages into a typed bundle (primer, worked_example, checkpoint, deepen, misconception_repair).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bundle_type, concept_ids]
+              properties:
+                bundle_type:
+                  type: string
+                  enum: [primer_bundle, worked_example_bundle, checkpoint_bundle, deepen_after_step_bundle, misconception_repair_bundle]
+                concept_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Concept IDs to include in the bundle
+                learner_id:
+                  type: string
+                coverage_state:
+                  type: object
+                  description: Per-concept coverage (level, recent_failures) to filter/prioritize
+      responses:
+        "200":
+          description: Returns assembled bundle with atoms
+
+  # ─── RUNS (Pipeline execution tracking) ─────────────────────
+  /runs:
+    get:
+      operationId: listRuns
+      summary: List pipeline execution runs
+      parameters:
+        - name: pipeline_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns array of PipelineRun
+
+  /runs/{id}:
+    get:
+      operationId: getRunStatus
+      summary: Get the status and output of a run
+      description: Use this to check if a research dispatch has completed and see atom counts.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns PipelineRun with status and output
+
+  # ─── AGENTS (Template design) ──────────────────────────────
   /agents:
     get:
       operationId: listAgents
@@ -5500,7 +5720,7 @@ paths:
         "200":
           description: Returns generated code and filename
 
-  # ─── PIPELINES ───────────────────────────────────────────
+  # ─── PIPELINES ─────────────────────────────────────────────
   /pipelines:
     get:
       operationId: listPipelines
@@ -5555,61 +5775,6 @@ paths:
         "200":
           description: Returns the composed Pipeline
 
-  /pipelines/{id}:
-    get:
-      operationId: getPipeline
-      summary: Get a single pipeline
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns Pipeline
-    patch:
-      operationId: updatePipeline
-      summary: Update pipeline nodes/edges
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                nodes:
-                  type: array
-                  items:
-                    type: object
-                edges:
-                  type: array
-                  items:
-                    type: object
-      responses:
-        "200":
-          description: Returns updated Pipeline
-    delete:
-      operationId: deletePipeline
-      summary: Delete a pipeline
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
   /pipelines/{id}/dispatch:
     post:
       operationId: dispatchPipeline
@@ -5633,228 +5798,11 @@ paths:
         "200":
           description: Returns { run_id, status }
 
-  # ─── RUNS ────────────────────────────────────────────────
-  /runs:
-    get:
-      operationId: listRuns
-      summary: List pipeline execution runs
-      parameters:
-        - name: pipeline_id
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns array of PipelineRun
-
-  /runs/{id}:
-    get:
-      operationId: getRunStatus
-      summary: Get the status and output of a run
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns PipelineRun
-
-  /runs/{id}/stream:
-    get:
-      operationId: streamRunTelemetry
-      summary: SSE stream of real-time telemetry events for a run
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: text/event-stream
-
-  /runs/{id}/assets:
-    get:
-      operationId: getRunAssets
-      summary: Get all artifacts generated by a run
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns array of Asset
-
-  # ─── ATOMS ──────────────────────────────────────────────
-  /atoms:
-    get:
-      operationId: listAtoms
-      summary: List learning atoms with optional filters
-      parameters:
-        - name: concept_id
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: type
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [concept_explanation, worked_example, analogy, misconception_correction, practice_item, reflection_prompt, checkpoint_block, content_bundle]
-        - name: level
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [beginner, intermediate, advanced]
-      responses:
-        "200":
-          description: Returns array of LearningAtom
-    post:
-      operationId: createAtom
-      summary: Create a learning atom manually or via import
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/LearningAtom"
-      responses:
-        "200":
-          description: Returns the created LearningAtom
-
-  /atoms/{id}:
-    get:
-      operationId: getAtom
-      summary: Get a single learning atom
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns LearningAtom
-    delete:
-      operationId: deleteAtom
-      summary: Delete a learning atom
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  # ─── CACHE ──────────────────────────────────────────────
-  /cache:
-    delete:
-      operationId: flushCache
-      summary: Flush cached data by type and/or age
-      parameters:
-        - name: type
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [research, synthesis, atom, delivery_idempotency]
-        - name: older_than_hours
-          in: query
-          required: false
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Returns { status, message }
-
-  # ─── DELIVERY PROFILES ─────────────────────────────────
-  /delivery-profiles:
-    get:
-      operationId: listDeliveryProfiles
-      summary: List all delivery profiles
-      responses:
-        "200":
-          description: Returns array of DeliveryProfile
-    post:
-      operationId: createDeliveryProfile
-      summary: Create a delivery profile
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeliveryProfileCreate"
-      responses:
-        "200":
-          description: Returns the created DeliveryProfile
-
-  /delivery-profiles/{id}:
-    get:
-      operationId: getDeliveryProfile
-      summary: Get a single delivery profile
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns DeliveryProfile
-    patch:
-      operationId: updateDeliveryProfile
-      summary: Update a delivery profile
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                target_type:
-                  type: string
-                config:
-                  type: object
-                pipeline_id:
-                  type: string
-      responses:
-        "200":
-          description: Returns updated DeliveryProfile
-    delete:
-      operationId: deleteDeliveryProfile
-      summary: Delete a delivery profile
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  # ─── NOTEBOOKS ───────────────────────────────────────────
+  # ─── NOTEBOOKS (NotebookLM grounding) ──────────────────────
   /notebooks:
     get:
       operationId: listNotebooks
-      summary: List all notebooks (falls back to Supabase if NLM unavailable)
+      summary: List all notebooks
       responses:
         "200":
           description: Returns array of Notebook
@@ -5875,67 +5823,11 @@ paths:
         "200":
           description: Returns { id, name }
 
-  /notebooks/{id}/sources:
-    get:
-      operationId: listSources
-      summary: List sources for a notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns array of source objects
-    post:
-      operationId: addSources
-      summary: Add content URLs to a Notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sources:
-                  type: array
-                  items:
-                    type: string
-              required: [sources]
-      responses:
-        "200":
-          description: OK
-
-  /notebooks/{id}/sources/{source_id}:
-    delete:
-      operationId: removeSource
-      summary: Remove a source from a notebook
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: source_id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
   /notebooks/{id}/query:
     post:
       operationId: queryNotebook
       summary: Query a notebook for grounded answers
+      description: Ask a question against an existing NotebookLM notebook. Returns grounded answers with citations.
       parameters:
         - name: id
           in: path
@@ -5956,30 +5848,28 @@ paths:
         "200":
           description: Returns { answer, citations }
 
-  # ─── RESEARCH ────────────────────────────────────────────
-  /research:
+  # ─── DELIVERY PROFILES ─────────────────────────────────────
+  /delivery-profiles:
+    get:
+      operationId: listDeliveryProfiles
+      summary: List all delivery profiles
+      responses:
+        "200":
+          description: Returns array of DeliveryProfile
     post:
-      operationId: fullResearch
-      summary: Trigger the standalone discovery→synthesis research pipeline
+      operationId: createDeliveryProfile
+      summary: Create a delivery profile (controls where atoms go)
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                topic:
-                  type: string
-                  description: The research topic to investigate
-                user_id:
-                  type: string
-                  default: default_user
-              required: [topic]
+              $ref: "#/components/schemas/DeliveryProfileCreate"
       responses:
         "200":
-          description: Returns { run_id, status }
+          description: Returns the created DeliveryProfile
 
-  # ─── CHAT ───────────────────────────────────────────────
+  # ─── CHAT ──────────────────────────────────────────────────
   /chat:
     post:
       operationId: nexusChat
@@ -5999,6 +5889,27 @@ paths:
       responses:
         "200":
           description: Returns { reply }
+
+  # ─── CACHE ─────────────────────────────────────────────────
+  /cache:
+    delete:
+      operationId: flushCache
+      summary: Flush cached data by type and/or age
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [research, synthesis, atom, delivery_idempotency]
+        - name: older_than_hours
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Returns { status, message }
 
 components:
   schemas:
@@ -6083,8 +5994,6 @@ components:
               type: string
             secret_header:
               type: string
-            payload_mapper:
-              type: string
             retry_policy:
               type: object
               properties:
@@ -6094,8 +6003,6 @@ components:
                 backoff_ms:
                   type: integer
                   default: 1000
-            idempotency_key:
-              type: string
         pipeline_id:
           type: string
       required: [name, target_type]
@@ -7087,6 +6994,180 @@ app.add_middleware(
 def health():
     return {"status": "ok", "service": "nexus", "version": "0.1.0"}
 
+# ─── DISCOVER (Self-documenting capability registry) ─────────────────────────
+
+DISCOVER_REGISTRY = {
+    "research": {
+        "capability": "research",
+        "endpoint": "POST /research",
+        "operationId": "dispatchResearch",
+        "description": "Trigger deep research. ADK agents search + scrape → NotebookLM ingestion → grounded atom extraction. Fire-and-forget.",
+        "schema": {
+            "topic": "string (REQUIRED) — the research topic",
+            "user_id": "string — defaults to default_user",
+            "session_id": "optional string — group multiple runs",
+            "experience_id": "optional string — enrich an existing Mira experience",
+            "goal_id": "optional string — link to a learning goal"
+        },
+        "example": {
+            "topic": "SaaS unit economics: CAC, LTV, churn",
+            "user_id": "a0000000-0000-0000-0000-000000000001"
+        },
+        "when_to_use": "When the user needs deep research on a topic. Poll GET /runs/{run_id} for completion. After done, use listAtoms to see results."
+    },
+    "atoms": {
+        "capability": "atoms",
+        "endpoint": "GET /atoms (list) | POST /atoms (create) | GET /atoms/{id}",
+        "description": "Learning atoms are small typed artifacts produced by the research pipeline.",
+        "schema": {
+            "filters": {
+                "concept_id": "string — filter by concept (e.g. 'retention_curves')",
+                "type": "concept_explanation | worked_example | analogy | misconception_correction | practice_item | reflection_prompt | checkpoint_block | content_bundle",
+                "level": "beginner | intermediate | advanced"
+            },
+            "create": {
+                "id": "string (REQUIRED)",
+                "atom_type": "string (REQUIRED)",
+                "concept_id": "string (REQUIRED)",
+                "content": "object (REQUIRED) — shape varies by atom_type",
+                "source_bundle_hash": "string (REQUIRED)",
+                "level": "string (REQUIRED)"
+            }
+        },
+        "example_query": "GET /atoms?concept_id=retention_curves&type=worked_example",
+        "when_to_use": "After research completes, query atoms to see what was produced. Use filters to find specific types."
+    },
+    "bundles": {
+        "capability": "bundles",
+        "endpoint": "POST /bundles/assemble",
+        "operationId": "assembleBundle",
+        "description": "Package stored atoms into delivery-ready bundles filtered by learner coverage state.",
+        "schema": {
+            "bundle_type": "REQUIRED — primer_bundle | worked_example_bundle | checkpoint_bundle | deepen_after_step_bundle | misconception_repair_bundle",
+            "concept_ids": "REQUIRED string[] — which concepts to include",
+            "learner_id": "optional string",
+            "coverage_state": "optional object — per-concept { level, recent_failures } to prioritize weak areas"
+        },
+        "bundle_types_explained": {
+            "primer_bundle": "Concept explanations + analogies (intro material)",
+            "worked_example_bundle": "Worked examples + practice items",
+            "checkpoint_bundle": "Checkpoint blocks for assessment",
+            "deepen_after_step_bundle": "Reflection prompts + misconception corrections",
+            "misconception_repair_bundle": "Targeted repair for confused concepts"
+        },
+        "example": {
+            "bundle_type": "primer_bundle",
+            "concept_ids": ["retention_curves", "feed_algorithms"]
+        },
+        "when_to_use": "After atoms exist for a topic. Assemble them into a bundle to deliver to an experience or review."
+    },
+    "agents": {
+        "capability": "agents",
+        "endpoint": "CRUD: /agents | NL: /agents/create-from-nl | /agents/{id}/modify-from-nl | /agents/{id}/test | /agents/{id}/export",
+        "description": "Design, test, and export ADK agent templates. Supports natural language creation and modification.",
+        "schema": {
+            "create_structured": {
+                "name": "string (REQUIRED)",
+                "instruction": "string (REQUIRED)",
+                "model": "string — default gemini-2.5-flash",
+                "tools": "string[] — e.g. ['google_search', 'url_context']",
+                "prompt_buckets": "{ persona, task, anti_patterns }",
+                "temperature": "number — default 0.2"
+            },
+            "create_from_nl": {"description": "string — natural language description of what the agent should do"},
+            "modify_from_nl": {"delta": "string — what to change"},
+            "test": {"sample_input": "string — input to dry-run the agent with"},
+            "export": {"format": "python | typescript", "pipeline_id": "optional string"}
+        },
+        "when_to_use": "When designing custom research, analysis, or synthesis agents. Use NL endpoints for quick scaffolding, structured for precise control."
+    },
+    "pipelines": {
+        "capability": "pipelines",
+        "endpoint": "CRUD: /pipelines | NL: /pipelines/compose-from-nl | Dispatch: /pipelines/{id}/dispatch",
+        "description": "Multi-agent pipeline orchestration. Wire agents together and dispatch execution.",
+        "schema": {
+            "create": {"name": "string (REQUIRED)", "nodes": "[{id, agent_template_id, position}]", "edges": "[{source, target}]"},
+            "compose_from_nl": {"description": "string (REQUIRED)", "agent_ids": "optional string[]"},
+            "dispatch": {"input": "string or object — the topic or structured input"}
+        },
+        "when_to_use": "When you need multi-agent orchestration beyond a single research dispatch."
+    },
+    "notebooks": {
+        "capability": "notebooks",
+        "endpoint": "GET /notebooks | POST /notebooks | POST /notebooks/{id}/query",
+        "description": "NotebookLM workspace management. Create notebooks, add sources, and query for grounded answers.",
+        "schema": {
+            "create": {"name": "string (REQUIRED)"},
+            "query": {"query": "string (REQUIRED) — question to ask against the notebook's sources"}
+        },
+        "when_to_use": "When you need grounded Q&A against specific source material. Research pipeline creates notebooks automatically — use queryNotebook to ask follow-up questions."
+    },
+    "runs": {
+        "capability": "runs",
+        "endpoint": "GET /runs | GET /runs/{id}",
+        "description": "Check status of research and pipeline executions.",
+        "schema": {
+            "list_filters": {"pipeline_id": "optional string"},
+            "response_shape": {
+                "id": "string",
+                "status": "pending | running | completed | failed",
+                "output": "{ atom_count, cache_stats, ... } when completed"
+            }
+        },
+        "when_to_use": "After calling dispatchResearch or dispatchPipeline. Poll until status is 'completed'."
+    },
+    "delivery_profiles": {
+        "capability": "delivery_profiles",
+        "endpoint": "CRUD: /delivery-profiles",
+        "description": "Configure where content goes after production. Supports Mira webhook adapter, generic webhooks, or local storage.",
+        "schema": {
+            "create": {
+                "name": "string (REQUIRED)",
+                "target_type": "REQUIRED — none | generic_webhook | mira_adapter | asset_store_only",
+                "config": "{ endpoint, secret_header, retry_policy: { max_retries, backoff_ms } }",
+                "pipeline_id": "optional string — auto-deliver for this pipeline"
+            }
+        },
+        "when_to_use": "When setting up automated delivery of research results to Mira or other systems."
+    },
+    "chat": {
+        "capability": "chat",
+        "endpoint": "POST /chat",
+        "operationId": "nexusChat",
+        "description": "Conversational assistant with workspace context. Knows about your agents and pipelines.",
+        "schema": {"message": "string (REQUIRED)", "pipeline_id": "optional string — focuses context on a pipeline"},
+        "when_to_use": "For freeform questions about the Nexus workspace, agent design advice, or pipeline architecture guidance."
+    },
+    "cache": {
+        "capability": "cache",
+        "endpoint": "DELETE /cache",
+        "description": "Flush research, synthesis, atom, or delivery caches by type and age.",
+        "schema": {
+            "type": "optional — research | synthesis | atom | delivery_idempotency",
+            "older_than_hours": "optional integer"
+        },
+        "when_to_use": "When stale cache is causing repeated results or you want to force fresh research."
+    }
+}
+
+@app.get("/discover")
+def discover(capability: str = None):
+    """Self-documenting capability registry. Call with ?capability=X for details, or without for the full list."""
+    if not capability:
+        return {
+            "available_capabilities": list(DISCOVER_REGISTRY.keys()),
+            "usage": "GET /discover?capability=research — returns schema, example, and when_to_use for that capability.",
+            "tip": "Call this before your first use of any Nexus endpoint."
+        }
+    
+    entry = DISCOVER_REGISTRY.get(capability)
+    if not entry:
+        return {
+            "error": f"Unknown capability: '{capability}'",
+            "available_capabilities": list(DISCOVER_REGISTRY.keys())
+        }
+    return entry
+
 # ─── AGENT TEMPLATES ─────────────────────────────────────────────────────────
 
 @app.post("/agents")
@@ -7710,6 +7791,21 @@ class DeliveryProfile(BaseModel):
 
 ```
 
+### nexus/service/test_config.py
+
+```python
+import os
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+load_dotenv("../.env")
+load_dotenv(".env.local")
+load_dotenv("../.env.local")
+
+print(f"GEMINI_API_KEY is: {os.environ.get('GEMINI_API_KEY')}")
+
+```
+
 ### nexus/service/requirements.txt
 
 ```
@@ -7902,99 +7998,3 @@ strategist_url = LlmAgent(
     name='strategist_url',
     model='gemini-2.5-flash',
     description='Reads URLs to extract their content.',
-    sub_agents=[],
-    instruction='Use UrlContextTool to read and extract the full content of URLs. Return as much content as possible.',
-    tools=[url_context],
-)
-
-# ── Main Research Strategist ─────────────────────────────────────────────────
-
-research_strategist_instruction = '''You are an elite Research Strategist working for a growth engineering team. You do ALL the web work for the pipeline.
-
-STEP 1: PLAN — Identify 5-7 advanced, technical research angles for the topic.
-DO NOT search for beginner tutorials (e.g., "how to make short form videos").
-INSTEAD, search for operator-level mechanics:
-- Algorithmic factors, ranking signals, and feed mechanisms
-- Advanced retention curves and pacing metrics
-- Implementation workflows, batching logic, infrastructure
-- Hard data, benchmarks (e.g., "YouTube Shorts engaged views methodology")
-- Monetization and compliance mechanics
-
-STEP 2: SEARCH — For each angle, run 1-2 highly specific search queries (5-10 total).
-Use technical vocabulary in your queries (e.g., "retention curve methodology" instead of "how to get more watch time").
-
-STEP 3: SELECT — Pick the top 6-8 URLs. Prioritize engineering blogs, platform documentation, technical teardowns, and hard data. Ignore generic SEO marketing blogs.
-
-STEP 4: READ — Use the URL reading tool to scrape/read the URLs. Extract all highly granular, actionable content.
-
-STEP 5: ORGANIZE — Package everything into a curated SOURCE BUNDLE for NotebookLM ingestion.
-Group items by topic cluster or purpose. 
-
-OUTPUT FORMAT:
-
-## Research Results
-
-### Key Questions to Answer
-[5-8 questions the final document must address]
-
-### SOURCE BUNDLE
-**Source: [URL 1]**
-[Extracted content from this page — include ALL useful text, data, quotes]
-
-**Source: [URL 2]**
-[Extracted content]
-
-... [repeat for all sources]
-
-CRITICAL RULES:
-- You MUST read/scrape the URLs, not just list them.
-- Extract as much content as possible from each URL.
-- NotebookLM will ONLY see what you extract — it cannot access the web.
-- Include specific numbers, dates, statistics, quotes from each source.
-- If a URL is inaccessible, note it and use search snippet content instead.'''
-
-research_strategist = LlmAgent(
-    name='research_strategist',
-    model='gemini-2.5-flash',
-    description='Plans research, executes searches, and scrapes top sources.',
-    sub_agents=[],
-    instruction=research_strategist_instruction,
-    tools=[
-        agent_tool.AgentTool(agent=strategist_search),
-        agent_tool.AgentTool(agent=strategist_url),
-    ],
-)
-
-# ── Deep Reader Factory ──────────────────────────────────────────────────────
-
-def make_deep_reader(reader_name: str) -> LlmAgent:
-    """Factory for pure-analysis reader agents (no search tools)."""
-    return LlmAgent(
-        name=reader_name,
-        model='gemini-2.5-flash',
-        description=f'Analyzes pre-scraped source content and extracts structured findings.',
-        sub_agents=[],
-        instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
-
-You receive RAW SCRAPED CONTENT from web sources. You have NO web access.
-
-Your job: Extract brutally concise, high-signal, operator-level mechanics. 
-IGNORE all generic advice, throat-clearing, and beginner "SEO fluff".
-If a source says "Use good lighting and a hook," IGNORE it.
-If a source says "Hooks must be <2s and resolve a 3-second hold proxy," EXTRACT it.
-
-FOCUS EXCLUSIVELY ON:
-1. **Hard Data & Formulas**: Benchmarks, precise dates, statistical thresholds, algorithmic weighting.
-2. **Mental Models & Workflows**: Specific sequential steps (e.g., "Hook → Value → Payoff").
-3. **Platform Mechanics**: Specific UI constraints, discovery algorithms (e.g., "Swipe-based feed ranking").
-4. **KPI Definitions**: How metrics are actually calculated (e.g., "Engaged views vs starts").
-5. **Implementation Specifics**: Naming specific tools, constraints, frameworks, or legal checks.
-
-OUTPUT FORMAT (KEEP UNDER 3000 CHARACTERS):
-## Findings from {reader_name}
-
-### Key Data Points (top 15-20)
-- [specific data point with numbers/dates/source]
-- [specific data point]
-[Prioritize: numbers > frameworks > quotes > general observations]
-

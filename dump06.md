@@ -1,3 +1,99 @@
+    sub_agents=[],
+    instruction='Use UrlContextTool to read and extract the full content of URLs. Return as much content as possible.',
+    tools=[url_context],
+)
+
+# ── Main Research Strategist ─────────────────────────────────────────────────
+
+research_strategist_instruction = '''You are an elite Research Strategist working for a growth engineering team. You do ALL the web work for the pipeline.
+
+STEP 1: PLAN — Identify 5-7 advanced, technical research angles for the topic.
+DO NOT search for beginner tutorials (e.g., "how to make short form videos").
+INSTEAD, search for operator-level mechanics:
+- Algorithmic factors, ranking signals, and feed mechanisms
+- Advanced retention curves and pacing metrics
+- Implementation workflows, batching logic, infrastructure
+- Hard data, benchmarks (e.g., "YouTube Shorts engaged views methodology")
+- Monetization and compliance mechanics
+
+STEP 2: SEARCH — For each angle, run 1-2 highly specific search queries (5-10 total).
+Use technical vocabulary in your queries (e.g., "retention curve methodology" instead of "how to get more watch time").
+
+STEP 3: SELECT — Pick the top 6-8 URLs. Prioritize engineering blogs, platform documentation, technical teardowns, and hard data. Ignore generic SEO marketing blogs.
+
+STEP 4: READ — Use the URL reading tool to scrape/read the URLs. Extract all highly granular, actionable content.
+
+STEP 5: ORGANIZE — Package everything into a curated SOURCE BUNDLE for NotebookLM ingestion.
+Group items by topic cluster or purpose. 
+
+OUTPUT FORMAT:
+
+## Research Results
+
+### Key Questions to Answer
+[5-8 questions the final document must address]
+
+### SOURCE BUNDLE
+**Source: [URL 1]**
+[Extracted content from this page — include ALL useful text, data, quotes]
+
+**Source: [URL 2]**
+[Extracted content]
+
+... [repeat for all sources]
+
+CRITICAL RULES:
+- You MUST read/scrape the URLs, not just list them.
+- Extract as much content as possible from each URL.
+- NotebookLM will ONLY see what you extract — it cannot access the web.
+- Include specific numbers, dates, statistics, quotes from each source.
+- If a URL is inaccessible, note it and use search snippet content instead.'''
+
+research_strategist = LlmAgent(
+    name='research_strategist',
+    model='gemini-2.5-flash',
+    description='Plans research, executes searches, and scrapes top sources.',
+    sub_agents=[],
+    instruction=research_strategist_instruction,
+    tools=[
+        agent_tool.AgentTool(agent=strategist_search),
+        agent_tool.AgentTool(agent=strategist_url),
+    ],
+)
+
+# ── Deep Reader Factory ──────────────────────────────────────────────────────
+
+def make_deep_reader(reader_name: str) -> LlmAgent:
+    """Factory for pure-analysis reader agents (no search tools)."""
+    return LlmAgent(
+        name=reader_name,
+        model='gemini-2.5-flash',
+        description=f'Analyzes pre-scraped source content and extracts structured findings.',
+        sub_agents=[],
+        instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
+
+You receive RAW SCRAPED CONTENT from web sources. You have NO web access.
+
+Your job: Extract brutally concise, high-signal, operator-level mechanics. 
+IGNORE all generic advice, throat-clearing, and beginner "SEO fluff".
+If a source says "Use good lighting and a hook," IGNORE it.
+If a source says "Hooks must be <2s and resolve a 3-second hold proxy," EXTRACT it.
+
+FOCUS EXCLUSIVELY ON:
+1. **Hard Data & Formulas**: Benchmarks, precise dates, statistical thresholds, algorithmic weighting.
+2. **Mental Models & Workflows**: Specific sequential steps (e.g., "Hook → Value → Payoff").
+3. **Platform Mechanics**: Specific UI constraints, discovery algorithms (e.g., "Swipe-based feed ranking").
+4. **KPI Definitions**: How metrics are actually calculated (e.g., "Engaged views vs starts").
+5. **Implementation Specifics**: Naming specific tools, constraints, frameworks, or legal checks.
+
+OUTPUT FORMAT (KEEP UNDER 3000 CHARACTERS):
+## Findings from {reader_name}
+
+### Key Data Points (top 15-20)
+- [specific data point with numbers/dates/source]
+- [specific data point]
+[Prioritize: numbers > frameworks > quotes > general observations]
+
 ### Comparison Data
 [Any head-to-head comparisons found (platform vs platform, etc.)]
 
@@ -123,6 +219,14 @@ async def run_pipeline(run_id: str, pipeline_id: str, topic: str, user_id: str):
         # 5. Store Final Result and Assets
         final_output = current_input
         
+        # Dump intermediates to file immediately so we can read them!
+        try:
+            with open("c:/notes/intermediates_dump.txt", "w", encoding="utf-8") as f:
+                for k, v in intermediate_outputs.items():
+                    f.write(f"\n--- NODE {k} ---\n{v}\n")
+        except Exception as e:
+            logger.error(f"Failed to dump to file: {e}")
+
         # Save assets to nexus_assets (W4)
         _store_pipeline_assets(run_id, intermediate_outputs, final_output)
 
@@ -132,7 +236,11 @@ async def run_pipeline(run_id: str, pipeline_id: str, topic: str, user_id: str):
         supabase.table("nexus_runs").update({
             "status": "completed",
             "completed_at": datetime.utcnow().isoformat(),
-            "output": {"message": "Success", "final_output": final_output}
+            "output": {
+                "message": "Success", 
+                "final_output": final_output,
+                "intermediate_outputs": intermediate_outputs
+            }
         }).eq("id", run_id).execute()
 
         # Handle delivery if attached to pipeline
@@ -239,7 +347,7 @@ async def _execute_agent_node(run_id: str, node_id: str, template: Dict, user_in
     for event in runner.run(user_id=user_id, session_id=session_id, new_message=msg):
         if hasattr(event, "content") and event.content:
             if hasattr(event.content, "parts"):
-                for part in event.content.parts:
+                for part in (event.content.parts or []):
                     # Tool call event
                     if hasattr(part, "function_call") and part.function_call:
                         tool_name = getattr(part.function_call, "name", "unknown")

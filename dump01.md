@@ -1,3 +1,4 @@
+import { FacetCard } from '@/components/profile/FacetCard'
 import { COPY } from '@/lib/studio-copy'
 
 interface ProfileClientProps {
@@ -7997,4 +7998,3 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
           >
             Skip for now
           </button>
-          
