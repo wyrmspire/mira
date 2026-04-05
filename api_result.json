@@ -1,0 +1,1169 @@
+[
+  {
+    "name": "1. Outline creation (Pricing Fundamentals)",
+    "url": "/plan",
+    "payload": {
+      "action": "create_outline",
+      "topic": "SaaS Pricing Strategy",
+      "domain": "Business",
+      "subtopics": [
+        {
+          "title": "Pricing Fundamentals",
+          "description": "Understanding value metrics and pricing models.",
+          "order": 1
+        }
+      ],
+      "pedagogicalIntent": "build_understanding"
+    },
+    "status": 201,
+    "statusText": "Created",
+    "response": {
+      "action": "create_outline",
+      "outline": {
+        "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
+        "userId": "a0000000-0000-0000-0000-000000000001",
+        "topic": "SaaS Pricing Strategy",
+        "domain": "Business",
+        "discoverySignals": {},
+        "subtopics": [
+          {
+            "order": 1,
+            "title": "Pricing Fundamentals",
+            "description": "Understanding value metrics and pricing models."
+          }
+        ],
+        "existingUnitIds": [],
+        "researchNeeded": [],
+        "pedagogicalIntent": "build_understanding",
+        "estimatedExperienceCount": null,
+        "status": "planning",
+        "goalId": null,
+        "createdAt": "2026-04-05T03:52:00.607+00:00",
+        "updatedAt": "2026-04-05T03:52:00.607+00:00"
+      },
+      "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
+    }
+  },
+  {
+    "name": "1b. Create First Experience",
+    "url": "/create",
+    "payload": {
+      "type": "ephemeral",
+      "title": "Pricing Fundamentals for SaaS",
+      "goal": "Understand value metrics and basic pricing models.",
+      "resolution": {
+        "depth": "medium",
+        "mode": "illuminate",
+        "timeScope": "session",
+        "intensity": "medium"
+      },
+      "reentry": {
+        "trigger": "completion",
+        "prompt": "How did that go?",
+        "contextScope": "minimal"
+      },
+      "steps": [
+        {
+          "step_type": "lesson",
+          "title": "What is a Value Metric?",
+          "blocks": [
+            {
+              "type": "content",
+              "content": "A value metric is the way you measure the value your customer receives."
+            }
+          ]
+        }
+      ]
+    },
+    "status": 201,
+    "statusText": "Created",
+    "response": {
+      "id": "826e015e-2fe6-46af-a259-7474337177c9",
+      "user_id": null,
+      "idea_id": null,
+      "template_id": null,
+      "title": "Pricing Fundamentals for SaaS",
+      "goal": "Understand value metrics and basic pricing models.",
+      "instance_type": "ephemeral",
+      "status": "injected",
+      "resolution": {
+        "mode": "illuminate",
+        "depth": "medium",
+        "intensity": "medium",
+        "timeScope": "session"
+      },
+      "reentry": {
+        "prompt": "How did that go?",
+        "trigger": "completion",
+        "contextScope": "minimal"
+      },
+      "previous_experience_id": null,
+      "next_suggested_ids": [],
+      "friction_level": null,
+      "source_conversation_id": null,
+      "generated_by": "gpt",
+      "realization_id": null,
+      "created_at": "2026-04-05T03:52:01.517+00:00",
+      "published_at": null,
+      "curriculum_outline_id": null,
+      "steps": [
+        {
+          "id": "e2d086a2-0734-4624-9089-def72bd03b8c",
+          "instance_id": "826e015e-2fe6-46af-a259-7474337177c9",
+          "step_order": 0,
+          "step_type": "lesson",
+          "title": "What is a Value Metric?",
+          "payload": {},
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:01.971791+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null,
+          "order_index": 0
+        }
+      ]
+    }
+  },
+  {
+    "name": "2. Create lesson with all Sprint 22 blocks",
+    "url": "/create",
+    "payload": {
+      "type": "ephemeral",
+      "title": "Beginner Lesson: Customer Interviews",
+      "goal": "Master the mechanics of open-ended customer interviews.",
+      "resolution": {
+        "depth": "heavy",
+        "mode": "practice",
+        "timeScope": "session",
+        "intensity": "high"
+      },
+      "reentry": {
+        "trigger": "completion",
+        "prompt": "Ready to move on?",
+        "contextScope": "minimal"
+      },
+      "steps": [
+        {
+          "step_type": "lesson",
+          "title": "Interview Mechanics",
+          "blocks": [
+            {
+              "type": "prediction",
+              "question": "What is the biggest mistake in customer interviews?",
+              "reveal_content": "Asking leading questions! It biases the user completely."
+            },
+            {
+              "type": "exercise",
+              "title": "Write an open-ended question",
+              "instructions": "Write a question avoiding bias.",
+              "validation_criteria": "Must not be a yes/no question."
+            },
+            {
+              "type": "checkpoint",
+              "question": "True or False: You should pitch your solution first.",
+              "expected_answer": "False",
+              "explanation": "Never pitch first. Always explore the problem."
+            }
+          ]
+        },
+        {
+          "step_type": "reflection",
+          "title": "Reflect on Bias",
+          "blocks": [
+            {
+              "type": "content",
+              "content": "Reflection time."
+            }
+          ],
+          "prompts": [
+            {
+              "prompt": "What are you most nervous about when interviewing?"
+            }
+          ]
+        }
+      ]
+    },
+    "status": 201,
+    "statusText": "Created",
+    "response": {
+      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "user_id": null,
+      "idea_id": null,
+      "template_id": null,
+      "title": "Beginner Lesson: Customer Interviews",
+      "goal": "Master the mechanics of open-ended customer interviews.",
+      "instance_type": "ephemeral",
+      "status": "injected",
+      "resolution": {
+        "mode": "practice",
+        "depth": "heavy",
+        "intensity": "high",
+        "timeScope": "session"
+      },
+      "reentry": {
+        "prompt": "Ready to move on?",
+        "trigger": "completion",
+        "contextScope": "minimal"
+      },
+      "previous_experience_id": null,
+      "next_suggested_ids": [],
+      "friction_level": null,
+      "source_conversation_id": null,
+      "generated_by": "gpt",
+      "realization_id": null,
+      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "published_at": null,
+      "curriculum_outline_id": null,
+      "steps": [
+        {
+          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "step_order": 0,
+          "step_type": "lesson",
+          "title": "Interview Mechanics",
+          "payload": {},
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null,
+          "order_index": 0
+        },
+        {
+          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
+          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "step_order": 1,
+          "step_type": "reflection",
+          "title": "Reflect on Bias",
+          "payload": {},
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null,
+          "order_index": 1
+        }
+      ]
+    }
+  },
+  {
+    "name": "3. Fast-path lightweight experience",
+    "url": "/create",
+    "payload": {
+      "type": "ephemeral",
+      "title": "Better Outreach Emails",
+      "goal": "Draft a concise outreach email.",
+      "resolution": {
+        "depth": "light",
+        "mode": "illuminate",
+        "timeScope": "immediate",
+        "intensity": "low"
+      },
+      "reentry": {
+        "trigger": "completion",
+        "prompt": "Done?",
+        "contextScope": "minimal"
+      },
+      "steps": [
+        {
+          "step_type": "lesson",
+          "title": "The Hook",
+          "sections": [
+            {
+              "heading": "Rule 1",
+              "body": "Keep it under 3 sentences.",
+              "type": "text"
+            }
+          ]
+        },
+        {
+          "step_type": "challenge",
+          "title": "Draft It",
+          "payload": {
+            "challenge_prompt": "Draft an email.",
+            "success_criteria": [
+              "Under 3 lines"
+            ]
+          }
+        }
+      ]
+    },
+    "status": 201,
+    "statusText": "Created",
+    "response": {
+      "id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+      "user_id": null,
+      "idea_id": null,
+      "template_id": null,
+      "title": "Better Outreach Emails",
+      "goal": "Draft a concise outreach email.",
+      "instance_type": "ephemeral",
+      "status": "injected",
+      "resolution": {
+        "mode": "illuminate",
+        "depth": "light",
+        "intensity": "low",
+        "timeScope": "immediate"
+      },
+      "reentry": {
+        "prompt": "Done?",
+        "trigger": "completion",
+        "contextScope": "minimal"
+      },
+      "previous_experience_id": null,
+      "next_suggested_ids": [],
+      "friction_level": null,
+      "source_conversation_id": null,
+      "generated_by": "gpt",
+      "realization_id": null,
+      "created_at": "2026-04-05T03:52:02.281+00:00",
+      "published_at": null,
+      "curriculum_outline_id": null,
+      "steps": [
+        {
+          "id": "4c83c962-5abe-4e85-84e1-8a138037dde9",
+          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "step_order": 0,
+          "step_type": "lesson",
+          "title": "The Hook",
+          "payload": {},
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.634363+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null,
+          "order_index": 0
+        },
+        {
+          "id": "321626ae-ce9f-4b5b-9eb0-27521f9d3b8a",
+          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "step_order": 1,
+          "step_type": "challenge",
+          "title": "Draft It",
+          "payload": {
+            "challenge_prompt": "Draft an email.",
+            "success_criteria": [
+              "Under 3 lines"
+            ]
+          },
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.761495+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null,
+          "order_index": 1
+        }
+      ]
+    }
+  },
+  {
+    "name": "4. Dispatch background research",
+    "url": "/plan",
+    "payload": {
+      "action": "dispatch_research",
+      "topic": "Unit Economics (CAC/LTV ratios)",
+      "pedagogicalIntent": "explore_concept"
+    },
+    "status": 200,
+    "statusText": "OK",
+    "response": {
+      "action": "dispatch_research",
+      "status": "dispatched",
+      "outlineId": null,
+      "topic": "Unit Economics (CAC/LTV ratios)",
+      "message": "Research dispatch logged. Knowledge units will arrive in the Knowledge Tab when ready."
+    }
+  },
+  {
+    "name": "5. Step Surgery",
+    "url": "/update",
+    "payload": {
+      "action": "update_step",
+      "experienceId": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "stepId": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+      "stepPayload": {
+        "title": "Interview Mechanics - Worked Example",
+        "blocks": [
+          {
+            "type": "content",
+            "content": "Let's look at a worked example instead of abstraction."
+          },
+          {
+            "type": "checkpoint",
+            "question": "Did the interviewer bias the user here?",
+            "expected_answer": "Yes",
+            "explanation": "They implicitly stated what the user should feel."
+          }
+        ]
+      }
+    },
+    "status": 200,
+    "statusText": "OK",
+    "response": {
+      "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+      "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "step_order": 0,
+      "step_type": "lesson",
+      "title": "Interview Mechanics - Worked Example",
+      "payload": {
+        "blocks": [
+          {
+            "type": "content",
+            "content": "Let's look at a worked example instead of abstraction."
+          },
+          {
+            "type": "checkpoint",
+            "question": "Did the interviewer bias the user here?",
+            "explanation": "They implicitly stated what the user should feel.",
+            "expected_answer": "Yes"
+          }
+        ]
+      },
+      "completion_rule": null,
+      "created_at": "2026-04-05T03:52:02.249138+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null
+    }
+  },
+  {
+    "name": "5b. Verify Surgery",
+    "url": "/experiences/09c96086-cf3b-485e-ac40-135d42cdf027",
+    "payload": null,
+    "status": 200,
+    "statusText": "OK",
+    "response": {
+      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "user_id": null,
+      "idea_id": null,
+      "template_id": null,
+      "title": "Beginner Lesson: Customer Interviews",
+      "goal": "Master the mechanics of open-ended customer interviews.",
+      "instance_type": "ephemeral",
+      "status": "injected",
+      "resolution": {
+        "mode": "practice",
+        "depth": "heavy",
+        "intensity": "high",
+        "timeScope": "session"
+      },
+      "reentry": {
+        "prompt": "Ready to move on?",
+        "trigger": "completion",
+        "contextScope": "minimal"
+      },
+      "previous_experience_id": null,
+      "next_suggested_ids": [],
+      "friction_level": null,
+      "source_conversation_id": null,
+      "generated_by": "gpt",
+      "realization_id": null,
+      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "published_at": null,
+      "curriculum_outline_id": null,
+      "steps": [
+        {
+          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "step_order": 0,
+          "step_type": "lesson",
+          "title": "Interview Mechanics - Worked Example",
+          "payload": {
+            "blocks": [
+              {
+                "type": "content",
+                "content": "Let's look at a worked example instead of abstraction."
+              },
+              {
+                "type": "checkpoint",
+                "question": "Did the interviewer bias the user here?",
+                "explanation": "They implicitly stated what the user should feel.",
+                "expected_answer": "Yes"
+              }
+            ]
+          },
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null
+        },
+        {
+          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
+          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "step_order": 1,
+          "step_type": "reflection",
+          "title": "Reflect on Bias",
+          "payload": {},
+          "completion_rule": null,
+          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "status": "pending",
+          "scheduled_date": null,
+          "due_date": null,
+          "estimated_minutes": null,
+          "completed_at": null
+        }
+      ],
+      "interactionCount": 0,
+      "resumeStepIndex": 0,
+      "graph": {
+        "previousTitle": null,
+        "suggestedNextCount": 0
+      }
+    }
+  },
+  {
+    "name": "6. GPT State Hydration",
+    "url": "/state?userId=a0000000-0000-0000-0000-000000000001",
+    "status": 200,
+    "statusText": "OK",
+    "response": {
+      "latestExperiences": [
+        {
+          "id": "87b9c4bf-df01-4992-a737-6cf704061349",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000001",
+          "title": "[Test] Persistent Planning Journey",
+          "goal": "Verify persistent experiences appear on Home > Suggested and in Library",
+          "instance_type": "persistent",
+          "status": "completed",
+          "resolution": {
+            "mode": "build",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "You finished the plan. Want to review priorities?",
+            "trigger": "completion",
+            "contextScope": "full"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "dev-harness",
+          "realization_id": null,
+          "created_at": "2026-04-05T02:52:59.728+00:00",
+          "published_at": "2026-04-05T02:53:58.247+00:00",
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "c6ba6b44-df7d-4c4b-b022-e9d0ca1b350b",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000001",
+          "title": "[Test] Ephemeral Quick Prompt",
+          "goal": "Verify ephemeral experiences appear in Library > Moments",
+          "instance_type": "ephemeral",
+          "status": "injected",
+          "resolution": {
+            "mode": "reflect",
+            "depth": "light",
+            "intensity": "low",
+            "timeScope": "immediate"
+          },
+          "reentry": null,
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "dev-harness",
+          "realization_id": null,
+          "created_at": "2026-04-05T02:52:59.296+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Building Resilient Webhook Ingestion Systems",
+          "goal": "Learn to design, implement, and test a secure, scalable, and resilient webhook ingestion system capable of handling \"at-least-once\" delivery and meeting critical provider SLAs.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "medium",
+            "timeScope": "multi_day"
+          },
+          "reentry": null,
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "mirak",
+          "realization_id": null,
+          "created_at": "2026-04-05T01:34:58.658+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "3039c5c8-b392-4208-9962-ca50d0ab389c",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 05: Social Automation and Publishing Intelligence",
+          "goal": "Design a practical social automation system that uses competitor and research signals to support content planning, packaging analysis, publishing operations, and follow-up review without over-automating brand judgment or platform-risky behavior.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which parts of your social workflow deserve automation, which ones still require human judgment, and what publishing intelligence loop should become part of your weekly system.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T03:33:56.418+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 04: Competitor Video Intelligence Workflow",
+          "goal": "Build a repeatable competitor-video intelligence workflow that collects packaging, transcript, CTA, and topic signals from creator competitors, stores them with useful metadata, and turns them into weekly content and strategy decisions.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which competitor fields gave you the most signal, which visual patterns required screenshots, and what recurring topic or packaging moves should influence your next content cycle.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
+          "next_suggested_ids": [
+            "3039c5c8-b392-4208-9962-ca50d0ab389c"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T02:57:17.528+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 03: Competitor Loops, Alerts, and Action Outputs",
+          "goal": "Build the back end of your founder data engine by turning competitor and social intelligence into repeatable loops, alerts, weekly digests, idea banks, and decision outputs that influence what you build, publish, or ignore.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which loops deserve automation, which alerts are actually useful, and which action outputs most directly improve your weekly founder decisions.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
+          "next_suggested_ids": [
+            "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T02:54:35.361+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
+          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
+          "next_suggested_ids": [
+            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T01:13:17.389+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 01: Acquisition Decisions and Visual Capture",
+          "goal": "Build the front end of your founder data engine by deciding which decisions the system should improve, when to use scraping versus browser automation versus computer use, and when screenshots or visual capture are necessary for competitive and creator research.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which acquisition methods match your real workflows best, where screenshots are genuinely necessary, and what your first repeatable competitor-intel pipeline should look like.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [
+            "32eec1ed-e7ca-43d7-913b-09bdf5ff6578"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-02T22:35:54.802+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "afa1dd16-fe01-422b-bfe4-ae915ffd5ecf",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Build Your YouTube SaaS Growth Engine (Expanded v2)",
+          "goal": "Design a YouTube growth system that turns channel strategy, topic selection, packaging, retention, calls to action, and follow-up assets into a repeatable acquisition engine for a SaaS business.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "medium",
+            "timeScope": "multi_day"
+          },
+          "reentry": {
+            "prompt": "Review which part of the engine is currently weakest: topic system, packaging, retention, CTA path, or follow-up conversion structure.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-02T22:29:47.472+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "dfac2e3c-cfb0-4aa2-b1d5-537a33424e87",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Build Your Founder's AI Radar System (Expanded v2)",
+          "goal": "Design and deploy a practical AI radar operating system that collects high-signal updates on models, funding, tools, and workflows, filters noise through explicit scoring rules, and produces a weekly decision loop that changes what you build, publish, or ignore.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "medium",
+            "timeScope": "multi_day"
+          },
+          "reentry": {
+            "prompt": "Review which sources actually produced signal, which scoring rules filtered noise best, and what recurring review ritual should become permanent.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "4dc9995f-52d7-4ad1-ad55-6be4e997db4c",
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-02T22:29:15.45+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        }
+      ],
+      "activeReentryPrompts": [
+        {
+          "instanceId": "87b9c4bf-df01-4992-a737-6cf704061349",
+          "instanceTitle": "[Test] Persistent Planning Journey",
+          "prompt": "You finished the plan. Want to review priorities?",
+          "trigger": "completion",
+          "contextScope": "full",
+          "priority": "medium"
+        }
+      ],
+      "frictionSignals": [],
+      "suggestedNext": [],
+      "synthesisSnapshot": null,
+      "proposedExperiences": [
+        {
+          "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Building Resilient Webhook Ingestion Systems",
+          "goal": "Learn to design, implement, and test a secure, scalable, and resilient webhook ingestion system capable of handling \"at-least-once\" delivery and meeting critical provider SLAs.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "medium",
+            "timeScope": "multi_day"
+          },
+          "reentry": null,
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "mirak",
+          "realization_id": null,
+          "created_at": "2026-04-05T01:34:58.658+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "3039c5c8-b392-4208-9962-ca50d0ab389c",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 05: Social Automation and Publishing Intelligence",
+          "goal": "Design a practical social automation system that uses competitor and research signals to support content planning, packaging analysis, publishing operations, and follow-up review without over-automating brand judgment or platform-risky behavior.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which parts of your social workflow deserve automation, which ones still require human judgment, and what publishing intelligence loop should become part of your weekly system.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T03:33:56.418+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 04: Competitor Video Intelligence Workflow",
+          "goal": "Build a repeatable competitor-video intelligence workflow that collects packaging, transcript, CTA, and topic signals from creator competitors, stores them with useful metadata, and turns them into weekly content and strategy decisions.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which competitor fields gave you the most signal, which visual patterns required screenshots, and what recurring topic or packaging moves should influence your next content cycle.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
+          "next_suggested_ids": [
+            "3039c5c8-b392-4208-9962-ca50d0ab389c"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T02:57:17.528+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 03: Competitor Loops, Alerts, and Action Outputs",
+          "goal": "Build the back end of your founder data engine by turning competitor and social intelligence into repeatable loops, alerts, weekly digests, idea banks, and decision outputs that influence what you build, publish, or ignore.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which loops deserve automation, which alerts are actually useful, and which action outputs most directly improve your weekly founder decisions.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
+          "next_suggested_ids": [
+            "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T02:54:35.361+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        },
+        {
+          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
+          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
+          "next_suggested_ids": [
+            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
+          ],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-03T01:13:17.389+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+        }
+      ],
+      "reentryCount": 1,
+      "compressedState": {
+        "narrative": "The user is a highly engaged power user or developer, actively pursuing multiple complex 'build' goals. Their primary focus appears to be an extensive 'Founder Research & Data Engine' curriculum, with Sprints 01 through 05 all proposed and awaiting action. Additionally, they have proposed other substantial, heavy-depth 'build' projects, including 'Building Resilient Webhook Ingestion Systems', 'Build Your YouTube SaaS Growth Engine', and 'Build Your Founder's AI Radar System'. Recently, they completed a '[Test] Persistent Planning Journey' which now has an active re-entry prompt to review priorities, and also initiated an ephemeral test. The varied sources of experience generation (GPT, dev-harness, Mirak) suggest deep interaction with the platform, potentially including testing its capabilities. Despite the high volume and complexity of proposed work, no explicit friction has been reported.",
+        "prioritySignals": [
+          "Dedicated Curriculum Engagement: Actively pursuing a multi-sprint 'Founder Research & Data Engine' project (Sprints 01-05 proposed).",
+          "High Volume of Complex Build Goals: Eight proposed persistent experiences, mostly 'heavy' depth and 'build' mode, indicating ambitious, long-term development.",
+          "Recent Test Completion with Active Re-entry: A '[Test] Persistent Planning Journey' was just completed, with an immediate prompt to review its priorities.",
+          "Power User Engagement: Experiences generated by 'dev-harness' and 'mirak' alongside 'gpt' suggest deep technical integration or platform testing.",
+          "No Reported Friction: Despite numerous complex projects, no friction signals are present."
+        ],
+        "suggestedOpeningTopic": "You've completed your test planning journey, and there's a prompt to review priorities. Shall we look at those, or are you ready to continue with Sprint 05 of your 'Founder Research & Data Engine'?"
+      },
+      "knowledgeSummary": {
+        "domains": {
+          "SaaS Growth Strategy": 2,
+          "AI-SaaS Strategy": 2,
+          "Content Engineering": 2,
+          "Growth Engineering": 2,
+          "Startup Validation": 2,
+          "SaaS Strategy": 4,
+          "AI Strategy & Operations": 2,
+          "Operations Automation": 2,
+          "nexus-enrichment": 3,
+          "API Integration": 2
+        },
+        "total": 23,
+        "masteredCount": 0
+      },
+      "activeMaps": [
+        {
+          "id": "4af83b6a-64fb-4840-b124-c0aa3814be34",
+          "name": "Default Board",
+          "nodeCount": 72,
+          "edgeCount": 76
+        }
+      ],
+      "curriculum": {
+        "active_outlines": [
+          {
+            "id": "c78443f7-1ac1-4979-82ad-bace1dc32956",
+            "topic": "Flowlink Creator-Operator OS",
+            "status": "planning",
+            "subtopic_count": 5,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "0119f14a-6aa2-4101-a350-76c4293d8ee9",
+            "topic": "Build Your Founder Research & Data Engine",
+            "status": "planning",
+            "subtopic_count": 8,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "3aabdf1a-8113-45b3-b856-2ed684875ce0",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "91773bf0-1eec-4db3-9840-97e3c16976c7",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "7977991e-12ac-4291-920b-f380352fb111",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "e75f0e30-2a52-433b-8cad-483a26d7e7a6",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "95435614-4228-4975-b0a0-a304f1f8425f",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "a3859039-cf43-4ea8-8924-2222bfd80aaa",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          }
+        ],
+        "recent_completions": []
+      },
+      "pending_enrichments": [
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T03:52:02.791+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T03:45:27.079+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T03:42:48.638+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T03:42:10.792+00:00"
+        }
+      ],
+      "goal": {
+        "id": "3a2113da-9a59-4838-a453-2ee0d05ac48f",
+        "title": "Build Flowlink into a creator-led AI workflow business",
+        "status": "active",
+        "domainCount": 5
+      },
+      "skill_domains": [
+        {
+          "name": "Customer Development & Workflow Discovery",
+          "mastery_level": "aware"
+        },
+        {
+          "name": "Content Engine & Shorts Pipeline",
+          "mastery_level": "aware"
+        },
+        {
+          "name": "Positioning & Brand Authority",
+          "mastery_level": "aware"
+        },
+        {
+          "name": "Offer Design & Monetization",
+          "mastery_level": "aware"
+        },
+        {
+          "name": "Product Direction & Execution Rhythm",
+          "mastery_level": "aware"
+        }
+      ],
+      "graph": {
+        "activeChains": 1,
+        "totalCompleted": 1,
+        "loopingTemplates": [
+          "b0000000-0000-0000-0000-000000000002",
+          "b0000000-0000-0000-0000-000000000001"
+        ],
+        "deepestChain": 0
+      }
+    }
+  }
+]

@@ -6,8 +6,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { instanceId, stepId, eventType, eventPayload } = body
 
-    if (!instanceId || !eventType) {
-      return NextResponse.json({ error: 'Missing required fields: instanceId, eventType' }, { status: 400 })
+    if (!eventType) {
+      return NextResponse.json({ error: 'Missing required field: eventType' }, { status: 400 })
     }
 
     const event = await recordInteraction({

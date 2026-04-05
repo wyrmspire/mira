@@ -65,17 +65,27 @@ export default function TrackCard({ outline }: TrackCardProps) {
         </div>
       </div>
 
-      <div className="space-y-4 mb-8 overflow-y-auto max-h-[120px] pr-2 scrollbar-none">
+      <div className="space-y-5 mb-8 overflow-y-auto max-h-[180px] pr-2 scrollbar-none">
         {outline.subtopics.map((subtopic, idx) => (
-          <div key={idx} className="flex items-start gap-3">
-            <div className="mt-1">{getStatusIcon(subtopic.status)}</div>
-            <div className="flex flex-col">
-              <span className={`text-xs font-bold leading-tight ${subtopic.status === 'completed' ? 'text-[#4a4a6a] line-through' : 'text-[#e2e8f0]'}`}>
-                {subtopic.title}
-              </span>
-              <span className="text-[10px] text-[#4a4a6a] line-clamp-1 mt-0.5">
+          <div key={idx} className="flex items-start gap-4 group/subtopic">
+            <div className="mt-1 flex-shrink-0">{getStatusIcon(subtopic.status)}</div>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className={`text-xs font-bold leading-tight truncate ${subtopic.status === 'completed' ? 'text-[#4a4a6a]' : 'text-[#e2e8f0]'}`}>
+                  {subtopic.title}
+                </span>
+                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                  subtopic.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500/70 border border-emerald-500/10' :
+                  subtopic.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
+                  'bg-[#1e1e2e] text-[#4a4a6a] border border-[#33334d]'
+                }`}>
+                  {subtopic.status === 'completed' ? 'Done' : 
+                   subtopic.status === 'in_progress' ? 'In Progress' : 'Pending'}
+                </span>
+              </div>
+              <p className="text-[10px] text-[#64748b] line-clamp-2 leading-relaxed italic">
                 {subtopic.description}
-              </span>
+              </p>
             </div>
           </div>
         ))}

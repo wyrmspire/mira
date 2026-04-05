@@ -46,3 +46,43 @@ export async function PATCH(
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+/**
+ * POST /api/knowledge/[id]
+ * Records a practice attempt and syncs mastery.
+ * Body: { correct: boolean, userId: string }
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const { correct, userId } = body;
+    const ownerId = userId || DEFAULT_USER_ID;
+
+    // 1. Record interaction in generic log
+    const { recordInteraction } = await import('@/lib/services/interaction-service');
+    await recordInteraction({
+      instanceId: null,
+      eventType: 'practice_attempt',
+      eventPayload: {
+        unit_id: params.id,
+        correct: !!correct
+      }
+    });
+
+    // 2. Sync mastery logic (Lane 6 - Evidence thresholds)
+    const { syncKnowledgeMastery } = await import('@/lib/experience/skill-mastery-engine');
+    await syncKnowledgeMastery(ownerId, params.id, {
+      type: 'practice_attempt',
+      correct: !!correct
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(`[api/knowledge/${params.id}] Error recording practice:`, error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+

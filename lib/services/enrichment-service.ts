@@ -143,3 +143,25 @@ export async function updateDeliveryStatus(
   if (mappedEntityId) updates.mapped_entity_id = mappedEntityId;
   await adapter.updateItem('enrichment_deliveries', id, updates);
 }
+
+/**
+ * Returns summary of enrichments for the GPT state packet.
+ */
+export async function getEnrichmentSummaryForState(userId: string): Promise<Array<{
+  topic: string;
+  status: string;
+  requested_at: string;
+}>> {
+  const adapter = getStorageAdapter();
+  const results = await adapter.query<EnrichmentRequestRow>('enrichment_requests', { user_id: userId });
+  
+  return results
+    .filter(r => r.status === 'dispatched' || r.status === 'pending' || r.status === 'delivered')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5) // Limit to most recent 5
+    .map(r => ({
+      topic: r.requested_gap,
+      status: r.status,
+      requested_at: r.created_at
+    }));
+}

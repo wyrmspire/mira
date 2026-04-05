@@ -172,6 +172,8 @@ export async function generateInteractionTimelineEntries(userId: string): Promis
   )
 
   for (const event of completionEvents) {
+    if (!event.instance_id) continue;
+    
     entries.push({
       id: event.id,
       timestamp: event.created_at,

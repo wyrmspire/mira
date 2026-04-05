@@ -260,7 +260,7 @@ export async function completeExperienceWithAI(instanceId: string, userId: strin
  * Gateway-compatible wrapper for ephemeral injection.
  * Handles validation and step creation in sequence.
  */
-export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance> {
+export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance & { steps: ExperienceStep[] }> {
   // Use existing route-level logic but inside a service
   const { createExperienceInstance, createExperienceStep } = await import('./experience-service')
   
@@ -273,7 +273,7 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
     instance_type: 'ephemeral',
     status: 'injected',
     resolution: data.resolution,
-    reentry: null,
+    reentry: data.reentry ?? null,
     previous_experience_id: null,
     next_suggested_ids: [],
     friction_level: null,
@@ -284,11 +284,12 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
   }
 
   const instance = await createExperienceInstance(instanceData)
+  const createdSteps: ExperienceStep[] = []
 
   if (data.steps && Array.isArray(data.steps)) {
     for (let i = 0; i < data.steps.length; i++) {
       const step = data.steps[i]
-      await createExperienceStep({
+      const createdStep = await createExperienceStep({
         instance_id: instance.id,
         step_order: i,
         step_type: step.step_type || step.type,
@@ -296,10 +297,16 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
         payload: step.payload || {},
         completion_rule: step.completion_rule || null
       })
+      createdSteps.push(createdStep)
     }
   }
 
-  return instance;
+  const stepsResponse = createdSteps.map(s => ({
+    ...s,
+    order_index: s.step_order
+  }));
+
+  return { ...instance, steps: stepsResponse };
 }
 
 /**

@@ -11,6 +11,9 @@ import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
 import { getKnowledgeSummaryForGPT } from './knowledge-service'
 import { getFacetsBySnapshot } from './facet-service'
 import { getBoardSummaries } from './mind-map-service'
+import { getSkillDomainsForUser } from './skill-domain-service'
+import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
+import { SkillMasteryLevel } from '@/lib/constants'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -44,6 +47,37 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
       frictionAssessment: aiResult.frictionAssessment
     }
     snapshot.next_candidates = aiResult.nextCandidates
+  }
+  
+  // W2 - Compute Mastery Transitions for Lane 5
+  if (sourceType === 'experience') {
+    const allDomains = await getSkillDomainsForUser(userId)
+    const linkedDomains = allDomains.filter(d => d.linkedExperienceIds.includes(sourceId))
+    
+    if (linkedDomains.length > 0) {
+      const transitions: any[] = []
+      const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert']
+      const userInstances = await getExperienceInstances({ userId })
+      
+      for (const domain of linkedDomains) {
+        // 'After' state is current
+        const { masteryLevel: afterLevel, evidenceCount: afterEvidence } = await computeSkillMastery(domain, undefined, userInstances)
+        // 'Before' state skips this experience
+        const { masteryLevel: beforeLevel, evidenceCount: beforeEvidence } = await computeSkillMastery(domain, sourceId, userInstances)
+        
+        if (afterLevel !== beforeLevel || afterEvidence !== beforeEvidence) {
+          transitions.push({
+            domainId: domain.id,
+            domainName: domain.name,
+            before: { level: beforeLevel, evidence: beforeEvidence },
+            after: { level: afterLevel, evidence: afterEvidence },
+            isLevelUp: LEVELS.indexOf(afterLevel) > LEVELS.indexOf(beforeLevel)
+          })
+        }
+      }
+      
+      snapshot.key_signals.masteryTransitions = transitions
+    }
   }
   
   // Lane 4: Persist computed friction as a key signal if not already present

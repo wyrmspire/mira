@@ -203,6 +203,15 @@ components/
                            CoachTrigger (proactive coaching: failed checkpoint, dwell, unread)
                            StepKnowledgeCard (pre/in/post timing knowledge delivery)
                            TrackCard, TrackSection (curriculum outline UI)
+    blocks/              ← Granular block renderers (Sprint 22)
+      BlockRenderer.tsx    ← Master router: dispatches by block.type
+      ContentBlockRenderer.tsx  ← Markdown content block (ReactMarkdown + prose)
+      PredictionBlockRenderer.tsx ← "What do you think?" → reveal answer
+      ExerciseBlockRenderer.tsx   ← Interactive exercise with hints
+      CheckpointBlockRenderer.tsx ← Semantic grading via gradeCheckpointFlow
+      HintLadderBlockRenderer.tsx ← Progressive clue reveal
+      CalloutBlockRenderer.tsx    ← Styled callout (tip/warning/insight)
+      MediaBlockRenderer.tsx      ← Image/audio/video placeholder
   knowledge/             ← KnowledgeUnitCard, KnowledgeUnitView, MasteryBadge, DomainCard
   skills/                ← SkillTreeCard, SkillTreeGrid (Sprint 13)
   common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
@@ -708,9 +717,24 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 ### SOP-41: Gateway step creation must filter metadata out of step payload — never leak userId/type/etc.
 **Learned from**: Flowlink system audit — standalone `type:"step"` creation fails with `UnrecognizedKwargsError`
 
+
 - ❌ Destructuring `{ type, experienceId, step_type, title, payload, ...rest }` and passing `rest` as the step payload (leaks `userId`, `boardId`, etc. into the payload)
 - ✅ Define per-step-type content key lists (`lesson: ['sections']`, `challenge: ['objectives']`, etc.) and extract ONLY those keys from `rest` into the step payload.
 - Why: When GPT sends `{ type: "step", step_type: "lesson", title: "...", sections: [...], userId: "..." }`, the `rest` object picks up `userId` alongside `sections`. This pollutes the step payload and can cause DB write failures or validation errors. Content keys must be explicitly extracted per step type.
+
+### SOP-42: React hooks in block renderers must be called unconditionally
+**Learned from**: Sprint 22 Lane 7 QA — conditional `useInteractionCapture` broke React rules of hooks
+
+- ❌ `if (instanceId) { const { trackEvent } = useInteractionCapture(...) }` (conditional hook call)
+- ✅ Call the hook unconditionally: `const { trackEvent } = useInteractionCapture(instanceId ?? '', stepId ?? '')` — then gate the *effect* on `instanceId` presence.
+- Why: React requires hooks to be called in the same order on every render. Block renderers may render with or without a parent experience context (`instanceId`). If the hook is wrapped in a conditional, React throws a hooks-order violation on re-render.
+
+### SOP-43: Dev test harness must accept both monolithic AND block payloads
+**Learned from**: Sprint 22 Lane 7 QA — test harness rejected block-based step payloads
+
+- ❌ Validating step payloads strictly for `sections` or `prompts` arrays only.
+- ✅ Accept EITHER `sections`/`prompts` (monolithic) OR `blocks` (granular). Both are valid under the Fast Path Guarantee.
+- Why: Sprint 22 introduced `blocks[]` as an alternative to `sections[]`. The dev test harness at `/api/dev/test-experience` was still validating the old-only shape, causing all block-based test experiences to fail creation.
 
 ---
 

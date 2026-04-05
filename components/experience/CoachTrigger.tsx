@@ -1,13 +1,13 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KnowledgeUnit } from '@/types/knowledge';
 import { StepKnowledgeLink } from '@/types/curriculum';
+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
 
 interface CoachTriggerProps {
   stepId: string;
   userId: string;
+  instanceId: string;
   onOpenCoach: () => void;
   // External triggers
   failedCheckpoint?: boolean;
@@ -16,12 +16,13 @@ interface CoachTriggerProps {
 }
 
 /**
- * CoachTrigger - Lane 6
+ * CoachTrigger - Lane 4
  * surfaces coach after failed checkpoints, extended dwell, or for unread units.
  */
 export function CoachTrigger({
   stepId,
   userId,
+  instanceId,
   onOpenCoach,
   failedCheckpoint = false,
   knowledgeLinks = [],
@@ -32,8 +33,28 @@ export function CoachTrigger({
   const [dismissed, setDismissed] = useState(false);
   const [unseenUnitTitle, setUnseenUnitTitle] = useState<string | null>(null);
   const [unseenUnitId, setUnseenUnitId] = useState<string | null>(null);
+  
+  const { 
+    trackCoachTriggerCheckpointFail, 
+    trackCoachTriggerDwell, 
+    trackCoachTriggerUnreadKnowledge 
+  } = useInteractionCapture(instanceId);
 
-  // Reset visibility when step changes
+  // Use refs to track if a specific trigger has already fired for this step session
+  const triggeredSteps = useRef<Set<string>>(new Set());
+  const sessionTriggers = useRef<Record<string, Set<string>>>({});
+
+  const hasTriggered = (type: string) => {
+    const key = `${stepId}:${type}`;
+    return triggeredSteps.current.has(key);
+  };
+
+  const markTriggered = (type: string) => {
+    const key = `${stepId}:${type}`;
+    triggeredSteps.current.add(key);
+  };
+
+  // Reset visibility state when stepId changes
   useEffect(() => {
     setIsVisible(false);
     setTriggerType(null);
@@ -44,36 +65,37 @@ export function CoachTrigger({
 
   // 1. failed_checkpoint trigger
   useEffect(() => {
-    if (failedCheckpoint && !dismissed && !isVisible) {
+    if (failedCheckpoint && !dismissed && !isVisible && !hasTriggered('failed_checkpoint')) {
       setTriggerType('failed_checkpoint');
       setIsVisible(true);
+      markTriggered('failed_checkpoint');
+      trackCoachTriggerCheckpointFail(stepId, { missedQuestions });
     }
-  }, [failedCheckpoint, dismissed, isVisible]);
+  }, [failedCheckpoint, dismissed, isVisible, stepId, missedQuestions]);
 
   // 2. unread_knowledge trigger
   useEffect(() => {
     // Check if we already have a more critical trigger or if we're active
-    if (dismissed || isVisible || (triggerType === 'failed_checkpoint')) return;
+    if (dismissed || isVisible || (triggerType === 'failed_checkpoint') || hasTriggered('unread_knowledge')) return;
 
     const preSupportLinks = knowledgeLinks.filter(l => l.linkType === 'pre_support');
     if (preSupportLinks.length === 0) return;
 
     async function checkPreSupport() {
       try {
-        for (const link of preSupportLinks) {
-          const unitRes = await fetch(`/api/knowledge/${link.knowledgeUnitId}`);
-          if (unitRes.ok) {
-            const unitResData = await unitRes.json();
-            // Handle possibility of data wrapping (e.g. { units: group }) or flat unit
-            const unit: KnowledgeUnit = unitResData.unit || unitResData;
-
-            if (unit.mastery_status === 'unseen') {
-              setUnseenUnitTitle(unit.title);
-              setUnseenUnitId(unit.id);
-              setTriggerType('unread_knowledge');
-              setIsVisible(true);
-              return;
-            }
+        const ids = preSupportLinks.map(l => l.knowledgeUnitId).join(',');
+        const res = await fetch(`/api/knowledge/batch?ids=${ids}`);
+        if (res.ok) {
+          const { units } = await res.json();
+          const unseen = (units as KnowledgeUnit[]).find(u => u.mastery_status === 'unseen');
+          
+          if (unseen) {
+            setUnseenUnitTitle(unseen.title);
+            setUnseenUnitId(unseen.id);
+            setTriggerType('unread_knowledge');
+            setIsVisible(true);
+            markTriggered('unread_knowledge');
+            trackCoachTriggerUnreadKnowledge(stepId, unseen.id);
           }
         }
       } catch (err) {
@@ -82,19 +104,22 @@ export function CoachTrigger({
     }
 
     checkPreSupport();
-  }, [knowledgeLinks, dismissed, isVisible, triggerType]);
+  }, [knowledgeLinks, dismissed, isVisible, triggerType, stepId]);
 
-  // 3. dwell trigger (> 5 mins)
+  // 3. dwell trigger (> 3 mins)
   useEffect(() => {
-    if (dismissed || isVisible || (triggerType !== null)) return;
+    if (dismissed || isVisible || (triggerType !== null) || hasTriggered('dwell')) return;
 
+    const dwellTime = 3 * 60 * 1000; // 3 minutes
     const timer = setTimeout(() => {
       setTriggerType('dwell');
       setIsVisible(true);
-    }, 5 * 60 * 1000); // 5 minutes
+      markTriggered('dwell');
+      trackCoachTriggerDwell(stepId, dwellTime);
+    }, dwellTime);
 
     return () => clearTimeout(timer);
-  }, [dismissed, isVisible, triggerType]);
+  }, [dismissed, isVisible, triggerType, stepId]);
 
   if (!isVisible || dismissed) return null;
 
@@ -113,7 +138,7 @@ export function CoachTrigger({
     if (triggerType === 'failed_checkpoint' && missedQuestions && missedQuestions.length > 0) {
       const q = missedQuestions[0];
       const topic = q.length > 40 ? q.substring(0, 40) + '...' : q;
-      return `You missed a few points. Want to review "${topic}"? 💬`;
+      return `You missed a few points on "${topic}". Want to review? 💬`;
     }
 
     const labels = {
@@ -126,7 +151,7 @@ export function CoachTrigger({
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out">
+    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out pointer-events-auto">
       <div className="bg-[#1e1e2e] border border-amber-500/30 rounded-2xl p-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] flex items-center gap-4 max-w-sm backdrop-blur-xl transition-all hover:border-amber-500/50 group">
         <div className="flex-1 min-w-[200px]">
           <div className="text-slate-200 text-sm font-medium leading-relaxed">
@@ -139,7 +164,7 @@ export function CoachTrigger({
               onOpenCoach();
               setIsVisible(false);
             }}
-            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 whitespace-nowrap"
           >
             Chat
           </button>

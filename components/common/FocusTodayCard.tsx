@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ROUTES } from '@/lib/routes'
 import { formatRelativeTime } from '@/lib/date'
 import { ExperienceInstance, ExperienceStep } from '@/types/experience'
+import { COPY } from '@/lib/studio-copy'
 
 interface FocusTodayCardProps {
   experience?: ExperienceInstance | null
@@ -9,6 +10,8 @@ interface FocusTodayCardProps {
   totalSteps?: number
   lastActivityAt?: string | null
   focusReason?: string
+  outlineTitle?: string
+  outlineProgress?: number
 }
 
 export function FocusTodayCard({ 
@@ -16,7 +19,9 @@ export function FocusTodayCard({
   nextStep, 
   totalSteps,
   lastActivityAt,
-  focusReason
+  focusReason,
+  outlineTitle,
+  outlineProgress
 }: FocusTodayCardProps) {
   if (!experience) {
     return (
@@ -56,6 +61,14 @@ export function FocusTodayCard({
             <h2 className="text-xl font-bold text-[#f1f5f9] leading-tight group-hover:text-white transition-colors">
               {experience.title}
             </h2>
+            {outlineTitle && outlineProgress !== undefined && (
+              <p className="text-xs text-[#94a3b8] mt-1 font-medium italic">
+                {COPY.home.focusNarrative
+                  .replace('{percent}', String(outlineProgress))
+                  .replace('{title}', outlineTitle)
+                  .replace('{step}', nextStep?.title || 'Next Step')}
+              </p>
+            )}
           </div>
           {lastActivityAt && (
             <span className="text-[10px] font-medium text-[#4a4a6a] uppercase tracking-tighter whitespace-nowrap">

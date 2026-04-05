@@ -236,6 +236,7 @@ export default function ExperienceRenderer({
           {/* Lane 6 / Lane 5: Coach Triggers */}
           <CoachTrigger 
             stepId={currentStep.id}
+            instanceId={instance.id}
             userId={instance.user_id}
             onOpenCoach={handleOpenCoach}
             failedCheckpoint={failedCheckpoint}

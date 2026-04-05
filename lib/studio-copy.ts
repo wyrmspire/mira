@@ -17,6 +17,12 @@ export const COPY = {
     activeSection: 'Active Journeys',
     emptySuggested: 'No new suggestions from Mira.',
     emptyActive: 'No active journeys.',
+    focusNarrative: "You're {percent}% through {title}. Next: {step}.",
+    reentry: {
+      heading: 'Pick Up Where You Left Off',
+      viewMore: 'View {count} other re-entry points ↓',
+      hideMore: 'Hide other re-entry points ↑',
+    },
   },
   send: {
     heading: 'Ideas from GPT',

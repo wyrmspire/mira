@@ -11,15 +11,39 @@ import MasteryBadge from './MasteryBadge';
 
 interface KnowledgeUnitViewProps {
   unit: KnowledgeUnit;
+  practiceCount: number;
 }
 
 type Tab = 'learn' | 'practice' | 'links';
 
-export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
+export default function KnowledgeUnitView({ unit, practiceCount: initialPracticeCount }: KnowledgeUnitViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>('learn');
   const [expandedQuestions, setExpandedQuestions] = useState<number[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [localPracticeCount, setLocalPracticeCount] = useState(initialPracticeCount);
+
+  const handlePracticeAttempt = async (correct: boolean) => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+
+    try {
+      const res = await fetch(`/api/knowledge/${unit.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ correct, userId: unit.user_id }),
+      });
+
+      if (res.ok) {
+        if (correct) setLocalPracticeCount(prev => prev + 1);
+        router.refresh(); // Sync mastery status from server
+      }
+    } catch (err) {
+      console.error('Failed to record practice:', err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const toggleQuestion = (index: number) => {
     setExpandedQuestions(prev => 
@@ -81,23 +105,30 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
         <h1 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{unit.title}</h1>
       </header>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#1e1e2e] mb-8 overflow-x-auto no-scrollbar">
-        {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
-              activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
-            }`}
-          >
-            {tab}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-            )}
-          </button>
-        ))}
-      </div>
+        {/* Tabs */}
+        <div className="flex gap-8 border-b border-[#1e1e2e] mb-8">
+          {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`pb-4 text-xs font-bold uppercase tracking-widest transition-all relative ${
+                activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {tab}
+                {tab === 'practice' && localPracticeCount > 0 && (
+                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded-md border border-amber-500/20">
+                    Practiced {localPracticeCount}x
+                  </span>
+                )}
+              </div>
+              {activeTab === tab && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
+              )}
+            </button>
+          ))}
+        </div>
 
       {/* Tab Content */}
       <div className="min-h-[400px]">
@@ -216,9 +247,27 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
                       </button>
                       {expandedQuestions.includes(i) && (
                         <div className="px-5 pb-5 pt-2 border-t border-[#1e1e2e] animate-in slide-in-from-top-1 duration-200">
-                          <p className="text-sm text-[#94a3b8] leading-relaxed">
+                          <p className="text-sm text-[#94a3b8] leading-relaxed mb-6">
                             {q.answer}
                           </p>
+                          
+                          <div className="flex items-center justify-between pt-4 border-t border-[#1e1e2e]/50">
+                            <span className="text-[10px] font-bold text-[#4a4a6a] uppercase">Did you get this right?</span>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handlePracticeAttempt(false)}
+                                className="px-3 py-1.5 rounded-lg border border-rose-500/20 text-rose-500 text-[10px] font-bold hover:bg-rose-500/10 transition-colors"
+                              >
+                                Not Yet
+                              </button>
+                              <button 
+                                onClick={() => handlePracticeAttempt(true)}
+                                className="px-4 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors"
+                              >
+                                Yes
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>

@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
 import { getKnowledgeSummaryForGPT } from '@/lib/services/knowledge-service'
 import { getCurriculumSummaryForGPT } from '@/lib/services/curriculum-outline-service'
-import { getActiveGoal, getGoalsForUser } from '@/lib/services/goal-service'
+import { getGoalsForUser, getActiveGoal } from '@/lib/services/goal-service'
 import { getSkillDomainsForGoal, getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
+import { getEnrichmentSummaryForState } from '@/lib/services/enrichment-service'
 import { getGraphSummaryForGPT } from '@/lib/services/graph-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
@@ -12,12 +13,13 @@ export async function GET(request: Request) {
   const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
-    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary] = await Promise.all([
+    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments] = await Promise.all([
       buildGPTStatePacket(userId),
       getKnowledgeSummaryForGPT(userId),
       getCurriculumSummaryForGPT(userId),
       getActiveGoal(userId),
-      getGraphSummaryForGPT(userId)
+      getGraphSummaryForGPT(userId),
+      getEnrichmentSummaryForState(userId)
     ])
 
     // SOP-40: If no active goal, fall back to most recent intake goal
@@ -45,8 +47,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       ...packet, 
-      knowledgeSummary, 
+      knowledgeSummary: {
+        domains: knowledgeSummary.domains,
+        total: knowledgeSummary.totalUnits,
+        masteredCount: knowledgeSummary.masteredCount
+      }, 
       curriculum,
+      pending_enrichments: enrichments,
       goal: goal ? {
         id: goal.id,
         title: goal.title,

@@ -83,6 +83,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       goal: 'string',
       urgency: 'low | medium | high (controls notification toast duration)',
       resolution: '{...}',
+      reentry: '{...} — trigger, prompt, contextScope',
       steps: '[...]'
     },
     example: {
@@ -93,6 +94,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       goal: 'Verify understanding of Unit Economics',
       urgency: 'medium',
       resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
+      reentry: { trigger: 'completion', prompt: 'Great job. Want to dive deeper into Unit Economics?', contextScope: 'full' },
       steps: [
         {
           type: 'checkpoint',

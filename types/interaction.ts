@@ -10,11 +10,12 @@ export type InteractionEventType =
   | 'experience_completed'
   | 'draft_saved'
   | 'checkpoint_graded'
-  | 'checkpoint_graded_batch';
+  | 'checkpoint_graded_batch'
+  | 'practice_attempt';
 
 export interface InteractionEvent {
   id: string;
-  instance_id: string;
+  instance_id: string | null;
   step_id: string | null;
   event_type: InteractionEventType;
   event_payload: any; // JSONB

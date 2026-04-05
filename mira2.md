@@ -4,6 +4,103 @@
 
 ---
 
+## Phase Reality Update (Post-Sprint 22)
+
+> [!IMPORTANT]
+> **This section separates what is true, what is being tested, and what is aspirational.** Read this before the architecture vision below. If this section contradicts the vision sections, this section governs.
+
+### Current State After Sprint 22
+
+**Implemented now:**
+- Fast-path structural authoring preserved — GPT can always create outlines + experiences + steps directly
+- Nexus enrichment loop exists — `dispatch_research` → webhook delivery → Mira ingest pipeline is wired
+- Markdown rendering improvements landed — `react-markdown` + `@tailwindcss/typography` across all step renderers
+- Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
+- Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
+- Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
+- Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
+- Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
+- Mind map station + Goal OS fully CRUD-wired
+- System ready for Custom GPT acceptance testing
+
+**Being tested now:**
+- Whether real GPT conversations can successfully orchestrate planning, lightweight authoring, block-based lesson creation, async enrichment, and partial lesson revision
+- Whether the OpenAPI schema holds up under the 5 conversation types defined in [test.md](file:///c:/mira/test.md)
+- Whether the GPT instructions can stay under the 8,000 character limit while covering enough operational context
+- Whether `reentry` contracts actually persist and hydrate correctly on create calls (current tests show `reentry: null` in responses — investigate)
+- Whether step surgery via `update_step` works end-to-end when the experience instance doesn't return nested steps in the create response
+
+**Not yet complete:**
+- Proactive coach nudges (failed checkpoint → auto-surface, dwell time → gentle prompt)
+- Truly felt learner trajectory — the "what matters next" story on the home page
+- "What others experienced" grounding — aggregate learning data across users
+- Robust evidence-driven next-content logic (`/api/learning/next` is designed but not built)
+- Polished educational UX loop — completion feels like a level-up, not an exit
+- Agent Operational Memory — GPT doesn't yet learn from its own usage patterns across sessions
+- Open Learner Model — concept coverage + readiness state is designed but not implemented
+
+---
+
+### What This Acceptance Phase Is Actually Proving
+
+This phase is not proving architecture. The architecture works. It is proving **five specific behavioral claims:**
+
+1. **GPT can scope before building** — it follows the planning-first doctrine (outline → then experience), not dump-a-giant-lesson
+2. **GPT can stay lightweight when asked** — fast-path `light/illuminate/immediate/low` experiences don't trigger unnecessary machinery
+3. **GPT can author blocks** — Sprint 22's granular block types (`prediction`, `exercise`, `checkpoint`, `hint_ladder`) are usable by the GPT and render correctly
+4. **GPT can request enrichment without blocking the learner** — `dispatch_research` fires and forgets; the learner starts immediately on scaffolding
+5. **GPT can revise one part of a lesson without rewriting the whole thing** — `update_step` with new blocks replaces a single step surgically
+
+These five claims map directly to the [test.md](file:///c:/mira/test.md) battery. If they hold, the Custom GPT instructions and schema are validated. If they break, the next sprint fixes the observed failure, not a theoretical gap.
+
+---
+
+### Do Not Overclaim
+
+> [!CAUTION]
+> **These boundaries protect sprint planning from drifting into self-congratulation.**
+
+- **Nexus is a strong optional content worker, not yet a fully trusted autonomous educational orchestrator.** It can generate atoms and deliver via webhook. It cannot yet autonomously decide what to teach, when to teach it, or how to sequence content for a specific learner.
+- **"What others experienced" is a target capability, not a mature runtime layer yet.** There is no aggregation of learning patterns across users. The system is single-user with `DEFAULT_USER_ID`.
+- **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
+- **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
+- **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
+
+---
+
+### Near-Term UX Priorities
+
+These are the four product gaps that keep circling in every sprint retrospective:
+
+- Make experiences feel like a **workspace**, not a form wizard — the non-linear navigation (R1) landed, but the overall feel still leans "assignment" rather than "environment you inhabit"
+- Make coach/tutor support **proactive but subtle** — gentle surfacing triggers on failed checkpoints, extended dwell, unread knowledge links
+- Make progress feel like **personal movement**, not telemetry — completion screens that reflect synthesis, mastery transitions that feel earned, "you improved" signals
+- Make home/library show a **clear next path**, not just lists — the "Your Path" section and Focus Today card exist but need to tell a coherent "focus here today" story
+
+---
+
+### Demo-Ready vs Production-Ready
+
+| Demo-Ready Soon | Production-Ready Later |
+|----------------|----------------------|
+| GPT scopes topic via `create_outline` | Stable deep-research orchestration (Nexus → NotebookLM → atoms → delivery at scale) |
+| GPT creates first experience with blocks | Evidence-driven nudges (`/api/learning/next` + concept coverage) |
+| GPT optionally dispatches Nexus for enrichment | Learner-model loop (Open Learner Model with confidence decay) |
+| Mira renders improved lesson flow with block types | "Others experienced" aggregation (multi-user patterns) |
+| GPT revises steps surgically via `update_step` | Strong educational UX coherence (workspace feel, proactive coach, earned mastery) |
+| Coach answers questions in-context | Agent Operational Memory (GPT learns from its own usage) |
+| Curriculum outlines visible on home page | Multi-user auth (replace `DEFAULT_USER_ID`) |
+
+---
+
+### The Frontend Reality
+
+> "Mira is already a usable learner runtime: experiences can be opened, worked through, coached in-context, and revisited. The remaining gap is not basic runtime capability but coherence, guidance, and felt polish."
+
+Sprint 21 proved the enrichment slice. Sprint 22 proved the granular block substrate. Now the project is entering a **Custom GPT acceptance phase**, and the next decisions should come from observed GPT and learner friction, not only architecture theory.
+
+---
+
 ## The Master Constraint: Augmenting Mode, Not Replacement Mode
 
 > [!CAUTION]

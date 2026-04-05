@@ -2,11 +2,11 @@ import { InteractionEvent, InteractionEventType, Artifact } from '@/types/intera
 import { getStorageAdapter } from '@/lib/storage-adapter'
 import { generateId } from '@/lib/utils'
 
-export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
+export async function recordInteraction(data: { instanceId?: string | null; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
   const adapter = getStorageAdapter()
   const event: InteractionEvent = {
     id: generateId(),
-    instance_id: data.instanceId,
+    instance_id: data.instanceId ?? null,
     step_id: data.stepId || null,
     event_type: data.eventType,
     event_payload: data.eventPayload,
@@ -18,6 +18,12 @@ export async function recordInteraction(data: { instanceId: string; stepId?: str
 export async function getInteractionsByInstance(instanceId: string): Promise<InteractionEvent[]> {
   const adapter = getStorageAdapter()
   return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
+}
+
+export async function getInteractionsByUnit(unitId: string): Promise<InteractionEvent[]> {
+  const adapter = getStorageAdapter()
+  const attempts = await adapter.query<InteractionEvent>('interaction_events', { event_type: 'practice_attempt' })
+  return attempts.filter(a => a.event_payload?.unit_id === unitId)
 }
 
 export async function getInteractionsForInstances(instanceIds: string[]): Promise<InteractionEvent[]> {

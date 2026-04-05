@@ -18,6 +18,11 @@ export const INTERACTION_EVENTS = {
   BLOCK_HINT_USED: 'block_hint_used',
   BLOCK_PREDICTION_SUBMITTED: 'block_prediction_submitted',
   BLOCK_EXERCISE_COMPLETED: 'block_exercise_completed',
+
+  // Lane 4: Proactive Coach Telemetry
+  COACH_TRIGGER_CHECKPOINT_FAIL: 'coach_trigger_checkpoint_fail',
+  COACH_TRIGGER_DWELL: 'coach_trigger_dwell',
+  COACH_TRIGGER_UNREAD_KNOWLEDGE: 'coach_trigger_unread_knowledge',
 } as const;
 
 export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];

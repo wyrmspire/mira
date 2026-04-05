@@ -42,8 +42,10 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
   
   // Group interactions by instanceId
   const interactionsByInstance = allInteractions.reduce((acc, interaction) => {
-    if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
-    acc[interaction.instance_id].push(interaction)
+    if (interaction.instance_id) {
+      if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
+      acc[interaction.instance_id].push(interaction)
+    }
     return acc
   }, {} as Record<string, InteractionEvent[]>)
 
@@ -105,7 +107,14 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
     }
   }
 
-  // Sort by priority (high first)
+  // Sort by priority (high first) and then by trigger type
   const priorityOrder = { high: 0, medium: 1, low: 2 }
-  return prompts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+  const triggerOrder = { completion: 0, inactivity: 1, time: 2, manual: -1 }
+  
+  return prompts.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    }
+    return triggerOrder[a.trigger] - triggerOrder[b.trigger]
+  })
 }

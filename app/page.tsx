@@ -155,6 +155,8 @@ export default async function HomePage() {
             totalSteps={focusExperience.totalSteps}
             lastActivityAt={focusExperience.lastActivityAt}
             focusReason={focusExperience.focusReason}
+            outlineTitle={focusExperience.outlineTitle}
+            outlineProgress={focusExperience.outlineProgress}
           />
         </section>
 
@@ -198,19 +200,27 @@ export default async function HomePage() {
         {reentryPrompts.length > 0 && (
           <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <h2 className="text-xs font-bold text-amber-500 uppercase tracking-widest">
-              Pick Up Where You Left Off
+              {COPY.home.reentry.heading}
             </h2>
             <div className="grid grid-cols-1 gap-4">
-              {reentryPrompts.slice(0, 3).map((prompt) => (
-                <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
-              ))}
-              {reentryPrompts.length > 3 && (
-                <Link 
-                  href={`${ROUTES.library}?filter=reentry`}
-                  className="text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors"
-                >
-                  View {reentryPrompts.length - 3} more re-entry points →
-                </Link>
+              <ReentryPromptCard prompt={reentryPrompts[0]} />
+              
+              {reentryPrompts.length > 1 && (
+                <details className="group/details">
+                  <summary className="list-none cursor-pointer text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors">
+                    <span className="group-open/details:hidden">
+                      {COPY.home.reentry.viewMore.replace('{count}', String(reentryPrompts.length - 1))}
+                    </span>
+                    <span className="hidden group-open/details:inline">
+                      {COPY.home.reentry.hideMore}
+                    </span>
+                  </summary>
+                  <div className="mt-4 grid grid-cols-1 gap-4">
+                    {reentryPrompts.slice(1).map((prompt) => (
+                      <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           </section>

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       instance_type: 'ephemeral',
       status: 'injected',
       resolution: normalized.resolution,
-      reentry: null, // Ephemeral doesn't typically have reentry contracts yet
+      reentry: normalized.reentry,
       previous_experience_id: null,
       next_suggested_ids: [],
       friction_level: null,

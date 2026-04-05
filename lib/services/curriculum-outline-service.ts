@@ -148,6 +148,24 @@ export async function getRecentlyCompletedOutlines(
 }
 
 /**
+ * Find an active or planning outline by topic (case-insensitive partial match).
+ */
+export async function findActiveOutlineByTopic(
+  userId: string,
+  topic: string
+): Promise<CurriculumOutline | null> {
+  const active = await getActiveCurriculumOutlines(userId);
+  const normalizedTopic = topic.toLowerCase().trim();
+  
+  // Try exact match first
+  const exact = active.find(o => o.topic.toLowerCase().trim() === normalizedTopic);
+  if (exact) return exact;
+  
+  // Fall back to partial match
+  return active.find(o => o.topic.toLowerCase().includes(normalizedTopic)) || null;
+}
+
+/**
  * Partial update of a curriculum outline (status, subtopics, etc.).
  */
 export async function updateCurriculumOutline(

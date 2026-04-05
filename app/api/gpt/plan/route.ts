@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import {
   createCurriculumOutline,
   getCurriculumOutline,
+  findActiveOutlineByTopic,
 } from '@/lib/services/curriculum-outline-service';
+import { createEnrichmentRequest } from '@/lib/services/enrichment-service';
 import { DEFAULT_USER_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -120,10 +122,35 @@ export async function POST(request: Request) {
     // Action: dispatch_research
     // ------------------------------------------------------------------
     if (action === 'dispatch_research') {
-      const { outlineId, topic } = payload;
+      let { outlineId, topic } = payload;
 
-      // Stub — real MiraK dispatch wired in a future sprint
-      console.log(`[plan/route] dispatch_research requested. outlineId=${outlineId}, topic=${topic}`);
+      if (!topic && outlineId) {
+        const o = await getCurriculumOutline(outlineId);
+        if (o) topic = o.topic;
+      }
+
+      // W1: Auto-link to existing outline if none provided
+      if (!outlineId && topic) {
+        const existingOutline = await findActiveOutlineByTopic(userId, topic);
+        if (existingOutline) {
+          outlineId = existingOutline.id;
+          console.log(`[plan/route] Auto-linked research dispatch for "${topic}" to outline ${outlineId}`);
+        }
+      }
+
+      // W1: Log the enrichment request
+      if (topic) {
+        try {
+          await createEnrichmentRequest({
+            userId,
+            requestedGap: topic,
+            requestContext: { outlineId, source: 'gpt_dispatch' },
+            status: 'dispatched', // Mark as dispatched manually as it's a stub
+          });
+        } catch (err) {
+          console.error('[plan/route] Failed to log enrichment request:', err);
+        }
+      }
 
       return NextResponse.json({
         action: 'dispatch_research',

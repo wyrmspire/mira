@@ -214,22 +214,32 @@ export async function getKnowledgeDomains(userId: string): Promise<{ domain: str
   }));
 }
 
-export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }> {
+export async function getKnowledgeSummaryForGPT(userId: string): Promise<{
+  domains: Record<string, number>;
+  totalUnits: number;
+  masteredCount: number;
+}> {
   try {
     const units = await getKnowledgeUnits(userId);
-    const domains = Array.from(new Set(units.map(u => u.domain)));
+    const domainCounts: Record<string, number> = {};
+
+    units.forEach(u => {
+      if (!u.domain) return;
+      domainCounts[u.domain] = (domainCounts[u.domain] || 0) + 1;
+    });
+
     const totalUnits = units.length;
     const masteredCount = units.filter(u => u.mastery_status === 'practiced' || u.mastery_status === 'confident').length;
 
     return {
-      domains,
+      domains: domainCounts,
       totalUnits,
       masteredCount
     };
   } catch (error) {
     console.error('Error fetching knowledge summary for GPT:', error);
     return {
-      domains: [],
+      domains: {},
       totalUnits: 0,
       masteredCount: 0
     };

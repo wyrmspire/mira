@@ -13,6 +13,7 @@ import { getInteractionsForInstances } from './interaction-service';
 import { getArenaProjects } from './projects-service';
 import { getInboxEvents } from './inbox-service';
 import { getIdeasByStatus } from './ideas-service';
+import { getEnrichmentSummaryForState } from './enrichment-service';
 import { DEFAULT_USER_ID, MASTERY_THRESHOLDS } from '@/lib/constants';
 
 /**
@@ -34,7 +35,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     outlines,
     arenaProjects,
     allEvents,
-    capturedIdeas
+    capturedIdeas,
+    enrichments
   ] = await Promise.all([
     getActiveGoal(userId),
     getExperienceInstances({ userId }),
@@ -45,7 +47,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     getCurriculumOutlinesForUser(userId),
     getArenaProjects(), // Note: Projects service doesn't yet take userId in most calls
     getInboxEvents(),
-    getIdeasByStatus('captured')
+    getIdeasByStatus('captured'),
+    getEnrichmentSummaryForState(userId)
   ]);
 
   // 2. Resolve skill domains (goal-specific if active goal exists, else user-wide)
@@ -190,6 +193,17 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
       totalSteps: focusTotalSteps,
       lastActivityAt: focusLastActivity,
       focusReason,
+      outlineTitle: focusExperience?.curriculum_outline_id 
+        ? outlines.find(o => o.id === focusExperience.curriculum_outline_id)?.topic 
+        : undefined,
+      outlineProgress: focusExperience?.curriculum_outline_id 
+        ? (() => {
+            const o = outlines.find(o => o.id === focusExperience.curriculum_outline_id);
+            if (!o) return undefined;
+            const completed = o.subtopics.filter(s => s.status === 'completed').length;
+            return Math.round((completed / o.subtopics.length) * 100);
+          })()
+        : undefined,
     },
     proposedExperiences,
     activeExperiences,
@@ -201,5 +215,6 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
     arenaProjects,
     recentEvents: allEvents.slice(0, 3),
     capturedIdeas,
+    pendingEnrichments: enrichments,
   };
 }

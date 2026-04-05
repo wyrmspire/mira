@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { runFlowSafe } from '@/lib/ai/safe-flow';
 import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
+import { syncKnowledgeMastery } from '@/lib/experience/skill-mastery-engine';
 
 /**
  * POST /api/coach/grade
@@ -67,7 +68,6 @@ export async function POST(request: Request) {
     const instanceId = step?.instance_id;
 
     if (instanceId) {
-      const { promoteKnowledgeProgress } = await import('@/lib/services/knowledge-service');
       const { recordInteraction } = await import('@/lib/services/interaction-service');
       const { getLinksForStep } = await import('@/lib/services/step-knowledge-link-service');
       const { DEFAULT_USER_ID } = await import('@/lib/constants');
@@ -81,15 +81,21 @@ export async function POST(request: Request) {
 
         const links = await getLinksForStep(stepId);
         // Promote units linked with type 'tests'
-        const testLinks = links.filter(l => l.linkType === 'tests');
+        const testLinks = links.filter((l: any) => l.linkType === 'tests');
         
         for (const link of testLinks) {
-          await promoteKnowledgeProgress(ownerId, link.knowledgeUnitId);
+          await syncKnowledgeMastery(ownerId, link.knowledgeUnitId, { 
+            type: 'checkpoint_pass', 
+            correct: true 
+          });
         }
         
         // Fallback to knowledgeUnitId from body if no link-table entry exists (backward comp)
         if (testLinks.length === 0 && knowledgeUnitId) {
-          await promoteKnowledgeProgress(ownerId, knowledgeUnitId);
+          await syncKnowledgeMastery(ownerId, knowledgeUnitId, { 
+            type: 'checkpoint_pass', 
+            correct: true 
+          });
         }
       }
 

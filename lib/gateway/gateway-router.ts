@@ -5,7 +5,8 @@ import {
   updateExperienceStep, 
   reorderExperienceSteps, 
   deleteExperienceStep, 
-  transitionExperienceStatus 
+  transitionExperienceStatus,
+  ExperienceStep
 } from '@/lib/services/experience-service';
 import { createIdea } from '@/lib/services/ideas-service';
 import { createKnowledgeUnit } from '@/lib/services/knowledge-service';
@@ -53,6 +54,7 @@ export async function dispatchCreate(type: string, payload: any) {
       }
 
       const newInstance = await createExperienceInstance(instanceData);
+      const createdSteps: ExperienceStep[] = [];
 
       // Create inline steps if provided
       if (payload.steps && Array.isArray(payload.steps)) {
@@ -62,12 +64,13 @@ export async function dispatchCreate(type: string, payload: any) {
           if (!st || st === 'step') continue;
           
           const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
-          await addStep(newInstance.id, {
+          const createdStep = await addStep(newInstance.id, {
             step_type: st,
             title: title ?? '',
             payload: nestedPayload ?? rest,
             completion_rule: completion_rule ?? null,
           });
+          createdSteps.push(createdStep);
         }
       }
 
@@ -75,7 +78,12 @@ export async function dispatchCreate(type: string, payload: any) {
         const { linkExperiences } = await import('@/lib/services/graph-service');
         await linkExperiences(instanceData.previous_experience_id, newInstance.id, 'chain');
       }
-      return newInstance;
+      const stepsResponse = createdSteps.map(s => ({
+        ...s,
+        order_index: s.step_order
+      }));
+
+      return { ...newInstance, steps: stepsResponse };
     }
     case 'ephemeral':
       return injectEphemeralExperience(payload);
@@ -313,9 +321,29 @@ export async function dispatchCreate(type: string, payload: any) {
  */
 export async function dispatchUpdate(action: string, payload: any) {
   switch (action) {
-    case 'update_step':
+    case 'update_step': {
       if (!payload.stepId) throw new Error('Missing stepId');
-      return updateExperienceStep(payload.stepId, payload.stepPayload ?? payload.updates);
+      const updates = payload.stepPayload ?? payload.updates ?? {};
+      
+      const columnFields = ['title', 'step_type', 'step_order', 'status', 'completion_rule', 'scheduled_date', 'due_date', 'estimated_minutes'];
+      const topLevel: any = {};
+      const payloadUpdates: any = {};
+      
+      Object.keys(updates).forEach(key => {
+        if (columnFields.includes(key)) {
+          topLevel[key] = updates[key];
+        } else {
+          payloadUpdates[key] = updates[key];
+        }
+      });
+      
+      // If there are payload updates, wrap them
+      if (Object.keys(payloadUpdates).length > 0) {
+        topLevel.payload = payloadUpdates;
+      }
+      
+      return updateExperienceStep(payload.stepId, topLevel);
+    }
     
     case 'reorder_steps':
       if (!payload.experienceId || !payload.orderedIds) {

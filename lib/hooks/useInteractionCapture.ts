@@ -80,6 +80,18 @@ export function useInteractionCapture(instanceId: string) {
     postEvent(INTERACTION_EVENTS.BLOCK_EXERCISE_COMPLETED, stepId, { blockId, ...result });
   };
 
+  const trackCoachTriggerCheckpointFail = (stepId: string, result: Record<string, any>) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_CHECKPOINT_FAIL, stepId, result);
+  };
+
+  const trackCoachTriggerDwell = (stepId: string, dwellMs: number) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_DWELL, stepId, { dwellMs });
+  };
+
+  const trackCoachTriggerUnreadKnowledge = (stepId: string, knowledgeUnitId: string) => {
+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_UNREAD_KNOWLEDGE, stepId, { knowledgeUnitId });
+  };
+
   return {
     trackStepView,
     trackAnswer,
@@ -93,5 +105,8 @@ export function useInteractionCapture(instanceId: string) {
     trackBlockHint,
     trackBlockPrediction,
     trackBlockExercise,
+    trackCoachTriggerCheckpointFail,
+    trackCoachTriggerDwell,
+    trackCoachTriggerUnreadKnowledge,
   };
 };
