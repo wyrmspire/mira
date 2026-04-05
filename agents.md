@@ -751,3 +751,6 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
     - **Configuration**: Fixed concatenated `NEXUS_WEBHOOK_SECRET` in `.env.local` which caused initial 500 errors.
     - **Misconception Mapping**: Added `misconception` to `KnowledgeUnitType` constant/label/color mapping to ensure full compatibility with Nexus atoms.
 - **Status**: Enrichment is strictly additive and non-blocking. Fast Path (GPT authoring) verified as unbroken.
+- **2026-04-05**: Sprint 22 boardinit (Granular Block Architecture). Planned 7 lanes to implement LearnIO pedagogical block mechanics (`Prediction`, `Exercise`, `HintLadder`, `Checkpoint`, `Callout`, `Media`) as part of the "Store Atoms, Render Molecules" granular architecture rollout.
+
+Current test count: **223 passing** | Build: clean | TSC: clean

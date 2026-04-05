@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { INTERACTION_EVENTS, buildInteractionPayload, type InteractionEventType } from '@/lib/experience/interaction-events';
+import { INTERACTION_EVENTS, buildInteractionPayload, type InteractionEventType } from '@/lib/enrichment/interaction-events';
 
 /**
  * useInteractionCapture - A pure client-side hook for experience telemetry.
@@ -68,6 +68,18 @@ export function useInteractionCapture(instanceId: string) {
     }
   };
 
+  const trackBlockHint = (stepId: string, blockId: string, payload: Record<string, any> = {}) => {
+    postEvent(INTERACTION_EVENTS.BLOCK_HINT_USED, stepId, { blockId, ...payload });
+  };
+
+  const trackBlockPrediction = (stepId: string, blockId: string, prediction: string) => {
+    postEvent(INTERACTION_EVENTS.BLOCK_PREDICTION_SUBMITTED, stepId, { blockId, prediction });
+  };
+
+  const trackBlockExercise = (stepId: string, blockId: string, result: Record<string, any>) => {
+    postEvent(INTERACTION_EVENTS.BLOCK_EXERCISE_COMPLETED, stepId, { blockId, ...result });
+  };
+
   return {
     trackStepView,
     trackAnswer,
@@ -78,5 +90,8 @@ export function useInteractionCapture(instanceId: string) {
     trackDraft,
     startStepTimer,
     endStepTimer,
+    trackBlockHint,
+    trackBlockPrediction,
+    trackBlockExercise,
   };
-}
+};

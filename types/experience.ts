@@ -85,3 +85,78 @@ export interface ExperienceStep {
   completed_at?: string | null;       // ISO 8601 timestamp
   knowledge_links?: StepKnowledgeLink[];
 }
+
+// ---------------------------------------------------------------------------
+// Granular Block Architecture (Sprint 22)
+// ---------------------------------------------------------------------------
+
+export type BlockType =
+  | 'content'
+  | 'prediction'
+  | 'exercise'
+  | 'checkpoint'
+  | 'hint_ladder'
+  | 'callout'
+  | 'media';
+
+export interface BaseBlock {
+  id: string;
+  type: BlockType;
+  metadata?: Record<string, any>;
+}
+
+export interface ContentBlock extends BaseBlock {
+  type: 'content';
+  content: string; // Markdown
+}
+
+export interface PredictionBlock extends BaseBlock {
+  type: 'prediction';
+  question: string;
+  reveal_content: string; // Content shown after prediction
+}
+
+export interface ExerciseBlock extends BaseBlock {
+  type: 'exercise';
+  title: string;
+  instructions: string;
+  validation_criteria?: string;
+}
+
+export interface CheckpointBlock extends BaseBlock {
+  type: 'checkpoint';
+  question: string;
+  expected_answer: string;
+  explanation?: string;
+}
+
+export interface HintLadderBlock extends BaseBlock {
+  type: 'hint_ladder';
+  hints: string[];
+}
+
+export interface CalloutBlock extends BaseBlock {
+  type: 'callout';
+  intent: 'info' | 'warning' | 'tip' | 'success';
+  content: string;
+}
+
+export interface MediaBlock extends BaseBlock {
+  type: 'media';
+  media_type: 'image' | 'video' | 'audio';
+  url: string;
+  caption?: string;
+}
+
+/**
+ * Union of all granular block types.
+ * @stable
+ */
+export type ExperienceBlock =
+  | ContentBlock
+  | PredictionBlock
+  | ExerciseBlock
+  | CheckpointBlock
+  | HintLadderBlock
+  | CalloutBlock
+  | MediaBlock;

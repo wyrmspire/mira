@@ -134,25 +134,36 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       lesson: {
         sections: [
           { heading: 'string', body: 'markdown', type: 'text | callout | checkpoint' }
+        ],
+        blocks: [
+          { type: 'content', content: 'markdown' },
+          { type: 'prediction', question: 'string', reveal_content: 'markdown' },
+          { type: 'callout', intent: 'info | warning | tip | success', content: 'markdown' },
+          { type: 'media', media_type: 'image | video | audio', url: 'string', caption: 'string' }
         ]
       },
       challenge: {
-        objectives: [{ id: 'string', description: 'string' }]
+        objectives: [{ id: 'string', description: 'string' }],
+        blocks: [{ type: 'exercise', title: 'string', instructions: 'string', validation_criteria: 'string' }]
       },
       reflection: {
-        prompts: [{ id: 'string', text: 'string' }]
+        prompts: [{ id: 'string', text: 'string' }],
+        blocks: [{ type: 'content', content: 'markdown' }]
       },
       questionnaire: {
-        questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }]
+        questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }],
+        blocks: []
       },
       plan_builder: {
         sections: [
           { type: 'goals | milestones | resources', items: [{ id: 'string', text: 'string' }] }
-        ]
+        ],
+        blocks: []
       },
       essay_tasks: {
         content: 'string',
-        tasks: [{ id: 'string', description: 'string' }]
+        tasks: [{ id: 'string', description: 'string' }],
+        blocks: []
       },
       checkpoint: {
         knowledge_unit_id: 'UUID',
@@ -160,7 +171,8 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
           { id: 'string', question: 'string', expected_answer: 'string', difficulty: 'easy|medium|hard', format: 'free_text|choice', options: ['string'] }
         ],
         passing_threshold: 'number',
-        on_fail: 'retry | continue | tutor_redirect'
+        on_fail: 'retry | continue | tutor_redirect',
+        blocks: [{ type: 'checkpoint', question: 'string', expected_answer: 'string', explanation: 'string' }]
       }
     };
 

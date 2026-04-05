@@ -213,6 +213,12 @@ paths:
                         type: object
                         additionalProperties: true
                         description: Step-specific payload. Call discover?capability=step_payload&step_type=X for the exact shape.
+                      blocks:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                        description: Granular blocks for the step. If provided, blocks take precedence over sections or content.
                   description: Array of steps for the experience.
                 curriculum_outline_id:
                   type: string
@@ -337,6 +343,61 @@ paths:
                   type: object
                   additionalProperties: true
                   description: Optional explicit wrapper for step payload if the agent prefers nested over flat.
+                blocks:
+                  type: array
+                  description: "Granular blocks for the step (Sprint 22). If provided, blocks take precedence over sections or content. Each block must have a 'type' (content, prediction, exercise, checkpoint, hint_ladder, callout, media) and its corresponding fields."
+                  items:
+                    type: object
+                    required: [type]
+                    properties:
+                      id:
+                        type: string
+                      type:
+                        type: string
+                        enum: [content, prediction, exercise, checkpoint, hint_ladder, callout, media]
+                      content:
+                        type: string
+                        description: Markdown for 'content' or 'callout' blocks.
+                      question:
+                        type: string
+                        description: Question for 'prediction' or 'checkpoint' blocks.
+                      reveal_content:
+                        type: string
+                        description: Content to show after prediction for 'prediction' blocks.
+                      title:
+                        type: string
+                        description: Title for 'exercise' blocks.
+                      instructions:
+                        type: string
+                        description: Instructions for 'exercise' blocks.
+                      validation_criteria:
+                        type: string
+                        description: Criteria for 'exercise' blocks.
+                      expected_answer:
+                        type: string
+                        description: Answer key for 'checkpoint' blocks.
+                      explanation:
+                        type: string
+                        description: Explanation for 'checkpoint' blocks.
+                      hints:
+                        type: array
+                        items:
+                          type: string
+                        description: Array of hints for 'hint_ladder' blocks.
+                      intent:
+                        type: string
+                        enum: [info, warning, tip, success]
+                        description: Intent for 'callout' blocks.
+                      media_type:
+                        type: string
+                        enum: [image, video, audio]
+                        description: Media type for 'media' blocks.
+                      url:
+                        type: string
+                        description: Remote URL for 'media' blocks.
+                      caption:
+                        type: string
+                        description: Caption for 'media' blocks.
       responses:
         '201':
           description: Created

@@ -8,6 +8,8 @@
  * @version 1
  */
 
+import { ExperienceBlock } from '@/types/experience';
+
 // ---------------------------------------------------------------------------
 // Base step contract (shared by all step types)
 // ---------------------------------------------------------------------------
@@ -97,6 +99,7 @@ export interface LessonSection {
 export interface LessonPayloadV1 {
   v?: number
   sections: LessonSection[]
+  blocks?: ExperienceBlock[]
 }
 
 // ── Challenge ──
@@ -112,6 +115,7 @@ export interface ChallengeObjective {
 export interface ChallengePayloadV1 {
   v?: number
   objectives: ChallengeObjective[]
+  blocks?: ExperienceBlock[]
 }
 
 // ── Reflection ──
@@ -127,6 +131,7 @@ export interface ReflectionPrompt {
 export interface ReflectionPayloadV1 {
   v?: number
   prompts: ReflectionPrompt[]
+  blocks?: ExperienceBlock[]
 }
 
 // ── Plan Builder ──
@@ -147,6 +152,7 @@ export interface PlanBuilderSection {
 export interface PlanBuilderPayloadV1 {
   v?: number
   sections: PlanBuilderSection[]
+  blocks?: ExperienceBlock[]
 }
 
 // ── Essay + Tasks ──
@@ -163,6 +169,7 @@ export interface EssayTasksPayloadV1 {
   /** The essay/reading content. */
   content: string
   tasks: EssayTask[]
+  blocks?: ExperienceBlock[]
 }
 
 // ── Checkpoint ──
@@ -183,6 +190,7 @@ export interface CheckpointPayloadV1 {
   questions: CheckpointQuestion[]
   passing_threshold: number
   on_fail: 'retry' | 'continue' | 'tutor_redirect'
+  blocks?: ExperienceBlock[]
 }
 
 // ---------------------------------------------------------------------------

@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { ExperienceStep } from '@/types/experience';
+import { ExperienceStep, ExperienceBlock } from '@/types/experience';
 import ReactMarkdown from 'react-markdown';
+import BlockRenderer from '../blocks/BlockRenderer';
 
 interface ReflectionPayload {
-  prompts: Array<{
+  prompts?: Array<{
     id: string;
     text: string;
     format?: 'free_text';
   }>;
+  blocks?: ExperienceBlock[];
 }
 
 interface ReflectionStepProps {
@@ -25,6 +27,8 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
   const [responses, setResponses] = useState<Record<string, string>>(initialResponses || {});
   const payload = step.payload as ReflectionPayload | null;
   const prompts = payload?.prompts ?? [];
+  const blocks = payload?.blocks ?? [];
+  const hasBlocks = blocks.length > 0;
 
   const handleChange = (promptId: string, value: string) => {
     setResponses((prev) => ({ ...prev, [promptId]: value }));
@@ -52,18 +56,26 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
         </div>
         
         <div className="space-y-16">
-          {prompts.map((p) => (
-            <div key={p.id} className="space-y-6">
-              <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-bold prose-p:text-[#475569] prose-p:leading-relaxed">
-                <ReactMarkdown>{p.text}</ReactMarkdown>
-              </div>
-              <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
-                <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
-                  "{responses[p.id] || 'No reflection logged.'}"
-                </p>
-              </div>
+          {hasBlocks ? (
+            <div className="space-y-10">
+              {blocks.map((block, idx) => (
+                <BlockRenderer key={block.id || idx} block={block} />
+              ))}
             </div>
-          ))}
+          ) : (
+            prompts.map((p) => (
+              <div key={p.id} className="space-y-6">
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-bold prose-p:text-[#475569] prose-p:leading-relaxed">
+                  <ReactMarkdown>{p.text}</ReactMarkdown>
+                </div>
+                <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
+                  <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
+                    "{responses[p.id] || 'No reflection logged.'}"
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     );
@@ -77,48 +89,63 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-16">
-        {prompts.length === 0 && (
-          <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
-            <p className="text-[#64748b] text-lg">Reflection prompts are being prepared.</p>
+        {hasBlocks ? (
+          <div className="space-y-10">
+            {blocks.map((block, idx) => (
+              <BlockRenderer 
+                key={block.id || idx} 
+                block={block} 
+                instanceId={step.instance_id}
+                stepId={step.id}
+              />
+            ))}
           </div>
+        ) : (
+          <>
+            {prompts.length === 0 && (
+              <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+                <p className="text-[#64748b] text-lg">Reflection prompts are being prepared.</p>
+              </div>
+            )}
+            {prompts.map((prompt, idx) => {
+              const wordCount = responses[prompt.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
+              return (
+                <div 
+                  key={prompt.id} 
+                  className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700"
+                  style={{ animationDelay: `${idx * 150}ms`, animationFillMode: 'both' }}
+                >
+                  <div className="flex justify-between items-end">
+                    <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-semibold prose-p:text-[#e2e8f0] prose-p:leading-relaxed max-w-[80%]">
+                      <ReactMarkdown>{prompt.text}</ReactMarkdown>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded transition-colors ${
+                      wordCount > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-[#475569] bg-[#1a1a2e]'
+                    }`}>
+                      {wordCount} WORDS
+                    </span>
+                  </div>
+                  
+                  <div className="relative">
+                    <textarea
+                      value={responses[prompt.id] || ''}
+                      onChange={(e) => handleChange(prompt.id, e.target.value)}
+                      onBlur={() => handleBlur(prompt.id)}
+                      placeholder="Share your thoughts honestly…"
+                      rows={5}
+                      className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-2xl px-6 py-5 text-lg text-[#f1f5f9] placeholder-[#94a3b8]/20 focus:outline-none focus:border-violet-500/40 focus:bg-[#161625] transition-all resize-none leading-relaxed shadow-inner"
+                    />
+                    <div className="absolute bottom-4 right-4 flex gap-2">
+                       {responses[prompt.id] && (
+                         <span className="text-[10px] text-emerald-400/50 font-mono animate-pulse">DRAFT SAVED</span>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
         )}
-        {prompts.map((prompt, idx) => {
-          const wordCount = responses[prompt.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
-          return (
-            <div 
-              key={prompt.id} 
-              className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700"
-              style={{ animationDelay: `${idx * 150}ms`, animationFillMode: 'both' }}
-            >
-              <div className="flex justify-between items-end">
-                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-semibold prose-p:text-[#e2e8f0] prose-p:leading-relaxed max-w-[80%]">
-                  <ReactMarkdown>{prompt.text}</ReactMarkdown>
-                </div>
-                <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded transition-colors ${
-                  wordCount > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-[#475569] bg-[#1a1a2e]'
-                }`}>
-                  {wordCount} WORDS
-                </span>
-              </div>
-              
-              <div className="relative">
-                <textarea
-                  value={responses[prompt.id] || ''}
-                  onChange={(e) => handleChange(prompt.id, e.target.value)}
-                  onBlur={() => handleBlur(prompt.id)}
-                  placeholder="Share your thoughts honestly…"
-                  rows={5}
-                  className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-2xl px-6 py-5 text-lg text-[#f1f5f9] placeholder-[#94a3b8]/20 focus:outline-none focus:border-violet-500/40 focus:bg-[#161625] transition-all resize-none leading-relaxed shadow-inner"
-                />
-                <div className="absolute bottom-4 right-4 flex gap-2">
-                   {responses[prompt.id] && (
-                     <span className="text-[10px] text-emerald-400/50 font-mono animate-pulse">DRAFT SAVED</span>
-                   )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
 
         <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
           <button

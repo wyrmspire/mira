@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState } from 'react';
-import type { ExperienceStep } from '@/types/experience';
+import { ExperienceStep, ExperienceBlock } from '@/types/experience';
 import ReactMarkdown from 'react-markdown';
+import BlockRenderer from '../blocks/BlockRenderer';
 
 interface EssayTasksPayload {
-  content: string;
-  tasks: Array<{
+  content?: string;
+  tasks?: Array<{
     id: string;
     description: string;
   }>;
+  blocks?: ExperienceBlock[];
 }
 
 interface EssayTasksStepProps {
@@ -27,6 +29,8 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
   const payload = step.payload as EssayTasksPayload | null;
   const tasks = payload?.tasks ?? [];
   const content = payload?.content ?? '';
+  const blocks = payload?.blocks ?? [];
+  const hasBlocks = blocks.length > 0;
 
   const toggleTask = (taskId: string) => {
     const newState = { ...completed, [taskId]: !completed[taskId] };
@@ -67,73 +71,88 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
         )}
       </div>
 
-      <div className="rounded-3xl border bg-[#12121a] border-rose-500/20 p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold text-[#f1f5f9]">Essay & Instructions</h3>
+      {hasBlocks ? (
+        <div className="space-y-10">
+          {blocks.map((block, idx) => (
+            <BlockRenderer 
+              key={block.id || idx} 
+              block={block} 
+              instanceId={step.instance_id}
+              stepId={step.id}
+            />
+          ))}
         </div>
-        
-        <div className="animate-in fade-in duration-500">
-          <div className="prose prose-invert max-w-none">
-            <div className="prose prose-invert prose-indigo max-w-none prose-p:text-[#94a3b8] prose-p:leading-[1.8] prose-p:text-lg prose-p:font-serif prose-p:italic border-l-2 border-[#1e1e2e] pl-6 py-2">
-              <ReactMarkdown>{content || 'Detailed instructions are being prepared.'}</ReactMarkdown>
+      ) : (
+        <>
+          <div className="rounded-3xl border bg-[#12121a] border-rose-500/20 p-8">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-[#f1f5f9]">Essay & Instructions</h3>
+            </div>
+            
+            <div className="animate-in fade-in duration-500">
+              <div className="prose prose-invert max-w-none">
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-[#94a3b8] prose-p:leading-[1.8] prose-p:text-lg prose-p:font-serif prose-p:italic border-l-2 border-[#1e1e2e] pl-6 py-2">
+                  <ReactMarkdown>{content || 'Detailed instructions are being prepared.'}</ReactMarkdown>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="space-y-4">
-        <h4 className="text-xs font-bold text-[#475569] uppercase tracking-widest pl-4">Review Checklist</h4>
-        <div className="grid gap-4">
-          {tasks.length === 0 && (
-            <div className="p-8 border border-dashed border-[#1e1e2e] rounded-2xl text-center">
-              <p className="text-[#475569]">No specific tasks defined.</p>
-            </div>
-          )}
-          {tasks.map((task) => {
-            const isTaskDone = !!completed[task.id];
-            const wordCount = taskResponses[task.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
-            return (
-              <div
-                key={task.id}
-                className={`w-full p-6 rounded-2xl border transition-all duration-300 ${
-                  isTaskDone
-                    ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.03)]'
-                    : 'bg-[#0d0d12] border-[#1e1e2e]'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className={`prose prose-invert prose-indigo max-w-none prose-p:text-lg prose-p:font-bold prose-strong:text-rose-300 prose-code:text-amber-300 transition-all ${
-                    isTaskDone ? 'prose-p:text-emerald-400/60 prose-p:line-through' : 'prose-p:text-[#f1f5f9]'
-                  }`}>
-                    <ReactMarkdown>{task.description}</ReactMarkdown>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-[10px] font-mono text-[#475569]">{wordCount} WORDS</span>
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
-                        isTaskDone
-                          ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
-                          : 'bg-transparent border-[#33334d] hover:border-emerald-500/50'
-                      }`}
-                    >
-                      {isTaskDone && <span className="text-[14px]">✓</span>}
-                    </button>
-                  </div>
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-[#475569] uppercase tracking-widest pl-4">Review Checklist</h4>
+            <div className="grid gap-4">
+              {tasks.length === 0 && (
+                <div className="p-8 border border-dashed border-[#1e1e2e] rounded-2xl text-center">
+                  <p className="text-[#475569]">No specific tasks defined.</p>
                 </div>
-                <textarea
-                  value={taskResponses[task.id] || ''}
-                  onChange={(e) => setTaskResponses({ ...taskResponses, [task.id]: e.target.value })}
-                  onBlur={() => handleBlur(task.id)}
-                  placeholder="Draft your response here…"
-                  rows={8}
-                  className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none focus:border-rose-500/30 transition-all resize-none font-serif leading-relaxed"
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              )}
+              {tasks.map((task) => {
+                const isTaskDone = !!completed[task.id];
+                const wordCount = taskResponses[task.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
+                return (
+                  <div
+                    key={task.id}
+                    className={`w-full p-6 rounded-2xl border transition-all duration-300 ${
+                      isTaskDone
+                        ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.03)]'
+                        : 'bg-[#0d0d12] border-[#1e1e2e]'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`prose prose-invert prose-indigo max-w-none prose-p:text-lg prose-p:font-bold prose-strong:text-rose-300 prose-code:text-amber-300 transition-all ${
+                        isTaskDone ? 'prose-p:text-emerald-400/60 prose-p:line-through' : 'prose-p:text-[#f1f5f9]'
+                      }`}>
+                        <ReactMarkdown>{task.description}</ReactMarkdown>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[10px] font-mono text-[#475569]">{wordCount} WORDS</span>
+                        <button
+                          onClick={() => toggleTask(task.id)}
+                          className={`w-6 h-6 rounded-md border flex items-center justify-center transition-all ${
+                            isTaskDone
+                              ? 'bg-emerald-500 border-emerald-500 text-[#0a0a0f]'
+                              : 'bg-transparent border-[#33334d] hover:border-emerald-500/50'
+                          }`}
+                        >
+                          {isTaskDone && <span className="text-[14px]">✓</span>}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={taskResponses[task.id] || ''}
+                      onChange={(e) => setTaskResponses({ ...taskResponses, [task.id]: e.target.value })}
+                      onBlur={() => handleBlur(task.id)}
+                      placeholder="Draft your response here…"
+                      rows={8}
+                      className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-xl px-5 py-4 text-[#e2e8f0] placeholder-[#94a3b8]/10 focus:outline-none focus:border-rose-500/30 transition-all resize-none font-serif leading-relaxed"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
 
       <div className="pt-10 border-t border-[#1e1e2e]">
         {!isSubmitted ? (
@@ -146,10 +165,10 @@ export default function EssayTasksStep({ step, onComplete, onSkip, onDraft }: Es
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!allDone}
+              disabled={!hasBlocks && !allDone}
               className="px-12 py-4 bg-rose-600 text-white rounded-xl text-sm font-extrabold hover:bg-rose-500 transition-all disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed shadow-xl shadow-rose-900/20 active:scale-95"
             >
-              Submit for Review →
+              {hasBlocks ? 'Finish Step →' : 'Submit for Review →'}
             </button>
           </div>
         ) : (
