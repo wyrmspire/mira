@@ -18,6 +18,7 @@
 - Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
 - Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
 - Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
+- **Capability discovery operational** — GPT can ask the live gateway for current schema/examples via `GET /api/gpt/discover`; the model does not need to memorize the full API surface
 - Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
 - Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
 - Mind map station + Goal OS fully CRUD-wired
@@ -65,6 +66,7 @@ These five claims map directly to the [test.md](file:///c:/mira/test.md) battery
 - **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
 - **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
 - **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
+- **GPT does not yet improve its own operating doctrine across sessions.** It can discover the current API surface dynamically via `GET /api/gpt/discover`, but it cannot yet store and reuse learned tactics through operational memory.
 
 ---
 
@@ -338,7 +340,24 @@ NEXUS-AUGMENTED PATH (optional, invoked when depth matters):
 
 GPT starts every serious conversation by hydrating from `GET /api/gpt/state`. It dispatches Nexus when depth or source grounding is needed. Nexus returns atoms, bundles, and assets. Mira decides what the learner sees. This division is strict.
 
+### Current GPT Self-Knowledge (What Exists Now)
+
+GPT already has runtime capability discovery without needing operational memory. Three things give it live self-knowledge:
+
+- **`GET /api/gpt/discover`** — returns the current endpoint registry with purposes, parameter schemas, and usage examples. GPT can call this to know what the gateway can do right now, without the information being hardcoded into its instructions.
+- **OpenAPI schema** — the Custom GPT action schema gives the model the full request/response contract at configuration time.
+- **Intentionally small GPT instructions** — the instructions stay under 8,000 characters precisely because the model can discover schema and examples dynamically rather than memorizing them.
+
+This is **runtime capability discovery**, not operational memory. GPT can learn what the current API surface looks like in a session, but it cannot yet remember what worked well across sessions. That distinction is what Agent Operational Memory (below) is designed to close — in a future sprint.
+
+> **The next sprint should not assume operational memory exists.** Acceptance testing should validate schema discovery, planning behavior, authoring, enrichment dispatch, and surgical revision using the current gateway surface — `state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`.
+
+---
+
 ### Agent Operational Memory (How GPT Learns to Use Its Own Tools)
+
+> **Status: Future design. Not implemented in the current GPT gateway.**
+> Current GPT behavior relies on `GET /api/gpt/state` + `GET /api/gpt/discover` + OpenAPI-aligned instructions. GPT can dynamically learn the schema at runtime, but it cannot yet persist its own learned strategies across sessions.
 
 > [!IMPORTANT]
 > **This section addresses a gap not covered by learner memory or content memory.** The Custom GPT and the internal Gemini tutor chat both have access to Mira endpoints and Nexus endpoints — but they don't inherently know *how* to use them effectively, *when* to invoke them, or *why* certain patterns produce better results. This is the third memory dimension: **agent operational memory**.
@@ -353,9 +372,9 @@ The problem: GPT's Custom Instructions are static. They're written once and upda
 | **Content memory** | Atoms, source bundles, pipeline runs, cache | Nexus | "Generated 7 atoms on viral content with 1,139 citations" |
 | **Operational memory** | Endpoint usage patterns, effective strategies, learned instructions | Mira (new) | "When learner has >3 shaky concepts, dispatch Nexus deep research before creating new experiences" |
 
-**What operational memory enables:**
+**What operational memory enables (beyond current discovery):**
 
-1. **Capability discovery** — GPT/Gemini chat knows what endpoints exist, what they do, and what parameters they accept. This isn't hardcoded — it's a living registry that updates as the system evolves.
+1. **Richer capability registry** — The current `GET /api/gpt/discover` already gives GPT a live endpoint registry. Operational memory would extend this with usage history, confidence scores, and Nexus-specific strategy knowledge that doesn't fit the discover endpoint's scope.
 
 2. **Usage pattern learning** — When GPT discovers that a certain sequence of actions works well (e.g., "check enrichment status before creating a new experience on the same topic"), it can save that pattern as an operational instruction.
 
@@ -363,13 +382,15 @@ The problem: GPT's Custom Instructions are static. They're written once and upda
 
 4. **Cross-session persistence** — These learnings survive across conversations. The next time GPT hydrates, it gets not just learner state but also its own accumulated operational wisdom.
 
-**Proposed endpoint:**
+**Proposed endpoints (future — not yet implemented):**
 
-| Endpoint | Method | What It Does |
-|---------|--------|--------------|
-| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. |
-| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. |
-| `/api/gpt/capabilities` | GET | Returns a live registry of all available endpoints (both Mira and Nexus), their purposes, parameter schemas, and usage examples. This is the agent's self-knowledge of its own tools. |
+| Endpoint | Method | What It Does | Status |
+|---------|--------|--------------|--------|
+| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. | Future |
+| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. | Future |
+| `/api/gpt/capabilities` | GET | Future consolidation endpoint — a unified registry of all available endpoints (both Mira and Nexus) with purposes, schemas, and examples. **Currently, this role is served by `GET /api/gpt/discover`.** | Future |
+
+> **Current capability discovery endpoint:** `GET /api/gpt/discover` — already implemented and part of the live gateway. `/api/gpt/capabilities` is a future consolidation idea, not a current endpoint.
 
 **`/api/gpt/operational-memory` shape:**
 

@@ -3981,6 +3981,8 @@ export default function PredictionBlockRenderer({
 ### components/experience/CoachTrigger.tsx
 
 ```tsx
+'use client';
+
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { KnowledgeUnit } from '@/types/knowledge';
@@ -7996,5 +7998,3 @@ export default function ReflectionStep({ step, onComplete, onSkip, onDraft, read
             Skip for now
           </button>
           
-          <div className="flex flex-col items-end gap-3">
-            {!isComplete && (

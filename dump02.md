@@ -1,3 +1,5 @@
+          <div className="flex flex-col items-end gap-3">
+            {!isComplete && (
                <p className="text-[10px] text-violet-400/70 font-mono tracking-widest">
                  AWAITING YOUR INSIGHTS
                </p>
@@ -7996,5 +7998,3 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       thesis: 'A healthy SaaS business maintains a lifetime value at least 3x its customer acquisition cost.',
       content: '# The 3:1 Rule\n\nIn venture-backed SaaS...',
       key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']
-    },
-    when_to_use: 'To persist self-generated research or core curriculum concepts.',

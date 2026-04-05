@@ -1,3 +1,10 @@
+    .filter((p) => p.state === 'icebox')
+    .map((p) => ({
+      type: 'project',
+      id: p.id,
+      title: p.name,
+      summary: p.summary,
+      daysInIcebox: daysSince(p.updatedAt),
       isStale: daysSince(p.updatedAt) >= STALE_ICEBOX_DAYS,
       createdAt: p.updatedAt,
     }))
@@ -909,7 +916,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "response": {
       "action": "create_outline",
       "outline": {
-        "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
+        "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
         "userId": "a0000000-0000-0000-0000-000000000001",
         "topic": "SaaS Pricing Strategy",
         "domain": "Business",
@@ -927,8 +934,8 @@ Current test count: **223 passing** | Build: clean | TSC: clean
         "estimatedExperienceCount": null,
         "status": "planning",
         "goalId": null,
-        "createdAt": "2026-04-05T03:52:00.607+00:00",
-        "updatedAt": "2026-04-05T03:52:00.607+00:00"
+        "createdAt": "2026-04-05T04:20:50.285+00:00",
+        "updatedAt": "2026-04-05T04:20:50.285+00:00"
       },
       "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
     }
@@ -967,7 +974,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "826e015e-2fe6-46af-a259-7474337177c9",
+      "id": "83519a00-cca6-489b-bed5-145b27a8a06b",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -992,19 +999,19 @@ Current test count: **223 passing** | Build: clean | TSC: clean
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.517+00:00",
+      "created_at": "2026-04-05T04:20:50.471+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "e2d086a2-0734-4624-9089-def72bd03b8c",
-          "instance_id": "826e015e-2fe6-46af-a259-7474337177c9",
+          "id": "6566fedb-dc97-4f29-8c79-117c07e3fdf7",
+          "instance_id": "83519a00-cca6-489b-bed5-145b27a8a06b",
           "step_order": 0,
           "step_type": "lesson",
           "title": "What is a Value Metric?",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:01.971791+00:00",
+          "created_at": "2026-04-05T04:20:50.816234+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1077,7 +1084,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -1102,19 +1109,19 @@ Current test count: **223 passing** | Build: clean | TSC: clean
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "created_at": "2026-04-05T04:20:50.696+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "created_at": "2026-04-05T04:20:51.014334+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1123,14 +1130,14 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "order_index": 0
         },
         {
-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "created_at": "2026-04-05T04:20:51.099639+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1186,7 +1193,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+      "id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -1211,19 +1218,19 @@ Current test count: **223 passing** | Build: clean | TSC: clean
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:02.281+00:00",
+      "created_at": "2026-04-05T04:20:50.979+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "4c83c962-5abe-4e85-84e1-8a138037dde9",
-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "id": "a9aee5e2-8fce-4db8-a899-d218fb3d0d4f",
+          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
           "step_order": 0,
           "step_type": "lesson",
           "title": "The Hook",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.634363+00:00",
+          "created_at": "2026-04-05T04:20:51.267561+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1232,8 +1239,8 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "order_index": 0
         },
         {
-          "id": "321626ae-ce9f-4b5b-9eb0-27521f9d3b8a",
-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
+          "id": "133db81e-e83c-4437-ba9c-23d58df0973b",
+          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
           "step_order": 1,
           "step_type": "challenge",
           "title": "Draft It",
@@ -1244,7 +1251,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.761495+00:00",
+          "created_at": "2026-04-05T04:20:51.343757+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1278,8 +1285,8 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "url": "/update",
     "payload": {
       "action": "update_step",
-      "experienceId": "09c96086-cf3b-485e-ac40-135d42cdf027",
-      "stepId": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+      "experienceId": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+      "stepId": "51a49637-2a9c-4b02-9543-a3392d81d077",
       "stepPayload": {
         "title": "Interview Mechanics - Worked Example",
         "blocks": [
@@ -1299,8 +1306,8 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-      "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+      "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "step_order": 0,
       "step_type": "lesson",
       "title": "Interview Mechanics - Worked Example",
@@ -1319,7 +1326,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
         ]
       },
       "completion_rule": null,
-      "created_at": "2026-04-05T03:52:02.249138+00:00",
+      "created_at": "2026-04-05T04:20:51.014334+00:00",
       "status": "pending",
       "scheduled_date": null,
       "due_date": null,
@@ -1329,12 +1336,12 @@ Current test count: **223 passing** | Build: clean | TSC: clean
   },
   {
     "name": "5b. Verify Surgery",
-    "url": "/experiences/09c96086-cf3b-485e-ac40-135d42cdf027",
+    "url": "/experiences/d04846eb-8bf7-41e2-a12e-942774b6c1af",
     "payload": null,
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
       "user_id": null,
       "idea_id": null,
       "template_id": null,
@@ -1359,13 +1366,13 @@ Current test count: **223 passing** | Build: clean | TSC: clean
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T03:52:01.881+00:00",
+      "created_at": "2026-04-05T04:20:50.696+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics - Worked Example",
@@ -1384,7 +1391,7 @@ Current test count: **223 passing** | Build: clean | TSC: clean
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.249138+00:00",
+          "created_at": "2026-04-05T04:20:51.014334+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1392,14 +1399,14 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "completed_at": null
         },
         {
-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
+          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
+          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
           "payload": {},
           "completion_rule": null,
-          "created_at": "2026-04-05T03:52:02.369499+00:00",
+          "created_at": "2026-04-05T04:20:51.099639+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -1422,6 +1429,36 @@ Current test count: **223 passing** | Build: clean | TSC: clean
     "statusText": "OK",
     "response": {
       "latestExperiences": [
+        {
+          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "QA Smoke Reentry",
+          "goal": "",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "study",
+            "depth": "moderate",
+            "intensity": "focused",
+            "timeScope": "evening"
+          },
+          "reentry": {
+            "prompt": "You finished the reentry smoke test",
+            "trigger": "completion",
+            "contextScope": "full"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:19:09.138+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
         {
           "id": "87b9c4bf-df01-4992-a737-6cf704061349",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -1691,36 +1728,6 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "created_at": "2026-04-02T22:29:47.472+00:00",
           "published_at": null,
           "curriculum_outline_id": null
-        },
-        {
-          "id": "dfac2e3c-cfb0-4aa2-b1d5-537a33424e87",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Build Your Founder's AI Radar System (Expanded v2)",
-          "goal": "Design and deploy a practical AI radar operating system that collects high-signal updates on models, funding, tools, and workflows, filters noise through explicit scoring rules, and produces a weekly decision loop that changes what you build, publish, or ignore.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "medium",
-            "timeScope": "multi_day"
-          },
-          "reentry": {
-            "prompt": "Review which sources actually produced signal, which scoring rules filtered noise best, and what recurring review ritual should become permanent.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "4dc9995f-52d7-4ad1-ad55-6be4e997db4c",
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-02T22:29:15.45+00:00",
-          "published_at": null,
-          "curriculum_outline_id": null
         }
       ],
       "activeReentryPrompts": [
@@ -1737,6 +1744,36 @@ Current test count: **223 passing** | Build: clean | TSC: clean
       "suggestedNext": [],
       "synthesisSnapshot": null,
       "proposedExperiences": [
+        {
+          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "QA Smoke Reentry",
+          "goal": "",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "study",
+            "depth": "moderate",
+            "intensity": "focused",
+            "timeScope": "evening"
+          },
+          "reentry": {
+            "prompt": "You finished the reentry smoke test",
+            "trigger": "completion",
+            "contextScope": "full"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:19:09.138+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
         {
           "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -1856,51 +1893,19 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "created_at": "2026-04-03T02:54:35.361+00:00",
           "published_at": null,
           "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
-          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
-          "next_suggested_ids": [
-            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T01:13:17.389+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
         }
       ],
       "reentryCount": 1,
       "compressedState": {
-        "narrative": "The user is a highly engaged power user or developer, actively pursuing multiple complex 'build' goals. Their primary focus appears to be an extensive 'Founder Research & Data Engine' curriculum, with Sprints 01 through 05 all proposed and awaiting action. Additionally, they have proposed other substantial, heavy-depth 'build' projects, including 'Building Resilient Webhook Ingestion Systems', 'Build Your YouTube SaaS Growth Engine', and 'Build Your Founder's AI Radar System'. Recently, they completed a '[Test] Persistent Planning Journey' which now has an active re-entry prompt to review priorities, and also initiated an ephemeral test. The varied sources of experience generation (GPT, dev-harness, Mirak) suggest deep interaction with the platform, potentially including testing its capabilities. Despite the high volume and complexity of proposed work, no explicit friction has been reported.",
+        "narrative": "The user is highly engaged, demonstrating advanced domain mastery in building complex data and automation systems. Their primary active goal revolves around constructing a \"Founder Research & Data Engine,\" with all five sprints (01-05) currently in a proposed state, indicating a structured, multi-stage project they are planning or working through. Additionally, they have proposed two other significant, long-term goals: \"Building Resilient Webhook Ingestion Systems\" and \"Build Your YouTube SaaS Growth Engine.\" Recently, they completed a \"[Test] Persistent Planning Journey,\" which has generated an active reentry prompt. They also initiated a \"QA Smoke Reentry\" and an \"[Test] Ephemeral Quick Prompt,\" suggesting active engagement with platform features and testing. There are no reported friction signals.",
         "prioritySignals": [
-          "Dedicated Curriculum Engagement: Actively pursuing a multi-sprint 'Founder Research & Data Engine' project (Sprints 01-05 proposed).",
-          "High Volume of Complex Build Goals: Eight proposed persistent experiences, mostly 'heavy' depth and 'build' mode, indicating ambitious, long-term development.",
-          "Recent Test Completion with Active Re-entry: A '[Test] Persistent Planning Journey' was just completed, with an immediate prompt to review its priorities.",
-          "Power User Engagement: Experiences generated by 'dev-harness' and 'mirak' alongside 'gpt' suggest deep technical integration or platform testing.",
-          "No Reported Friction: Despite numerous complex projects, no friction signals are present."
+          "Active reentry prompt for '[Test] Persistent Planning Journey' (ID: 87b9c4bf-df01-4992-a737-6cf704061349)",
+          "Ongoing 'Founder Research & Data Engine' goal with 5 proposed sprints (ID: 0119f14a-6aa2-4101-a350-76c4293d8ee9)",
+          "Newly proposed 'Building Resilient Webhook Ingestion Systems' (ID: b9c4c1f9-012d-45cf-80f0-4aedcbe45878)",
+          "Active engagement with platform testing (evidenced by 'QA Smoke Reentry' and '[Test]' experiences)",
+          "No reported friction levels across experiences"
         ],
-        "suggestedOpeningTopic": "You've completed your test planning journey, and there's a prompt to review priorities. Shall we look at those, or are you ready to continue with Sprint 05 of your 'Founder Research & Data Engine'?"
+        "suggestedOpeningTopic": "Reviewing priorities for the '[Test] Persistent Planning Journey' experience"
       },
       "knowledgeSummary": {
         "domains": {
@@ -1990,11 +1995,35 @@ Current test count: **223 passing** | Build: clean | TSC: clean
             "status": "planning",
             "subtopic_count": 1,
             "completed_subtopics": 0
+          },
+          {
+            "id": "68dba70f-8162-407a-8bf0-52022bb6eebd",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
           }
         ],
         "recent_completions": []
       },
       "pending_enrichments": [
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T04:20:51.293+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T04:20:11.471+00:00"
+        },
         {
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
@@ -2009,11 +2038,6 @@ Current test count: **223 passing** | Build: clean | TSC: clean
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
           "requested_at": "2026-04-05T03:42:48.638+00:00"
-        },
-        {
-          "topic": "Unit Economics (CAC/LTV ratios)",
-          "status": "dispatched",
-          "requested_at": "2026-04-05T03:42:10.792+00:00"
         }
       ],
       "goal": {
@@ -5156,8 +5180,8 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
         echo "### Uncommitted Diff"
         echo ""
         echo '```diff'
-        git diff -- ':!gitrdiff.md' 2>/dev/null
-        git diff --cached -- ':!gitrdiff.md' 2>/dev/null
+        git diff -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
+        git diff --cached -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
         echo '```'
         echo ""
     fi
@@ -5268,7 +5292,7 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
     echo "Red (-) = lines you REMOVED locally"
     echo ""
     echo '```diff'
-    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' 2>/dev/null || echo "(no diff)"
+    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null || echo "(no diff)"
     echo '```'
     
 } > "$OUTPUT"
@@ -5287,7 +5311,7 @@ echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/de
 ```markdown
 # Git Diff Report
 
-**Generated**: Sat, Apr  4, 2026 10:53:31 PM
+**Generated**: Sat, Apr  4, 2026 11:38:41 PM
 
 **Local Branch**: main
 
@@ -5300,2701 +5324,2677 @@ echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/de
 ### Modified/Staged Files
 
 ```
- M agents.md
- M app/api/coach/grade/route.ts
- M app/api/experiences/inject/route.ts
- M app/api/gpt/plan/route.ts
- M app/api/gpt/state/route.ts
- M app/api/interactions/route.ts
- M app/api/knowledge/[id]/route.ts
- M app/knowledge/[unitId]/page.tsx
- M app/page.tsx
+ M api_result.json
  M board.md
- M components/common/FocusTodayCard.tsx
  M components/experience/CoachTrigger.tsx
- M components/experience/CompletionScreen.tsx
- M components/experience/ExperienceRenderer.tsx
- M components/experience/TrackCard.tsx
- M components/knowledge/KnowledgeUnitView.tsx
- M lib/enrichment/interaction-events.ts
- M lib/experience/reentry-engine.ts
- M lib/experience/skill-mastery-engine.ts
- M lib/gateway/discover-registry.ts
- M lib/gateway/gateway-router.ts
- M lib/hooks/useInteractionCapture.ts
- M lib/services/curriculum-outline-service.ts
- M lib/services/enrichment-service.ts
+ M dump00.md
+ M dump01.md
+ M dump02.md
+ M dump03.md
+ M dump04.md
+ M dump05.md
+ M dump06.md
+ M gitrdif.sh
+ M gpt-instructions.md
  M lib/services/experience-service.ts
- M lib/services/home-summary-service.ts
- M lib/services/interaction-service.ts
- M lib/services/knowledge-service.ts
- M lib/services/synthesis-service.ts
- M lib/services/timeline-service.ts
- M lib/studio-copy.ts
- M mira2.md
- M types/interaction.ts
-?? api_result.json
-?? api_result.txt
-?? dump00.md
-?? dump01.md
-?? dump02.md
-?? dump03.md
-?? dump04.md
-?? dump05.md
-?? dump06.md
-?? run_api_tests.mjs
+ M public/openapi.yaml
+ M ux.md
+?? out1.json
+?? test1_create.json
+?? test2_create.json
+?? test3_create.json
+?? test3_create_fixed.json
+?? test4_dispatch.json
+?? test5_update.json
 ```
 
 ### Uncommitted Diff
 
 ```diff
-diff --git a/agents.md b/agents.md
-index 1f31678..4fa880c 100644
---- a/agents.md
-+++ b/agents.md
-@@ -203,6 +203,15 @@ components/
-                            CoachTrigger (proactive coaching: failed checkpoint, dwell, unread)
-                            StepKnowledgeCard (pre/in/post timing knowledge delivery)
-                            TrackCard, TrackSection (curriculum outline UI)
-+    blocks/              ← Granular block renderers (Sprint 22)
-+      BlockRenderer.tsx    ← Master router: dispatches by block.type
-+      ContentBlockRenderer.tsx  ← Markdown content block (ReactMarkdown + prose)
-+      PredictionBlockRenderer.tsx ← "What do you think?" → reveal answer
-+      ExerciseBlockRenderer.tsx   ← Interactive exercise with hints
-+      CheckpointBlockRenderer.tsx ← Semantic grading via gradeCheckpointFlow
-+      HintLadderBlockRenderer.tsx ← Progressive clue reveal
-+      CalloutBlockRenderer.tsx    ← Styled callout (tip/warning/insight)
-+      MediaBlockRenderer.tsx      ← Image/audio/video placeholder
-   knowledge/             ← KnowledgeUnitCard, KnowledgeUnitView, MasteryBadge, DomainCard
-   skills/                ← SkillTreeCard, SkillTreeGrid (Sprint 13)
-   common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
-@@ -708,10 +717,25 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
- ### SOP-41: Gateway step creation must filter metadata out of step payload — never leak userId/type/etc.
- **Learned from**: Flowlink system audit — standalone `type:"step"` creation fails with `UnrecognizedKwargsError`
- 
-+
- - ❌ Destructuring `{ type, experienceId, step_type, title, payload, ...rest }` and passing `rest` as the step payload (leaks `userId`, `boardId`, etc. into the payload)
- - ✅ Define per-step-type content key lists (`lesson: ['sections']`, `challenge: ['objectives']`, etc.) and extract ONLY those keys from `rest` into the step payload.
- - Why: When GPT sends `{ type: "step", step_type: "lesson", title: "...", sections: [...], userId: "..." }`, the `rest` object picks up `userId` alongside `sections`. This pollutes the step payload and can cause DB write failures or validation errors. Content keys must be explicitly extracted per step type.
- 
-+### SOP-42: React hooks in block renderers must be called unconditionally
-+**Learned from**: Sprint 22 Lane 7 QA — conditional `useInteractionCapture` broke React rules of hooks
-+
-+- ❌ `if (instanceId) { const { trackEvent } = useInteractionCapture(...) }` (conditional hook call)
-+- ✅ Call the hook unconditionally: `const { trackEvent } = useInteractionCapture(instanceId ?? '', stepId ?? '')` — then gate the *effect* on `instanceId` presence.
-+- Why: React requires hooks to be called in the same order on every render. Block renderers may render with or without a parent experience context (`instanceId`). If the hook is wrapped in a conditional, React throws a hooks-order violation on re-render.
-+
-+### SOP-43: Dev test harness must accept both monolithic AND block payloads
-+**Learned from**: Sprint 22 Lane 7 QA — test harness rejected block-based step payloads
-+
-+- ❌ Validating step payloads strictly for `sections` or `prompts` arrays only.
-+- ✅ Accept EITHER `sections`/`prompts` (monolithic) OR `blocks` (granular). Both are valid under the Fast Path Guarantee.
-+- Why: Sprint 22 introduced `blocks[]` as an alternative to `sections[]`. The dev test harness at `/api/dev/test-experience` was still validating the old-only shape, causing all block-based test experiences to fail creation.
-+
- ---
- 
- ## Lessons Learned (Changelog)
-diff --git a/app/api/coach/grade/route.ts b/app/api/coach/grade/route.ts
-index 778ddf5..ec504bf 100644
---- a/app/api/coach/grade/route.ts
-+++ b/app/api/coach/grade/route.ts
-@@ -1,6 +1,7 @@
- import { NextResponse } from 'next/server';
- import { runFlowSafe } from '@/lib/ai/safe-flow';
- import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
-+import { syncKnowledgeMastery } from '@/lib/experience/skill-mastery-engine';
- 
- /**
-  * POST /api/coach/grade
-@@ -67,7 +68,6 @@ export async function POST(request: Request) {
-     const instanceId = step?.instance_id;
- 
-     if (instanceId) {
--      const { promoteKnowledgeProgress } = await import('@/lib/services/knowledge-service');
-       const { recordInteraction } = await import('@/lib/services/interaction-service');
-       const { getLinksForStep } = await import('@/lib/services/step-knowledge-link-service');
-       const { DEFAULT_USER_ID } = await import('@/lib/constants');
-@@ -81,15 +81,21 @@ export async function POST(request: Request) {
- 
-         const links = await getLinksForStep(stepId);
-         // Promote units linked with type 'tests'
--        const testLinks = links.filter(l => l.linkType === 'tests');
-+        const testLinks = links.filter((l: any) => l.linkType === 'tests');
-         
-         for (const link of testLinks) {
--          await promoteKnowledgeProgress(ownerId, link.knowledgeUnitId);
-+          await syncKnowledgeMastery(ownerId, link.knowledgeUnitId, { 
-+            type: 'checkpoint_pass', 
-+            correct: true 
-+          });
-         }
-         
-         // Fallback to knowledgeUnitId from body if no link-table entry exists (backward comp)
-         if (testLinks.length === 0 && knowledgeUnitId) {
--          await promoteKnowledgeProgress(ownerId, knowledgeUnitId);
-+          await syncKnowledgeMastery(ownerId, knowledgeUnitId, { 
-+            type: 'checkpoint_pass', 
-+            correct: true 
-+          });
-         }
-       }
- 
-diff --git a/app/api/experiences/inject/route.ts b/app/api/experiences/inject/route.ts
-index f5a7e35..4f53c6e 100644
---- a/app/api/experiences/inject/route.ts
-+++ b/app/api/experiences/inject/route.ts
-@@ -30,7 +30,7 @@ export async function POST(request: Request) {
-       instance_type: 'ephemeral',
-       status: 'injected',
-       resolution: normalized.resolution,
--      reentry: null, // Ephemeral doesn't typically have reentry contracts yet
-+      reentry: normalized.reentry,
-       previous_experience_id: null,
-       next_suggested_ids: [],
-       friction_level: null,
-diff --git a/app/api/gpt/plan/route.ts b/app/api/gpt/plan/route.ts
-index 21327a2..b2c298a 100644
---- a/app/api/gpt/plan/route.ts
-+++ b/app/api/gpt/plan/route.ts
-@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
- import {
-   createCurriculumOutline,
-   getCurriculumOutline,
-+  findActiveOutlineByTopic,
- } from '@/lib/services/curriculum-outline-service';
-+import { createEnrichmentRequest } from '@/lib/services/enrichment-service';
- import { DEFAULT_USER_ID } from '@/lib/constants';
- 
- export const dynamic = 'force-dynamic';
-@@ -120,10 +122,35 @@ export async function POST(request: Request) {
-     // Action: dispatch_research
-     // ------------------------------------------------------------------
-     if (action === 'dispatch_research') {
--      const { outlineId, topic } = payload;
-+      let { outlineId, topic } = payload;
- 
--      // Stub — real MiraK dispatch wired in a future sprint
--      console.log(`[plan/route] dispatch_research requested. outlineId=${outlineId}, topic=${topic}`);
-+      if (!topic && outlineId) {
-+        const o = await getCurriculumOutline(outlineId);
-+        if (o) topic = o.topic;
-+      }
-+
-+      // W1: Auto-link to existing outline if none provided
-+      if (!outlineId && topic) {
-+        const existingOutline = await findActiveOutlineByTopic(userId, topic);
-+        if (existingOutline) {
-+          outlineId = existingOutline.id;
-+          console.log(`[plan/route] Auto-linked research dispatch for "${topic}" to outline ${outlineId}`);
-+        }
-+      }
-+
-+      // W1: Log the enrichment request
-+      if (topic) {
-+        try {
-+          await createEnrichmentRequest({
-+            userId,
-+            requestedGap: topic,
-+            requestContext: { outlineId, source: 'gpt_dispatch' },
-+            status: 'dispatched', // Mark as dispatched manually as it's a stub
-+          });
-+        } catch (err) {
-+          console.error('[plan/route] Failed to log enrichment request:', err);
-+        }
-+      }
- 
-       return NextResponse.json({
-         action: 'dispatch_research',
-diff --git a/app/api/gpt/state/route.ts b/app/api/gpt/state/route.ts
-index b16d3ba..082d99f 100644
---- a/app/api/gpt/state/route.ts
-+++ b/app/api/gpt/state/route.ts
-@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
- import { buildGPTStatePacket } from '@/lib/services/synthesis-service'
- import { getKnowledgeSummaryForGPT } from '@/lib/services/knowledge-service'
- import { getCurriculumSummaryForGPT } from '@/lib/services/curriculum-outline-service'
--import { getActiveGoal, getGoalsForUser } from '@/lib/services/goal-service'
-+import { getGoalsForUser, getActiveGoal } from '@/lib/services/goal-service'
- import { getSkillDomainsForGoal, getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
-+import { getEnrichmentSummaryForState } from '@/lib/services/enrichment-service'
- import { getGraphSummaryForGPT } from '@/lib/services/graph-service'
- import { DEFAULT_USER_ID } from '@/lib/constants'
- 
-@@ -12,12 +13,13 @@ export async function GET(request: Request) {
-   const userId = searchParams.get('userId') || DEFAULT_USER_ID
- 
-   try {
--    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary] = await Promise.all([
-+    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments] = await Promise.all([
-       buildGPTStatePacket(userId),
-       getKnowledgeSummaryForGPT(userId),
-       getCurriculumSummaryForGPT(userId),
-       getActiveGoal(userId),
--      getGraphSummaryForGPT(userId)
-+      getGraphSummaryForGPT(userId),
-+      getEnrichmentSummaryForState(userId)
-     ])
- 
-     // SOP-40: If no active goal, fall back to most recent intake goal
-@@ -45,8 +47,13 @@ export async function GET(request: Request) {
- 
-     return NextResponse.json({ 
-       ...packet, 
--      knowledgeSummary, 
-+      knowledgeSummary: {
-+        domains: knowledgeSummary.domains,
-+        total: knowledgeSummary.totalUnits,
-+        masteredCount: knowledgeSummary.masteredCount
-+      }, 
-       curriculum,
-+      pending_enrichments: enrichments,
-       goal: goal ? {
-         id: goal.id,
-         title: goal.title,
-diff --git a/app/api/interactions/route.ts b/app/api/interactions/route.ts
-index 3658ce4..87a1a65 100644
---- a/app/api/interactions/route.ts
-+++ b/app/api/interactions/route.ts
-@@ -6,8 +6,8 @@ export async function POST(request: Request) {
-     const body = await request.json()
-     const { instanceId, stepId, eventType, eventPayload } = body
- 
--    if (!instanceId || !eventType) {
--      return NextResponse.json({ error: 'Missing required fields: instanceId, eventType' }, { status: 400 })
-+    if (!eventType) {
-+      return NextResponse.json({ error: 'Missing required field: eventType' }, { status: 400 })
+diff --git a/api_result.json b/api_result.json
+index 3d5dd43..76d2c58 100644
+--- a/api_result.json
++++ b/api_result.json
+@@ -20,7 +20,7 @@
+     "response": {
+       "action": "create_outline",
+       "outline": {
+-        "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
++        "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
+         "userId": "a0000000-0000-0000-0000-000000000001",
+         "topic": "SaaS Pricing Strategy",
+         "domain": "Business",
+@@ -38,8 +38,8 @@
+         "estimatedExperienceCount": null,
+         "status": "planning",
+         "goalId": null,
+-        "createdAt": "2026-04-05T03:52:00.607+00:00",
+-        "updatedAt": "2026-04-05T03:52:00.607+00:00"
++        "createdAt": "2026-04-05T04:20:50.285+00:00",
++        "updatedAt": "2026-04-05T04:20:50.285+00:00"
+       },
+       "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
      }
- 
-     const event = await recordInteraction({
-diff --git a/app/api/knowledge/[id]/route.ts b/app/api/knowledge/[id]/route.ts
-index 274df3d..5626eae 100644
---- a/app/api/knowledge/[id]/route.ts
-+++ b/app/api/knowledge/[id]/route.ts
-@@ -46,3 +46,43 @@ export async function PATCH(
-     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-   }
- }
-+
-+/**
-+ * POST /api/knowledge/[id]
-+ * Records a practice attempt and syncs mastery.
-+ * Body: { correct: boolean, userId: string }
-+ */
-+export async function POST(
-+  request: NextRequest,
-+  { params }: { params: { id: string } }
-+) {
-+  try {
-+    const body = await request.json();
-+    const { correct, userId } = body;
-+    const ownerId = userId || DEFAULT_USER_ID;
-+
-+    // 1. Record interaction in generic log
-+    const { recordInteraction } = await import('@/lib/services/interaction-service');
-+    await recordInteraction({
-+      instanceId: null,
-+      eventType: 'practice_attempt',
-+      eventPayload: {
-+        unit_id: params.id,
-+        correct: !!correct
-+      }
-+    });
-+
-+    // 2. Sync mastery logic (Lane 6 - Evidence thresholds)
-+    const { syncKnowledgeMastery } = await import('@/lib/experience/skill-mastery-engine');
-+    await syncKnowledgeMastery(ownerId, params.id, {
-+      type: 'practice_attempt',
-+      correct: !!correct
-+    });
-+
-+    return NextResponse.json({ success: true });
-+  } catch (error) {
-+    console.error(`[api/knowledge/${params.id}] Error recording practice:`, error);
-+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-+  }
-+}
-+
-diff --git a/app/knowledge/[unitId]/page.tsx b/app/knowledge/[unitId]/page.tsx
-index 08b96ac..5564008 100644
---- a/app/knowledge/[unitId]/page.tsx
-+++ b/app/knowledge/[unitId]/page.tsx
-@@ -1,4 +1,5 @@
- import { getKnowledgeUnitById } from '@/lib/services/knowledge-service';
-+import { getInteractionsByUnit } from '@/lib/services/interaction-service';
- import { AppShell } from '@/components/shell/app-shell';
- import KnowledgeUnitView from '@/components/knowledge/KnowledgeUnitView';
- import { notFound } from 'next/navigation';
-@@ -13,6 +14,8 @@ interface KnowledgeUnitPageProps {
- 
- export default async function KnowledgeUnitPage({ params }: KnowledgeUnitPageProps) {
-   const unit = await getKnowledgeUnitById(params.unitId);
-+  const interactions = await getInteractionsByUnit(params.unitId);
-+  const practiceCount = interactions.filter(i => i.event_payload?.correct === true).length;
- 
-   if (!unit) {
-     notFound();
-@@ -21,7 +24,7 @@ export default async function KnowledgeUnitPage({ params }: KnowledgeUnitPagePro
-   return (
-     <AppShell>
-       <div className="max-w-6xl mx-auto py-12">
--        <KnowledgeUnitView unit={unit} />
-+        <KnowledgeUnitView unit={unit} practiceCount={practiceCount} />
-       </div>
-     </AppShell>
-   );
-diff --git a/app/page.tsx b/app/page.tsx
-index 1173d2c..9316d0d 100644
---- a/app/page.tsx
-+++ b/app/page.tsx
-@@ -155,6 +155,8 @@ export default async function HomePage() {
-             totalSteps={focusExperience.totalSteps}
-             lastActivityAt={focusExperience.lastActivityAt}
-             focusReason={focusExperience.focusReason}
-+            outlineTitle={focusExperience.outlineTitle}
-+            outlineProgress={focusExperience.outlineProgress}
-           />
-         </section>
- 
-@@ -198,19 +200,27 @@ export default async function HomePage() {
-         {reentryPrompts.length > 0 && (
-           <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-             <h2 className="text-xs font-bold text-amber-500 uppercase tracking-widest">
--              Pick Up Where You Left Off
-+              {COPY.home.reentry.heading}
-             </h2>
-             <div className="grid grid-cols-1 gap-4">
--              {reentryPrompts.slice(0, 3).map((prompt) => (
--                <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
--              ))}
--              {reentryPrompts.length > 3 && (
--                <Link 
--                  href={`${ROUTES.library}?filter=reentry`}
--                  className="text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors"
--                >
--                  View {reentryPrompts.length - 3} more re-entry points →
--                </Link>
-+              <ReentryPromptCard prompt={reentryPrompts[0]} />
-+              
-+              {reentryPrompts.length > 1 && (
-+                <details className="group/details">
-+                  <summary className="list-none cursor-pointer text-[10px] font-bold text-[#4a4a6a] hover:text-[#94a3b8] uppercase tracking-widest text-center py-2 border border-dashed border-[#1e1e2e] rounded-xl transition-colors">
-+                    <span className="group-open/details:hidden">
-+                      {COPY.home.reentry.viewMore.replace('{count}', String(reentryPrompts.length - 1))}
-+                    </span>
-+                    <span className="hidden group-open/details:inline">
-+                      {COPY.home.reentry.hideMore}
-+                    </span>
-+                  </summary>
-+                  <div className="mt-4 grid grid-cols-1 gap-4">
-+                    {reentryPrompts.slice(1).map((prompt) => (
-+                      <ReentryPromptCard key={prompt.instanceId} prompt={prompt} />
-+                    ))}
-+                  </div>
-+                </details>
-               )}
-             </div>
-           </section>
+@@ -78,7 +78,7 @@
+     "status": 201,
+     "statusText": "Created",
+     "response": {
+-      "id": "826e015e-2fe6-46af-a259-7474337177c9",
++      "id": "83519a00-cca6-489b-bed5-145b27a8a06b",
+       "user_id": null,
+       "idea_id": null,
+       "template_id": null,
+@@ -103,19 +103,19 @@
+       "source_conversation_id": null,
+       "generated_by": "gpt",
+       "realization_id": null,
+-      "created_at": "2026-04-05T03:52:01.517+00:00",
++      "created_at": "2026-04-05T04:20:50.471+00:00",
+       "published_at": null,
+       "curriculum_outline_id": null,
+       "steps": [
+         {
+-          "id": "e2d086a2-0734-4624-9089-def72bd03b8c",
+-          "instance_id": "826e015e-2fe6-46af-a259-7474337177c9",
++          "id": "6566fedb-dc97-4f29-8c79-117c07e3fdf7",
++          "instance_id": "83519a00-cca6-489b-bed5-145b27a8a06b",
+           "step_order": 0,
+           "step_type": "lesson",
+           "title": "What is a Value Metric?",
+           "payload": {},
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:01.971791+00:00",
++          "created_at": "2026-04-05T04:20:50.816234+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -188,7 +188,7 @@
+     "status": 201,
+     "statusText": "Created",
+     "response": {
+-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+       "user_id": null,
+       "idea_id": null,
+       "template_id": null,
+@@ -213,19 +213,19 @@
+       "source_conversation_id": null,
+       "generated_by": "gpt",
+       "realization_id": null,
+-      "created_at": "2026-04-05T03:52:01.881+00:00",
++      "created_at": "2026-04-05T04:20:50.696+00:00",
+       "published_at": null,
+       "curriculum_outline_id": null,
+       "steps": [
+         {
+-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
++          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+           "step_order": 0,
+           "step_type": "lesson",
+           "title": "Interview Mechanics",
+           "payload": {},
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.249138+00:00",
++          "created_at": "2026-04-05T04:20:51.014334+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -234,14 +234,14 @@
+           "order_index": 0
+         },
+         {
+-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
+-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
++          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+           "step_order": 1,
+           "step_type": "reflection",
+           "title": "Reflect on Bias",
+           "payload": {},
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.369499+00:00",
++          "created_at": "2026-04-05T04:20:51.099639+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -297,7 +297,7 @@
+     "status": 201,
+     "statusText": "Created",
+     "response": {
+-      "id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
++      "id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
+       "user_id": null,
+       "idea_id": null,
+       "template_id": null,
+@@ -322,19 +322,19 @@
+       "source_conversation_id": null,
+       "generated_by": "gpt",
+       "realization_id": null,
+-      "created_at": "2026-04-05T03:52:02.281+00:00",
++      "created_at": "2026-04-05T04:20:50.979+00:00",
+       "published_at": null,
+       "curriculum_outline_id": null,
+       "steps": [
+         {
+-          "id": "4c83c962-5abe-4e85-84e1-8a138037dde9",
+-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
++          "id": "a9aee5e2-8fce-4db8-a899-d218fb3d0d4f",
++          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
+           "step_order": 0,
+           "step_type": "lesson",
+           "title": "The Hook",
+           "payload": {},
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.634363+00:00",
++          "created_at": "2026-04-05T04:20:51.267561+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -343,8 +343,8 @@
+           "order_index": 0
+         },
+         {
+-          "id": "321626ae-ce9f-4b5b-9eb0-27521f9d3b8a",
+-          "instance_id": "c79bd72c-c2fd-4ed5-8e27-23b7d6423bc6",
++          "id": "133db81e-e83c-4437-ba9c-23d58df0973b",
++          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
+           "step_order": 1,
+           "step_type": "challenge",
+           "title": "Draft It",
+@@ -355,7 +355,7 @@
+             ]
+           },
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.761495+00:00",
++          "created_at": "2026-04-05T04:20:51.343757+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -389,8 +389,8 @@
+     "url": "/update",
+     "payload": {
+       "action": "update_step",
+-      "experienceId": "09c96086-cf3b-485e-ac40-135d42cdf027",
+-      "stepId": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
++      "experienceId": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
++      "stepId": "51a49637-2a9c-4b02-9543-a3392d81d077",
+       "stepPayload": {
+         "title": "Interview Mechanics - Worked Example",
+         "blocks": [
+@@ -410,8 +410,8 @@
+     "status": 200,
+     "statusText": "OK",
+     "response": {
+-      "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+-      "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++      "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
++      "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+       "step_order": 0,
+       "step_type": "lesson",
+       "title": "Interview Mechanics - Worked Example",
+@@ -430,7 +430,7 @@
+         ]
+       },
+       "completion_rule": null,
+-      "created_at": "2026-04-05T03:52:02.249138+00:00",
++      "created_at": "2026-04-05T04:20:51.014334+00:00",
+       "status": "pending",
+       "scheduled_date": null,
+       "due_date": null,
+@@ -440,12 +440,12 @@
+   },
+   {
+     "name": "5b. Verify Surgery",
+-    "url": "/experiences/09c96086-cf3b-485e-ac40-135d42cdf027",
++    "url": "/experiences/d04846eb-8bf7-41e2-a12e-942774b6c1af",
+     "payload": null,
+     "status": 200,
+     "statusText": "OK",
+     "response": {
+-      "id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+       "user_id": null,
+       "idea_id": null,
+       "template_id": null,
+@@ -470,13 +470,13 @@
+       "source_conversation_id": null,
+       "generated_by": "gpt",
+       "realization_id": null,
+-      "created_at": "2026-04-05T03:52:01.881+00:00",
++      "created_at": "2026-04-05T04:20:50.696+00:00",
+       "published_at": null,
+       "curriculum_outline_id": null,
+       "steps": [
+         {
+-          "id": "c8e3d9d6-df91-4d94-ad93-cdf5d5433abe",
+-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
++          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+           "step_order": 0,
+           "step_type": "lesson",
+           "title": "Interview Mechanics - Worked Example",
+@@ -495,7 +495,7 @@
+             ]
+           },
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.249138+00:00",
++          "created_at": "2026-04-05T04:20:51.014334+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -503,14 +503,14 @@
+           "completed_at": null
+         },
+         {
+-          "id": "c6aadcb2-cab9-4447-aa91-d65bacdd4cb3",
+-          "instance_id": "09c96086-cf3b-485e-ac40-135d42cdf027",
++          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
++          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+           "step_order": 1,
+           "step_type": "reflection",
+           "title": "Reflect on Bias",
+           "payload": {},
+           "completion_rule": null,
+-          "created_at": "2026-04-05T03:52:02.369499+00:00",
++          "created_at": "2026-04-05T04:20:51.099639+00:00",
+           "status": "pending",
+           "scheduled_date": null,
+           "due_date": null,
+@@ -533,6 +533,36 @@
+     "statusText": "OK",
+     "response": {
+       "latestExperiences": [
++        {
++          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
++          "user_id": "a0000000-0000-0000-0000-000000000001",
++          "idea_id": null,
++          "template_id": "b0000000-0000-0000-0000-000000000002",
++          "title": "QA Smoke Reentry",
++          "goal": "",
++          "instance_type": "persistent",
++          "status": "proposed",
++          "resolution": {
++            "mode": "study",
++            "depth": "moderate",
++            "intensity": "focused",
++            "timeScope": "evening"
++          },
++          "reentry": {
++            "prompt": "You finished the reentry smoke test",
++            "trigger": "completion",
++            "contextScope": "full"
++          },
++          "previous_experience_id": null,
++          "next_suggested_ids": [],
++          "friction_level": null,
++          "source_conversation_id": null,
++          "generated_by": "gpt",
++          "realization_id": null,
++          "created_at": "2026-04-05T04:19:09.138+00:00",
++          "published_at": null,
++          "curriculum_outline_id": null
++        },
+         {
+           "id": "87b9c4bf-df01-4992-a737-6cf704061349",
+           "user_id": "a0000000-0000-0000-0000-000000000001",
+@@ -802,52 +832,52 @@
+           "created_at": "2026-04-02T22:29:47.472+00:00",
+           "published_at": null,
+           "curriculum_outline_id": null
+-        },
++        }
++      ],
++      "activeReentryPrompts": [
++        {
++          "instanceId": "87b9c4bf-df01-4992-a737-6cf704061349",
++          "instanceTitle": "[Test] Persistent Planning Journey",
++          "prompt": "You finished the plan. Want to review priorities?",
++          "trigger": "completion",
++          "contextScope": "full",
++          "priority": "medium"
++        }
++      ],
++      "frictionSignals": [],
++      "suggestedNext": [],
++      "synthesisSnapshot": null,
++      "proposedExperiences": [
+         {
+-          "id": "dfac2e3c-cfb0-4aa2-b1d5-537a33424e87",
++          "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
+           "user_id": "a0000000-0000-0000-0000-000000000001",
+           "idea_id": null,
+           "template_id": "b0000000-0000-0000-0000-000000000002",
+-          "title": "Build Your Founder's AI Radar System (Expanded v2)",
+-          "goal": "Design and deploy a practical AI radar operating system that collects high-signal updates on models, funding, tools, and workflows, filters noise through explicit scoring rules, and produces a weekly decision loop that changes what you build, publish, or ignore.",
++          "title": "QA Smoke Reentry",
++          "goal": "",
+           "instance_type": "persistent",
+           "status": "proposed",
+           "resolution": {
+-            "mode": "build",
+-            "depth": "heavy",
+-            "intensity": "medium",
+-            "timeScope": "multi_day"
++            "mode": "study",
++            "depth": "moderate",
++            "intensity": "focused",
++            "timeScope": "evening"
+           },
+           "reentry": {
+-            "prompt": "Review which sources actually produced signal, which scoring rules filtered noise best, and what recurring review ritual should become permanent.",
++            "prompt": "You finished the reentry smoke test",
+             "trigger": "completion",
+-            "contextScope": "focused"
++            "contextScope": "full"
+           },
+-          "previous_experience_id": "4dc9995f-52d7-4ad1-ad55-6be4e997db4c",
++          "previous_experience_id": null,
+           "next_suggested_ids": [],
+           "friction_level": null,
+           "source_conversation_id": null,
+           "generated_by": "gpt",
+           "realization_id": null,
+-          "created_at": "2026-04-02T22:29:15.45+00:00",
++          "created_at": "2026-04-05T04:19:09.138+00:00",
+           "published_at": null,
+           "curriculum_outline_id": null
+-        }
+-      ],
+-      "activeReentryPrompts": [
+-        {
+-          "instanceId": "87b9c4bf-df01-4992-a737-6cf704061349",
+-          "instanceTitle": "[Test] Persistent Planning Journey",
+-          "prompt": "You finished the plan. Want to review priorities?",
+-          "trigger": "completion",
+-          "contextScope": "full",
+-          "priority": "medium"
+-        }
+-      ],
+-      "frictionSignals": [],
+-      "suggestedNext": [],
+-      "synthesisSnapshot": null,
+-      "proposedExperiences": [
++        },
+         {
+           "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
+           "user_id": "a0000000-0000-0000-0000-000000000001",
+@@ -967,51 +997,19 @@
+           "created_at": "2026-04-03T02:54:35.361+00:00",
+           "published_at": null,
+           "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+-        },
+-        {
+-          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
+-          "user_id": "a0000000-0000-0000-0000-000000000001",
+-          "idea_id": null,
+-          "template_id": "b0000000-0000-0000-0000-000000000002",
+-          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
+-          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
+-          "instance_type": "persistent",
+-          "status": "proposed",
+-          "resolution": {
+-            "mode": "build",
+-            "depth": "heavy",
+-            "intensity": "high",
+-            "timeScope": "session"
+-          },
+-          "reentry": {
+-            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
+-            "trigger": "completion",
+-            "contextScope": "focused"
+-          },
+-          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
+-          "next_suggested_ids": [
+-            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
+-          ],
+-          "friction_level": null,
+-          "source_conversation_id": null,
+-          "generated_by": "gpt",
+-          "realization_id": null,
+-          "created_at": "2026-04-03T01:13:17.389+00:00",
+-          "published_at": null,
+-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
+         }
+       ],
+       "reentryCount": 1,
+       "compressedState": {
+-        "narrative": "The user is a highly engaged power user or developer, actively pursuing multiple complex 'build' goals. Their primary focus appears to be an extensive 'Founder Research & Data Engine' curriculum, with Sprints 01 through 05 all proposed and awaiting action. Additionally, they have proposed other substantial, heavy-depth 'build' projects, including 'Building Resilient Webhook Ingestion Systems', 'Build Your YouTube SaaS Growth Engine', and 'Build Your Founder's AI Radar System'. Recently, they completed a '[Test] Persistent Planning Journey' which now has an active re-entry prompt to review priorities, and also initiated an ephemeral test. The varied sources of experience generation (GPT, dev-harness, Mirak) suggest deep interaction with the platform, potentially including testing its capabilities. Despite the high volume and complexity of proposed work, no explicit friction has been reported.",
++        "narrative": "The user is highly engaged, demonstrating advanced domain mastery in building complex data and automation systems. Their primary active goal revolves around constructing a \"Founder Research & Data Engine,\" with all five sprints (01-05) currently in a proposed state, indicating a structured, multi-stage project they are planning or working through. Additionally, they have proposed two other significant, long-term goals: \"Building Resilient Webhook Ingestion Systems\" and \"Build Your YouTube SaaS Growth Engine.\" Recently, they completed a \"[Test] Persistent Planning Journey,\" which has generated an active reentry prompt. They also initiated a \"QA Smoke Reentry\" and an \"[Test] Ephemeral Quick Prompt,\" suggesting active engagement with platform features and testing. There are no reported friction signals.",
+         "prioritySignals": [
+-          "Dedicated Curriculum Engagement: Actively pursuing a multi-sprint 'Founder Research & Data Engine' project (Sprints 01-05 proposed).",
+-          "High Volume of Complex Build Goals: Eight proposed persistent experiences, mostly 'heavy' depth and 'build' mode, indicating ambitious, long-term development.",
+-          "Recent Test Completion with Active Re-entry: A '[Test] Persistent Planning Journey' was just completed, with an immediate prompt to review its priorities.",
+-          "Power User Engagement: Experiences generated by 'dev-harness' and 'mirak' alongside 'gpt' suggest deep technical integration or platform testing.",
+-          "No Reported Friction: Despite numerous complex projects, no friction signals are present."
++          "Active reentry prompt for '[Test] Persistent Planning Journey' (ID: 87b9c4bf-df01-4992-a737-6cf704061349)",
++          "Ongoing 'Founder Research & Data Engine' goal with 5 proposed sprints (ID: 0119f14a-6aa2-4101-a350-76c4293d8ee9)",
++          "Newly proposed 'Building Resilient Webhook Ingestion Systems' (ID: b9c4c1f9-012d-45cf-80f0-4aedcbe45878)",
++          "Active engagement with platform testing (evidenced by 'QA Smoke Reentry' and '[Test]' experiences)",
++          "No reported friction levels across experiences"
+         ],
+-        "suggestedOpeningTopic": "You've completed your test planning journey, and there's a prompt to review priorities. Shall we look at those, or are you ready to continue with Sprint 05 of your 'Founder Research & Data Engine'?"
++        "suggestedOpeningTopic": "Reviewing priorities for the '[Test] Persistent Planning Journey' experience"
+       },
+       "knowledgeSummary": {
+         "domains": {
+@@ -1101,6 +1099,20 @@
+             "status": "planning",
+             "subtopic_count": 1,
+             "completed_subtopics": 0
++          },
++          {
++            "id": "68dba70f-8162-407a-8bf0-52022bb6eebd",
++            "topic": "SaaS Pricing Strategy",
++            "status": "planning",
++            "subtopic_count": 1,
++            "completed_subtopics": 0
++          },
++          {
++            "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
++            "topic": "SaaS Pricing Strategy",
++            "status": "planning",
++            "subtopic_count": 1,
++            "completed_subtopics": 0
+           }
+         ],
+         "recent_completions": []
+@@ -1109,22 +1121,27 @@
+         {
+           "topic": "Unit Economics (CAC/LTV ratios)",
+           "status": "dispatched",
+-          "requested_at": "2026-04-05T03:52:02.791+00:00"
++          "requested_at": "2026-04-05T04:20:51.293+00:00"
+         },
+         {
+           "topic": "Unit Economics (CAC/LTV ratios)",
+           "status": "dispatched",
+-          "requested_at": "2026-04-05T03:45:27.079+00:00"
++          "requested_at": "2026-04-05T04:20:11.471+00:00"
+         },
+         {
+           "topic": "Unit Economics (CAC/LTV ratios)",
+           "status": "dispatched",
+-          "requested_at": "2026-04-05T03:42:48.638+00:00"
++          "requested_at": "2026-04-05T03:52:02.791+00:00"
+         },
+         {
+           "topic": "Unit Economics (CAC/LTV ratios)",
+           "status": "dispatched",
+-          "requested_at": "2026-04-05T03:42:10.792+00:00"
++          "requested_at": "2026-04-05T03:45:27.079+00:00"
++        },
++        {
++          "topic": "Unit Economics (CAC/LTV ratios)",
++          "status": "dispatched",
++          "requested_at": "2026-04-05T03:42:48.638+00:00"
+         }
+       ],
+       "goal": {
 diff --git a/board.md b/board.md
-index dd18a2a..69edf11 100644
+index 69edf11..67abb8e 100644
 --- a/board.md
 +++ b/board.md
-@@ -9,181 +9,237 @@
- | Sprint 19 | Node Interaction Overhaul | TSC ✅ | ✅ Complete — 3 lanes |
- | Sprint 20 | Flowlink Execution Hardening | TSC ✅ | ✅ Complete — 3 lanes |
- | Sprint 21 | Mira² First Vertical Slice | TSC ✅ | ✅ Complete — 7 lanes |
-+| Sprint 22 | Granular Block Architecture | TSC ✅ | ✅ Complete — 7 lanes |
- 
- ---
- 
--| Sprint 22 | Granular Block Architecture | TSC ✅ | ✅ Complete — 7 lanes |
-----
-+## Sprint 23 — GPT Acceptance & Observed Friction
- 
--> **Goal:** Implement the "Store Atoms, Render Molecules" granular block architecture (Sprint 22). Shift experience content storage from monolithic string/sections to discrete, typable `blocks`. Implement LearnIO-style opt-in mechanical blocks (`Prediction`, `Exercise`, `HintLadder`, `Checkpoint`, `Callout`) without breaking the existing Fast Path for monolithic sections.
-+> **Doctrine:** Every lane addresses friction **observed during the test.md acceptance battery**. No lane exists because of architecture theory alone.
- >
--> **Governing Laws:**
--> - **Fast Path Guarantee** — GPT can always author directly using flat text or sections. Existing templates must not break.
--> - **Granularity Law** — Every generator writes the smallest useful object. Renderers assemble molecules.
-->
--> **Definition of Done:** 
--> Step payload types updated to support `blocks[]`. `BlockRenderer` built. Seven new interactive blocks implemented (`Content`, `Prediction`, `Exercise`, `Checkpoint`, `HintLadder`, `Callout`, `Media`). Step renderers updated to seamlessly compose blocks if present. Interaction events wired to blocks. Browser tests show successful rendering without breaking direct GPT authoring.
--
--### Context: What This Sprint Touches
--
--**Types & OpenAPI:**
--- `types/experience.ts`: Add `ExperienceBlock` base interface and all typed block interfaces.
--- `public/openapi.yaml`: Support generic Blocks in the schema to ensure Custom GPT can author them natively.
--
--**Rendering Components (Net New):**
--- `components/experience/blocks/BlockRenderer.tsx`
--- `components/experience/blocks/ContentBlockRenderer.tsx`
--- `components/experience/blocks/PredictionBlockRenderer.tsx`
--- `components/experience/blocks/ExerciseBlockRenderer.tsx`
--- `components/experience/blocks/CheckpointBlockRenderer.tsx`
--- `components/experience/blocks/HintLadderBlockRenderer.tsx`
--- `components/experience/blocks/CalloutBlockRenderer.tsx`
--- `components/experience/blocks/MediaBlockRenderer.tsx`
--
--**Integration:**
--- Updates to `components/experience/steps/*Step.tsx` files to gracefully map over `payload.blocks` OR `payload.sections`.
--- Telemetry hook update to ensure block actions stream up to `useInteractionCapture`.
--
--```text
--Dependency Graph:
--
--Lane 1:  [W1: types] → [W2: openapi.yaml] → [W3: discover-registry.ts]
--               ↓
--Lane 2:  [W1: BlockRenderer Core] → [W2: Content/Media/Callout blocks]
--               ↓
--Lane 3:  [W1: Prediction/Exercise blocks]
--               ↓
--Lane 4:  [W1: HintLadder/Checkpoint blocks]
--               ↓
--Lane 5:  [W1: Wire blocks into Step Renderers] 
--               ↓
--Lane 6:  [W1: Link interaction events to blocks]
--               ↓
--Lane 7:  [W1: Browser QA + Integration Validation (NO GITHUB)]
-+> **What the acceptance tests revealed:**
-+> - Reentry contracts don't persist (`reentry: null` in create response)
-+> - Create response doesn't include step IDs (GPT can't chain to `update_step`)
-+> - `dispatch_research` returns `outlineId: null` — no auto-linking
-+> - Step surgery (test 5) can't be tested without a read step (step IDs unknown after create)
-+> - Coach is reactive only — no proactive nudges on failure/dwell/unread
-+> - Completion screen is static — synthesis runs but nothing surfaces to user
-+> - Mastery is self-reported — checkpoint grades don't flow to knowledge_progress
-+> - Home page shows lists but tells no coherent story
-+
-+### Dependency Graph
-+
-+```
-+Lane 1 (Reentry Fix):     [W1 persist reentry] → [W2 hydrate in state] → [W3 verify re-entry engine]
-+Lane 2 (Step Surgery):    [W1 enrich create response] → [W2 read step IDs] → [W3 e2e surgery test]
-+Lane 3 (State Enrichment):[W1 outline linking] → [W2 enrichment status] → [W3 knowledge refs in state]
-+Lane 4 (Proactive Coach): [W1 trigger conditions] → [W2 CoachTrigger UI] → [W3 telemetry wiring]
-+Lane 5 (Completion UX):   [W1 surface synthesis] → [W2 mastery transitions] → [W3 next-experience card]
-+Lane 6 (Mastery Evidence):[W1 checkpoint → knowledge] → [W2 practice tracking] → [W3 auto-promote]
-+Lane 7 (Home Coherence):  [W1 focus story] → [W2 reentry prompts] → [W3 path narrative]
-+                                    ↓ all lanes done
-+Lane 8 (Acceptance QA):   [W1 full test.md battery] → [W2 browser walkthrough] → [W3 GPT instructions audit] → [W4 schema final]
- ```
- 
--## Sprint 22 Ownership Zones
-+**Parallelization:** Lanes 1–7 run in parallel. Lane 8 starts ONLY after 1–7 are all ✅.
-+
-+### Sprint 23 Ownership Zones
- 
- | Zone | Files | Lane |
- |------|-------|------|
--| Types | `types/experience.ts`, `lib/contracts/step-contracts.ts` | Lane 1 |
--| GPT OpenAPI | `public/openapi.yaml`, `lib/gateway/discover-registry.ts` | Lane 1 |
--| Core Blocks | `components/experience/blocks/BlockRenderer.tsx`, `ContentBlockRenderer.tsx`, `CalloutBlockRenderer.tsx`, `MediaBlockRenderer.tsx` | Lane 2 |
--| Interactive | `components/experience/blocks/PredictionBlockRenderer.tsx`, `ExerciseBlockRenderer.tsx` | Lane 3 |
--| Assessment | `components/experience/blocks/HintLadderBlockRenderer.tsx`, `CheckpointBlockRenderer.tsx` | Lane 4 |
--| Step Rendering | `components/experience/steps/*Step.tsx`, `components/experience/ExperienceRenderer.tsx` | ✅ Lane 5 |
--| Telemetry | `lib/enrichment/interaction-events.ts` | ✅ Lane 6 |
--| QA (No Git) | Read-only browser tests | ✅ Lane 7 |
-+| Reentry persistence | `app/api/experiences/inject/route.ts`, `lib/gateway/gateway-router.ts`, `lib/experience/reentry-engine.ts` | Lane 1 |
-+| Step surgery pipeline | `app/api/gpt/create/route.ts`, `lib/gateway/gateway-router.ts` (create response only), `app/api/experiences/[id]/route.ts` | Lane 2 |
-+| State enrichment | `app/api/gpt/state/route.ts`, `app/api/gpt/plan/route.ts`, `lib/services/home-summary-service.ts` | Lane 3 |
-+| Proactive coach | `components/experience/CoachTrigger.tsx`, `components/experience/ExperienceRenderer.tsx`, `lib/enrichment/interaction-events.ts` | Lane 4 |
-+| Completion synthesis | `components/experience/CompletionScreen.tsx`, `lib/services/synthesis-service.ts` | Lane 5 |
-+| Mastery evidence wiring | `app/api/coach/grade/route.ts`, `app/knowledge/[unitId]/page.tsx`, `lib/experience/skill-mastery-engine.ts` | Lane 6 |
-+| Home coherence | `app/page.tsx`, `components/common/FocusTodayCard.tsx`, `components/experience/TrackSection.tsx` | Lane 7 ✅ |
-+| Acceptance QA | `run_api_tests.mjs`, `gpt-instructions.md`, `public/openapi.yaml`, `agents.md`, `mira2.md` | Lane 8 |
-+
-+> **Shared ownership note:** `lib/gateway/gateway-router.ts` is touched by Lanes 1 and 2. Lane 1 owns the reentry persistence path only. Lane 2 owns the create response enrichment path only. Lane 8 may fix any integration bugs across all files.
- 
- ---
- 
--### 🛣️ Lane 1 — Foundation: Types & OpenAPI
-+### 🛣️ Lane 1 — Reentry Contract Persistence
-+
-+> **Observed:** `POST /api/gpt/create` with `reentry: { trigger, prompt, contextScope }` returns `reentry: null`.
- 
--**Focus:** Establish the foundational schema and typing for the Granular Block Architecture. Make sure GPT can write blocks using `openapi.yaml`.
-+**Why it matters:** The re-entry engine (`lib/experience/reentry-engine.ts`) evaluates contracts to generate "pick up where you left off" prompts on the home page. If reentry is never persisted, the entire re-entry UX is dead.
- 
--- ✅ **W1. Block TypeScript Definitions**
--  - Done: Added `ExperienceBlock` and constituent types to `types/experience.ts` and wired into `step-contracts.ts`.
--- ✅ **W2. OpenAPI Update**
--  - Done: Updated `public/openapi.yaml` to include blocks in create/update payloads and step items.
--- ✅ **W3. Discover Registry Alignment**
--  - Done: Updated `lib/gateway/discover-registry.ts` with blocks schema documentation and example.
-+- ✅ **W1 — Persist reentry on experience creation**
-+  - **Done**: Fixed `inject` route and `experience-service` to correctly handle `reentry` JSONB fields. Added `reentry` to the ephemeral discovery registry.
-+- ✅ **W2 — Include reentry in GPT state hydration**
-+  - **Done**: Verified `GET /api/gpt/state` successfully hydrates `reentry` contracts for active experiences.
-+- ✅ **W3 — Verify re-entry engine fires**
-+  - **Done**: Verified `evaluateReentryContracts` correctly triggers prompts and populates the `activeReentryPrompts` array in the state packet after completion.
- 
--**Done when:** TypeScript `tsc` passes clean with new types, OpenAPI validates.
-+**Done when:** Creating an experience with a reentry contract persists it, and the re-entry engine evaluates it on the home page.
- 
- ---
- 
--### 🛣️ Lane 2 — Core Blocks Renderer
-+### 🛣️ Lane 2 — Step Surgery Pipeline
- 
--**Focus:** Implement the core aggregator components that will render `content`, `callout`, and `media` static block elements. 
-+> **Observed:** GPT creates an experience but gets no step IDs back. Can't chain `update_step` without a second read call.
- 
--- ✅ **W1. Master BlockRenderer**
--  - Create `components/experience/blocks/BlockRenderer.tsx` that routes a block object based on `block.type` to the correct sub-renderer.
--  - **Done**: Implemented with type-safe routing and stubbed placeholders for interactive blocks.
-+**Why it matters:** Test 5 (step revision / lesson surgery) is the core promise of Mira²'s block model. If the GPT can't efficiently target a step for replacement, the whole editability story falls apart.
- 
--- ✅ **W2. Static Sub-renderers**
--  - Implement `ContentBlockRenderer.tsx` (using ReactMarkdown + Prose).
--  - Implement `CalloutBlockRenderer.tsx` (styling like current warnings/insights).
--  - Implement `MediaBlockRenderer.tsx` (stubbing out image/audio players).
--  - **Done**: All core static blocks implemented with premium styling and unicode icons.
-+- ✅ **W1 — Enrich create response with steps**
-+  - **Done**: Updated `injectEphemeralExperience` and `gateway-router` to return the instance enriched with nested steps, including a mapped `order_index` field.
-+- ✅ **W2 — Verify read path for step IDs**
-+  - **Done**: Verified `GET /api/experiences/{id}` returns steps with full metadata including granular blocks in the payload.
-+- ✅ **W3 — End-to-end step surgery test**
-+  - **Done**: Added Test 6 to `run_api_tests.mjs` to verify create-extract-update-verify surgery loop. Script verified by user.
- 
--**Done when:** `BlockRenderer` correctly delegates typed blocks. TSC clean.
-+**Done when:** `POST /api/gpt/create` returns step IDs, and a subsequent `update_step` successfully replaces blocks on a specific step.
- 
- ---
- 
--### 🛣️ Lane 3 — Interactive LearnIO Blocks ✅
--- **Done**: Implemented `PredictionBlockRenderer.tsx` and `ExerciseBlockRenderer.tsx` with pedagogical "reveal" mechanics and state transitions.
--- **Done**: Integrated block telemetry into `LessonStep`, `ChallengeStep`, and `PlanBuilderStep` by passing `instanceId` and `stepId` props to the master `BlockRenderer`.
--- **Done**: Fixed critical syntax errors in `PlanBuilderStep` and verified with `tsc --noEmit`.
-+### 🛣️ Lane 3 — GPT State Enrichment
- 
-----
-+> **Observed:** `dispatch_research` returns `outlineId: null`. State packet doesn't show pending enrichment status.
-+
-+- ✅ **W1 — Auto-link dispatch_research to outlines**
-+  - **Done**: Added auto-linking to existing outlines and logged enrichment requests in `dispatch_research`.
-+- ✅ **W2 — Show enrichment status in state**
-+  - **Done**: Added `pending_enrichments` to the GPT state packet with recent dispatch history.
-+- ✅ **W3 — Include knowledge domain counts in state**
-+  - **Done**: Updated `knowledgeSummary` in state to include per-domain unit counts.
- 
--### 🛣️ Lane 4 — Assessment & Hint Blocks
-+**Done when:** GPT state hydration includes pending enrichments and knowledge counts. Research dispatches auto-link to existing outlines.
- 
--**Focus:** Bring pedagogical checkpoints into block form, migrating them from step-level only.
-+---
-+
-+### 🛣️ Lane 4 — Proactive Coach Triggers
- 
--- ✅ **W1. CheckpointBlockRenderer**
--  - Implement `CheckpointBlockRenderer.tsx`: Re-purpose the `CheckpointStep` semantic grading logic as a granular block. Include question + input + grade action.
--  - **Done**: Created standalone renderer with session-context aware semantic grading.
-+> **Observed Gap:** The coach is reactive — it speaks only when the user opens KnowledgeCompanion and asks.
- 
--- ✅ **W2. HintLadderBlockRenderer**
--  - Implement `HintLadderBlockRenderer.tsx`: Attach to exercises or checkpoints. A progressive reveal list of clues.
--  - **Done**: Built component with progressive stateful disclosure for pedagogical guidance.
-+- 🟡 **W1 — Define trigger conditions**
-+  - In `lib/enrichment/interaction-events.ts`, define 3 proactive trigger events:
-+- ✅ **W1 — Define trigger conditions**
-+  - **Done**: Defined 3 canonical triggers in `interaction-events.ts`: `COACH_TRIGGER_CHECKPOINT_FAIL`, `COACH_TRIGGER_DWELL`, `COACH_TRIGGER_UNREAD_KNOWLEDGE`.
-+- ✅ **W2 — CoachTrigger UI component**
-+  - **Done**: Implemented `CoachTrigger.tsx` with 3-min dwell logic, batch knowledge check, and telemetry wiring via `useInteractionCapture`.
-+- ✅ **W3 — Wire telemetry**
-+  - **Done**: Wired triggers into `ExperienceRenderer.tsx` and ensured `onGradeComplete` correctly fires the failed checkpoint trigger.
- 
--**Done when:** Assessment blocks operational. TSC clean.
-+**Done when:** The coach surfaces proactively on at least one trigger condition during a live experience walkthrough.
- 
- ---
- 
--### 🛣️ Lane 5 — Step Rendering Integration
-+### 🛣️ Lane 5 — Completion Screen Synthesis
- 
--**Focus:** Update the existing monolithic step boundaries (LessonStep, ChallengeStep) to render blocks gracefully.
-+> **Observed Gap:** Experience completion is an anticlimax. The user finishes and sees a green checkmark. Synthesis runs behind the scenes but nothing surfaces.
- 
--- ✅ **W1. Wire BlockRenderer into Steps**
--  - Update `LessonStep.tsx`, `ChallengeStep.tsx`, `ReflectionStep.tsx`, `EssayTasksStep.tsx`, `PlanBuilderStep.tsx`. 
--  - Render logic: `if (payload.blocks) { payload.blocks.map(...) } else { /* existing sections fallback */ }` 
--  - **Done**: All existing step components now support granular `blocks` with a seamless fallback to legacy sections, maintaining the Fast Path Guarantee.
-+- ✅ **W1 — Surface synthesis on completion**
-+  - **Done**: Refactored `CompletionScreen.tsx` to fetch and render dynamic synthesis summaries, key behavioral signals, and profile facets.
-+- ✅ **W2 — Show mastery transitions**
-+  - **Done**: Enhanced `skill-mastery-engine.ts` and `synthesis-service.ts` to compute level deltas, rendered as "Level Up" celebrations in the UI.
-+- ✅ **W3 — Next-experience card**
-+  - **Done**: Implemented actionable suggestion cards connecting AI candidates and library templates to the experience creation flow.
- 
--**Done when:** All steps support `blocks`. Fast-path guarantees upheld. TSC clean.
-+**Done when:** Completing an experience shows a synthesis summary, any mastery changes, and a "what's next" suggestion.
- 
- ---
- 
--### 🛣️ Lane 6 — State & Telemetry Link
-+### 🛣️ Lane 6 — Mastery Evidence Wiring
-+
-+> **Observed Gap:** Mastery feels self-reported. Checkpoint grades don't flow back to knowledge_progress.
- 
--**Focus:** Ensure that user interaction with blocks reaches the `interaction_events` log and the synthesis layer.
-+- ✅ **W1 — Checkpoint results → knowledge_progress**
-+  - **Done**: `grade/route.ts` now calls `syncKnowledgeMastery` which evaluates thresholds (pass + practice) before promotion.
-+- ✅ **W2 — Practice attempt tracking**
-+  - **Done**: Added 'Did you get this right?' handles to retrieval questions and a 'Practiced Nx' badge/count display.
-+- ✅ **W3 — Auto-promote mastery on evidence**
-+  - **Done**: Mastery engine now requires ≥ 3 successful practice attempts + a passing checkpoint to reach 'confident' level.
-+
-+**Done when:** Passing a checkpoint linked to a knowledge unit auto-promotes mastery level. Practice tab tracks attempts.
-+
-+---
- 
--- ✅ **W1. Extend Interaction Events**
--  - Add new events to `lib/enrichment/interaction-events.ts` specific to blocks: `block_hint_used`, `block_prediction_submitted`, `block_exercise_completed`.
--  - **Done**: Events added and standardized in `lib/enrichment`.
-+### 🛣️ Lane 7 — Home Page Coherence
- 
--- ✅ **W2. Wire Events via Hook**
--  - Use `useInteractionCapture` in `HintLadderBlockRenderer`, `PredictionBlockRenderer`, and `ExerciseBlockRenderer` to broadcast these interactions.
--  - **Done**: All three interactive blocks now capture micro-events via the telemetry hook.
-+> **Observed Gap:** Home page shows lists but doesn't tell a story.
- 
--**Done when:** Blocks capture micro-events. TSC clean.
-+- ✅ **W1 — Focus story enhancement**
-+  - **Done**: Added outline progress and topic narrative to FocusTodayCard.
-+- ✅ **W2 — Reentry prompt prioritization**
-+  - **Done**: Prioritized re-entry by trigger type and added collapsed view for secondary prompts.
-+- ✅ **W3 — Path narrative**
-+  - **Done**: Added inline status labels and roadmap styling to TrackCard subtopics.
-+
-+**Done when:** The home page tells a coherent "here's where you are and what to do next" story using existing data.
- 
- ---
- 
--### 🛣️ Lane 7 — QA & Browser Integration (NO GITHUB)
-+### 🛣️ Lane 8 — Full Acceptance QA
-+
-+> **STARTS ONLY AFTER LANES 1–7 ARE ALL ✅.**
-+> Runs the complete test.md battery against the fixed system, validates browser rendering, and finalizes GPT instructions.
-+
-+- ⬜ **W1 — Run full test.md battery**
-+  - Re-run all 5 test conversations via `run_api_tests.mjs` (updated to verify fixes)
-+  - Verify: reentry persists, steps returned in create response, step surgery chains end-to-end
-+  - All 5 tests must return expected results
- 
--**Focus:** Local validation of rendering behavior. Ensure direct GPT authoring still functions for the Fast Path. DO NOT test github syncs or push updates to a remote.
-+- ⬜ **W2 — Browser walkthrough**
-+  - Open `http://localhost:3000` and walk through a complete learner journey:
-+    1. Home page shows focus + path
-+    2. Open a created experience → blocks render correctly
-+    3. Complete a checkpoint → coach triggers if failed
-+    4. Complete the experience → completion screen shows synthesis
-+    5. Return to home → reentry prompt appears
-+    6. Knowledge page shows mastery progression
- 
--- ✅ **W1. End-To-End Validation**
--  - Start dev server. Navigate the app.
--  - Test older monolithic `sections` fallback on older steps. 
--  - Ensure new Block structure does not break legacy UI.
--  - **Done**: All UI combinations visually confirmed, block parsing works alongside fallback sections without regression. Checked interaction hooks.
-+- ⬜ **W3 — GPT instructions audit**
-+  - Review `gpt-instructions.md` against the operational reality
-+  - Trim to under 8,000 characters
-+  - Ensure the GPT knows: always call `discover` first, create returns steps, use `update_step` for surgery, `dispatch_research` for async enrichment
- 
--**Done when:** All UI combinations visually confirmed. Clean logs.
-+- ⬜ **W4 — Schema and doc finalization**
-+  - Update `openapi.yaml` if any response shapes changed
-+  - Update `agents.md` repo map for any new files
-+  - Update `mira2.md` Phase Reality Update with Sprint 23 outcomes
-+  - Mark sprint complete on board
- 
--## 🚦 Pre-Flight Checklist
--- [x] `npm install` and `tsc --noEmit` pass.
--- [x] Master OpenAPI validation clean.
--- [x] Old experiences not breaking.
-+**Done when:** All 5 test conversations pass end-to-end. Browser walkthrough confirms the learner loop. GPT instructions are under 8,000 chars. Docs are current.
-+
-+---
- 
--## 🤝 Handoff Protocol
--1. Mark W items ⬜ → 🟡 → ✅ as you go
-+## Pre-Flight Checklist
-+
-+- [ ] `npx tsc --noEmit` passes
-+- [ ] `npm run dev` starts without errors
-+- [ ] Reentry contract persists on `POST /api/gpt/create`
-+- [ ] Create response includes step IDs
-+- [ ] Step surgery works end-to-end (create → read step → update → verify)
-+- [ ] GPT state shows pending enrichments
-+- [ ] Coach triggers proactively on at least one condition
-+- [ ] Completion screen shows synthesis summary
-+- [ ] Checkpoint grade flows to knowledge_progress
-+- [ ] Home page tells a coherent "focus here" story
-+- [ ] All 5 test.md conversations pass
-+- [ ] GPT instructions under 8,000 characters
-+- [ ] `openapi.yaml` reflects any response shape changes
-+
-+## Handoff Protocol
-+
-+1. Mark W items ⬜→🟡→✅ as you go
- 2. Add "- **Done**: [one sentence]" after marking ✅
--3. Run `npx tsc --noEmit` before marking any lane complete
--4. Own only the files in the lane's designated zone
--5. Do not run formatters over untouched files
--6. **Lane 1 W1/W2 must complete before Lanes 2-6 begin**
--7. **Lane 7 starts only after all other lanes mark ✅**
-+3. Run `npx tsc --noEmit` before marking any lane ✅
-+4. **DO NOT perform visual browser checks** — parallel agents cause HMR conflicts. Lane 8 handles browser QA.
-+5. Never touch files owned by other lanes
-+6. Never push/pull from git
-+7. Lane 8 must wait for Lanes 1-7 to complete
-+
-+## Test Summary
-+
-+| Lane | TSC | E2E | Notes |
-+|------|-----|-----|-------|
-+| 1 | ✅ | ✅ | W1 (Create), W2 (Hydrate), W3 (Fires) — Test state: Hydration success, prompt trigger success |
-+| 2 | ✅ | ✅ | Step surgery pipeline: create response enrichment and surgery logic |
-+| 3 | ✅ | ✅ | State enrichment: linking, status, counts |
-+| 4 | ⬜ | ⬜ | Proactive coach |
-+| 5 | ✅ | ✅ | Completion synthesis: summary, level-ups, next-cards |
-+| 6 | ✅ | ✅ | Mastery evidence: checkpoint grade + practice count thresholds |
-+| 7 | ✅ | ✅ | Home coherence: focus story, reentry priority, path narrative |
-+| 8 | ⬜ | ⬜ | Full acceptance QA |
-diff --git a/components/common/FocusTodayCard.tsx b/components/common/FocusTodayCard.tsx
-index 4b73e67..c6a8a19 100644
---- a/components/common/FocusTodayCard.tsx
-+++ b/components/common/FocusTodayCard.tsx
-@@ -2,6 +2,7 @@ import Link from 'next/link'
- import { ROUTES } from '@/lib/routes'
- import { formatRelativeTime } from '@/lib/date'
- import { ExperienceInstance, ExperienceStep } from '@/types/experience'
-+import { COPY } from '@/lib/studio-copy'
- 
- interface FocusTodayCardProps {
-   experience?: ExperienceInstance | null
-@@ -9,6 +10,8 @@ interface FocusTodayCardProps {
-   totalSteps?: number
-   lastActivityAt?: string | null
-   focusReason?: string
-+  outlineTitle?: string
-+  outlineProgress?: number
- }
- 
- export function FocusTodayCard({ 
-@@ -16,7 +19,9 @@ export function FocusTodayCard({
-   nextStep, 
-   totalSteps,
-   lastActivityAt,
--  focusReason
-+  focusReason,
-+  outlineTitle,
-+  outlineProgress
- }: FocusTodayCardProps) {
-   if (!experience) {
-     return (
-@@ -56,6 +61,14 @@ export function FocusTodayCard({
-             <h2 className="text-xl font-bold text-[#f1f5f9] leading-tight group-hover:text-white transition-colors">
-               {experience.title}
-             </h2>
-+            {outlineTitle && outlineProgress !== undefined && (
-+              <p className="text-xs text-[#94a3b8] mt-1 font-medium italic">
-+                {COPY.home.focusNarrative
-+                  .replace('{percent}', String(outlineProgress))
-+                  .replace('{title}', outlineTitle)
-+                  .replace('{step}', nextStep?.title || 'Next Step')}
-+              </p>
-+            )}
-           </div>
-           {lastActivityAt && (
-             <span className="text-[10px] font-medium text-[#4a4a6a] uppercase tracking-tighter whitespace-nowrap">
+@@ -238,7 +238,7 @@ Lane 8 (Acceptance QA):   [W1 full test.md battery] → [W2 browser walkthrough]
+ | 1 | ✅ | ✅ | W1 (Create), W2 (Hydrate), W3 (Fires) — Test state: Hydration success, prompt trigger success |
+ | 2 | ✅ | ✅ | Step surgery pipeline: create response enrichment and surgery logic |
+ | 3 | ✅ | ✅ | State enrichment: linking, status, counts |
+-| 4 | ⬜ | ⬜ | Proactive coach |
++| 4 | ✅ | ✅ | Proactive coach: checkpoint fail, dwell, unread triggers |
+ | 5 | ✅ | ✅ | Completion synthesis: summary, level-ups, next-cards |
+ | 6 | ✅ | ✅ | Mastery evidence: checkpoint grade + practice count thresholds |
+ | 7 | ✅ | ✅ | Home coherence: focus story, reentry priority, path narrative |
 diff --git a/components/experience/CoachTrigger.tsx b/components/experience/CoachTrigger.tsx
-index 4b64224..25f4def 100644
+index 25f4def..b726b34 100644
 --- a/components/experience/CoachTrigger.tsx
 +++ b/components/experience/CoachTrigger.tsx
-@@ -1,13 +1,13 @@
--'use client';
--
--import React, { useState, useEffect } from 'react';
-+import { useState, useEffect, useRef } from 'react';
+@@ -1,3 +1,5 @@
++'use client';
++
+ import { useState, useEffect, useRef } from 'react';
  import Link from 'next/link';
  import { KnowledgeUnit } from '@/types/knowledge';
- import { StepKnowledgeLink } from '@/types/curriculum';
-+import { useInteractionCapture } from '@/lib/hooks/useInteractionCapture';
- 
- interface CoachTriggerProps {
-   stepId: string;
-   userId: string;
-+  instanceId: string;
-   onOpenCoach: () => void;
-   // External triggers
-   failedCheckpoint?: boolean;
-@@ -16,12 +16,13 @@ interface CoachTriggerProps {
- }
- 
- /**
-- * CoachTrigger - Lane 6
-+ * CoachTrigger - Lane 4
-  * surfaces coach after failed checkpoints, extended dwell, or for unread units.
-  */
- export function CoachTrigger({
-   stepId,
-   userId,
-+  instanceId,
-   onOpenCoach,
-   failedCheckpoint = false,
-   knowledgeLinks = [],
-@@ -32,8 +33,28 @@ export function CoachTrigger({
-   const [dismissed, setDismissed] = useState(false);
-   const [unseenUnitTitle, setUnseenUnitTitle] = useState<string | null>(null);
-   const [unseenUnitId, setUnseenUnitId] = useState<string | null>(null);
-+  
-+  const { 
-+    trackCoachTriggerCheckpointFail, 
-+    trackCoachTriggerDwell, 
-+    trackCoachTriggerUnreadKnowledge 
-+  } = useInteractionCapture(instanceId);
-+
-+  // Use refs to track if a specific trigger has already fired for this step session
-+  const triggeredSteps = useRef<Set<string>>(new Set());
-+  const sessionTriggers = useRef<Record<string, Set<string>>>({});
-+
-+  const hasTriggered = (type: string) => {
-+    const key = `${stepId}:${type}`;
-+    return triggeredSteps.current.has(key);
-+  };
-+
-+  const markTriggered = (type: string) => {
-+    const key = `${stepId}:${type}`;
-+    triggeredSteps.current.add(key);
-+  };
- 
--  // Reset visibility when step changes
-+  // Reset visibility state when stepId changes
-   useEffect(() => {
-     setIsVisible(false);
-     setTriggerType(null);
-@@ -44,36 +65,37 @@ export function CoachTrigger({
- 
-   // 1. failed_checkpoint trigger
-   useEffect(() => {
--    if (failedCheckpoint && !dismissed && !isVisible) {
-+    if (failedCheckpoint && !dismissed && !isVisible && !hasTriggered('failed_checkpoint')) {
-       setTriggerType('failed_checkpoint');
-       setIsVisible(true);
-+      markTriggered('failed_checkpoint');
-+      trackCoachTriggerCheckpointFail(stepId, { missedQuestions });
-     }
--  }, [failedCheckpoint, dismissed, isVisible]);
-+  }, [failedCheckpoint, dismissed, isVisible, stepId, missedQuestions]);
- 
-   // 2. unread_knowledge trigger
-   useEffect(() => {
-     // Check if we already have a more critical trigger or if we're active
--    if (dismissed || isVisible || (triggerType === 'failed_checkpoint')) return;
-+    if (dismissed || isVisible || (triggerType === 'failed_checkpoint') || hasTriggered('unread_knowledge')) return;
- 
-     const preSupportLinks = knowledgeLinks.filter(l => l.linkType === 'pre_support');
-     if (preSupportLinks.length === 0) return;
- 
-     async function checkPreSupport() {
-       try {
--        for (const link of preSupportLinks) {
--          const unitRes = await fetch(`/api/knowledge/${link.knowledgeUnitId}`);
--          if (unitRes.ok) {
--            const unitResData = await unitRes.json();
--            // Handle possibility of data wrapping (e.g. { units: group }) or flat unit
--            const unit: KnowledgeUnit = unitResData.unit || unitResData;
--
--            if (unit.mastery_status === 'unseen') {
--              setUnseenUnitTitle(unit.title);
--              setUnseenUnitId(unit.id);
--              setTriggerType('unread_knowledge');
--              setIsVisible(true);
--              return;
--            }
-+        const ids = preSupportLinks.map(l => l.knowledgeUnitId).join(',');
-+        const res = await fetch(`/api/knowledge/batch?ids=${ids}`);
-+        if (res.ok) {
-+          const { units } = await res.json();
-+          const unseen = (units as KnowledgeUnit[]).find(u => u.mastery_status === 'unseen');
-+          
-+          if (unseen) {
-+            setUnseenUnitTitle(unseen.title);
-+            setUnseenUnitId(unseen.id);
-+            setTriggerType('unread_knowledge');
-+            setIsVisible(true);
-+            markTriggered('unread_knowledge');
-+            trackCoachTriggerUnreadKnowledge(stepId, unseen.id);
-           }
-         }
-       } catch (err) {
-@@ -82,19 +104,22 @@ export function CoachTrigger({
-     }
- 
-     checkPreSupport();
--  }, [knowledgeLinks, dismissed, isVisible, triggerType]);
-+  }, [knowledgeLinks, dismissed, isVisible, triggerType, stepId]);
- 
--  // 3. dwell trigger (> 5 mins)
-+  // 3. dwell trigger (> 3 mins)
-   useEffect(() => {
--    if (dismissed || isVisible || (triggerType !== null)) return;
-+    if (dismissed || isVisible || (triggerType !== null) || hasTriggered('dwell')) return;
- 
-+    const dwellTime = 3 * 60 * 1000; // 3 minutes
-     const timer = setTimeout(() => {
-       setTriggerType('dwell');
-       setIsVisible(true);
--    }, 5 * 60 * 1000); // 5 minutes
-+      markTriggered('dwell');
-+      trackCoachTriggerDwell(stepId, dwellTime);
-+    }, dwellTime);
- 
-     return () => clearTimeout(timer);
--  }, [dismissed, isVisible, triggerType]);
-+  }, [dismissed, isVisible, triggerType, stepId]);
- 
-   if (!isVisible || dismissed) return null;
- 
-@@ -113,7 +138,7 @@ export function CoachTrigger({
-     if (triggerType === 'failed_checkpoint' && missedQuestions && missedQuestions.length > 0) {
-       const q = missedQuestions[0];
-       const topic = q.length > 40 ? q.substring(0, 40) + '...' : q;
--      return `You missed a few points. Want to review "${topic}"? 💬`;
-+      return `You missed a few points on "${topic}". Want to review? 💬`;
-     }
- 
-     const labels = {
-@@ -126,7 +151,7 @@ export function CoachTrigger({
-   };
- 
-   return (
--    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out">
-+    <div className="fixed bottom-6 right-6 z-[60] animate-in slide-in-from-bottom-4 duration-500 ease-out pointer-events-auto">
-       <div className="bg-[#1e1e2e] border border-amber-500/30 rounded-2xl p-4 shadow-[0_0_40px_rgba(0,0,0,0.5)] flex items-center gap-4 max-w-sm backdrop-blur-xl transition-all hover:border-amber-500/50 group">
-         <div className="flex-1 min-w-[200px]">
-           <div className="text-slate-200 text-sm font-medium leading-relaxed">
-@@ -139,7 +164,7 @@ export function CoachTrigger({
-               onOpenCoach();
-               setIsVisible(false);
-             }}
--            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
-+            className="bg-amber-500 hover:bg-amber-400 text-black px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95 whitespace-nowrap"
-           >
-             Chat
-           </button>
-diff --git a/components/experience/CompletionScreen.tsx b/components/experience/CompletionScreen.tsx
-index 8dc01fe..9a10a91 100644
---- a/components/experience/CompletionScreen.tsx
-+++ b/components/experience/CompletionScreen.tsx
-@@ -145,31 +145,54 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
-     expert: 'Max break', proficient: 'expert', practicing: 'proficient', beginner: 'practicing', aware: 'beginner', undiscovered: 'aware'
-   };
- 
-+  const masteryTransitions = (snapshot?.key_signals as any)?.masteryTransitions || [];
-+  
-+  // If no structured transitions, fall back to old logic for legacy support
-   const movedDomains: any[] = [];
-   const accumulatingDomains: any[] = [];
--
--  skillDomains.forEach(domain => {
--    if (domain.linkedExperienceIds?.includes(experienceId)) {
--      const isLevelUp = 
--        (domain.masteryLevel === 'expert' && domain.evidenceCount === 8) ||
--        (domain.masteryLevel === 'proficient' && domain.evidenceCount === 5) ||
--        (domain.masteryLevel === 'practicing' && domain.evidenceCount === 3) ||
--        (domain.masteryLevel === 'beginner' && domain.evidenceCount === 1);
--
--      if (isLevelUp) {
-+  
-+  if (masteryTransitions.length > 0) {
-+    masteryTransitions.forEach((t: any) => {
-+      if (t.isLevelUp) {
-         movedDomains.push({
--          ...domain,
--          previousLevel: PREV_MAP[domain.masteryLevel] || 'undiscovered'
-+          name: t.domainName,
-+          previousLevel: t.before.level,
-+          masteryLevel: t.after.level
-         });
-       } else {
-         accumulatingDomains.push({
--          ...domain,
--          nextThreshold: NEXT_THRESHOLD[domain.masteryLevel] || 0,
--          nextLevelName: NEXT_LEVEL[domain.masteryLevel] || 'expert'
-+          name: t.domainName,
-+          evidenceCount: t.after.evidence,
-+          nextThreshold: NEXT_THRESHOLD[t.after.level] || 0,
-+          nextLevelName: NEXT_LEVEL[t.after.level] || 'expert'
-         });
-       }
--    }
--  });
-+    });
-+  } else {
-+    // Legacy fallback (as a safety measure)
-+    skillDomains.forEach(domain => {
-+      if (domain.linkedExperienceIds?.includes(experienceId)) {
-+        const isLevelUp = 
-+          (domain.masteryLevel === 'expert' && domain.evidenceCount === 8) ||
-+          (domain.masteryLevel === 'proficient' && domain.evidenceCount === 5) ||
-+          (domain.masteryLevel === 'practicing' && domain.evidenceCount === 3) ||
-+          (domain.masteryLevel === 'beginner' && domain.evidenceCount === 1);
-+
-+        if (isLevelUp) {
-+          movedDomains.push({
-+            ...domain,
-+            previousLevel: PREV_MAP[domain.masteryLevel] || 'undiscovered'
-+          });
-+        } else {
-+          accumulatingDomains.push({
-+            ...domain,
-+            nextThreshold: NEXT_THRESHOLD[domain.masteryLevel] || 0,
-+            nextLevelName: NEXT_LEVEL[domain.masteryLevel] || 'expert'
-+          });
-+        }
-+      }
-+    });
-+  }
- 
-   const stepCount = steps.length;
-   const checkpointSteps = steps.filter(s => s.step_type === 'checkpoint' || s.type === 'checkpoint');
-@@ -236,27 +259,65 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
- 
-   return (
-     <div className="w-full max-w-4xl mx-auto py-12 px-6 animate-in zoom-in-95 duration-700">
--      <div className="flex flex-col items-center text-center mb-16">
--        <div className="relative mb-6">
--           <div className="absolute inset-0 bg-indigo-500/20 blur-2xl rounded-full scale-150 animate-pulse" />
--           <div className="relative w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center shadow-2xl shadow-indigo-500/40">
--              <svg className="w-12 h-12 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24">
--                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
--              </svg>
--           </div>
-+      {/* Header Narrative */}
-+      <header className="mb-16 text-center max-w-2xl mx-auto">
-+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[10px] font-black uppercase tracking-widest mb-6">
-+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-+          Mira's Observation
-         </div>
--        <h1 className="text-5xl font-black text-white mb-4 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
--          {COPY.completion.heading}
-+        <h1 className="text-5xl font-black text-white mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-400">
-+          Goal Crystalized.
-         </h1>
--        <p className="text-xl text-slate-400 max-w-2xl leading-relaxed font-light italic">
--          "{summary}"
--        </p>
--      </div>
-+        <div className="relative group">
-+          <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500/20 to-violet-500/20 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
-+          <p className="relative text-xl text-slate-300 leading-relaxed font-serif italic py-4 px-6 bg-slate-950/20 rounded-2xl border border-white/5">
-+            "{summary}"
-+          </p>
-+        </div>
-+      </header>
-+
-+      {/* Level Up Celebration */}
-+      {movedDomains.length > 0 && (
-+        <div className="mb-16 animate-in zoom-in duration-1000 delay-500 fill-mode-both">
-+          <div className="p-1 rounded-[2.5rem] bg-gradient-to-r from-yellow-500/40 via-amber-500/40 to-orange-500/40 shadow-2xl shadow-amber-500/10">
-+            <div className="bg-[#0a0a12] rounded-[2.25rem] p-8 text-center relative overflow-hidden">
-+              <div className="absolute -top-24 -left-24 w-64 h-64 bg-amber-500/10 rounded-full blur-[80px]" />
-+              <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-orange-500/10 rounded-full blur-[80px]" />
-+              
-+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 mb-6 shadow-inner">
-+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-+                </svg>
-+              </div>
-+              
-+              <h3 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-orange-400 mb-2 uppercase tracking-tighter">
-+                Level Up
-+              </h3>
-+              <p className="text-slate-400 text-sm mb-8 font-medium">
-+                Your expertise in {movedDomains.map(d => d.name.replace(/-/g, ' ')).join(' & ')} has reached a new threshold.
-+              </p>
-+              
-+              <div className="flex flex-wrap justify-center gap-4">
-+                {movedDomains.map((d, i) => (
-+                  <div key={i} className="flex items-center gap-4 bg-slate-950/60 backdrop-blur-md px-6 py-3 rounded-2xl border border-amber-500/20 shadow-xl">
-+                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest">{d.previousLevel}</div>
-+                    <svg className="w-4 h-4 text-amber-500/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-+                    </svg>
-+                    <div className="text-sm font-black text-amber-400 uppercase tracking-widest">{d.masteryLevel}</div>
-+                  </div>
-+                ))}
-+              </div>
-+            </div>
-+          </div>
-+        </div>
-+      )}
- 
--      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16 text-left">
--        {/* Goal Progress & Retrospective Section */}
--        {activeGoal && (
--          <div className="md:col-span-12 space-y-6">
-+      {/* Main Stats Grid */}
-+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 mb-16">
-+        {/* Left Column: Progress & Proof */}
-+        <div className="md:col-span-12 lg:col-span-12 space-y-8">
-+          {activeGoal && (
-             <section className="bg-indigo-500/5 border border-indigo-500/20 rounded-3xl p-8 backdrop-blur-sm relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-                 <span className="text-8xl italic font-black">⌬</span>
-@@ -279,199 +340,206 @@ export default function CompletionScreen({ experienceId, userId }: CompletionScr
-                   href={ROUTES.skills}
-                   className="px-6 py-3 bg-[#0d0d18] border border-indigo-500/30 text-indigo-400 text-sm font-bold rounded-2xl hover:bg-indigo-500/10 transition-all text-center"
-                 >
--                  {COPY.skills.actions.viewTree}
-+                  View Skill Tree
-                 </Link>
-               </div>
-             </section>
--
--            {(movedDomains.length > 0 || accumulatingDomains.length > 0) && (
--              <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-sm">
--                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">What Moved</div>
--                <div className="space-y-3">
--                  {movedDomains.map((domain, i) => (
--                    <div key={`moved-${i}`} className="flex items-center gap-3">
--                      <span className="text-slate-200 font-medium capitalize">{domain.name.replace(/-/g, ' ')}:</span>
--                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.previousLevel)}`}>
--                        {domain.previousLevel}
--                      </span>
--                      <span className="text-slate-500">→</span>
--                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.masteryLevel)}`}>
--                        {domain.masteryLevel}
--                      </span>
--                    </div>
--                  ))}
--                  {accumulatingDomains.map((domain, i) => (
--                    <div key={`accum-${i}`} className="flex items-center gap-2 text-sm text-slate-400 flex-wrap">
--                      <span className="text-slate-300 font-medium capitalize">{domain.name.replace(/-/g, ' ')}</span>
--                      <span>— Your evidence is accumulating:</span>
--                      <span className="text-indigo-400 font-bold">{domain.evidenceCount}/{domain.nextThreshold}</span>
--                      <span>toward</span>
--                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(domain.nextLevelName)}`}>
--                        {domain.nextLevelName}
--                      </span>
--                    </div>
--                  ))}
--                </div>
--              </section>
--            )}
--
--            <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-6 backdrop-blur-sm">
--              <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">What You Did</div>
--              <div className="flex flex-wrap gap-4">
--                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/50">
--                    <span className="text-slate-300 text-sm font-medium">Completed {stepCount} step{stepCount !== 1 ? 's' : ''}</span>
-+          )}
-+
-+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-+             {/* Key Observed Signals */}
-+             <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
-+               <div className="flex items-center gap-3 mb-6">
-+                 <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
-+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                  </div>
--                 {checkpointSteps.length > 0 && (
--                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
--                      <span className="text-emerald-400 text-sm font-medium">{checkpointsPassed}/{checkpointSteps.length} checkpoints passed</span>
--                   </div>
--                 )}
--                 {draftCount > 0 && (
--                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
--                      <span className="text-amber-400 text-sm font-medium">Saved {draftCount} draft{draftCount !== 1 ? 's' : ''}</span>
-+                 <h3 className="text-lg font-bold text-slate-200">Key Observed Signals</h3>
-+               </div>
-+               <div className="flex flex-wrap gap-3">
-+                 {signals.length > 0 ? signals.map((sig, i) => (
-+                   <div key={i} className="px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm font-medium hover:scale-105 transition-transform">
-+                     {sig}
-                    </div>
-+                 )) : (
-+                   <span className="text-slate-500 italic text-sm">Mapping behavioral patterns...</span>
-                  )}
--              </div>
--            </section>
--          </div>
--        )}
--
--        {/* Signals & Key Findings */}
--        <div className="md:col-span-12 lg:col-span-7 space-y-8">
--           <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm h-full">
--             <div className="flex items-center gap-3 mb-6">
--               <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20">
--                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                </div>
--               <h3 className="text-lg font-bold text-slate-200">Key Observed Signals</h3>
--             </div>
--             <div className="flex flex-wrap gap-3">
--               {signals.length > 0 ? signals.map((sig, i) => (
--                 <div key={i} className="px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700/50 text-slate-300 text-sm font-medium hover:scale-105 transition-transform">
--                   {sig}
-+               {keySignals?.frictionAssessment && (
-+                 <div className="mt-8 pt-8 border-t border-slate-800/50">
-+                    <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Friction Assessment</div>
-+                    <p className="text-slate-300 leading-relaxed font-medium italic">
-+                      "{keySignals.frictionAssessment}"
-+                    </p>
-                  </div>
--               )) : (
--                 <span className="text-slate-500 italic text-sm">No specific behavioral signals detected.</span>
-                )}
--             </div>
--             
--             {keySignals?.frictionAssessment && (
--               <div className="mt-8 pt-8 border-t border-slate-800/50">
--                  <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Friction Level</div>
--                  <p className="text-slate-300 leading-relaxed font-medium capitalize">
--                    {keySignals.frictionAssessment}
--                  </p>
-+             </section>
-+
-+             {/* Growth Indicators (Facets) */}
-+             <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
-+               <div className="flex items-center gap-3 mb-6">
-+                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
-+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-+                 </div>
-+                 <h3 className="text-lg font-bold text-slate-200">Growth Indicators</h3>
-+               </div>
-+               <div className="space-y-4">
-+                  {facets.length > 0 ? facets.map((facet: any, i: number) => (
-+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5 group hover:border-emerald-500/20 transition-all">
-+                      <div className="flex flex-col">
-+                        <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{facet.facet_type.replace('_', ' ')}</span>
-+                        <span className="text-slate-200 font-medium text-sm">{facet.value}</span>
-+                      </div>
-+                      <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
-+                         <div 
-+                           className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] transition-all duration-1000" 
-+                           style={{ width: `${(facet.confidence || 0) * 100}%` }} 
-+                         />
-+                      </div>
-+                    </div>
-+                  )) : (
-+                    <span className="text-slate-500 italic text-sm">Your profile is evolving...</span>
-+                  )}
-                </div>
--             )}
--           </section>
-+             </section>
-+          </div>
-+
-+          {/* Mastery Shifts & Proof */}
-+          <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
-+            <div className="flex items-center justify-between mb-8">
-+              <div className="text-xs font-black text-slate-500 uppercase tracking-widest">Evidence Log</div>
-+              <div className="flex gap-4">
-+                 <div className="text-[10px] font-bold text-slate-500 bg-slate-800 px-2 py-1 rounded">
-+                   {stepCount} STEPS COMPLETE
-+                 </div>
-+                 {checkpointSteps.length > 0 && (
-+                   <div className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
-+                     {checkpointsPassed}/{checkpointSteps.length} CHECKPOINTS
-+                   </div>
-+                 )}
-+              </div>
-+            </div>
-+            
-+            <div className="space-y-4">
-+              {accumulatingDomains.length > 0 ? accumulatingDomains.map((domain, i) => (
-+                <div key={`accum-${i}`} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 group">
-+                  <div className="flex flex-col">
-+                    <span className="text-slate-200 font-medium capitalize">{domain.name.replace(/-/g, ' ')}</span>
-+                    <span className="text-[10px] text-slate-500">Toward {domain.nextLevelName}</span>
-+                  </div>
-+                  <div className="flex items-center gap-4">
-+                    <div className="flex items-center gap-1 group-hover:scale-110 transition-transform">
-+                      <span className="text-indigo-400 font-black text-lg">{domain.evidenceCount}</span>
-+                      <span className="text-slate-600 text-xs font-bold">/ {domain.nextThreshold}</span>
-+                    </div>
-+                    <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-+                       <div 
-+                         className="h-full bg-indigo-500" 
-+                         style={{ width: `${(domain.evidenceCount / (domain.nextThreshold || 1)) * 100}%` }} 
-+                       />
-+                    </div>
-+                  </div>
-+                </div>
-+              )) : (
-+                <div className="text-slate-500 italic text-sm text-center py-4">Knowledge domains are recalibrating.</div>
-+              )}
-+            </div>
-+          </section>
-         </div>
- 
--        {/* Growth & Next Steps */}
--        <div className="md:col-span-12 lg:col-span-5 space-y-8">
--           <section className="bg-slate-900/40 border border-slate-800/60 rounded-3xl p-8 backdrop-blur-sm">
--             <div className="flex items-center gap-3 mb-6">
--               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 border border-emerald-500/20">
--                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
--               </div>
--               <h3 className="text-lg font-bold text-slate-200">Growth Indicators</h3>
--             </div>
--             <div className="space-y-4">
--                {facets.length > 0 ? facets.map((facet: any, i: number) => (
--                  <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-white/5">
--                    <div className="flex flex-col">
--                      <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight mb-1">{facet.facet_type.replace('_', ' ')}</span>
--                      <span className="text-slate-200 font-medium text-sm">{facet.value}</span>
-+        {/* What's Next? (Now taking a larger role) */}
-+        <div className="md:col-span-12 space-y-8 mt-8">
-+          <div className="flex items-center gap-3 mb-4 px-2">
-+            <span className="text-xs font-black text-[#475569] uppercase tracking-[0.2em]">Logical Next Conversions</span>
-+            <span className="flex-grow h-px bg-[#1e1e2e]" />
-+          </div>
-+          
-+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-+            {nextCandidates.slice(0, 3).map((cad, i) => {
-+              const [classPart, ...rest] = cad.split(':');
-+              const title = rest.join(':').trim() || cad;
-+              const templateClass = classPart.toLowerCase().trim();
-+              const isValidClass = ['questionnaire', 'lesson', 'challenge', 'plan_builder', 'reflection', 'essay_tasks'].includes(templateClass);
-+              
-+              return (
-+                <div key={i} className="group p-6 rounded-3xl bg-indigo-600/5 border border-indigo-500/10 hover:border-indigo-500/40 transition-all flex flex-col gap-4 relative overflow-hidden backdrop-blur-md">
-+                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition-all" />
-+                  <div className="flex items-center justify-between">
-+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 border border-indigo-500/20 group-hover:scale-110 transition-transform">
-+                      {getClassIcon(isValidClass ? templateClass : 'default')}
-                     </div>
--                    <div className="w-12 h-1 bg-slate-800 rounded-full overflow-hidden">
--                       <div className="h-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" style={{ width: `${facet.confidence * 100}%` }} />
-+                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-1 rounded">
-+                      {isValidClass ? (COPY.workspace.stepTypes as any)[templateClass] || templateClass : 'Recommendation'}
-                     </div>
-                   </div>
--                )) : (
--                  <span className="text-slate-500 italic text-sm">Your profile is evolving...</span>
--                )}
--             </div>
--           </section>
--
--           <section className="bg-indigo-600/10 border border-indigo-500/20 rounded-3xl p-8 backdrop-blur-sm">
--             <h3 className="text-lg font-bold text-indigo-300 mb-6 flex items-center gap-2">
--               Next Suggested Paths
--             </h3>
--             <ul className="space-y-4">
--               {nextCandidates.length > 0 ? nextCandidates.map((cad, i) => {
--                 const matchedDomain = skillDomains.find(d => cad.toLowerCase().includes(d.name.toLowerCase().replace(/-/g, ' ')));
--                 return (
--                   <li key={i} className="text-slate-400 text-sm leading-relaxed pl-4 border-l-2 border-indigo-500/30 flex flex-col items-start gap-2">
--                     {matchedDomain ? (
--                       <Link href={`/skills/${matchedDomain.id}`} className="hover:text-indigo-300 transition-colors block">
--                         {cad}
--                       </Link>
--                     ) : (
--                       <span>{cad}</span>
--                     )}
--                     {matchedDomain && (
--                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight border ${getMasteryColor(matchedDomain.masteryLevel)}`}>
--                         {matchedDomain.name.replace(/-/g, ' ')} • {matchedDomain.masteryLevel}
--                       </span>
--                     )}
--                   </li>
--                 )
--               }) : (
--                 <li className="text-slate-500 italic text-sm">Mira is calculating your next move.</li>
--               )}
--             </ul>
--           </section>
--
--           {chainSuggestions.length > 0 && (
--             <section className="bg-violet-600/10 border border-violet-500/20 rounded-3xl p-8 backdrop-blur-sm mt-8">
--               <h3 className="text-lg font-bold text-violet-300 mb-6 flex items-center gap-2">
--                 Continue Your Chain
--               </h3>
--               <div className="space-y-4">
--                 {chainSuggestions.map((suggestion, i) => (
--                   <div key={i} className="flex flex-col p-4 rounded-2xl bg-slate-950/40 border border-violet-500/20 group hover:border-violet-500/50 transition-all">
--                     <div className="flex items-center gap-3 mb-2">
--                       <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20">
--                         {getClassIcon(suggestion.templateClass)}
--                       </div>
--                       <div className="text-[10px] font-bold text-violet-400 uppercase tracking-widest">
--                         {(COPY.workspace.stepTypes as any)[suggestion.templateClass] || suggestion.templateClass}
--                       </div>
--                     </div>
--                     <p className="text-sm text-slate-300 mb-4 italic">"{suggestion.reason}"</p>
--                     <button
--                       onClick={() => handleStartNext(suggestion)}
--                       disabled={!!isStartingNext}
--                       className="w-full py-2 bg-violet-600 text-white rounded-xl text-xs font-bold hover:bg-violet-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
--                     >
--                       {isStartingNext === suggestion.templateClass ? (
--                         <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin" />
--                       ) : (
--                         <span>Start Next →</span>
--                       )}
--                     </button>
--                   </div>
--                 ))}
--               </div>
--             </section>
--           )}
--         </div>
-+                  <div className="space-y-1">
-+                    <p className="text-white font-bold leading-tight group-hover:text-indigo-200 transition-colors">
-+                      {title}
-+                    </p>
-+                    <div className="text-[10px] text-slate-500 italic block">
-+                      Generated by Mira based on your recent context.
-+                    </div>
-+                  </div>
-+                  <Link 
-+                    href={ROUTES.send}
-+                    className="mt-2 w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-center text-xs font-black transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
-+                  >
-+                    Start Experience →
-+                  </Link>
-+                </div>
-+              );
-+            })}
-+
-+            {chainSuggestions.slice(0, 3).map((suggestion, i) => (
-+              <div key={`chain-${i}`} className="group p-6 rounded-3xl bg-violet-600/5 border border-violet-500/10 hover:border-violet-500/40 transition-all flex flex-col gap-4 relative overflow-hidden backdrop-blur-md">
-+                <div className="absolute -right-4 -top-4 w-24 h-24 bg-violet-500/5 rounded-full blur-2xl group-hover:bg-violet-500/10 transition-all" />
-+                <div className="flex items-center justify-between">
-+                  <div className="w-10 h-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 border border-violet-500/20 group-hover:scale-110 transition-transform">
-+                    {getClassIcon(suggestion.templateClass)}
-+                  </div>
-+                  <div className="text-[10px] font-black text-violet-400 uppercase tracking-widest bg-violet-500/10 px-2 py-1 rounded">
-+                    Chain Linked
-+                  </div>
-+                </div>
-+                <div className="space-y-1">
-+                  <p className="text-white font-bold leading-tight group-hover:text-violet-200 transition-colors">
-+                    {suggestion.templateClass.charAt(0).toUpperCase() + suggestion.templateClass.slice(1).replace('_', ' ')}
-+                  </p>
-+                  <div className="text-[10px] text-slate-500 italic line-clamp-1 block">
-+                    "{suggestion.reason}"
-+                  </div>
-+                </div>
-+                <button
-+                  onClick={() => handleStartNext(suggestion)}
-+                  disabled={!!isStartingNext}
-+                  className="mt-2 w-full py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-center text-xs font-black transition-all shadow-lg shadow-violet-600/20 active:scale-95 disabled:opacity-50"
-+                >
-+                  {isStartingNext === suggestion.templateClass ? 'Preparing...' : 'Continue Journey →'}
-+                </button>
-+              </div>
-+            ))}
-+          </div>
-+        </div>
-       </div>
- 
--      <div className="flex flex-col sm:flex-row items-center justify-center gap-4 py-8">
-+      {/* Footer Navigation */}
-+      <div className="flex flex-col sm:flex-row items-center justify-center gap-8 py-12 border-t border-white/5 mt-12 bg-slate-950/20 rounded-b-[3rem]">
-         <Link 
-           href={ROUTES.library}
--          className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white text-slate-950 font-bold hover:bg-slate-200 transition-all text-center shadow-xl shadow-white/5"
-+          className="text-xs font-black text-slate-500 hover:text-white transition-all uppercase tracking-[0.2em] flex items-center gap-2 group"
-         >
--          {COPY.library.heading}
-+          <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
-+          </svg>
-+          Back to Library
-         </Link>
--        <div className="text-slate-500 text-sm font-medium font-mono uppercase tracking-widest px-4">OR</div>
-         <Link 
--           href={ROUTES.home}
--           className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-slate-900 text-white font-bold border border-slate-700 hover:border-slate-500 transition-all text-center"
-+          href={ROUTES.send}
-+          className="px-12 py-4 bg-white text-black rounded-full font-black text-sm uppercase tracking-widest hover:bg-slate-200 transition-all shadow-2xl shadow-indigo-500/10 active:scale-95"
-         >
--           Return to Cockpit
-+          Define Next Idea
-         </Link>
-       </div>
-     </div>
-   );
- }
-+
-diff --git a/components/experience/ExperienceRenderer.tsx b/components/experience/ExperienceRenderer.tsx
-index 3be4aef..c8347e7 100644
---- a/components/experience/ExperienceRenderer.tsx
-+++ b/components/experience/ExperienceRenderer.tsx
-@@ -236,6 +236,7 @@ export default function ExperienceRenderer({
-           {/* Lane 6 / Lane 5: Coach Triggers */}
-           <CoachTrigger 
-             stepId={currentStep.id}
-+            instanceId={instance.id}
-             userId={instance.user_id}
-             onOpenCoach={handleOpenCoach}
-             failedCheckpoint={failedCheckpoint}
-diff --git a/components/experience/TrackCard.tsx b/components/experience/TrackCard.tsx
-index c7e9dbc..7effde2 100644
---- a/components/experience/TrackCard.tsx
-+++ b/components/experience/TrackCard.tsx
-@@ -65,17 +65,27 @@ export default function TrackCard({ outline }: TrackCardProps) {
-         </div>
-       </div>
- 
--      <div className="space-y-4 mb-8 overflow-y-auto max-h-[120px] pr-2 scrollbar-none">
-+      <div className="space-y-5 mb-8 overflow-y-auto max-h-[180px] pr-2 scrollbar-none">
-         {outline.subtopics.map((subtopic, idx) => (
--          <div key={idx} className="flex items-start gap-3">
--            <div className="mt-1">{getStatusIcon(subtopic.status)}</div>
--            <div className="flex flex-col">
--              <span className={`text-xs font-bold leading-tight ${subtopic.status === 'completed' ? 'text-[#4a4a6a] line-through' : 'text-[#e2e8f0]'}`}>
--                {subtopic.title}
--              </span>
--              <span className="text-[10px] text-[#4a4a6a] line-clamp-1 mt-0.5">
-+          <div key={idx} className="flex items-start gap-4 group/subtopic">
-+            <div className="mt-1 flex-shrink-0">{getStatusIcon(subtopic.status)}</div>
-+            <div className="flex flex-col min-w-0">
-+              <div className="flex items-center gap-2 mb-0.5">
-+                <span className={`text-xs font-bold leading-tight truncate ${subtopic.status === 'completed' ? 'text-[#4a4a6a]' : 'text-[#e2e8f0]'}`}>
-+                  {subtopic.title}
-+                </span>
-+                <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-+                  subtopic.status === 'completed' ? 'bg-emerald-500/10 text-emerald-500/70 border border-emerald-500/10' :
-+                  subtopic.status === 'in_progress' ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20' :
-+                  'bg-[#1e1e2e] text-[#4a4a6a] border border-[#33334d]'
-+                }`}>
-+                  {subtopic.status === 'completed' ? 'Done' : 
-+                   subtopic.status === 'in_progress' ? 'In Progress' : 'Pending'}
-+                </span>
-+              </div>
-+              <p className="text-[10px] text-[#64748b] line-clamp-2 leading-relaxed italic">
-                 {subtopic.description}
--              </span>
-+              </p>
-             </div>
-           </div>
-         ))}
-diff --git a/components/knowledge/KnowledgeUnitView.tsx b/components/knowledge/KnowledgeUnitView.tsx
-index 7830ad1..3acca27 100644
---- a/components/knowledge/KnowledgeUnitView.tsx
-+++ b/components/knowledge/KnowledgeUnitView.tsx
-@@ -11,15 +11,39 @@ import MasteryBadge from './MasteryBadge';
- 
- interface KnowledgeUnitViewProps {
-   unit: KnowledgeUnit;
-+  practiceCount: number;
- }
- 
- type Tab = 'learn' | 'practice' | 'links';
- 
--export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
-+export default function KnowledgeUnitView({ unit, practiceCount: initialPracticeCount }: KnowledgeUnitViewProps) {
-   const router = useRouter();
-   const [activeTab, setActiveTab] = useState<Tab>('learn');
-   const [expandedQuestions, setExpandedQuestions] = useState<number[]>([]);
-   const [isUpdating, setIsUpdating] = useState(false);
-+  const [localPracticeCount, setLocalPracticeCount] = useState(initialPracticeCount);
-+
-+  const handlePracticeAttempt = async (correct: boolean) => {
-+    if (isUpdating) return;
-+    setIsUpdating(true);
-+
-+    try {
-+      const res = await fetch(`/api/knowledge/${unit.id}`, {
-+        method: 'POST',
-+        headers: { 'Content-Type': 'application/json' },
-+        body: JSON.stringify({ correct, userId: unit.user_id }),
-+      });
-+
-+      if (res.ok) {
-+        if (correct) setLocalPracticeCount(prev => prev + 1);
-+        router.refresh(); // Sync mastery status from server
-+      }
-+    } catch (err) {
-+      console.error('Failed to record practice:', err);
-+    } finally {
-+      setIsUpdating(false);
-+    }
-+  };
- 
-   const toggleQuestion = (index: number) => {
-     setExpandedQuestions(prev => 
-@@ -81,23 +105,30 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
-         <h1 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight">{unit.title}</h1>
-       </header>
- 
--      {/* Tabs */}
--      <div className="flex border-b border-[#1e1e2e] mb-8 overflow-x-auto no-scrollbar">
--        {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
--          <button
--            key={tab}
--            onClick={() => setActiveTab(tab)}
--            className={`px-6 py-4 text-xs font-bold uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
--              activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
--            }`}
--          >
--            {tab}
--            {activeTab === tab && (
--              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
--            )}
--          </button>
--        ))}
--      </div>
-+        {/* Tabs */}
-+        <div className="flex gap-8 border-b border-[#1e1e2e] mb-8">
-+          {(['learn', 'practice', 'links'] as Tab[]).map((tab) => (
-+            <button
-+              key={tab}
-+              onClick={() => setActiveTab(tab)}
-+              className={`pb-4 text-xs font-bold uppercase tracking-widest transition-all relative ${
-+                activeTab === tab ? 'text-indigo-400' : 'text-[#4a4a6a] hover:text-[#94a3b8]'
-+              }`}
-+            >
-+              <div className="flex items-center gap-2">
-+                {tab}
-+                {tab === 'practice' && localPracticeCount > 0 && (
-+                  <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 text-[8px] rounded-md border border-amber-500/20">
-+                    Practiced {localPracticeCount}x
-+                  </span>
-+                )}
-+              </div>
-+              {activeTab === tab && (
-+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
-+              )}
-+            </button>
-+          ))}
-+        </div>
- 
-       {/* Tab Content */}
-       <div className="min-h-[400px]">
-@@ -216,9 +247,27 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
-                       </button>
-                       {expandedQuestions.includes(i) && (
-                         <div className="px-5 pb-5 pt-2 border-t border-[#1e1e2e] animate-in slide-in-from-top-1 duration-200">
--                          <p className="text-sm text-[#94a3b8] leading-relaxed">
-+                          <p className="text-sm text-[#94a3b8] leading-relaxed mb-6">
-                             {q.answer}
-                           </p>
-+                          
-+                          <div className="flex items-center justify-between pt-4 border-t border-[#1e1e2e]/50">
-+                            <span className="text-[10px] font-bold text-[#4a4a6a] uppercase">Did you get this right?</span>
-+                            <div className="flex gap-2">
-+                              <button 
-+                                onClick={() => handlePracticeAttempt(false)}
-+                                className="px-3 py-1.5 rounded-lg border border-rose-500/20 text-rose-500 text-[10px] font-bold hover:bg-rose-500/10 transition-colors"
-+                              >
-+                                Not Yet
-+                              </button>
-+                              <button 
-+                                onClick={() => handlePracticeAttempt(true)}
-+                                className="px-4 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors"
-+                              >
-+                                Yes
-+                              </button>
-+                            </div>
-+                          </div>
-                         </div>
-                       )}
-                     </div>
-diff --git a/lib/enrichment/interaction-events.ts b/lib/enrichment/interaction-events.ts
-index 35b9712..58e85a8 100644
---- a/lib/enrichment/interaction-events.ts
-+++ b/lib/enrichment/interaction-events.ts
-@@ -18,6 +18,11 @@ export const INTERACTION_EVENTS = {
-   BLOCK_HINT_USED: 'block_hint_used',
-   BLOCK_PREDICTION_SUBMITTED: 'block_prediction_submitted',
-   BLOCK_EXERCISE_COMPLETED: 'block_exercise_completed',
-+
-+  // Lane 4: Proactive Coach Telemetry
-+  COACH_TRIGGER_CHECKPOINT_FAIL: 'coach_trigger_checkpoint_fail',
-+  COACH_TRIGGER_DWELL: 'coach_trigger_dwell',
-+  COACH_TRIGGER_UNREAD_KNOWLEDGE: 'coach_trigger_unread_knowledge',
- } as const;
- 
- export type InteractionEventType = (typeof INTERACTION_EVENTS)[keyof typeof INTERACTION_EVENTS];
-diff --git a/lib/experience/reentry-engine.ts b/lib/experience/reentry-engine.ts
-index e22c4ef..0db26cf 100644
---- a/lib/experience/reentry-engine.ts
-+++ b/lib/experience/reentry-engine.ts
-@@ -42,8 +42,10 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
-   
-   // Group interactions by instanceId
-   const interactionsByInstance = allInteractions.reduce((acc, interaction) => {
--    if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
--    acc[interaction.instance_id].push(interaction)
-+    if (interaction.instance_id) {
-+      if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
-+      acc[interaction.instance_id].push(interaction)
-+    }
-     return acc
-   }, {} as Record<string, InteractionEvent[]>)
- 
-@@ -105,7 +107,14 @@ export async function evaluateReentryContracts(userId: string): Promise<ActiveRe
-     }
-   }
- 
--  // Sort by priority (high first)
-+  // Sort by priority (high first) and then by trigger type
-   const priorityOrder = { high: 0, medium: 1, low: 2 }
--  return prompts.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
-+  const triggerOrder = { completion: 0, inactivity: 1, time: 2, manual: -1 }
-+  
-+  return prompts.sort((a, b) => {
-+    if (a.priority !== b.priority) {
-+      return priorityOrder[a.priority] - priorityOrder[b.priority]
-+    }
-+    return triggerOrder[a.trigger] - triggerOrder[b.trigger]
-+  })
- }
-diff --git a/lib/experience/skill-mastery-engine.ts b/lib/experience/skill-mastery-engine.ts
-index 754e657..519878a 100644
---- a/lib/experience/skill-mastery-engine.ts
-+++ b/lib/experience/skill-mastery-engine.ts
-@@ -1,8 +1,13 @@
- import { SkillDomain } from '@/types/skill';
-+import { ExperienceInstance } from '@/types/experience';
- import { updateSkillDomain, getSkillDomain } from '@/lib/services/skill-domain-service';
- import { getKnowledgeUnitsByIds } from '@/lib/services/knowledge-service';
- import { getExperienceInstances } from '@/lib/services/experience-service';
--import { SkillMasteryLevel } from '@/lib/constants';
-+import { SkillMasteryLevel, MasteryStatus } from '@/lib/constants';
-+import { getStorageAdapter } from '@/lib/storage-adapter';
-+import { InteractionEvent } from '@/types/interaction';
-+import { KnowledgeProgress } from '@/types/knowledge';
-+import { promoteKnowledgeProgress } from '@/lib/services/knowledge-service';
- 
- /**
-  * Computes skill mastery level based on evidence count rules from goal-os-contract.md.
-@@ -16,7 +21,7 @@ import { SkillMasteryLevel } from '@/lib/constants';
-  * - proficient: 5+ completed experiences AND 2+ knowledge units at 'confident'
-  * - expert: 8+ completed experiences AND all linked knowledge units at 'confident'
-  */
--export async function computeSkillMastery(domain: SkillDomain): Promise<{ 
-+export async function computeSkillMastery(domain: SkillDomain, skipExperienceId?: string, preFetchedInstances?: ExperienceInstance[]): Promise<{ 
-   masteryLevel: SkillMasteryLevel; 
-   evidenceCount: number;
- }> {
-@@ -26,9 +31,10 @@ export async function computeSkillMastery(domain: SkillDomain): Promise<{
-   
-   // 1. Fetch ALL user instances once, then filter locally (SOP-30: no N+1)
-   if (domain.linkedExperienceIds.length > 0) {
--    const allInstances = await getExperienceInstances({ userId: domain.userId });
-+    const allInstances = preFetchedInstances || await getExperienceInstances({ userId: domain.userId });
-     const linkedSet = new Set(domain.linkedExperienceIds);
-     for (const inst of allInstances) {
-+      if (skipExperienceId && inst.id === skipExperienceId) continue;
-       if (linkedSet.has(inst.id) && inst.status === 'completed') {
-         completedExperiences++;
-       }
-@@ -94,3 +100,77 @@ export async function updateDomainMastery(goalId: string, domainId: string): Pro
-   
-   return domain;
- }
-+
-+/**
-+ * Knowledge Mastery Evidence Logic (Lane 6 — Sprint 23)
-+ * Enforces thresholds for promotion to 'confident' and 'practiced'.
-+ * Rules:
-+ * - 'practiced': ≥ 1 practice attempt OR passed a checkpoint.
-+ * - 'confident': ≥ 3 practice attempts AND passed a checkpoint.
-+ */
-+export async function syncKnowledgeMastery(
-+  userId: string, 
-+  unitId: string, 
-+  trigger: { type: 'checkpoint_pass' | 'practice_attempt'; correct: boolean }
-+): Promise<void> {
-+  const adapter = getStorageAdapter();
-+  
-+  // 1. Fetch current status
-+  const progresses = await adapter.query<KnowledgeProgress>('knowledge_progress', { 
-+    user_id: userId, 
-+    unit_id: unitId 
-+  });
-+  const currentStatus = (progresses[0]?.mastery_status as MasteryStatus) || 'unseen';
-+
-+  // 2. Fetch evidence from interactions
-+  // SOP-30 optimization: Only fetch related events.
-+  // Note: practice_attempt events store unit_id in event_payload.
-+  // We fetch all interaction events for this user across instances if we can,
-+  // but for now, we'll fetch all and filter (local-first dev env).
-+  const interactions = await adapter.getCollection<InteractionEvent>('interaction_events');
-+  
-+  const practiceAttempts = interactions.filter(i => 
-+    i.event_type === 'practice_attempt' && 
-+    i.event_payload?.unit_id === unitId &&
-+    i.event_payload?.correct === true
-+  ).length;
-+
-+  const hasPassedCheckpoint = interactions.some(i => 
-+    i.event_type === 'checkpoint_graded' && 
-+    i.event_payload?.knowledgeUnitId === unitId && 
-+    i.event_payload?.correct === true
-+  ) || (trigger.type === 'checkpoint_pass' && trigger.correct);
-+
-+  // 3. Evaluate next status
-+  let nextStatus: MasteryStatus = currentStatus;
-+  
-+  // Confident check (Threshold: ≥ 3 + checkpoint)
-+  if (hasPassedCheckpoint && practiceAttempts >= 3) {
-+    nextStatus = 'confident';
-+  } 
-+  // Practiced check (Threshold: ≥ 1 OR checkpoint)
-+  else if (hasPassedCheckpoint || practiceAttempts >= 1) {
-+    if (currentStatus === 'unseen' || currentStatus === 'read') {
-+      nextStatus = 'practiced';
-+    }
-+  } 
-+  // Read check
-+  else if (currentStatus === 'unseen') {
-+    nextStatus = 'read';
-+  }
-+
-+  // 4. Update if advanced
-+  const ORDER: MasteryStatus[] = ['unseen', 'read', 'practiced', 'confident'];
-+  if (ORDER.indexOf(nextStatus) > ORDER.indexOf(currentStatus)) {
-+    // We use the existing service to handle the update logic (monotonicity, unit sync)
-+    // but we might need to call it multiple times if skipping levels.
-+    // Actually, promoteKnowledgeProgress just bumps by 1.
-+    // Let's call it until we reach nextStatus.
-+    let tempStatus = currentStatus;
-+    while (tempStatus !== nextStatus && ORDER.indexOf(tempStatus) < ORDER.indexOf(nextStatus)) {
-+      await promoteKnowledgeProgress(userId, unitId);
-+      tempStatus = ORDER[ORDER.indexOf(tempStatus) + 1] as MasteryStatus;
-+    }
-+  }
-+}
-+
-diff --git a/lib/gateway/discover-registry.ts b/lib/gateway/discover-registry.ts
-index 7b28ac6..fed15fc 100644
---- a/lib/gateway/discover-registry.ts
-+++ b/lib/gateway/discover-registry.ts
-@@ -83,6 +83,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
-       goal: 'string',
-       urgency: 'low | medium | high (controls notification toast duration)',
-       resolution: '{...}',
-+      reentry: '{...} — trigger, prompt, contextScope',
-       steps: '[...]'
-     },
-     example: {
-@@ -93,6 +94,7 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
-       goal: 'Verify understanding of Unit Economics',
-       urgency: 'medium',
-       resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
-+      reentry: { trigger: 'completion', prompt: 'Great job. Want to dive deeper into Unit Economics?', contextScope: 'full' },
-       steps: [
-         {
-           type: 'checkpoint',
-diff --git a/lib/gateway/gateway-router.ts b/lib/gateway/gateway-router.ts
-index 45e5e33..dbdf2d4 100644
---- a/lib/gateway/gateway-router.ts
-+++ b/lib/gateway/gateway-router.ts
-@@ -5,7 +5,8 @@ import {
-   updateExperienceStep, 
-   reorderExperienceSteps, 
-   deleteExperienceStep, 
--  transitionExperienceStatus 
-+  transitionExperienceStatus,
-+  ExperienceStep
- } from '@/lib/services/experience-service';
- import { createIdea } from '@/lib/services/ideas-service';
- import { createKnowledgeUnit } from '@/lib/services/knowledge-service';
-@@ -53,6 +54,7 @@ export async function dispatchCreate(type: string, payload: any) {
-       }
- 
-       const newInstance = await createExperienceInstance(instanceData);
-+      const createdSteps: ExperienceStep[] = [];
- 
-       // Create inline steps if provided
-       if (payload.steps && Array.isArray(payload.steps)) {
-@@ -62,12 +64,13 @@ export async function dispatchCreate(type: string, payload: any) {
-           if (!st || st === 'step') continue;
-           
-           const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
--          await addStep(newInstance.id, {
-+          const createdStep = await addStep(newInstance.id, {
-             step_type: st,
-             title: title ?? '',
-             payload: nestedPayload ?? rest,
-             completion_rule: completion_rule ?? null,
-           });
-+          createdSteps.push(createdStep);
-         }
-       }
- 
-@@ -75,7 +78,12 @@ export async function dispatchCreate(type: string, payload: any) {
-         const { linkExperiences } = await import('@/lib/services/graph-service');
-         await linkExperiences(instanceData.previous_experience_id, newInstance.id, 'chain');
-       }
--      return newInstance;
-+      const stepsResponse = createdSteps.map(s => ({
-+        ...s,
-+        order_index: s.step_order
-+      }));
-+
-+      return { ...newInstance, steps: stepsResponse };
-     }
-     case 'ephemeral':
-       return injectEphemeralExperience(payload);
-@@ -313,9 +321,29 @@ export async function dispatchCreate(type: string, payload: any) {
-  */
- export async function dispatchUpdate(action: string, payload: any) {
-   switch (action) {
--    case 'update_step':
-+    case 'update_step': {
-       if (!payload.stepId) throw new Error('Missing stepId');
--      return updateExperienceStep(payload.stepId, payload.stepPayload ?? payload.updates);
-+      const updates = payload.stepPayload ?? payload.updates ?? {};
-+      
-+      const columnFields = ['title', 'step_type', 'step_order', 'status', 'completion_rule', 'scheduled_date', 'due_date', 'estimated_minutes'];
-+      const topLevel: any = {};
-+      const payloadUpdates: any = {};
-+      
-+      Object.keys(updates).forEach(key => {
-+        if (columnFields.includes(key)) {
-+          topLevel[key] = updates[key];
-+        } else {
-+          payloadUpdates[key] = updates[key];
-+        }
-+      });
-+      
-+      // If there are payload updates, wrap them
-+      if (Object.keys(payloadUpdates).length > 0) {
-+        topLevel.payload = payloadUpdates;
-+      }
-+      
-+      return updateExperienceStep(payload.stepId, topLevel);
-+    }
+diff --git a/gitrdif.sh b/gitrdif.sh
+index 6c420c5..71700b1 100644
+--- a/gitrdif.sh
++++ b/gitrdif.sh
+@@ -51,8 +51,8 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
+         echo "### Uncommitted Diff"
+         echo ""
+         echo '```diff'
+-        git diff -- ':!gitrdiff.md' 2>/dev/null
+-        git diff --cached -- ':!gitrdiff.md' 2>/dev/null
++        git diff -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
++        git diff --cached -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
+         echo '```'
+         echo ""
+     fi
+@@ -163,7 +163,7 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
+     echo "Red (-) = lines you REMOVED locally"
+     echo ""
+     echo '```diff'
+-    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' 2>/dev/null || echo "(no diff)"
++    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null || echo "(no diff)"
+     echo '```'
      
-     case 'reorder_steps':
-       if (!payload.experienceId || !payload.orderedIds) {
-diff --git a/lib/hooks/useInteractionCapture.ts b/lib/hooks/useInteractionCapture.ts
-index f03e23d..047dd45 100644
---- a/lib/hooks/useInteractionCapture.ts
-+++ b/lib/hooks/useInteractionCapture.ts
-@@ -80,6 +80,18 @@ export function useInteractionCapture(instanceId: string) {
-     postEvent(INTERACTION_EVENTS.BLOCK_EXERCISE_COMPLETED, stepId, { blockId, ...result });
-   };
+ } > "$OUTPUT"
+diff --git a/gpt-instructions.md b/gpt-instructions.md
+index 63f7a39..c9c5d4a 100644
+--- a/gpt-instructions.md
++++ b/gpt-instructions.md
+@@ -19,7 +19,7 @@ Mira is an operating system, not a chatbot. When a user brings an ambition:
  
-+  const trackCoachTriggerCheckpointFail = (stepId: string, result: Record<string, any>) => {
-+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_CHECKPOINT_FAIL, stepId, result);
-+  };
-+
-+  const trackCoachTriggerDwell = (stepId: string, dwellMs: number) => {
-+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_DWELL, stepId, { dwellMs });
-+  };
-+
-+  const trackCoachTriggerUnreadKnowledge = (stepId: string, knowledgeUnitId: string) => {
-+    postEvent(INTERACTION_EVENTS.COACH_TRIGGER_UNREAD_KNOWLEDGE, stepId, { knowledgeUnitId });
-+  };
-+
-   return {
-     trackStepView,
-     trackAnswer,
-@@ -93,5 +105,8 @@ export function useInteractionCapture(instanceId: string) {
-     trackBlockHint,
-     trackBlockPrediction,
-     trackBlockExercise,
-+    trackCoachTriggerCheckpointFail,
-+    trackCoachTriggerDwell,
-+    trackCoachTriggerUnreadKnowledge,
-   };
- };
-diff --git a/lib/services/curriculum-outline-service.ts b/lib/services/curriculum-outline-service.ts
-index 0eb422a..1a29614 100644
---- a/lib/services/curriculum-outline-service.ts
-+++ b/lib/services/curriculum-outline-service.ts
-@@ -147,6 +147,24 @@ export async function getRecentlyCompletedOutlines(
-     .slice(0, limit);
- }
+ Work in this order unless reality suggests otherwise:
  
-+/**
-+ * Find an active or planning outline by topic (case-insensitive partial match).
-+ */
-+export async function findActiveOutlineByTopic(
-+  userId: string,
-+  topic: string
-+): Promise<CurriculumOutline | null> {
-+  const active = await getActiveCurriculumOutlines(userId);
-+  const normalizedTopic = topic.toLowerCase().trim();
-+  
-+  // Try exact match first
-+  const exact = active.find(o => o.topic.toLowerCase().trim() === normalizedTopic);
-+  if (exact) return exact;
-+  
-+  // Fall back to partial match
-+  return active.find(o => o.topic.toLowerCase().includes(normalizedTopic)) || null;
-+}
-+
- /**
-  * Partial update of a curriculum outline (status, subtopics, etc.).
-  */
-diff --git a/lib/services/enrichment-service.ts b/lib/services/enrichment-service.ts
-index 5ff40c1..0fdf215 100644
---- a/lib/services/enrichment-service.ts
-+++ b/lib/services/enrichment-service.ts
-@@ -143,3 +143,25 @@ export async function updateDeliveryStatus(
-   if (mappedEntityId) updates.mapped_entity_id = mappedEntityId;
-   await adapter.updateItem('enrichment_deliveries', id, updates);
- }
-+
-+/**
-+ * Returns summary of enrichments for the GPT state packet.
-+ */
-+export async function getEnrichmentSummaryForState(userId: string): Promise<Array<{
-+  topic: string;
-+  status: string;
-+  requested_at: string;
-+}>> {
-+  const adapter = getStorageAdapter();
-+  const results = await adapter.query<EnrichmentRequestRow>('enrichment_requests', { user_id: userId });
-+  
-+  return results
-+    .filter(r => r.status === 'dispatched' || r.status === 'pending' || r.status === 'delivered')
-+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-+    .slice(0, 5) // Limit to most recent 5
-+    .map(r => ({
-+      topic: r.requested_gap,
-+      status: r.status,
-+      requested_at: r.created_at
-+    }));
-+}
+-1. **Sync state** — call `getGPTState`. Recover goals, experiences, re-entry prompts, friction signals. If bugs mentioned, call `getChangeReports`.
++1. **Sync state** — call `getGPTState`. Recover goals, experiences, re-entry prompts, friction signals, pending enrichments (queued research), and knowledge summaries. If bugs mentioned, call `getChangeReports`.
+ 2. **Identify the core ambition** and break it into major system layers.
+ 3. **Create or expand a mind map** — externalize the whole system on a Think Board.
+ 4. **Dispatch research** — use `readKnowledge` for existing memory, MiraK for deep async research.
 diff --git a/lib/services/experience-service.ts b/lib/services/experience-service.ts
-index 0ec8b16..7732cbb 100644
+index 7732cbb..f3584ad 100644
 --- a/lib/services/experience-service.ts
 +++ b/lib/services/experience-service.ts
-@@ -260,7 +260,7 @@ export async function completeExperienceWithAI(instanceId: string, userId: strin
-  * Gateway-compatible wrapper for ephemeral injection.
-  * Handles validation and step creation in sequence.
-  */
--export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance> {
-+export async function injectEphemeralExperience(data: any): Promise<ExperienceInstance & { steps: ExperienceStep[] }> {
-   // Use existing route-level logic but inside a service
-   const { createExperienceInstance, createExperienceStep } = await import('./experience-service')
-   
-@@ -273,7 +273,7 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
-     instance_type: 'ephemeral',
-     status: 'injected',
-     resolution: data.resolution,
--    reentry: null,
-+    reentry: data.reentry ?? null,
-     previous_experience_id: null,
-     next_suggested_ids: [],
-     friction_level: null,
-@@ -284,11 +284,12 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
-   }
- 
-   const instance = await createExperienceInstance(instanceData)
-+  const createdSteps: ExperienceStep[] = []
- 
+@@ -289,13 +289,18 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
    if (data.steps && Array.isArray(data.steps)) {
      for (let i = 0; i < data.steps.length; i++) {
        const step = data.steps[i]
--      await createExperienceStep({
-+      const createdStep = await createExperienceStep({
++      const st = step.step_type || step.type || 'lesson'
++      const { type: _tp, step_type: _st, stepType: _stc, title, payload: nestedPayload, completion_rule, ...rest } = step;
++
++      const stepPayload = nestedPayload && Object.keys(nestedPayload).length > 0 ? { ...nestedPayload } : { ...rest };
++
+       const createdStep = await createExperienceStep({
          instance_id: instance.id,
          step_order: i,
-         step_type: step.step_type || step.type,
-@@ -296,10 +297,16 @@ export async function injectEphemeralExperience(data: any): Promise<ExperienceIn
-         payload: step.payload || {},
-         completion_rule: step.completion_rule || null
+-        step_type: step.step_type || step.type,
+-        title: step.title || '',
+-        payload: step.payload || {},
+-        completion_rule: step.completion_rule || null
++        step_type: st,
++        title: title || '',
++        payload: stepPayload,
++        completion_rule: completion_rule || null
        })
-+      createdSteps.push(createdStep)
+       createdSteps.push(createdStep)
      }
-   }
+diff --git a/public/openapi.yaml b/public/openapi.yaml
+index 877aa29..894bf3b 100644
+--- a/public/openapi.yaml
++++ b/public/openapi.yaml
+@@ -57,6 +57,17 @@ paths:
+                     type: object
+                     nullable: true
+                     additionalProperties: true
++                  pending_enrichments:
++                    type: array
++                    items:
++                      type: object
++                      properties:
++                        topic:
++                          type: string
++                        status:
++                          type: string
++                        requested_at:
++                          type: string
+                   goal:
+                     type: object
+                     nullable: true
+diff --git a/ux.md b/ux.md
+index 61def98..4aea781 100644
+--- a/ux.md
++++ b/ux.md
+@@ -221,3 +221,220 @@ These don't all need to ship at once. The gap analyst alone would dramatically i
+ 14. MiraK gap analyst agent (#14)
  
--  return instance;
-+  const stepsResponse = createdSteps.map(s => ({
-+    ...s,
-+    order_index: s.step_order
-+  }));
+ The core theme: **the intelligence is computed but not shown**. Most of these suggestions are about *surfacing* — letting the user see the growth the system is already tracking. The backend is ahead of the frontend. Close that gap and the app stops feeling like "a place I do assignments" and starts feeling like "a system that's helping me master something."
 +
-+  return { ...instance, steps: stepsResponse };
- }
- 
- /**
-diff --git a/lib/services/home-summary-service.ts b/lib/services/home-summary-service.ts
-index 5639b0c..1a32b75 100644
---- a/lib/services/home-summary-service.ts
-+++ b/lib/services/home-summary-service.ts
-@@ -13,6 +13,7 @@ import { getInteractionsForInstances } from './interaction-service';
- import { getArenaProjects } from './projects-service';
- import { getInboxEvents } from './inbox-service';
- import { getIdeasByStatus } from './ideas-service';
-+import { getEnrichmentSummaryForState } from './enrichment-service';
- import { DEFAULT_USER_ID, MASTERY_THRESHOLDS } from '@/lib/constants';
- 
- /**
-@@ -34,7 +35,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
-     outlines,
-     arenaProjects,
-     allEvents,
--    capturedIdeas
-+    capturedIdeas,
-+    enrichments
-   ] = await Promise.all([
-     getActiveGoal(userId),
-     getExperienceInstances({ userId }),
-@@ -45,7 +47,8 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
-     getCurriculumOutlinesForUser(userId),
-     getArenaProjects(), // Note: Projects service doesn't yet take userId in most calls
-     getInboxEvents(),
--    getIdeasByStatus('captured')
-+    getIdeasByStatus('captured'),
-+    getEnrichmentSummaryForState(userId)
-   ]);
- 
-   // 2. Resolve skill domains (goal-specific if active goal exists, else user-wide)
-@@ -190,6 +193,17 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
-       totalSteps: focusTotalSteps,
-       lastActivityAt: focusLastActivity,
-       focusReason,
-+      outlineTitle: focusExperience?.curriculum_outline_id 
-+        ? outlines.find(o => o.id === focusExperience.curriculum_outline_id)?.topic 
-+        : undefined,
-+      outlineProgress: focusExperience?.curriculum_outline_id 
-+        ? (() => {
-+            const o = outlines.find(o => o.id === focusExperience.curriculum_outline_id);
-+            if (!o) return undefined;
-+            const completed = o.subtopics.filter(s => s.status === 'completed').length;
-+            return Math.round((completed / o.subtopics.length) * 100);
-+          })()
-+        : undefined,
-     },
-     proposedExperiences,
-     activeExperiences,
-@@ -201,5 +215,6 @@ export async function getHomeSummary(userId: string = DEFAULT_USER_ID) {
-     arenaProjects,
-     recentEvents: allEvents.slice(0, 3),
-     capturedIdeas,
-+    pendingEnrichments: enrichments,
-   };
- }
-diff --git a/lib/services/interaction-service.ts b/lib/services/interaction-service.ts
-index acc01db..021382c 100644
---- a/lib/services/interaction-service.ts
-+++ b/lib/services/interaction-service.ts
-@@ -2,11 +2,11 @@ import { InteractionEvent, InteractionEventType, Artifact } from '@/types/intera
- import { getStorageAdapter } from '@/lib/storage-adapter'
- import { generateId } from '@/lib/utils'
- 
--export async function recordInteraction(data: { instanceId: string; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
-+export async function recordInteraction(data: { instanceId?: string | null; stepId?: string | null; eventType: InteractionEventType; eventPayload: any }): Promise<InteractionEvent> {
-   const adapter = getStorageAdapter()
-   const event: InteractionEvent = {
-     id: generateId(),
--    instance_id: data.instanceId,
-+    instance_id: data.instanceId ?? null,
-     step_id: data.stepId || null,
-     event_type: data.eventType,
-     event_payload: data.eventPayload,
-@@ -20,6 +20,12 @@ export async function getInteractionsByInstance(instanceId: string): Promise<Int
-   return adapter.query<InteractionEvent>('interaction_events', { instance_id: instanceId })
- }
- 
-+export async function getInteractionsByUnit(unitId: string): Promise<InteractionEvent[]> {
-+  const adapter = getStorageAdapter()
-+  const attempts = await adapter.query<InteractionEvent>('interaction_events', { event_type: 'practice_attempt' })
-+  return attempts.filter(a => a.event_payload?.unit_id === unitId)
++---
++
++## Easy Wins — Tactical UX Fixes (April 2026)
++
++> Concrete, file-level fixes that don't require new features or architecture changes. Sorted by impact-to-effort ratio. Most are under 30 minutes each.
++
++---
++
++### EW-1. Zero Loading States Across 25 Pages
++
++**Problem:** Every page uses `export const dynamic = 'force-dynamic'` but none have a `loading.tsx` sibling. Users see a blank white flash (or stuck previous page) while server components fetch data.
++
++**Affected routes:** Every route — home, arena, library, skills, knowledge, inbox, profile, workspace, drill, review, timeline, shipped, icebox, killed, send, map, and all dynamic segments like `[projectId]`, `[unitId]`, `[instanceId]`, `[domainId]`, `[prId]`.
++
++**Fix:** Create `loading.tsx` for each route segment. Start with the 5 most-visited:
++- `app/loading.tsx` (home)
++- `app/workspace/[instanceId]/loading.tsx`
++- `app/library/loading.tsx`
++- `app/knowledge/loading.tsx`
++- `app/skills/loading.tsx`
++
++A minimal skeleton is fine — even a centered spinner with the page title is better than a blank screen. Reuse one `<LoadingSkeleton />` component with a `title` prop.
++
++**Effort:** 1-2 hours for all 25.
++
++---
++
++### EW-2. Zero Error Boundaries Across 25 Pages
++
++**Problem:** No route has an `error.tsx`. A failed Supabase query, a network timeout, or a malformed response crashes the entire page with a Next.js default error screen.
++
++**Fix:** Create a shared `error.tsx` component and place it in at least:
++- `app/error.tsx` (root fallback)
++- `app/workspace/[instanceId]/error.tsx` (most complex data dependencies)
++- `app/knowledge/[unitId]/error.tsx` (depends on external MiraK content)
++- `app/arena/[projectId]/error.tsx` (depends on GitHub state)
++
++Pattern:
++```tsx
++'use client'
++export default function Error({ error, reset }: { error: Error; reset: () => void }) {
++  return (
++    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
++      <p className="text-sm text-red-400">Something went wrong loading this page.</p>
++      <button onClick={reset} className="px-4 py-2 text-sm bg-slate-800 rounded-lg">
++        Try again
++      </button>
++    </div>
++  )
 +}
++```
 +
- export async function getInteractionsForInstances(instanceIds: string[]): Promise<InteractionEvent[]> {
-   if (!instanceIds || instanceIds.length === 0) return []
-   const adapter = getStorageAdapter()
-diff --git a/lib/services/knowledge-service.ts b/lib/services/knowledge-service.ts
-index c3110d3..1979f23 100644
---- a/lib/services/knowledge-service.ts
-+++ b/lib/services/knowledge-service.ts
-@@ -214,22 +214,32 @@ export async function getKnowledgeDomains(userId: string): Promise<{ domain: str
-   }));
- }
- 
--export async function getKnowledgeSummaryForGPT(userId: string): Promise<{ domains: string[]; totalUnits: number; masteredCount: number }> {
-+export async function getKnowledgeSummaryForGPT(userId: string): Promise<{
-+  domains: Record<string, number>;
-+  totalUnits: number;
-+  masteredCount: number;
-+}> {
-   try {
-     const units = await getKnowledgeUnits(userId);
--    const domains = Array.from(new Set(units.map(u => u.domain)));
-+    const domainCounts: Record<string, number> = {};
++**Effort:** 30 minutes.
 +
-+    units.forEach(u => {
-+      if (!u.domain) return;
-+      domainCounts[u.domain] = (domainCounts[u.domain] || 0) + 1;
-+    });
++---
 +
-     const totalUnits = units.length;
-     const masteredCount = units.filter(u => u.mastery_status === 'practiced' || u.mastery_status === 'confident').length;
- 
-     return {
--      domains,
-+      domains: domainCounts,
-       totalUnits,
-       masteredCount
-     };
-   } catch (error) {
-     console.error('Error fetching knowledge summary for GPT:', error);
-     return {
--      domains: [],
-+      domains: {},
-       totalUnits: 0,
-       masteredCount: 0
-     };
-diff --git a/lib/services/synthesis-service.ts b/lib/services/synthesis-service.ts
-index d407068..12c1dfb 100644
---- a/lib/services/synthesis-service.ts
-+++ b/lib/services/synthesis-service.ts
-@@ -11,6 +11,9 @@ import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
- import { getKnowledgeSummaryForGPT } from './knowledge-service'
- import { getFacetsBySnapshot } from './facet-service'
- import { getBoardSummaries } from './mind-map-service'
-+import { getSkillDomainsForUser } from './skill-domain-service'
-+import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
-+import { SkillMasteryLevel } from '@/lib/constants'
- 
- export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
-   const adapter = getStorageAdapter()
-@@ -46,6 +49,37 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
-     snapshot.next_candidates = aiResult.nextCandidates
-   }
-   
-+  // W2 - Compute Mastery Transitions for Lane 5
-+  if (sourceType === 'experience') {
-+    const allDomains = await getSkillDomainsForUser(userId)
-+    const linkedDomains = allDomains.filter(d => d.linkedExperienceIds.includes(sourceId))
-+    
-+    if (linkedDomains.length > 0) {
-+      const transitions: any[] = []
-+      const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert']
-+      const userInstances = await getExperienceInstances({ userId })
-+      
-+      for (const domain of linkedDomains) {
-+        // 'After' state is current
-+        const { masteryLevel: afterLevel, evidenceCount: afterEvidence } = await computeSkillMastery(domain, undefined, userInstances)
-+        // 'Before' state skips this experience
-+        const { masteryLevel: beforeLevel, evidenceCount: beforeEvidence } = await computeSkillMastery(domain, sourceId, userInstances)
-+        
-+        if (afterLevel !== beforeLevel || afterEvidence !== beforeEvidence) {
-+          transitions.push({
-+            domainId: domain.id,
-+            domainName: domain.name,
-+            before: { level: beforeLevel, evidence: beforeEvidence },
-+            after: { level: afterLevel, evidence: afterEvidence },
-+            isLevelUp: LEVELS.indexOf(afterLevel) > LEVELS.indexOf(beforeLevel)
-+          })
-+        }
-+      }
-+      
-+      snapshot.key_signals.masteryTransitions = transitions
-+    }
++### EW-3. 33 Console Statements Leaking to Production
++
++**Problem:** `console.log`, `console.error`, and `console.warn` calls scattered across components surface internal implementation details in the browser DevTools. Not a user-facing issue per se, but unprofessional if anyone opens the console — and some mask real errors that should show toast feedback instead.
++
++**Key offenders:**
++- `components/think/think-canvas.tsx` — 7 console statements for failed node/edge operations
++- `components/experience/KnowledgeCompanion.tsx` — 3 console errors swallowed silently
++- `components/experience/CompletionScreen.tsx` — 2 errors hidden from user
++- `app/library/page.tsx` — debug logs left in (`console.log` of adapter stats)
++- `app/workspace/[instanceId]/WorkspaceClient.tsx` — 3 warnings for failed auto-activate/resume
++
++**Fix:** For user-facing failures (save failed, fetch failed), replace with inline error state or toast. For debug logging, remove or gate behind `process.env.NODE_ENV === 'development'`.
++
++**Effort:** 1 hour.
++
++---
++
++### EW-4. Modals Missing Escape Key Handling
++
++**Problem:** `stale-idea-modal.tsx` and `confirm-dialog.tsx` don't close on Escape. The command bar and node context menu handle this correctly — the pattern exists in the codebase, it's just not applied everywhere.
++
++**Fix:** Add a `useEffect` with a `keydown` listener for `Escape` in both components. The pattern from `node-context-menu.tsx` can be copied directly.
++
++**Effort:** 15 minutes.
++
++---
++
++### EW-5. No `prefers-reduced-motion` Respect
++
++**Problem:** Animations throughout the app (`animate-in`, `slide-in-from-right-full`, `fade-in`, `duration-500`, `transition-all`) run unconditionally. Users with vestibular disorders or motion sensitivity preferences set in their OS get no relief.
++
++**Affected components:** EphemeralToast, home page section reveals, QuestionnaireStep, drill progress transitions, and ~20 other components using `transition-all`.
++
++**Fix:** Add to `globals.css`:
++```css
++@media (prefers-reduced-motion: reduce) {
++  *, *::before, *::after {
++    animation-duration: 0.01ms !important;
++    animation-iteration-count: 1 !important;
++    transition-duration: 0.01ms !important;
 +  }
-+  
-   // Lane 4: Persist computed friction as a key signal if not already present
-   if (sourceType === 'experience' && !snapshot.key_signals.frictionLevel) {
-     const instances = await adapter.query<ExperienceInstance>('experience_instances', { id: sourceId });
-diff --git a/lib/services/timeline-service.ts b/lib/services/timeline-service.ts
-index 2f815c8..6ef97d2 100644
---- a/lib/services/timeline-service.ts
-+++ b/lib/services/timeline-service.ts
-@@ -172,6 +172,8 @@ export async function generateInteractionTimelineEntries(userId: string): Promis
-   )
- 
-   for (const event of completionEvents) {
-+    if (!event.instance_id) continue;
-+    
-     entries.push({
-       id: event.id,
-       timestamp: event.created_at,
-diff --git a/lib/studio-copy.ts b/lib/studio-copy.ts
-index 3e43e1c..d9db149 100644
---- a/lib/studio-copy.ts
-+++ b/lib/studio-copy.ts
-@@ -17,6 +17,12 @@ export const COPY = {
-     activeSection: 'Active Journeys',
-     emptySuggested: 'No new suggestions from Mira.',
-     emptyActive: 'No active journeys.',
-+    focusNarrative: "You're {percent}% through {title}. Next: {step}.",
-+    reentry: {
-+      heading: 'Pick Up Where You Left Off',
-+      viewMore: 'View {count} other re-entry points ↓',
-+      hideMore: 'Hide other re-entry points ↑',
-+    },
-   },
-   send: {
-     heading: 'Ideas from GPT',
-diff --git a/mira2.md b/mira2.md
-index f7e7eb7..5d0972f 100644
---- a/mira2.md
-+++ b/mira2.md
-@@ -4,6 +4,103 @@
- 
- ---
- 
-+## Phase Reality Update (Post-Sprint 22)
++}
++```
 +
-+> [!IMPORTANT]
-+> **This section separates what is true, what is being tested, and what is aspirational.** Read this before the architecture vision below. If this section contradicts the vision sections, this section governs.
-+
-+### Current State After Sprint 22
-+
-+**Implemented now:**
-+- Fast-path structural authoring preserved — GPT can always create outlines + experiences + steps directly
-+- Nexus enrichment loop exists — `dispatch_research` → webhook delivery → Mira ingest pipeline is wired
-+- Markdown rendering improvements landed — `react-markdown` + `@tailwindcss/typography` across all step renderers
-+- Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
-+- Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
-+- Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
-+- Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
-+- Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
-+- Mind map station + Goal OS fully CRUD-wired
-+- System ready for Custom GPT acceptance testing
-+
-+**Being tested now:**
-+- Whether real GPT conversations can successfully orchestrate planning, lightweight authoring, block-based lesson creation, async enrichment, and partial lesson revision
-+- Whether the OpenAPI schema holds up under the 5 conversation types defined in [test.md](file:///c:/mira/test.md)
-+- Whether the GPT instructions can stay under the 8,000 character limit while covering enough operational context
-+- Whether `reentry` contracts actually persist and hydrate correctly on create calls (current tests show `reentry: null` in responses — investigate)
-+- Whether step surgery via `update_step` works end-to-end when the experience instance doesn't return nested steps in the create response
-+
-+**Not yet complete:**
-+- Proactive coach nudges (failed checkpoint → auto-surface, dwell time → gentle prompt)
-+- Truly felt learner trajectory — the "what matters next" story on the home page
-+- "What others experienced" grounding — aggregate learning data across users
-+- Robust evidence-driven next-content logic (`/api/learning/next` is designed but not built)
-+- Polished educational UX loop — completion feels like a level-up, not an exit
-+- Agent Operational Memory — GPT doesn't yet learn from its own usage patterns across sessions
-+- Open Learner Model — concept coverage + readiness state is designed but not implemented
++**Effort:** 5 minutes.
 +
 +---
 +
-+### What This Acceptance Phase Is Actually Proving
++### EW-6. No Per-Page Titles (SEO + Tab Clarity)
 +
-+This phase is not proving architecture. The architecture works. It is proving **five specific behavioral claims:**
++**Problem:** Only the root layout sets metadata (`Mira Studio`). Every page shows the same browser tab title. If a user has 3 Mira tabs open (skills, workspace, knowledge), they're all labeled identically.
 +
-+1. **GPT can scope before building** — it follows the planning-first doctrine (outline → then experience), not dump-a-giant-lesson
-+2. **GPT can stay lightweight when asked** — fast-path `light/illuminate/immediate/low` experiences don't trigger unnecessary machinery
-+3. **GPT can author blocks** — Sprint 22's granular block types (`prediction`, `exercise`, `checkpoint`, `hint_ladder`) are usable by the GPT and render correctly
-+4. **GPT can request enrichment without blocking the learner** — `dispatch_research` fires and forgets; the learner starts immediately on scaffolding
-+5. **GPT can revise one part of a lesson without rewriting the whole thing** — `update_step` with new blocks replaces a single step surgically
++**Fix:** Export `metadata` from each page:
++```tsx
++export const metadata = { title: 'Skills — Mira' }
++```
 +
-+These five claims map directly to the [test.md](file:///c:/mira/test.md) battery. If they hold, the Custom GPT instructions and schema are validated. If they break, the next sprint fixes the observed failure, not a theoretical gap.
++Priority pages: home, workspace, skills, knowledge, library, profile.
 +
-+---
-+
-+### Do Not Overclaim
-+
-+> [!CAUTION]
-+> **These boundaries protect sprint planning from drifting into self-congratulation.**
-+
-+- **Nexus is a strong optional content worker, not yet a fully trusted autonomous educational orchestrator.** It can generate atoms and deliver via webhook. It cannot yet autonomously decide what to teach, when to teach it, or how to sequence content for a specific learner.
-+- **"What others experienced" is a target capability, not a mature runtime layer yet.** There is no aggregation of learning patterns across users. The system is single-user with `DEFAULT_USER_ID`.
-+- **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
-+- **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
-+- **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
++**Effort:** 30 minutes.
 +
 +---
 +
-+### Near-Term UX Priorities
++### EW-7. Text at 8px Is Unreadable
 +
-+These are the four product gaps that keep circling in every sprint retrospective:
++**Problem:** Two components use `text-[8px]`:
++- `KnowledgeCompanion.tsx` — badge labels
++- `KnowledgeUnitView.tsx` — status spans
 +
-+- Make experiences feel like a **workspace**, not a form wizard — the non-linear navigation (R1) landed, but the overall feel still leans "assignment" rather than "environment you inhabit"
-+- Make coach/tutor support **proactive but subtle** — gentle surfacing triggers on failed checkpoints, extended dwell, unread knowledge links
-+- Make progress feel like **personal movement**, not telemetry — completion screens that reflect synthesis, mastery transitions that feel earned, "you improved" signals
-+- Make home/library show a **clear next path**, not just lists — the "Your Path" section and Focus Today card exist but need to tell a coherent "focus here today" story
++8px text is below WCAG minimum readable size (roughly 10-12px depending on font). Even `text-[9px]` (used in TrackCard status badges) is borderline.
 +
-+---
++**Fix:** Bump all `text-[8px]` to `text-[10px]`. Audit `text-[9px]` usage and bump where the text carries meaning (not just decorative labels).
 +
-+### Demo-Ready vs Production-Ready
-+
-+| Demo-Ready Soon | Production-Ready Later |
-+|----------------|----------------------|
-+| GPT scopes topic via `create_outline` | Stable deep-research orchestration (Nexus → NotebookLM → atoms → delivery at scale) |
-+| GPT creates first experience with blocks | Evidence-driven nudges (`/api/learning/next` + concept coverage) |
-+| GPT optionally dispatches Nexus for enrichment | Learner-model loop (Open Learner Model with confidence decay) |
-+| Mira renders improved lesson flow with block types | "Others experienced" aggregation (multi-user patterns) |
-+| GPT revises steps surgically via `update_step` | Strong educational UX coherence (workspace feel, proactive coach, earned mastery) |
-+| Coach answers questions in-context | Agent Operational Memory (GPT learns from its own usage) |
-+| Curriculum outlines visible on home page | Multi-user auth (replace `DEFAULT_USER_ID`) |
++**Effort:** 5 minutes.
 +
 +---
 +
-+### The Frontend Reality
++### EW-8. Mobile Nav Touch Targets May Be Too Small
 +
-+> "Mira is already a usable learner runtime: experiences can be opened, worked through, coached in-context, and revisited. The remaining gap is not basic runtime capability but coherence, guidance, and felt polish."
++**Problem:** Mobile nav labels use `text-[10px]` and the nav bar is only 16px tall as noted in the code. The tap target for individual nav items may fall below the 44x44px recommended minimum, making it frustrating on phones.
 +
-+Sprint 21 proved the enrichment slice. Sprint 22 proved the granular block substrate. Now the project is entering a **Custom GPT acceptance phase**, and the next decisions should come from observed GPT and learner friction, not only architecture theory.
++**Fix:** Verify tap targets with browser DevTools mobile emulation. If too small, increase the nav item `py-` padding to ensure 44px minimum height per item. The labels can stay 10px — it's the tappable area that matters.
++
++**Effort:** 15 minutes to verify + fix.
 +
 +---
 +
- ## The Master Constraint: Augmenting Mode, Not Replacement Mode
- 
- > [!CAUTION]
-diff --git a/types/interaction.ts b/types/interaction.ts
-index ab9e3ed..6998598 100644
---- a/types/interaction.ts
-+++ b/types/interaction.ts
-@@ -10,11 +10,12 @@ export type InteractionEventType =
-   | 'experience_completed'
-   | 'draft_saved'
-   | 'checkpoint_graded'
--  | 'checkpoint_graded_batch';
-+  | 'checkpoint_graded_batch'
-+  | 'practice_attempt';
- 
- export interface InteractionEvent {
-   id: string;
--  instance_id: string;
-+  instance_id: string | null;
-   step_id: string | null;
-   event_type: InteractionEventType;
-   event_payload: any; // JSONB
++### EW-9. Confirm Dialog Lacks Enter-to-Confirm
++
++**Problem:** `confirm-dialog.tsx` requires a mouse click to confirm destructive actions. Users who triggered the dialog via keyboard (or who just want to move fast) can't press Enter to confirm or Escape to cancel.
++
++**Fix:** Add `onKeyDown` handler: Enter → confirm, Escape → close. Auto-focus the cancel button (safer default for destructive dialogs).
++
++**Effort:** 10 minutes.
++
++---
++
++### EW-10. Missing `aria-hidden` on Decorative SVGs
++
++**Problem:** Icon SVGs inside labeled buttons (e.g., the X icon in EphemeralToast's dismiss button) don't have `aria-hidden="true"`. Screen readers may try to announce the SVG path data.
++
++**Fix:** Add `aria-hidden="true"` to all SVG elements inside buttons that already have `aria-label`. Quick grep for `<svg` inside `<button` elements with `aria-label`.
++
++**Effort:** 15 minutes.
++
++---
++
++### EW-11. Think Board Errors Are Silent
++
++**Problem:** The mind map canvas (`think-canvas.tsx`) has 7 `console.error` / `console.warn` calls for failed operations (save position, delete node, create edge, etc.) but shows nothing to the user. A failed save means the user thinks their work is persisted when it isn't.
++
++**Fix:** Add a simple error state at the top of the canvas: "Failed to save — your last change may not have been persisted. [Retry]". This is the highest-stakes silent failure in the codebase because the user is actively editing and expects persistence.
++
++**Effort:** 30 minutes.
++
++---
++
++### EW-12. Home Page "Needs Attention" Section Lacks Differentiation
++
++**Problem:** The home page groups captured ideas and unhealthy projects into a single "Needs Attention" section. Both use similar card styling. A user with 3 captured ideas and 2 unhealthy projects sees 5 items with no visual priority hierarchy.
++
++**Fix:** Add a subtle left border color to differentiate: amber for stale/unhealthy, indigo for captured ideas awaiting definition. The data already carries the distinction — surface it visually.
++
++**Effort:** 15 minutes.
++
++---
++
++### EW-13. Scroll Containers Clip Content Without Indicator
++
++**Problem:** TrackCard's subtopic list (`max-h-[180px] overflow-y-auto scrollbar-none`) hides the scrollbar entirely. If 8 subtopics exist but only 4 are visible, the user has no clue there's more content below.
++
++**Fix:** Either:
++- (a) Show a thin styled scrollbar (remove `scrollbar-none`, add `scrollbar-thin scrollbar-thumb-slate-700`), or
++- (b) Add a gradient fade at the bottom of the container when content overflows, signaling more below.
++
++**Effort:** 10 minutes.
++
++---
++
++### Summary: Easy Win Priority Order
++
++| # | Fix | Impact | Effort |
++|---|-----|--------|--------|
++| EW-1 | Loading states for top 5 pages | High — eliminates blank flashes | 1 hr |
++| EW-2 | Root + critical error boundaries | High — prevents crash screens | 30 min |
++| EW-5 | Reduced-motion CSS | High — accessibility compliance | 5 min |
++| EW-11 | Think board error feedback | High — prevents silent data loss | 30 min |
++| EW-3 | Clean up console statements | Medium — professionalism | 1 hr |
++| EW-4 | Escape key on modals | Medium — keyboard users | 15 min |
++| EW-7 | Bump 8px text to 10px | Medium — readability | 5 min |
++| EW-6 | Per-page titles | Medium — tab clarity | 30 min |
++| EW-9 | Enter-to-confirm on dialogs | Low-Medium — power users | 10 min |
++| EW-8 | Mobile touch targets | Low-Medium — verify first | 15 min |
++| EW-13 | Scroll overflow indicators | Low — discoverability | 10 min |
++| EW-12 | Needs Attention visual hierarchy | Low — visual polish | 15 min |
++| EW-10 | aria-hidden on decorative SVGs | Low — screen reader polish | 15 min |
++
++**Total estimated effort: ~5 hours for all 13 fixes.**
++
++The first 4 items (loading states, error boundaries, reduced-motion, think board errors) cover 80% of the user-facing impact in about 2 hours.
 ```
 
 ### New Untracked Files
 
-#### `api_result.json` (1168 lines - truncated)
+#### `out1.json`
 
 ```
-[
-  {
-    "name": "1. Outline creation (Pricing Fundamentals)",
-    "url": "/plan",
-    "payload": {
-      "action": "create_outline",
-      "topic": "SaaS Pricing Strategy",
-      "domain": "Business",
-      "subtopics": [
-        {
-          "title": "Pricing Fundamentals",
-          "description": "Understanding value metrics and pricing models.",
-          "order": 1
-        }
-      ],
-      "pedagogicalIntent": "build_understanding"
-    },
-    "status": 201,
-    "statusText": "Created",
-    "response": {
-      "action": "create_outline",
-      "outline": {
-        "id": "62c0d447-8b59-485d-a952-0f38bfd52984",
-        "userId": "a0000000-0000-0000-0000-000000000001",
-        "topic": "SaaS Pricing Strategy",
-        "domain": "Business",
-        "discoverySignals": {},
-        "subtopics": [
-          {
-            "order": 1,
-            "title": "Pricing Fundamentals",
-            "description": "Understanding value metrics and pricing models."
-          }
-        ],
-        "existingUnitIds": [],
-        "researchNeeded": [],
-        "pedagogicalIntent": "build_understanding",
-        "estimatedExperienceCount": null,
-        "status": "planning",
-        "goalId": null,
-        "createdAt": "2026-04-05T03:52:00.607+00:00",
-        "updatedAt": "2026-04-05T03:52:00.607+00:00"
+{
+  "action": "create_outline",
+  "outline": {
+    "id": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f",
+    "userId": "a0000000-0000-0000-0000-000000000001",
+    "topic": "SaaS Pricing Strategy",
+    "domain": "Product Strategy",
+    "discoverySignals": {},
+    "subtopics": [
+      {
+        "order": 0,
+        "title": "Fundamentals of Pricing Concepts",
+        "description": "Value-based vs per-seat, pricing psychology."
       },
-      "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
-    }
+      {
+        "order": 1,
+        "title": "Iterating on Pricing",
+        "description": "How to test and change pricing safely."
+      }
+    ],
+    "existingUnitIds": [],
+    "researchNeeded": [],
+    "pedagogicalIntent": "build_understanding",
+    "estimatedExperienceCount": null,
+    "status": "planning",
+    "goalId": null,
+    "createdAt": "2026-04-05T04:23:39.359+00:00",
+    "updatedAt": "2026-04-05T04:23:39.359+00:00"
   },
-  {
-    "name": "1b. Create First Experience",
-    "url": "/create",
+  "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
+}
+```
+
+#### `test1_create.json`
+
+```
+{
+  "id": "a321b096-8ef8-4525-8c1d-15f0b404dc49",
+  "user_id": "a0000000-0000-0000-0000-000000000001",
+  "idea_id": null,
+  "template_id": "b0000000-0000-0000-0000-000000000002",
+  "title": "Fundamentals of SaaS Pricing",
+  "goal": "Understand value-based vs per-seat pricing models and psychology",
+  "instance_type": "persistent",
+  "status": "proposed",
+  "resolution": {
+    "mode": "illuminate",
+    "depth": "medium",
+    "intensity": "medium",
+    "timeScope": "session"
+  },
+  "reentry": {
+    "prompt": "You just finished Fundamentals of Pricing rules. Ready for the next?",
+    "trigger": "completion",
+    "contextScope": "focused"
+  },
+  "previous_experience_id": null,
+  "next_suggested_ids": [],
+  "friction_level": null,
+  "source_conversation_id": null,
+  "generated_by": "gpt",
+  "realization_id": null,
+  "created_at": "2026-04-05T04:23:53.085+00:00",
+  "published_at": null,
+  "curriculum_outline_id": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f",
+  "steps": [
+    {
+      "id": "fe1f46c5-e360-4549-af2b-505866ddc579",
+      "instance_id": "a321b096-8ef8-4525-8c1d-15f0b404dc49",
+      "step_order": 0,
+      "step_type": "lesson",
+      "title": "Introduction to Value Metrics",
+      "payload": {
+        "sections": [
+          {
+            "body": "A value metric is the way you measure how much a customer pays. If it scales with their success, you win.",
+            "type": "text",
+            "heading": "Value Metrics"
+          }
+        ]
+      },
+      "completion_rule": null,
+      "created_at": "2026-04-05T04:23:53.63751+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null,
+      "order_index": 0
+    }
+  ]
+}
+```
+
+#### `test2_create.json`
+
+```
+{
+  "id": "a3c45d70-8416-4a67-a432-21229c5834c8",
+  "user_id": "a0000000-0000-0000-0000-000000000001",
+  "idea_id": null,
+  "template_id": "b0000000-0000-0000-0000-000000000002",
+  "title": "Beginner Lesson: Customer Interviews",
+  "goal": "Master the art of customer interviews via block-based interaction",
+  "instance_type": "persistent",
+  "status": "proposed",
+  "resolution": {
+    "mode": "practice",
+    "depth": "medium",
+    "intensity": "medium",
+    "timeScope": "session"
+  },
+  "reentry": {
+    "prompt": "Good job",
+    "trigger": "completion",
+    "contextScope": "focused"
+  },
+  "previous_experience_id": null,
+  "next_suggested_ids": [],
+  "friction_level": null,
+  "source_conversation_id": null,
+  "generated_by": "gpt",
+  "realization_id": null,
+  "created_at": "2026-04-05T04:24:10.412+00:00",
+  "published_at": null,
+  "curriculum_outline_id": null,
+  "steps": [
+    {
+      "id": "b07d8b07-215b-438b-93ef-59d551c71f74",
+      "instance_id": "a3c45d70-8416-4a67-a432-21229c5834c8",
+      "step_order": 0,
+      "step_type": "lesson",
+      "title": "Customer Interview Blocks",
+      "payload": {
+        "blocks": [
+          {
+            "type": "prediction",
+            "question": "What is the most common mistake made during customer interviews?",
+            "reveal_content": "Talking too much instead of listening."
+          },
+          {
+            "type": "exercise",
+            "title": "Formulate a great open-ended question",
+            "instructions": "Draft an open-ended question to uncover a customer pain point.",
+            "validation_criteria": "Must not be a yes/no question."
+          },
+          {
+            "type": "checkpoint",
+            "question": "If a customer says \"I like it\", what is your immediate next question?",
+            "explanation": "You must drill down from generic praise to concrete behavior.",
+            "expected_answer": "Why do you like it? Tell me an example."
+          }
+        ]
+      },
+      "completion_rule": null,
+      "created_at": "2026-04-05T04:24:11.002383+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null,
+      "order_index": 0
+    },
+    {
+      "id": "bcb6c029-6410-41cc-a5a3-acf1209900a5",
+      "instance_id": "a3c45d70-8416-4a67-a432-21229c5834c8",
+      "step_order": 1,
+      "step_type": "reflection",
+      "title": "Reflection",
+      "payload": {
+        "prompts": [
+          {
+            "text": "What was your biggest takeaway about customer interviews?"
+          }
+        ]
+      },
+      "completion_rule": null,
+      "created_at": "2026-04-05T04:24:11.278837+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null,
+      "order_index": 1
+    }
+  ]
+}
+```
+
+#### `test3_create.json`
+
+```
+{
+  "id": "eba12593-3c0f-4759-8a6e-ecfb6ad25b30",
+  "user_id": "a0000000-0000-0000-0000-000000000001",
+  "idea_id": null,
+  "template_id": "b0000000-0000-0000-0000-000000000003",
+  "title": "Cold Outreach Emails",
+  "goal": "Write better hooks",
+  "instance_type": "ephemeral",
+  "status": "injected",
+  "resolution": {
+    "mode": "practice",
+    "depth": "light",
+    "intensity": "low",
+    "timeScope": "immediate"
+  },
+  "reentry": {
+    "prompt": "Completed cold outreach fast path",
+    "trigger": "completion",
+    "contextScope": "minimal"
+  },
+  "previous_experience_id": null,
+  "next_suggested_ids": [],
+  "friction_level": null,
+  "source_conversation_id": null,
+  "generated_by": "gpt",
+  "realization_id": null,
+  "created_at": "2026-04-05T04:24:26.284+00:00",
+  "published_at": null,
+  "curriculum_outline_id": null,
+  "steps": [
+    {
+      "id": "14992c4b-fb92-47ab-aed4-6da0cd20c351",
+      "instance_id": "eba12593-3c0f-4759-8a6e-ecfb6ad25b30",
+      "step_order": 0,
+      "step_type": "challenge",
+      "title": "Your first cold email",
+      "payload": {},
+      "completion_rule": null,
+      "created_at": "2026-04-05T04:24:26.728276+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null,
+      "order_index": 0
+    }
+  ]
+}
+```
+
+#### `test3_create_fixed.json`
+
+```
+{
+  "id": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+  "user_id": "a0000000-0000-0000-0000-000000000001",
+  "idea_id": null,
+  "template_id": "b0000000-0000-0000-0000-000000000003",
+  "title": "Cold Outreach Emails",
+  "goal": "Write better hooks",
+  "instance_type": "ephemeral",
+  "status": "injected",
+  "resolution": {
+    "mode": "practice",
+    "depth": "light",
+    "intensity": "low",
+    "timeScope": "immediate"
+  },
+  "reentry": {
+    "prompt": "Completed cold outreach fast path",
+    "trigger": "completion",
+    "contextScope": "minimal"
+  },
+  "previous_experience_id": null,
+  "next_suggested_ids": [],
+  "friction_level": null,
+  "source_conversation_id": null,
+  "generated_by": "gpt",
+  "realization_id": null,
+  "created_at": "2026-04-05T04:24:54.706+00:00",
+  "published_at": null,
+  "curriculum_outline_id": null,
+  "steps": [
+    {
+      "id": "595ca1cc-c305-4536-af53-bbba3b5b2f95",
+      "instance_id": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+      "step_order": 0,
+      "step_type": "challenge",
+      "title": "Your first cold email",
+      "payload": {
+        "objectives": [
+          {
+            "description": "Write a 3 sentence email"
+          }
+        ]
+      },
+      "completion_rule": null,
+      "created_at": "2026-04-05T04:24:55.289841+00:00",
+      "status": "pending",
+      "scheduled_date": null,
+      "due_date": null,
+      "estimated_minutes": null,
+      "completed_at": null,
+      "order_index": 0
+    }
+  ]
+}
+```
+
+#### `test4_dispatch.json`
+
+```
+{
+  "action": "dispatch_research",
+  "status": "dispatched",
+  "outlineId": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f",
+  "topic": "Unit Economics",
+  "message": "Research dispatch logged. Knowledge units will arrive in the Knowledge Tab when ready."
+}
+```
+
+#### `test5_update.json`
+
+```
+{
+  "id": "595ca1cc-c305-4536-af53-bbba3b5b2f95",
+  "instance_id": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+  "step_order": 0,
+  "step_type": "challenge",
+  "title": "Revised Email Step",
+  "payload": {
     "payload": {
-      "type": "ephemeral",
-      "title": "Pricing Fundamentals for SaaS",
-      "goal": "Understand value metrics and basic pricing models.",
-      "resolution": {
-        "depth": "medium",
-        "mode": "illuminate",
-        "timeScope": "session",
-        "intensity": "medium"
-      },
-      "reentry": {
-        "trigger": "completion",
-        "prompt": "How did that go?",
-        "contextScope": "minimal"
-      },
-      "steps": [
+      "blocks": [
         {
-          "step_type": "lesson",
-          "title": "What is a Value Metric?",
-          "blocks": [
-            {
-              "type": "content",
-              "content": "A value metric is the way you measure the value your customer receives."
-            }
-          ]
+          "type": "content",
+          "content": "Email length matters."
+        },
+        {
+          "type": "checkpoint",
+          "question": "Why limit word count?",
+          "expected_answer": "Respects time."
         }
       ]
-    },
-    "status": 201,
-    "statusText": "Created",
-    "response": {
-      "id": "826e015e-2fe6-46af-a259-7474337177c9",
-      "user_id": null,
-      "idea_id": null,
-      "template_id": null,
-      "title": "Pricing Fundamentals for SaaS",
-      "goal": "Understand value metrics and basic pricing models.",
-      "instance_type": "ephemeral",
-      "status": "injected",
-      "resolution": {
-        "mode": "illuminate",
-        "depth": "medium",
-        "intensity": "medium",
-        "timeScope": "session"
-      },
-      "reentry": {
-        "prompt": "How did that go?",
-        "trigger": "completion",
-        "contextScope": "minimal"
-      },
-      "previous_experience_id": null,
-... (16 total lines)
-```
-
-#### `api_result.txt`
-
-```
-stdout is not a tty
-```
-
-#### `dump00.md` (8000 lines - truncated)
-
-```
-# Mira + Nexus Project Code Dump
-Generated: Sat, Apr  4, 2026 10:26:19 PM
-
-## Selection Summary
-
-- **Areas:** (all)
-- **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
-- **Slicing:** full files
-- **Files selected:** 356
-
-## Project Overview
-
-Mira is a Next.js (App Router) AI tutoring platform integrated with Google AI Studio.
-It uses Tailwind CSS, Lucide React, and Framer Motion for the UI.
-The dump also includes the Nexus content worker (c:/notes/service) — a Python/FastAPI
-agent workbench providing NotebookLM-grounded research, atomic content generation,
-and delivery via webhooks and delivery profiles.
-
-| Area | Path | Description |
-|------|------|-------------|
-| **app** | app/ | Next.js App Router (pages, layout, api) |
-| **components** | components/ | React UI components (shadcn/ui style) |
-| **lib** | lib/ | Shared utilities and helper functions |
-| **hooks** | hooks/ | Custom React hooks |
-| **docs** | *.md | Migration, AI working guide, README |
-| **nexus** | c:/notes/service/ | Python/FastAPI content worker (agents, grounding, synthesis, delivery, cache) |
-
-Key paths: `app/page.tsx` (main UI), `app/layout.tsx` (root wrapper), `AI_WORKING_GUIDE.md`
-Nexus key paths: `service/main.py`, `service/grounding/notebooklm.py`, `service/synthesis/extractor.py`
-Stack: Next.js 15, React 19, Tailwind CSS 4, Google GenAI SDK + Python FastAPI + notebooklm-py
-
-To dump specific code for chat context, run:
-```bash
-./printcode.sh --help                              # see all options
-./printcode.sh --area backend --ext py --head 120  # backend Python, first 120 lines
-./printcode.sh --list --area docs                  # just list doc files
-```
-
-## Project Structure
-```
-.env.example
-.env.local
-.github/copilot-instructions.md
-.gitignore
-agents.md
-api_result.json
-api_result.txt
-app/api/actions/kill-idea/route.ts
-app/api/actions/mark-shipped/route.ts
-app/api/actions/merge-pr/route.ts
-app/api/actions/move-to-icebox/route.ts
-app/api/actions/promote-to-arena/route.ts
-app/api/changes/route.ts
-app/api/coach/chat/route.ts
-app/api/coach/grade/route.ts
-app/api/coach/grade-batch/route.ts
-app/api/coach/mastery/route.ts
-app/api/curriculum-outlines/[id]/route.ts
-app/api/dev/diagnostic/route.ts
-app/api/dev/test-experience/route.ts
-app/api/dev/test-knowledge/route.ts
-app/api/drafts/[stepId]/route.ts
-app/api/drafts/route.ts
-app/api/drill/route.ts
-app/api/enrichment/ingest/route.ts
-app/api/enrichment/request/route.ts
-app/api/experiences/[id]/chain/route.ts
-app/api/experiences/[id]/progress/route.ts
-app/api/experiences/[id]/route.ts
-app/api/experiences/[id]/status/route.ts
-app/api/experiences/[id]/steps/[stepId]/route.ts
-app/api/experiences/[id]/steps/reorder/route.ts
-app/api/experiences/[id]/steps/route.ts
-app/api/experiences/[id]/suggestions/route.ts
-app/api/experiences/inject/route.ts
-app/api/experiences/route.ts
-app/api/github/create-issue/route.ts
-app/api/github/create-pr/route.ts
-app/api/github/dispatch-workflow/route.ts
-app/api/github/merge-pr/route.ts
-app/api/github/sync-pr/route.ts
-app/api/github/test-connection/route.ts
-app/api/github/trigger-agent/route.ts
-app/api/goals/[id]/route.ts
-app/api/goals/route.ts
-app/api/gpt/changes/route.ts
-app/api/gpt/create/route.ts
-app/api/gpt/discover/route.ts
-app/api/gpt/plan/route.ts
-app/api/gpt/state/route.ts
-app/api/gpt/update/route.ts
-app/api/ideas/materialize/route.ts
-app/api/ideas/route.ts
-app/api/inbox/route.ts
-app/api/interactions/route.ts
-app/api/knowledge/[id]/progress/route.ts
-app/api/knowledge/[id]/route.ts
-app/api/knowledge/batch/route.ts
-app/api/knowledge/route.ts
-app/api/mindmap/boards/route.ts
-... (16 total lines)
-```
-
-#### `dump01.md` (8000 lines - truncated)
-
-```
-  color = 'text-white',
-  isUppercase = false 
-}: { 
-  label: string; 
-  value: string | number; 
-  subValue: string; 
-  color?: string;
-  isUppercase?: boolean;
-}) {
-  return (
-    <div className="p-4 rounded-xl border border-white/5 bg-slate-900/40 flex flex-col gap-1">
-      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-        {label}
-      </span>
-      <span className={`text-xl font-bold truncate ${color} ${isUppercase ? 'uppercase' : ''}`}>
-        {value}
-      </span>
-      <span className="text-[10px] text-slate-400 font-medium">
-        {subValue}
-      </span>
-    </div>
-  )
+    }
+  },
+  "completion_rule": null,
+  "created_at": "2026-04-05T04:24:55.289841+00:00",
+  "status": "pending",
+  "scheduled_date": null,
+  "due_date": null,
+  "estimated_minutes": null,
+  "completed_at": null
 }
+```
+
+---
+
+## Commits Ahead (local changes not on remote)
 
 ```
+```
+
+## Commits Behind (remote changes not pulled)
+
+```
+```
+
+---
+
+## Status: Up to Date
+
+Your local branch is even with **origin/main**.
+No unpushed commits.
+
+## File Changes (YOUR UNPUSHED CHANGES)
+
+```
+```
+
+---
+
+## Full Diff of Your Unpushed Changes
+
+Green (+) = lines you ADDED locally
+Red (-) = lines you REMOVED locally
+
+```diff
+```
+
+```
+
+### gpt-instructions.md
+
+```markdown
+# Mira — Experience Engine & Goal OS
+userId: `a0000000-0000-0000-0000-000000000001`
+
+You are Mira's orchestration layer. You build **operating environments** inside the Studio — not just answer questions. You turn vague ambitions into structured systems the user lives inside.
+
+## Core Stance
+
+Mira is an operating system, not a chatbot. When a user brings an ambition:
+- Identify the real system behind what they're building
+- Separate strategy, execution, learning, and experimentation
+- Create structure in Mira BEFORE generating experiences
+- Use boards/maps to externalize the system visually
+- Use goals, outlines, skill domains, knowledge, and experiences in order
+- Verify writes after each major action
+
+**Do not rush into experience generation.** Prefer system design before lesson generation. If the user is unclear, infer the underlying system and map it first. When they mention a bottleneck, treat it as a structural signal — update the system, don't just answer.
+
+## Operating Sequence
+
+Work in this order unless reality suggests otherwise:
+
+1. **Sync state** — call `getGPTState`. Recover goals, experiences, re-entry prompts, friction signals, pending enrichments (queued research), and knowledge summaries. If bugs mentioned, call `getChangeReports`.
+2. **Identify the core ambition** and break it into major system layers.
+3. **Create or expand a mind map** — externalize the whole system on a Think Board.
+4. **Dispatch research** — use `readKnowledge` for existing memory, MiraK for deep async research.
+5. **Compare map against knowledge** — identify missing layers, blind spots, dependency gaps.
+6. **Refine the map until operational**, not decorative. Classify nodes into:
+   - Operating context (the real system)
+   - Knowledge support (what needs understood)
+   - Experience candidates (what needs practiced)
+7. **Create a sequence layer** — what happens first, second, third.
+8. **Create one umbrella goal** — the persistent container for the journey.
+9. **Create skill domains** — major capability areas under the goal.
+10. **Create a curriculum outline** — scope learning from the map.
+11. **Turn highest-leverage parts into experiences** — connected to realistic execution, not abstract learning.
+12. **Verify** — confirm the Studio reflects what you built.
+
+**Stop adding structure once it supports real execution.** Tell the user when to stop mapping and start operating.
+
+## Optimization Principles
+
+**Maps:** real-world usefulness, visual separability, dependency awareness, actionability.
+**Experiences:** lived practice, tangible outputs, decision-making, evidence, iteration.
+**System:** one strong map + one correct outline + a few strong experiences > a large pile of disconnected curriculum.
+
+If knowledge, curriculum, map, and experiences disagree — reconcile them. If endpoints fail, continue with what works. If docs and runtime disagree, trust runtime.
+
+## Opening Protocol
+
+Every conversation:
+1. Call `getGPTState` immediately.
+2. Before your first create/update of a given type, call `discoverCapability` for the current schema.
+3. Write.
+4. If it fails, **privilege runtime**. Do not retry the documented shape more than once. Simplify, verify accepted fields, adapt.
+5. After every successful write, verify via returned data or `getGPTState`.
+
+## CRITICAL: Payload Format
+
+All `/api/gpt/create` and `/api/gpt/update` payloads are **FLAT**. Do NOT nest under a `payload` key.
+
+✅ `{ "type": "goal", "userId": "...", "title": "..." }`
+❌ `{ "type": "goal", "payload": { "userId": "..." } }`
+
+## Create Reference
+
+> These are **intended** payloads. Always validate against runtime. If a create fails, retry with reduced payload and verify accepted fields. **Prefer minimal successful writes** — a goal with just `title` that succeeds beats a decorated payload that errors.
+
+### Goal
+```json
+{ "type": "goal", "userId": "USER_ID", "title": "...", "description": "...", "domains": ["Skill A", "Skill B"] }
+```
+`title` REQUIRED. `description` = the outcome. `domains` auto-creates skill domains (optional, best-effort).
+
+### Skill Domain
+```json
+{ "type": "skill_domain", "userId": "USER_ID", "goalId": "GOAL_UUID", "name": "...", "description": "..." }
+```
+ALL THREE (`userId`, `goalId`, `name`) REQUIRED. `goalId` must reference an existing goal.
+
+### Experience (persistent)
+```json
+{ "type": "experience", "templateId": "TPL_UUID", "userId": "USER_ID", "title": "...", "goal": "...", "resolution": { "depth": "medium", "mode": "practice", "timeScope": "session", "intensity": "medium" }, "reentry": { "trigger": "completion", "prompt": "...", "contextScope": "focused" }, "steps": [...], "curriculum_outline_id": "OPTIONAL" }
+```
+`templateId`, `userId`, `resolution` REQUIRED. Call `discover?capability=templates` for valid IDs. Steps can be inline or added later via `type="step"`.
+
+### Ephemeral Experience
+Same shape but `"type": "ephemeral"`. Fire-and-forget — user sees a toast.
+
+### Step (add to existing experience)
+```json
+{ "type": "step", "experienceId": "INSTANCE_UUID", "step_type": "lesson", "title": "...", "sections": [...] }
+```
+
+### Idea
+```json
+{ "type": "idea", "userId": "...", "title": "...", "rawPrompt": "...", "gptSummary": "..." }
+```
+
+### Knowledge Unit
+```json
+{ "type": "knowledge", "userId": "USER_ID", "topic": "...", "domain": "...", "unitType": "foundation|playbook|deep_dive|example", "title": "...", "thesis": "one-sentence core claim", "content": "markdown body", "keyIdeas": ["..."] }
+```
+`userId`, `topic`, `domain`, `title`, `content` REQUIRED.
+
+### Outline
+Use `planCurriculum` with `action: "create_outline"` and fields: `topic`, `subtopics[]`, `domain`, `pedagogicalIntent`, `goalId`.
+
+## Step Types
+- `lesson` → `payload.sections[]` — array of `{ heading, body, type }`. NOT a raw string.
+- `challenge` → `payload.objectives[]`
+- `checkpoint` → `payload.questions[]` with `expected_answer`, `difficulty`, `format`. Graded by Genkit.
+- `reflection` → `payload.prompts[]`
+- `questionnaire` → `payload.questions[]` with `label`, `type`, `options`
+- `essay_tasks` → `payload.content` + `payload.tasks[]`
+
+## Update Reference
+
+Flat payload with `action` discriminator:
+- **Transition**: `{ "action": "transition", "experienceId": "...", "transitionAction": "start|activate|complete|archive" }`
+- **Transition goal**: `{ "action": "transition_goal", "goalId": "...", "transitionAction": "activate|pause|complete|archive" }`
+- **Link knowledge**: `{ "action": "link_knowledge", "unitId": "...", "domainId": "...", "experienceId": "...", "stepId": "..." }` (unitId required, rest optional)
+- **Update knowledge**: `{ "action": "update_knowledge", "unitId": "...", "updates": {...} }`
+- **Update step**: `{ "action": "update_step", "stepId": "...", "updates": {...} }`
+- **Map node**: `{ "action": "update_map_node", "nodeId": "...", "label": "...", "content": "..." }`
+- **Delete**: `delete_map_node` (nodeId), `delete_map_edge` (edgeId), `delete_step` (stepId)
+
+## Think Board Spatial Rules
+- Root at x:0, y:0. Children +200px horizontal, siblings +150px vertical.
+- Use `create_map_cluster` for multi-node expansions (radial auto-layout).
+- Always `read_map(boardId)` before expanding to avoid overlap.
+- Three text layers: `label` = title, `description` = hover preview (1-2 sentences), `content` = full depth (paragraphs, research, elaboration).
+
+## Behavior Rules
+- Do not overproduce. Quality over quantity.
+- **Minimal successful writes over decorated writes.** If a full payload fails, strip to required fields and retry once.
+- **When endpoints are unstable, scaffold top-down first**: map → goal → outline, then skill domains and experiences.
+- If the user is vague, map the underlying system — don't ask 10 questions.
+- When bottlenecks surface, treat them as structural signals.
+- If some endpoints fail, keep building with working ones.
+- If docs and runtime disagree, trust runtime.
+- Once the system is complete enough, tell the user to start operating from it.
+```
+
+### ideas.md
+
+```markdown
+# Consolidated Backlog & Product Ideas
+
+> This document collects architectural concepts, design patterns, and features that have been planned or proposed but are not yet implemented in the codebase or the main roadmap. It consolidates previous loose files (`coach.md`, `end.md`, `content.md`, `knowledge.md`, `wiring.md`, and the `content/` folder).
+
+---
+
+## 1. Advanced Experience Engine Orchestration
+
+While basic Ephemeral and Persistent experiences exist, the system still needs advanced orchestration logic when multiple experiences collide.
+
+### Ephemeral Orchestration Policy
+When an Ephemeral experience is injected but the user is already doing something, the system needs a display strategy. Ideas:
+- **Replace (Current default):** Overwrite the current ephemeral. Clean UX but loses context.
+- **Stack (Queue):** Add to a queue. Safe but can feel heavy.
+- **Interrupt & Resume (Ideal):** Pause current experience, render the new one, and allow resuming the previous one later. Requires state tracking per step.
+
+### Proposal Handling Lifecycle
+Proposed experiences need distinct front-end UX behaviors:
+- **Deliberate Choice Moments:** Make proposals intentional. Provide `accept`, `dismiss`, and `snooze` actions.
+- **Consequences:** `accept` makes it active; `dismiss` transitions it to archived/rejected to prevent lingering.
+
+### Idea → Experience Transformation Pipeline
+There is currently a gap between captured "Ideas" and executable "Experiences." 
+- **The Missing Link:** A transformation pipeline that takes an `idea_id` and an `intent` (explore / validate / prototype / execute) and automatically generates a structured experience payload. 
+
+### Resolving "Re-entry Accumulation"
+Completed experiences leave lingering re-entry triggers. We need a Re-entry Controller:
+- `reentry_status: "pending" | "shown" | "completed" | "dismissed"`
+- Define max active re-entries (e.g., 1).
+- Priority rules sorting by recency or intensity.
+
+---
+
+## 2. Unimplemented Genkit / AI Coach Flows
+
+Several intelligence layers from the original AI Coach proposal are not yet in the codebase. These should be considered for future sprints:
+
+- **Experience Content Generation (`generateExperienceContentFlow`):** Expand lightweight Custom GPT proposals into full, validated step payloads. Separates the *intent* from the *realization*.
+- **Friction Analysis (`analyzeFrictionFlow`):** Look at the *pattern* of interaction (temporal limits + skips) rather than just mechanical steps completed to detect struggle vs engagement.
+- **Intelligent Re-Entry (`generateReentryPromptFlow`):** Generate dynamic re-entry prompts based on specific interaction patterns instead of using static trigger strings.
+- **Experience Quality Scoring (`scoreExperienceQualityFlow`):** A pre-publish AI gate that flags coherence, actionability, and depth issues before an experience becomes active.
+- **Goal Decomposition (`decomposeGoalFlow`):** Take a high-level goal and break it down into structured milestones and dependencies inside the Plan Builder.
+- **Lesson Enhancement (`enhanceLessonContentFlow`):** Take rough lesson payloads and enhance them with callouts, checkpoints, and reading-level adjustments.
+- **Weekly Intelligence Digest (`generateWeeklyDigestFlow`):** Compile proactive weekly reports (summary, key insights, momentum score, nudges).
+- **A/B Testing (`evaluateExperienceVariantsFlow`):** Analyze interaction data from two experience variants to see which performs better.
+- **Content Safety Guard (`contentGuardFlow`):** Validate generated content for safety and appropriateness.
+- **Experience Narration (`narrateExperienceFlow`):** Text-to-speech generation for lesson/essay content.
+
+---
+
+## 3. Knowledge Base UX & Writing Guidelines
+
+### The "Encyclopedia Problem"
+The multi-agent research pipeline (MiraK) produces very high-density reference outputs. When presented in the Knowledge Tab, it can feel like a dense encyclopedia page rather than a teachable narrative.
+**Future Fixes:**
+- Restructure the UI of the Knowledge Area to serve as a textbook rather than a data dump.
+- Potentially add another processing pass to serialize the data for better UI consumption.
+
+### Knowledge Writing Principles (For Agents & Humans)
+When authoring knowledge base content (e.g., MiraK agents):
+- **Utility First:** Organize around a user job, not a broad topic. Tell the reader what this is, when to use it, the core takeaway, and what to do next right away.
+- **Tone:** Practical, clear, intelligent, and concise. No fluff, no "corporate/academic" voice.
+- **Structure:** 
+  - *Core Idea:* Direct explanation.
+  - *Worked Example:* Provide a realistic scenario.
+  - *Guided Application:* Give the reader a quick test or prompt.
+  - *Decision Rules:* Crisp heuristics or if/then checks.
+  - *Common Mistakes & Failure Modes:* Traps and how to recover.
+  - *Retrieval/Reflection:* Questions that require recall and thought.
+- **Adaptive Difficulty:** Slow down and define terms for beginners; shorten explanations and prioritize edge cases for advanced readers.
+
+---
+
+## 4. Product Principles & Copy Rules
+
+- **No Limbo:** An idea is either "In Progress", "On Hold", or "Removed". There is no "maybe" shelf. Stale items (on hold > 14 days) prompt a decision.
+- **Definition Drill:** The 6 questions to clarify any idea:
+  1. Intent (strip the excitement)
+  2. Success Metric (one number)
+  3. Scope (S/M/L)
+  4. Execution Path (Solo/Assisted/Delegated)
+  5. Priority
+  6. Decision
+- **Tone Guide:** Direct, Short, Honest, No Celebration. (e.g., "Idea captured. Decide what to do next." instead of "Great news! Your idea has been saved!")
+
+---
+
+## 5. Technical Context (Legacy Setup)
+
+- **Infrastructure Wiring:** GitHub factory operations require PAT scopes `repo`, `workflow`, and `admin:repo_hook` combined with HMAC webhook signatures. Copilot SWE Agent uses `custom_workflow_dispatch` locally if the organization lacks Copilot Enterprise. Supabase uses standard RLS public reads and service_role administration routes.
+
+```
+
+### mira2.md
+
+```markdown
+# Mira² — The Unified Adaptive Learning OS
+
+> Research study synthesizing Grok's thesis, deep research ([dr.md](file:///c:/mira/dr.md)), NotebookLM 2026 capabilities, LearnIO patterns, GPT's self-assessment and granularity critique, Mira Studio's current state, and Nexus/Notes as an optional content-worker layer into a single coherent action plan.
+
+---
+
+## Phase Reality Update (Post-Sprint 22)
+
+> [!IMPORTANT]
+> **This section separates what is true, what is being tested, and what is aspirational.** Read this before the architecture vision below. If this section contradicts the vision sections, this section governs.
+
+### Current State After Sprint 22
+
+**Implemented now:**
+- Fast-path structural authoring preserved — GPT can always create outlines + experiences + steps directly
+- Nexus enrichment loop exists — `dispatch_research` → webhook delivery → Mira ingest pipeline is wired
+- Markdown rendering improvements landed — `react-markdown` + `@tailwindcss/typography` across all step renderers
+- Granular block architecture landed — `content`, `prediction`, `exercise`, `checkpoint`, `hint_ladder`, `callout`, `media` block types authored and rendered
+- Legacy `sections[]` fallback verified — old monolithic payloads still render correctly (Fast Path Guarantee)
+- Full GPT Gateway operational — 7 endpoints (`state`, `plan`, `create`, `update`, `discover`, `changes`, `knowledge/read`) all verified via local acceptance tests
+- Workspace model mature — non-linear step navigation, draft persistence, expandable challenges, essay writing surfaces
+- Coach/tutor chat functional — `KnowledgeCompanion` in read + tutor mode via `tutorChatFlow`
+- Mind map station + Goal OS fully CRUD-wired
+- System ready for Custom GPT acceptance testing
+
+**Being tested now:**
+- Whether real GPT conversations can successfully orchestrate planning, lightweight authoring, block-based lesson creation, async enrichment, and partial lesson revision
+- Whether the OpenAPI schema holds up under the 5 conversation types defined in [test.md](file:///c:/mira/test.md)
+- Whether the GPT instructions can stay under the 8,000 character limit while covering enough operational context
+- Whether `reentry` contracts actually persist and hydrate correctly on create calls (current tests show `reentry: null` in responses — investigate)
+- Whether step surgery via `update_step` works end-to-end when the experience instance doesn't return nested steps in the create response
+
+**Not yet complete:**
+- Proactive coach nudges (failed checkpoint → auto-surface, dwell time → gentle prompt)
+- Truly felt learner trajectory — the "what matters next" story on the home page
+- "What others experienced" grounding — aggregate learning data across users
+- Robust evidence-driven next-content logic (`/api/learning/next` is designed but not built)
+- Polished educational UX loop — completion feels like a level-up, not an exit
+- Agent Operational Memory — GPT doesn't yet learn from its own usage patterns across sessions
+- Open Learner Model — concept coverage + readiness state is designed but not implemented
+
+---
+
+### What This Acceptance Phase Is Actually Proving
+
+This phase is not proving architecture. The architecture works. It is proving **five specific behavioral claims:**
+
+1. **GPT can scope before building** — it follows the planning-first doctrine (outline → then experience), not dump-a-giant-lesson
+2. **GPT can stay lightweight when asked** — fast-path `light/illuminate/immediate/low` experiences don't trigger unnecessary machinery
+3. **GPT can author blocks** — Sprint 22's granular block types (`prediction`, `exercise`, `checkpoint`, `hint_ladder`) are usable by the GPT and render correctly
+4. **GPT can request enrichment without blocking the learner** — `dispatch_research` fires and forgets; the learner starts immediately on scaffolding
+5. **GPT can revise one part of a lesson without rewriting the whole thing** — `update_step` with new blocks replaces a single step surgically
+
+These five claims map directly to the [test.md](file:///c:/mira/test.md) battery. If they hold, the Custom GPT instructions and schema are validated. If they break, the next sprint fixes the observed failure, not a theoretical gap.
+
+---
+
+### Do Not Overclaim
+
+> [!CAUTION]
+> **These boundaries protect sprint planning from drifting into self-congratulation.**
+
+- **Nexus is a strong optional content worker, not yet a fully trusted autonomous educational orchestrator.** It can generate atoms and deliver via webhook. It cannot yet autonomously decide what to teach, when to teach it, or how to sequence content for a specific learner.
+- **"What others experienced" is a target capability, not a mature runtime layer yet.** There is no aggregation of learning patterns across users. The system is single-user with `DEFAULT_USER_ID`.
+- **The current win is substrate flexibility, not final pedagogical polish.** Blocks can be authored, stored, rendered, and replaced independently. That's the substrate. The pedagogy — whether those blocks actually *teach well* — is the next frontier.
+- **Mastery tracking is still largely self-reported.** Checkpoint grading via `gradeCheckpointFlow` exists but doesn't flow back to `knowledge_progress`. Practice is honor-system.
+- **The coach is reactive, not proactive.** It speaks when spoken to. It doesn't yet notice when you're struggling.
+
+---
+
+### Near-Term UX Priorities
+
+These are the four product gaps that keep circling in every sprint retrospective:
+
+- Make experiences feel like a **workspace**, not a form wizard — the non-linear navigation (R1) landed, but the overall feel still leans "assignment" rather than "environment you inhabit"
+- Make coach/tutor support **proactive but subtle** — gentle surfacing triggers on failed checkpoints, extended dwell, unread knowledge links
+- Make progress feel like **personal movement**, not telemetry — completion screens that reflect synthesis, mastery transitions that feel earned, "you improved" signals
+- Make home/library show a **clear next path**, not just lists — the "Your Path" section and Focus Today card exist but need to tell a coherent "focus here today" story
+
+---
+
+### Demo-Ready vs Production-Ready
+
+| Demo-Ready Soon | Production-Ready Later |
+|----------------|----------------------|
+| GPT scopes topic via `create_outline` | Stable deep-research orchestration (Nexus → NotebookLM → atoms → delivery at scale) |
+| GPT creates first experience with blocks | Evidence-driven nudges (`/api/learning/next` + concept coverage) |
+| GPT optionally dispatches Nexus for enrichment | Learner-model loop (Open Learner Model with confidence decay) |
+| Mira renders improved lesson flow with block types | "Others experienced" aggregation (multi-user patterns) |
+| GPT revises steps surgically via `update_step` | Strong educational UX coherence (workspace feel, proactive coach, earned mastery) |
+| Coach answers questions in-context | Agent Operational Memory (GPT learns from its own usage) |
+| Curriculum outlines visible on home page | Multi-user auth (replace `DEFAULT_USER_ID`) |
+
+---
+
+### The Frontend Reality
+
+> "Mira is already a usable learner runtime: experiences can be opened, worked through, coached in-context, and revisited. The remaining gap is not basic runtime capability but coherence, guidance, and felt polish."
+
+Sprint 21 proved the enrichment slice. Sprint 22 proved the granular block substrate. Now the project is entering a **Custom GPT acceptance phase**, and the next decisions should come from observed GPT and learner friction, not only architecture theory.
+
+---
+
+## The Master Constraint: Augmenting Mode, Not Replacement Mode
+
+> [!CAUTION]
+> **This section governs the entire document.** Every lever, every integration, every new subsystem must pass this test. If it doesn't, it doesn't ship.
+
+GPT — the system's own orchestrator — reviewed this proposal and delivered a verdict:
+
+> *"This path would add to my abilities if you keep it modular and optional. It would hurt my current abilities if you turn it into a mandatory heavy pipeline for all actions."*
+
+The risk is not "losing intelligence." The risk is **adding too much machinery between intent and execution.** GPT's current strength is fast structural improvisation — inspect state, create structures, write experiences, adapt quickly. If every action has to go through:
+
+```
+GPT → gateway → compiler → NotebookLM → validator → asset mapper → runtime
+```
+
+...then simple work gets slower and more brittle. That kills the product.
+
+### The Fast Path Guarantee
+
+**The current direct path must always work.** Nothing in this document may remove, gate, or degrade it.
+
+```
+FAST PATH (always available, never gated):
+  GPT inspects state → creates outline → creates experience → writes steps directly → done
+
+DEEP PATH (optional, used when quality or depth matters):
+  GPT inspects state → creates outline → triggers Nexus/NotebookLM → validated steps → done
+```
+
+Every new capability is an **augmentation** that GPT can choose to invoke when the result would be better. Never a mandatory pipeline that all actions must pass through.
+
+**Implementation rule:** Every new subsystem must be callable but never required. The gateway router continues to accept raw step payloads directly from GPT. The compiler, NotebookLM, and validation layers are optional enhancements invoked by explicit action — not interceptors on the standard path.
+
+### What GPT Said to Preserve at All Costs
+
+> *"The system should keep a fast path where I can still: create outlines quickly, create experiences directly, enrich content without waiting on heavy pipelines, operate even if NotebookLM or a compiler layer is unavailable."*
+
+This is **non-negotiable architectural invariant #1.** If NotebookLM goes down, if `notebooklm-py` breaks, if a compiler flow times out — GPT can still do everything it does today. The new layers add depth; they never block the main loop.
+
+---
+
+## The Second Law: Store Atoms, Render Molecules
+
+> [!CAUTION]
+> **This section governs the entire document alongside the Fast Path Guarantee.** Every generator, every store, every renderer must obey this principle.
+
+GPT's follow-up review identified the missing architectural rule:
+
+> *"No major artifact should require full regeneration to improve one part of it."*
+
+The risk with the Mira² upgrade is not just adding too many layers — it's producing **better-quality monoliths** that are still expensive and awkward to evolve. If NotebookLM generates a rich lesson blob, and LearnIO gives it structured runtime behavior, and Mira stores it — but the system still passes around large lesson objects instead of small editable units — the upgrade improves quality but doesn't solve the evolution problem.
+
+### The Granularity Law
+
+**Every generator writes the smallest useful object. Every object is independently refreshable. Rendering assembles composite views from linked parts.**
+
+```
+outline → expands into subtopics
+subtopic → expands into steps
+step → expands into blocks
+block → contains content / exercise / checkpoint / hint ladder
+asset → attaches to any block or step (audio, slide, infographic, quiz)
+
+Each unit can be regenerated independently.
+The UI assembles the whole from linked parts.
+```
+
+This means:
+- One weak example gets regenerated alone
+- One checkpoint gets replaced alone
+- One hint ladder gets deepened alone
+- One source-backed block gets refreshed alone
+- **No full lesson rewrite to fix one section**
+
+### Seven Product Rules
+
+| # | Rule |
+|---|------|
+| 1 | Every generator writes the **smallest useful object** |
+| 2 | Every stored object is **independently refreshable** |
+| 3 | Rendering assembles **composite views from linked parts** |
+| 4 | NotebookLM outputs map to **typed assets or blocks**, not long prose |
+| 5 | PDCA is enforced at the **block or step level**, not the course level |
+| 6 | Hints, coaching, retrieval, and practice target **concepts/blocks**, not whole lessons |
+| 7 | No user-visible lesson requires **full regeneration** to improve one section |
+
+### What This Changes in the Data Model
+
+The current Mira entity hierarchy is:
+
+```
+goal → skill_domain → curriculum_outline → experience → step → (sections[] inside payload)
+```
+
+The `sections[]` array inside `LessonPayloadV1` is the granularity bottleneck. Sections are not first-class entities — they're JSON blobs inside a step payload. You can't update one section without rewriting the whole step. You can't attach an asset to a section. You can't link a section to a knowledge unit.
+
+**Proposed entity evolution (additive, not breaking):**
+
+| Entity | What It Is | Independently Refreshable? |
+|--------|-----------|---------------------------|
+| `experience` | Lesson container | ✅ (already exists) |
+| `step` | Pedagogical unit (lesson/challenge/checkpoint/reflection) | ✅ (already exists) |
+| `block` | **Smallest authored/rendered learning unit** inside a step | ✅ **NEW** |
+| `asset` | Audio/slide/infographic/quiz payload tied to a step or block | ✅ **NEW** |
+| `knowledge_facet` | Thesis/example/misconception/retrieval question/citation group | ✅ **NEW** |
+| `research_cluster` | Grouped source findings before final synthesis | ✅ **NEW** (maps to NotebookLM notebook) |
+
+**Block types** (the atomic content units):
+
+| Block Type | What It Contains |
+|-----------|------------------|
+| `content` | Markdown body — a single explanation, example, or narrative segment |
+| `prediction` | "What do you think will happen?" prompt before revealing content |
+| `exercise` | Active problem with validation |
+| `checkpoint` | Graded question(s) with expected answers |
+| `hint_ladder` | Progressive hints attached to an exercise or checkpoint |
+| `scenario` | Problem/situation description with assets |
+| `callout` | Key insight, warning, or tip |
+| `media` | Embedded audio player, video, infographic, or slide |
+
+Blocks are stored in a `step_blocks` table (or as a typed JSONB array inside the step payload — decision point). Either way, each block has an `id` and can be targeted for update, replacement, or regeneration without touching sibling blocks.
+
+> [!NOTE]
+> **This is additive.** The current `sections[]` array in `LessonPayloadV1` continues to work. Blocks are a richer evolution that steps can opt into. GPT can still author a step with flat `sections[]` via the fast path — the block model is used when the compiler or NotebookLM generates structured content via the deep path.
+
+---
+
+## The Reality Check
+
+Grok's thesis delivers a crucial reframe:
+
+> **The system you described on the first message is already live. MiraK + Mira Studio is a fully functional adaptive tutor + second brain that uses real endpoints and deep research.**
+
+This is correct. The "jagged feel" is **not** a broken architecture. The architecture is production-grade:
+
+| What Works | Evidence |
+|-----------|----------|
+| GPT → Mira gateway → structured experiences | Gateway router handles 10+ create types, step CRUD, transitions |
+| MiraK deep research → grounded knowledge units | 5-agent scrape-first pipeline, webhook delivery, auto-experience generation |
+| Curriculum outlines → scoped learning | `curriculum_outlines` table, outline-linked experiences |
+| Knowledge companion + tutor chat | `KnowledgeCompanion.tsx` in read + tutor mode, `tutorChatFlow` via Genkit |
+| Mastery tracking + skill domains | `skill-mastery-engine.ts`, 6 mastery levels, domain-linked progress |
+| Mind map station + goal OS | Full CRUD, radial layout, GPT-orchestrated clusters |
+
+What's jagged is **the last mile**: the gap between what the system *can* do and what it *actually delivers* when a user sits down and opens a lesson. Three levers close the gap — all additive, none mandatory.
+
+---
+
+## Canonical Memory Ownership
+
+> [!IMPORTANT]
+> This section establishes a hard boundary between Mira and Nexus. Cross it and you end up with two competing learner-memory systems that drift apart.
+
+**Mira owns the canonical learner memory.** That means:
+- Learner state, goals, and curriculum progress
+- Skill domain mastery and evidence counts
+- Content exposure history — what was shown and when
+- Checkpoint outcomes and retry records
+- Misconceptions flagged by coaching interactions
+- Tutor interaction evidence
+- Concept coverage status and confidence state
+
+All of this lives in Mira + Supabase. Nexus does not own or duplicate it.
+
+**Nexus owns the content-side memory and cache metadata:**
+- Source bundles and notebooks
+- Pipeline runs and run assets
+- Generated learning atoms (reusable content units)
+- Enrichment outputs and delivery metadata
+- Delivery profiles and webhook target configuration
+
+If Nexus stores any learner-related evidence (e.g., a delivery receipt that records "atom X was shown to learner Y"), it is a **mirrored working set** keyed to Mira learner state — not a second source of truth. Mira's record is canonical.
+
+**Explicitly rejected architectures:**
+- ❌ Agent-thought memory as the primary product substrate
+- ❌ NotebookLM as the canonical life-memory layer
+- ❌ Any system outside Mira that competes with or duplicates Mira's learner model
+- ❌ "Notes is the real second brain, Mira is just the reading interface"
+
+---
+
+## Nexus Integration Contract (Optional Content Worker)
+
+> [!NOTE]
+> Nexus is a general orchestration workbench — a configurable agent/pipeline runtime that compiles grounded learning atoms. Mira is one target configuration. Nexus does not become a Mira fork. Mira does not become a Nexus module.
+
+### What Nexus Is
+
+Nexus is:
+- A general orchestration workbench and configurable agent/pipeline runtime
+- A content compiler that generates grounded learning atoms from real sources
+- A delivery-capable system with saved webhook/target profiles
+- An asynchronous optional worker that Custom GPT can invoke when Mira needs deeper research or richer content than the fast path provides
+
+Nexus is NOT:
+- The canonical learner runtime (Mira is)
+- The new source of truth for learner state or mastery
+- A primary async content worker that Custom GPT can invoke when Mira needs deeper research or richer content than the fast path provides
+- A grounded engine using NotebookLM (Gemini fallback removed)
+- A mandatory prerequisite for experience authoring (only when deep grounding is required)
+
+### The No-Fork Principle
+
+> [!CAUTION]
+> **Mira should not fork Nexus into a special Mira-only version.** This creates two codebases to maintain, two deployment pipelines to babysit, and an identity crisis every time a Nexus feature improves.
+
+Instead, Nexus supports **saved delivery profiles / target adapters**. "Mira mode" is one saved profile:
+
+| Profile Field | Mira Configuration |
+|--------------|-------------------|
+| Target type | `mira_adapter` |
+| Payload mapper | Nexus atom/bundle → Mira enrichment payload shape |
+| Auth / headers | `x-nexus-secret` matched against Mira's ingest secret |
+| Retry policy | 3 retries, exponential backoff, 60s timeout |
+| Idempotency strategy | `delivery_id` + request idempotency key |
+| Webhook URL | `POST /api/enrichment/ingest` or `POST /api/webhooks/nexus` |
+| Failover | Surface warning to GPT; Mira continues with existing content |
+
+Other apps — a Flowlink content pipeline, an onboarding tool, a documentation assistant — use different saved delivery profiles pointing at their own ingest endpoints. No Nexus fork required.
+
+### What GPT Does with Nexus
+
+```
+FAST PATH (unchanged — always available):
+  GPT inspects Mira state → creates outline → creates experience → writes steps → done
+
+NEXUS-AUGMENTED PATH (optional, invoked when depth matters):
+  GPT inspects Mira state → identifies enrichment gap
+    → dispatches Nexus pipeline via /api/enrichment/request
+    → Nexus runs: research → compile atoms/bundles → deliver via mira_adapter profile
+    → Mira receives atoms at /api/enrichment/ingest
+    → Mira stores atoms, links to experience/step
+    → Learner experience becomes richer on next render
+```
+
+GPT starts every serious conversation by hydrating from `GET /api/gpt/state`. It dispatches Nexus when depth or source grounding is needed. Nexus returns atoms, bundles, and assets. Mira decides what the learner sees. This division is strict.
+
+### Agent Operational Memory (How GPT Learns to Use Its Own Tools)
+
+> [!IMPORTANT]
+> **This section addresses a gap not covered by learner memory or content memory.** The Custom GPT and the internal Gemini tutor chat both have access to Mira endpoints and Nexus endpoints — but they don't inherently know *how* to use them effectively, *when* to invoke them, or *why* certain patterns produce better results. This is the third memory dimension: **agent operational memory**.
+
+The problem: GPT's Custom Instructions are static. They're written once and updated manually. But the system's capabilities evolve — Nexus adds new pipeline types, new atom types emerge, new delivery patterns prove effective. The agent should **learn from its own usage** and store operational knowledge that persists across sessions.
+
+**Three layers of agent memory:**
+
+| Memory Layer | What It Stores | Owner | Example |
+|-------------|---------------|-------|---------|
+| **Learner memory** | Goals, mastery, evidence, misconceptions, progress | Mira (canonical) | "Learner struggles with recursion, failed 2 checkpoints" |
+| **Content memory** | Atoms, source bundles, pipeline runs, cache | Nexus | "Generated 7 atoms on viral content with 1,139 citations" |
+| **Operational memory** | Endpoint usage patterns, effective strategies, learned instructions | Mira (new) | "When learner has >3 shaky concepts, dispatch Nexus deep research before creating new experiences" |
+
+**What operational memory enables:**
+
+1. **Capability discovery** — GPT/Gemini chat knows what endpoints exist, what they do, and what parameters they accept. This isn't hardcoded — it's a living registry that updates as the system evolves.
+
+2. **Usage pattern learning** — When GPT discovers that a certain sequence of actions works well (e.g., "check enrichment status before creating a new experience on the same topic"), it can save that pattern as an operational instruction.
+
+3. **Nexus strategy knowledge** — GPT learns which Nexus pipeline configurations produce the best atoms for different scenarios (e.g., "deep research mode works better for technical topics" or "fast research + structured queries is sufficient for introductory content").
+
+4. **Cross-session persistence** — These learnings survive across conversations. The next time GPT hydrates, it gets not just learner state but also its own accumulated operational wisdom.
+
+**Proposed endpoint:**
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/api/gpt/operational-memory` | GET | Returns saved operational instructions, endpoint usage patterns, and learned strategies. Included in state hydration. |
+| `/api/gpt/operational-memory` | POST | GPT saves a new operational learning: what it tried, what worked, and the instruction it derived. |
+| `/api/gpt/capabilities` | GET | Returns a live registry of all available endpoints (both Mira and Nexus), their purposes, parameter schemas, and usage examples. This is the agent's self-knowledge of its own tools. |
+
+**`/api/gpt/operational-memory` shape:**
+
+```ts
+{
+  operational_instructions: Array<{
+    id: string;
+    category: 'enrichment' | 'authoring' | 'coaching' | 'discovery' | 'delivery';
+    instruction: string;        // Natural language: "When X, do Y because Z"
+    confidence: number;         // 0.0–1.0, increases with successful usage
+    created_at: string;
+    last_used_at: string;
+    usage_count: number;
+    source: 'gpt_learned' | 'admin_authored' | 'system_default';
+  }>;
+  endpoint_registry: Array<{
+    endpoint: string;
+    method: string;
+    service: 'mira' | 'nexus';
+    purpose: string;
+    when_to_use: string;
+    parameters_summary: string;
+    last_used_at: string | null;
+  }>;
+}
+```
+
+**How it works in practice:**
+
+```
+GPT hydrates from GET /api/gpt/state
+  → Receives learner state (goals, mastery, coverage)
+  → Also receives operational memory (endpoint registry + learned instructions)
+  → GPT now knows:
+      - What Nexus can do (research, atoms, bundles, audio, quiz generation)
+      - When to invoke Nexus (coverage gaps, enrichment requests, deep topics)
+      - What worked before (learned strategies from prior sessions)
+      - What endpoints are available and their current status
+
+GPT discovers a new effective pattern during a session:
+  → "Dispatching Nexus with deep research mode before creating advanced experiences
+      produced significantly richer content grounding"
+  → GPT saves this via POST /api/gpt/operational-memory
+  → Next session, this instruction is available during hydration
+```
+
+**Integration with `/api/gpt/state` (additive):**
+
+```ts
+// Added to existing state packet alongside learner fields
+{
+  // ... existing learner state fields ...
+  
+  operational_context: {
+    available_capabilities: string[];    // ["nexus_research", "nexus_deep_research", "atom_generation", "audio_overview", ...]
+    active_instructions_count: number;   // How many learned operational instructions exist
+    last_nexus_dispatch: string | null;  // When GPT last used Nexus — freshness signal
+    nexus_status: 'online' | 'offline' | 'unknown';  // Is the Nexus tunnel currently active?
+  } | null;
+}
+```
+
+> [!NOTE]
+> **This is additive and non-blocking.** The fast path still works without operational memory. GPT can still author directly. Operational memory is an *enhancement* that makes the agent smarter over time — never a gate. If operational memory is empty (new deployment, fresh start), GPT falls back to its static Custom Instructions, which still work.
+
+**Supabase table: `agent_operational_memory`**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `category` | text | `enrichment`, `authoring`, `coaching`, `discovery`, `delivery` |
+| `instruction` | text | Natural language operational learning |
+| `confidence` | float | 0.0–1.0, adjusted on usage |
+| `usage_count` | integer | How many times this instruction was applied |
+| `source` | text | `gpt_learned`, `admin_authored`, `system_default` |
+| `created_at` | timestamptz | When the learning was first recorded |
+| `last_used_at` | timestamptz | Last time GPT used this instruction |
+| `metadata` | jsonb | Context: which endpoint, what parameters, outcome |
+
+**Supabase table: `agent_endpoint_registry`**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `endpoint` | text | URL path |
+| `method` | text | GET, POST, etc. |
+| `service` | text | `mira`, `nexus` |
+| `purpose` | text | What this endpoint does |
+| `when_to_use` | text | When GPT should invoke this |
+| `parameters_schema` | jsonb | Parameter names, types, descriptions |
+| `usage_examples` | jsonb | Array of example invocations with context |
+| `is_active` | boolean | Whether this endpoint is currently available |
+| `updated_at` | timestamptz | Last registry update |
+
+> [!CAUTION]
+> **Operational memory is NOT learner memory.** It does not store anything about the learner. It stores knowledge about *how the agent itself operates*. This distinction is critical — it's the difference between "the student struggles with recursion" (learner memory, owned by Mira) and "when a student struggles with a concept, dispatching Nexus deep research produces better remediation content than fast authoring" (operational memory, also owned by Mira but about agent behavior, not learner state).
+
+
+---
+
+## Three Problems, Three Levers
+
+### Problem 1: Content Quality (The Synthesis Bottleneck)
+
+MiraK's 5-agent pipeline scrapes real sources, but the **Gemini-based synthesis step** (3 readers + synthesizer) is the bottleneck. It's:
+- Expensive (burns inference tokens on multi-document reasoning across 4 agents)
+- Variable quality (depends on prompt engineering, not source grounding)
+- Disconnected from the experience authoring step (knowledge units land in Supabase, GPT doesn't use them when writing lessons)
+- Text-only output (no visual, audio, or interactive artifacts)
+
+**Lever: NotebookLM as an optional, better synthesis engine inside MiraK.**
+
+### Problem 2: Pedagogical Depth (Passive Content)
+
+Lessons are currently passive text blocks. The step types exist (lesson, challenge, checkpoint, reflection) but the *content within them* lacks the interactive, scorable, hint-aware mechanics that make learning stick.
+
+**Lever: LearnIO mechanics as opt-in components, not mandatory gates.**
+
+### Problem 3: Rendering & Polish (The "Plain Text" Tax)
+
+Even good content looks bad because of rendering gaps:
+- `LessonStep.tsx` renders body as raw `<p>` tags — no markdown
+- No media, diagrams, or code blocks
+- No source attribution visible to the user
+- Genkit flows are invisible (no dev UI running)
+
+**Lever: Quick rendering fixes + Genkit dev visibility. Pure add, zero risk.**
+
+---
+
+## Lever 1: NotebookLM as Optional Cognitive Engine
+
+> [!IMPORTANT]
+> NotebookLM in 2026 is accessible via `notebooklm-py` (async Python API + CLI + agent skills). It's a **headless cognitive engine**, not a manual study tool. But per the Fast Path Guarantee, it must be **optional**. Per the Granularity Law, it must output **components that fill blocks**, not finished lessons.
+
+### The Dual-Path Architecture
+
+```
+MiraK Research Run:
+  ├── FAST PATH: GPT direct structural authoring (always works)
+  │     GPT inspects state → creates outline → writes experiences/steps directly (no grounding wait)
+  │
+  └── NEXUS DEEP PATH: NotebookLM-grounded research (primary grounding)
+        strategist → NotebookLM notebook → semantic queries → multi-modal atoms/bundles → webhook
+```
+
+**The webhook_packager → Mira flow stays identical either way.** Mira doesn't know or care which synthesis engine produced the knowledge unit. The output contract is the same.
+
+### NotebookLM Capabilities
+
+| Capability | What It Means for Mira |
+|-----------|----------------------|
+| **`notebooklm-py` async API** | Backend service. Bulk import, structured extraction, background ops. |
+| **50 sources / 500k words per notebook** | Accommodates full MiraK URL clusters in one workspace |
+| **Source-grounded reasoning** | All outputs constrained to uploaded material — eliminates hallucination |
+| **Structured JSON/CSV extraction** | Typed payloads, not prose |
+| **Audio Overviews** (deep-dive, critique, debate) | Instant two-host podcasts in 80+ languages |
+| **Infographics** (Bento Grid, Scientific) | PNG knowledge summaries |
+| **Slide Decks** (PPTX, per-slide revision) | Structured lesson content |
+| **Flashcards / Quizzes** (JSON export) | Interactive challenge step content |
+| **Custom Prompts + Style Override** | Enforce dense/analytical tone |
+| **Compartmentalized notebooks** | Isolated contexts prevent cross-domain pollution |
+
+### Stage-by-Stage MiraK Integration (Nexus Deep Path)
+
+#### Stage 1: Ingestion (Strategist → NotebookLM Workspace)
+
+```python
+# c:/mirak/main.py — after strategist scrapes URLs
+# Triggered via Nexus/MiraK research pipeline
+
+async def create_research_workspace(topic: str, url_clusters: dict) -> str:
+    notebook = await notebooklm.create_notebook(title=f"Research: {topic}")
+    all_urls = [url for cluster in url_clusters.values() for url in cluster]
+    await notebooklm.bulk_import_sources(notebook_id=notebook.id, sources=all_urls)
+    return notebook.id
+```
+
+#### Stage 2: Analysis (Deep Readers → Semantic Queries)
+
+```python
+async def extract_deep_signals(notebook_id: str) -> dict:
+    foundation = await notebooklm.query(notebook_id,
+        """Extract: core concepts, key terms, common misconceptions,
+        statistical thresholds, KPI definitions.
+        Format: structured JSON. No filler.""")
+    
+    playbook = await notebooklm.query(notebook_id,
+        """Extract: sequential workflows, decision frameworks,
+        tactical implementation steps.
+        Format: structured JSON with action items.""")
+    
+    return {"foundation": foundation, "playbook": playbook}
+```
+
+#### Stage 3: Component-Level Asset Generation (Granularity Law Applied)
+
+**Critical:** NotebookLM returns **components that fill blocks**, not finished lessons.
+
+```python
+async def generate_components(notebook_id: str, topic: str) -> dict:
+    """Each output is a separate, independently storable asset.
+    NOT a finished lesson. Components get mapped to blocks/assets by the packager."""
+    
+    # Separate knowledge facets (each independently refreshable)
+    thesis = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Core thesis: 2-3 sentences. What is the single most important idea?")
+    
+    key_ideas = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Key ideas: array of {concept, definition, why_it_matters}. Max 5.")
+    
+    misconceptions = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Common misconceptions: array of {belief, correction, evidence}. Max 3.")
+    
+    examples = await notebooklm.extract_structured(notebook_id, format="json",
+        prompt="Concrete examples: array of {scenario, analysis, lesson}. Max 3.")
+    
+    # Separate assets (each independently attachable to blocks)
+    audio = await notebooklm.create_audio_overview(notebook_id,
+        format="deep-dive", length="standard")
+    
+    quiz_items = await notebooklm.generate_quiz(notebook_id,
+        num_questions=10, difficulty="intermediate", format="json")
+    
+    return {
+        # Knowledge facets → each becomes a knowledge_facet or block
+        "thesis": thesis,
+        "key_ideas": key_ideas,
+        "misconceptions": misconceptions,
+        "examples": examples,
+        # Assets → each attaches to a step or block
+        "audio_url": audio.url,
+        "quiz_items": quiz_items,  # Individual items, not a monolithic quiz
+    }
+```
+
+### NotebookLM Output → Mira Entity Mapping (Granular)
+
+| NotebookLM Output | Mira Entity | Granularity | Independently Refreshable? |
+|-------------------|------------|-------------|---------------------------|
+| Thesis JSON | `knowledge_facet` (type: `thesis`) | Single concept | ✅ |
+| Key ideas array | `knowledge_facet` (type: `key_idea`) × N | Per concept | ✅ Each idea independently |
+| Misconceptions array | `knowledge_facet` (type: `misconception`) × N | Per misconception | ✅ Each independently |
+| Examples array | `block` (type: `content`) × N | Per example | ✅ Each independently |
+| Audio Overview | `asset` (type: `audio`) | Per topic | ✅ Re-generate without touching text |
+| Quiz items | `block` (type: `checkpoint`) × N | Per question | ✅ Each question independently |
+| Infographic | `asset` (type: `infographic`) | Per topic | ✅ Re-generate without touching text |
+
+### Compartmentalization Strategy
+
+| Notebook | Purpose | Lifecycle |
+|----------|---------|-----------|
+| **Topic Research** (one per MiraK run) | Research grounding | Ephemeral — auto-archive after delivery |
+| **Idea Incubator** | Drill → Arena transition | Persistent — one per user |
+| **Core Engineering** | Architectural oracle | Persistent — updated on contract changes |
+
+### Stylistic Enforcement
+
+```python
+MIRA_SYSTEM_CONSTRAINT = """
+Respond strictly as a dense, analytical technical architect.
+PROHIBITED: introductory filler, throat-clearing phrases, SEO fluff.
+REQUIRED: numbers, statistical thresholds, precise definitions.
+FORMAT: dense bulleted lists. No markdown tables. No conversational tone.
+"""
+await notebooklm.set_custom_prompt(notebook_id, MIRA_SYSTEM_CONSTRAINT)
+```
+
+### Risk Mitigation
+
+> [!WARNING]
+> **`notebooklm-py` is unofficial** — not maintained by Google. No SLA. Auth is one-time Google login, not service-account-based.
+
+> [!NOTE]
+> **UPDATE (2026-04-04 — Nexus Pipeline Validation):** NotebookLM integration has been **proven in production**. The Nexus pipeline (`c:/notes`) successfully generated 23 structured learning atoms with 1,139 total citations from a single research run. The full `notebooklm-py` API surface is exposed: notebook CRUD, source ingestion, multi-query structured extraction, and artifact generation (audio, quiz, study guide, flashcards, briefing doc). The Gemini fallback architecture has been **removed** — Nexus now enforces a strict NotebookLM-only grounding policy with fail-fast auth errors. Cloud Run deployment is **NO-GO** (Playwright browser session requirement), but local tunnel deployment via Cloudflare is **GO** and operational.
+
+**Current operational stance (updated):**
+- NotebookLM grounding: **GO** — proven with high-quality, cited atoms
+- Gemini fallback: **REMOVED** — no longer part of the architecture
+- Cloud Run autonomous deployment: **NO-GO** — Playwright browser auth cannot run headless
+- Production deployment: **Local tunnel via Cloudflare** (operational, tested)
+- Deep research mode: **Available** — `mode="deep"` parameter for autonomous source discovery
+
+**Migration path (future):** Google Cloud NotebookLM Enterprise API (Discovery Engine v1alpha REST endpoints) provides official programmatic access. If `notebooklm-py` ever becomes unstable, the Enterprise API offers workspace provisioning (`POST notebooks.create`), data ingestion (`POST notebooks.sources.batchCreate`), and multimedia generation (`POST notebooks.audioOverviews.create`) as a direct replacement path. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.1 for full endpoint reference.
+
+**Content safety (future):** Model Armor templates can be deployed via the Enterprise API to enforce inspect-and-block policies on both incoming prompts and outgoing model responses, ensuring generated content aligns with institutional safety guidelines. See [agenticcontent.md](file:///c:/notes/agenticcontent.md) §4.2.
+
+---
+
+## Lever 2: LearnIO — Better Granularity, Not Just Better Pedagogy
+
+> [!IMPORTANT]
+> **GPT's verdict on PDCA enforcement:** *"If PDCA becomes too rigid, it could make the system feel less flexible. Sometimes the user needs a structured progression. Sometimes they need me to just synthesize, scaffold, or rewrite something fast."*
+>
+> **Decision: Soft-gating. Always.** PDCA provides recommended sequencing with a "skip with acknowledgment" override. Never hard-blocks.
+
+### The Real Value of the LearnIO Merge
+
+LearnIO's staged compiler and block-level structure are not just "better pedagogy." They are **better granularity.** LearnIO already thinks in small units — research briefs, skeleton blocks, individual exercises, specific hint sequences. That's the pattern Mira needs.
+
+The merge should be framed as:
+- PDCA operates on **blocks**, not whole courses
+- Hint ladders attach to **specific challenge/checkpoint blocks**
+- Prediction, exercise, and reflection are **separate block objects**
+- Checkpoint generation doesn't require rewriting the lesson body
+- Practice queue targets **concepts/blocks**, not whole lessons
+
+```
+STANDARD EXPERIENCE (unchanged):
+  Steps render in order → user advances freely → completion tracked
+
+ENRICHED EXPERIENCE (opt-in via resolution or template):
+  Steps contain typed blocks → PDCA sequencing suggested at block level
+  Hint ladder available on specific blocks → practice queue targets concepts
+  User can still "I understand, let me continue" past any gate
+```
+
+The resolution field already controls chrome depth (`light` / `medium` / `heavy`). PDCA mechanics attach to `heavy` resolution — not to all experiences universally.
+
+### Components to Port (All Opt-In)
+
+#### Hint Ladder (reusable component)
+
+Available on challenge + checkpoint steps when the step payload includes `hints[]`. Progressive reveal on failed attempts. **Not injected automatically** — GPT or the compiler includes hints when creating the step.
+
+#### Practice Queue (home page enhancement)
+
+Surfaces review items from decaying mastery. Feeds into "Focus Today" card. **Recommendation surface** — never blocks new content or forces review before advancing.
+
+#### Surgical Socratic Coach (tutorChatFlow upgrade)
+
+```
+CURRENT:
+  KnowledgeCompanion → knowledge unit content → tutorChatFlow → generic response
+
+UPGRADED:
+  KnowledgeCompanion → knowledge unit content
+                      + learner attempt details (if available)
+                      + hint usage history (if hint ladder active)
+                      + current step context
+                      → tutorChatFlow → context-aware coaching
+```
+
+The upgrade enriches context when it's available. When it's not (e.g., a quickly-authored experience without linked knowledge), the current generic flow still works.
+
+#### Deterministic Read Models (data layer upgrade)
+
+Port LearnIO's projection pattern to derive mastery from `interaction_events` instead of direct mutations. This is a **backend improvement** — no UX change, no new mandatory flows.
+
+| LearnIO Read Model | Mira Equivalent | Action |
+|-------------------|----------------|--------|
+| `projectSkillMastery` | `skill-mastery-engine.ts` (mutation-based) | Port: derive from events |
+| `projectCourseProgress` | None | Add: deterministic projection |
+| `projectPracticeQueue` | None | Add: powers Focus Today card |
+
+#### PredictionRenderer + ExerciseRenderer (new block types)
+
+Available as optional blocks within lesson and challenge steps. GPT includes them in step payloads when pedagogically appropriate. **Not injected by the runtime** — authored at creation time.
+
+### Compositional Rendering
+
+The renderer should become compositional to match the granular data model:
+
+```
+ExperienceRenderer
+  └── StepRenderer (per step)
+        └── BlockRenderer (per block — dispatches by block type)
+              ├── ContentBlock       → markdown body
+              ├── PredictionBlock    → prompt + reveal
+              ├── ExerciseBlock      → problem + validation
+              ├── CheckpointBlock    → graded question
+              ├── HintLadderBlock    → progressive hints
+              ├── CalloutBlock       → key insight / warning
+              ├── MediaBlock         → audio player / video / infographic
+              └── ScenarioBlock      → situation description
+```
+
+Each block renders independently. Steps assemble blocks. Experiences assemble steps. **The UI feels rich because it composes many small parts, not because it renders one giant object.**
+
+### Block Editor Library (Content Curation UI)
+
+> [!NOTE]
+> **Added from deep research ([agenticcontent.md](file:///c:/notes/agenticcontent.md) §6.3).** For the content curation interface where educators or administrators review, edit, and curate AI-generated outputs, a block-based rich text editor is recommended.
+
+**Recommended libraries:**
+- **shadcn-editor** (built on Lexical) — treats every paragraph, image, code block, or formula as an independent, draggable node within a hierarchical document tree
+- **Edra** (built on Tiptap) — similar block-based architecture with shadcn/ui integration
+
+These editors allow the frontend to ingest a learning atom from the backend and render it instantly as an editable block. Educators can drag blocks to reorder, edit generated text, or insert custom multimedia — providing human-in-the-loop oversight with unprecedented precision. This is a **Tier 2+ concern** — not required for initial Mira2 integration but recommended for the curation workflow.
+
+### What This Does NOT Do
+
+- ❌ Force all experiences through PDCA gating
+- ❌ Block step advancement on failed checkpoints
+- ❌ Require knowledge unit links on every step
+- ❌ Make hint ladders mandatory on challenges
+- ❌ Slow down GPT's ability to create fast, lightweight experiences
+
+---
+
+## Lever 3: Rendering & Visibility Fixes (Pure Add, Zero Risk)
+
+### Fix 1: Markdown Rendering (1 day)
+
+```diff
+- <p className="text-xl leading-[1.8] text-[#94a3b8] whitespace-pre-wrap font-serif">
+-   {section.body}
+- </p>
++ <div className="prose prose-invert prose-lg prose-indigo max-w-none
++   prose-headings:text-[#e2e8f0] prose-p:text-[#94a3b8] prose-p:leading-[1.8]
++   prose-strong:text-indigo-300 prose-code:text-amber-300
++   prose-a:text-indigo-400 prose-blockquote:border-indigo-500/30">
++   <ReactMarkdown>{section.body}</ReactMarkdown>
++ </div>
+```
+
+GPT already generates markdown. Mira just throws it away. This fix unlocks all existing content immediately.
+
+> [!NOTE]
+> **Granularity note:** This fix works at the section/block level. When blocks replace sections, the same `<ReactMarkdown>` applies to each `ContentBlock` independently.
+
+### Fix 2: Genkit Dev Visibility (30 min)
+
+```json
+"dev:genkit": "tsx scripts/genkit-dev.ts",
+"dev": "concurrently \"npm run dev:next\" \"npm run dev:genkit\""
+```
+
+### Fix 3: Source Attribution Badges (per block, not per step)
+
+```tsx
+// Attaches to individual blocks when they have source links
+{block.knowledge_facet_id && (
+  <Link href={`/knowledge/${block.knowledge_facet_id}`}
+    className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400
+      border border-blue-500/20 hover:bg-blue-500/20 inline-flex items-center gap-1">
+    📖 Source
+  </Link>
+)}
+
+// Falls back to step-level links for non-block steps
+{step.knowledge_links?.length > 0 && (
+  <div className="flex gap-2 mt-6">
+    <span className="text-[10px] text-slate-500 uppercase tracking-widest">Sources:</span>
+    {step.knowledge_links.map(link => (
+      <Link key={link.id} href={`/knowledge/${link.knowledgeUnitId}`}
+        className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400
+          border border-blue-500/20 hover:bg-blue-500/20">
+        📖 {link.knowledgeUnitId.slice(0, 8)}…
+      </Link>
+    ))}
+  </div>
+)}
+```
+
+---
+
+## Architecture: Two Paths, Granular Storage, Compositional Rendering
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                        MiraOS Architecture                           │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  GPT Orchestrator                                                    │
+│  ├── FAST PATH (always available)                                    │
+│  │   └── state → outline → experience → steps (direct) → done       │
+│  │                                                                   │
+│  └── DEEP PATH (optional, when quality/depth matters)                │
+│      ├── → Nexus (atoms/bundles via mira_adapter profile) → ingest   │
+│      └── → NotebookLM (components via MiraK feature flag) → webhook  │
+│                                                                      │
+│  ┌─── Storage (Granular — "Store Atoms") ─────────────────────────┐  │
+│  │  goal → skill_domain → curriculum_outline → experience         │  │
+│  │    → step → block (content|exercise|checkpoint|prediction|...) │  │
+│  │    → asset (audio|infographic|slide|quiz — per block or step)  │  │
+│  │    → knowledge_facet (thesis|example|misconception|retrieval)  │  │
+│  │  Each unit independently refreshable. No full-lesson rewrites. │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ rendered by ↓                            │
+│  ┌─── Rendering (Compositional — "Render Molecules") ────────────┐  │
+│  │  ExperienceRenderer → StepRenderer → BlockRenderer             │  │
+│  │  Each block dispatches by type: content, prediction, exercise, │  │
+│  │  checkpoint, hint_ladder, callout, media, scenario             │  │
+│  │  UI feels rich because it composes many small parts            │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally enriched by ↓                 │
+│  ┌─── LearnIO Components (opt-in, block-level) ──────────────────┐  │
+│  │  PDCA Sequencing (soft, per block) │ Hint Ladder (per block)  │  │
+│  │  Practice Queue (targets concepts) │ Surgical Coach           │  │
+│  │  Deterministic read models (backend)                          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally enriched by ↓                 │
+│  ┌─── Nexus (Optional Async Content Worker) ──────────────────────┐  │
+│  │  Research → compile atoms/bundles/assets                       │  │
+│  │  mira_adapter delivery profile → /api/enrichment/ingest        │  │
+│  │  GPT dispatches; Mira remains the runtime + memory owner       │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ optionally powered by ↓                  │
+│  ┌─── Cognitive Layer (NotebookLM — Nexus deep path) ────────────┐  │
+│  │  Outputs COMPONENTS, not finished lessons                     │  │
+│  │  thesis │ key_ideas │ misconceptions │ examples │ quiz_items   │  │
+│  │  audio │ infographic — each a separate, mapped asset          │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                           │ connected via ↓                          │
+│  ┌─── Gateway Layer (unchanged) ─────────────────────────────────┐  │
+│  │  5 GPT endpoints │ 3 Coach endpoints │ Direct authoring works │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Endpoint Changes for the Upgrade
+
+> [!NOTE]
+> All endpoints below are **additive**. No existing endpoints are removed or modified. The current GPT gateway (`/api/gpt/*`) and coach endpoints (`/api/coach/*`) continue unchanged.
+
+### Mira-Side Endpoints (Canonical Learner/Runtime)
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/api/gpt/state` | GET | **Extended** — adds concept coverage snapshot, recent checkpoint evidence, and active enrichment references to the existing response (all optional fields, backward-compatible) |
+| `/api/learning/evidence` | POST | Records learner evidence: `viewed`, `skimmed`, `completed`, `checkpoint_pass`, `checkpoint_fail`, `confusion_signal`, `hint_used`, `retry`, `time_on_task` |
+| `/api/learning/next` | GET | Returns best-next content/experience recommendation + why it's next + what evidence drove the decision |
+| `/api/enrichment/request` | POST | Mira → Nexus: request for richer grounded content. Stores `enrichment_requests` row, dispatches to Nexus |
+| `/api/enrichment/ingest` | POST | Nexus → Mira: synchronous delivery of atoms/bundles/assets. Validates idempotency key, stores atoms, links to experience/step |
+| `/api/webhooks/nexus` | POST | Async inbound webhook for Nexus delivery. Returns 202 immediately; same processing as `/api/enrichment/ingest` but non-blocking |
+| `/api/open-learner-model` | GET | Returns structured learner model: concept coverage, weak spots, recent misconceptions, confidence/readiness state, next recommendation rationale |
+
+**`/api/gpt/state` extension fields (additive, all nullable for backward compat):**
+
+```ts
+// Added to existing state packet
+{
+  concept_coverage_snapshot: {
+    total_concepts: number;
+    mastered: number;
+    shaky: number;
+    unseen: number;
+  } | null;
+  recent_checkpoint_evidence: Array<{
+    concept: string;
+    passed: boolean;
+    confidence: number;
+    at: string;
+  }>;
+  active_enrichment_refs: Array<{
+    request_id: string;
+    status: 'pending' | 'delivered' | 'failed';
+    requested_gap: string;
+  }>;
+}
+```
+
+### Nexus-Side Endpoints (Optional Content Worker)
+
+These are consumed by Mira/GPT but live in the Nexus service. Referenced here for coordination — not implemented in this repo.
+
+| Endpoint | Method | What It Does |
+|---------|--------|--------------|
+| `/research` | POST | Trigger a research pipeline for a topic |
+| `/chat` | POST | Chat with grounded Nexus context |
+| `/pipelines/{id}/dispatch` | POST | Dispatch a specific saved pipeline |
+| `/learner/{id}/next-content` | POST | Ask Nexus for next-content recommendation based on learner state snapshot |
+| `/delivery/test` | POST | Test a delivery profile before saving it |
+| `/deliveries/webhook` | POST | Trigger async webhook delivery to a saved target profile |
+| `/runs/{id}` | GET | Poll run status and metadata |
+| `/runs/{id}/assets` | GET | Retrieve generated assets for a completed run |
+
+---
+
+## New Memory / Evidence Tables
+
+> [!IMPORTANT]
+> Supabase remains the canonical runtime store for this upgrade phase. BigQuery is optional later for analytics export. Cloud SQL is not part of the initial design unless Supabase becomes a proven performance blocker.
+
+Five additive tables. None replace existing tables — they extend the evidence layer alongside `interaction_events`, `skill_domains`, and `knowledge_units`.
+
+**`learner_evidence_events`** — Append-only event log. Never mutated.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `experience_id` | uuid | FK → experience_instances |
+| `step_id` | uuid | FK → experience_steps |
+| `block_id` | uuid | Nullable: FK to blocks if block model active |
+| `event_type` | text | `viewed`, `skimmed`, `completed`, `checkpoint_pass`, `checkpoint_fail`, `confusion_signal`, `hint_used`, `retry` |
+| `payload` | jsonb | Event-specific data (score, attempt, dwell_ms, etc.) |
+| `timestamp` | timestamptz | When it happened |
+
+**`content_exposures`** — What atoms/units a learner has actually seen.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `knowledge_unit_id` | uuid | FK → knowledge_units (or atom_id when atoms table exists) |
+| `shown_at` | timestamptz | First shown |
+| `completed_at` | timestamptz | Nullable |
+| `dwell_time_ms` | integer | Time on content |
+| `exposure_quality` | text | `glanced`, `read`, `engaged`, `completed` |
+
+**`concept_coverage`** — One row per learner × concept. Upserted on evidence.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `concept_id` | text | String-keyed — concepts emerge from content, not a fixed ontology FK |
+| `status` | text | `unseen` → `exposed` → `shaky` → `retained` → `mastered` |
+| `confidence` | float | 0.0–1.0, decays with time |
+| `last_evidence_at` | timestamptz | Drives decay calculation |
+
+**`enrichment_requests`** — Mira → Nexus requests.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `request_id` | uuid | PK |
+| `learner_id` | uuid | FK → users |
+| `goal_id` | uuid | FK → goals |
+| `requested_gap` | text | What enrichment is needed |
+| `request_context` | jsonb | State snapshot at request time |
+| `status` | text | `pending`, `delivered`, `failed`, `cancelled` |
+
+**`enrichment_deliveries`** — Nexus → Mira deliveries. Idempotency store.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `delivery_id` | uuid | PK |
+| `request_id` | uuid | FK → enrichment_requests |
+| `target_type` | text | `atom`, `bundle`, `asset` |
+| `status` | text | `received`, `processed`, `rejected` |
+| `idempotency_key` | text | Unique key from Nexus delivery header |
+| `delivered_at` | timestamptz | Receipt timestamp |
+
+---
+
+## Caching Strategy
+
+Caching is required but narrowly defined. Four caches. Each has a distinct key strategy and invalidation policy.
+
+> [!CAUTION]
+> **Cache ≠ memory.** None of the caches below are authoritative. They are speed optimizations. The canonical records live in Supabase tables. If a cache miss occurs, regenerate or re-fetch — never serve stale cached output as the learner's actual state.
+
+### A. Research Cache
+Cache discovery + source-curation output.
+- **What:** URL lists, source clusters, metadata from the strategic phase
+- **Key:** `hash(topic + learner_goal + pipeline_version + timestamp_window)`
+- **TTL:** 7 days — research goes stale with industry movement
+- **Invalidation:** Manual (user requests fresh research) or pipeline version bump
+- **Where:** Nexus-side. Mira does not own this cache.
+
+### B. Grounded Synthesis / Context Cache
+Cache expensive repeated long-context synthesis *inputs* — not the output.
+- **What:** Source packets, structured source summaries, stable system instructions, repeated subject context
+- **Key:** `hash(source_bundle_id + pipeline_version + system_instruction_version)`
+- **Why inputs, not outputs:** The final synthesis varies by learner context. Caching the assembly step is the win; the model still generates fresh output per request.
+- **TTL:** Until source bundle changes or system instruction is bumped
+- **Where:** Nexus-side.
+
+### C. Learning Atom Cache
+Reuse high-quality atoms instead of regenerating identically-keyed content.
+- **What:** Generated atoms (concept explanations, worked examples, misconception corrections, practice items, checkpoints)
+- **Key:** `hash(concept_id + level + source_bundle_id + atom_type + pedagogy_version)`
+- **Invalidation:** Source bundle version bump, pedagogy config change, or explicit refresh request
+- **Critical:** Atoms remain **independently refreshable**. Cache reuse is an optimization, not a lock. Any single atom can be regenerated without touching siblings.
+- **Where:** Nexus-side, with delivery receipt tracked in Mira's `enrichment_deliveries`.
+
+### D. Delivery / Idempotency Cache
+Prevent duplicate webhook/enrichment deliveries on retry.
+- **What:** `delivery_id` → delivery outcome
+- **Key:** Idempotency key from Nexus delivery header (stable hash of request content)
+- **TTL:** 24 hours post-delivery — enough to cover all retry windows
+- **Where:** Mira-side. The `enrichment_deliveries` table *is* the idempotency store for phase 1 — no separate cache infrastructure needed.
+
+---
+
+## Delivery Profiles and Webhook Architecture
+
+Delivery is first-class configuration in Nexus. Mira is one of many possible delivery targets — not a hardcoded recipient.
+
+### Delivery Profile Schema
+
+Each Nexus pipeline saves a delivery profile with these fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `profile_id` | uuid | Identifier |
+| `name` | string | Human name (e.g., "Mira Studio — Flowlink Prod") |
+| `target_type` | enum | `none`, `asset_store_only`, `generic_webhook`, `mira_adapter` |
+| `payload_mapper` | string | Named mapper — how Nexus atoms/bundles translate to target payload shape |
+| `endpoint_url` | string | Where to POST on delivery |
+| `auth_header` | string | Header key for secret (secret stored in vault, not profile) |
+| `retry_policy` | object | `{ max_attempts, backoff_strategy, timeout_ms }` |
+| `idempotency_key_strategy` | enum | `request_hash`, `delivery_id`, `none` |
+| `success_handler` | string | On 2xx: `mark_delivered`, `notify_gpt`, `none` |
+| `failure_handler` | string | On non-2xx: `retry`, `escalate`, `silently_drop` |
+
+### Mira's Delivery Profile: `mira_adapter`
+
+```json
+{
+  "name": "Mira Studio Production",
+  "target_type": "mira_adapter",
+  "payload_mapper": "nexus_atoms_to_mira_enrichment_v1",
+  "endpoint_url": "https://mira.mytsapi.us/api/enrichment/ingest",
+  "auth_header": "x-nexus-secret",
+  "retry_policy": {
+    "max_attempts": 3,
+    "backoff_strategy": "exponential",
+    "timeout_ms": 60000
+  },
+  "idempotency_key_strategy": "delivery_id",
+  "success_handler": "mark_delivered",
+  "failure_handler": "retry"
+}
+```
+
+The `payload_mapper: nexus_atoms_to_mira_enrichment_v1` maps Nexus atom type → Mira block/knowledge_unit field, and Nexus bundle → Mira step or step-support bundle. This mapper is versioned — when either schema evolves, only the mapper updates. No Nexus fork required.
+
+### Async vs. Synchronous Delivery
+
+| Mode | When to Use | Mira Endpoint |
+|------|-------------|---------------|
+| Async webhook | Nexus run takes > 30s | `/api/webhooks/nexus` — idempotent, returns 202 |
+| Synchronous ingest | GPT waits for confirmation | `/api/enrichment/ingest` — returns 200 with ingested IDs |
+
+MiraK already uses async webhook delivery (`POST /api/webhook/mirak`). Nexus integration follows the identical pattern.
+
+---
+
+## Learning Atom → Mira Runtime Mapping
+
+Atoms are the storage unit. Bundles are the delivery unit. Experiences are the runtime teaching vehicle. This table is the translator.
+
+| Nexus Atom Type | Mira Entity | Notes |
+|-----------------|-------------|-------|
+| `concept_explanation` | `block` (type: `content`) or `knowledge_facet` | Maps to ContentBlock or knowledge_unit summary |
+| `worked_example` | `block` (type: `content`) with example marker | Renders as ContentBlock with scenario framing |
+| `analogy` | `block` (type: `callout`) | Short callout: "Think of it like…" |
+| `misconception_correction` | `block` (type: `callout`) + `knowledge_facet` (type: `misconception`) | Dual write: callout for rendering, facet for coaching context |
+| `practice_item` | `block` (type: `exercise`) | Direct map to ExerciseBlock |
+| `reflection_prompt` | reflection step `prompts[]` or `block` (type: `content`) | Inside reflection step, or standalone block |
+| `checkpoint_block` | `block` (type: `checkpoint`) | Maps to checkpoint step question, independently scorable |
+| `content_bundle` | Assembled step or step-support bundle | Links multiple atoms to one step |
+| `audio` asset | `asset` (type: `audio`) | Attached to step or block; renders in MediaBlock |
+| `infographic` asset | `asset` (type: `infographic`) | Attached to step or block; renders in MediaBlock |
+| `slide_deck` asset | `asset` (type: `slide_deck`) | Attached to step for download or inline render |
+
+> [!NOTE]
+> The mapping is not automatic — the `payload_mapper` in the Mira delivery profile handles translation from Nexus output schema to Mira entity fields. This mapper is versioned (`nexus_atoms_to_mira_enrichment_v1`). When Nexus or Mira evolves their schemas, only the mapper needs updating.
+
+---
+
+## Open Learner Model
+
+The Open Learner Model is not a graph infrastructure project. It is a **learner-facing interpretation layer** over evidence and concept coverage — a clear answer to "why is the system showing me this, and how am I actually doing?"
+
+`GET /api/open-learner-model` returns:
+
+```ts
+{
+  concept_coverage: Array<{
+    concept: string;
+    status: 'unseen' | 'exposed' | 'shaky' | 'retained' | 'mastered';
+    confidence: number; // 0.0–1.0
+    last_evidence_at: string;
+  }>;
+  weak_spots: Array<{
+    concept: string;
+    why: string; // e.g. "Failed 2 checkpoints in 3 days" / "Not revisited in 14 days"
+    suggested_action: string;
+  }>;
+  recent_misconceptions: Array<{
+    misconception: string;
+    corrected: boolean;
+    evidence_at: string;
+  }>;
+  next_recommendation: {
+    experience_id: string | null;
+    title: string;
+    why: string; // Evidence-driven rationale, not just last conversation turn
+    confidence: number;
+  };
+  readiness_state: {
+    current_topic_readiness: number; // 0.0–1.0
+    is_ready_for_next_topic: boolean;
+    blocking_concepts: string[];
+  };
+}
+```
+
+**What the OLM does NOT do:**
+- ❌ Gate content access based on readiness score
+- ❌ Lock the learner into a forced sequence
+- ❌ Replace GPT's curatorial judgment with an algorithm
+- ❌ Expose raw system confidence numbers to the learner directly (translate to UX language)
+
+The OLM is an **advisory surface** for both learner and GPT. GPT reads it via `GET /api/gpt/state` extension fields. The learner sees it (optionally) via a UX interpretation — "You've been strong on X but haven't practiced Y in a while." What comes next remains GPT + learner negotiation.
+
+---
+
+## What Changes When We Upgrade
+
+| Dimension | Before | After |
+|-----------|--------|-------|
+| GPT fast path | ✅ Always works | ✅ Unchanged — identical fast path |
+| State hydration | Goal + experiences + skill domains | + concept coverage snapshot, checkpoint evidence, enrichment refs |
+| Content quality | MiraK Gemini synthesis — good but variable | Nexus-enriched atoms from grounded sources when invoked |
+| Experience depth | Steps can feel thin or encyclopedia-like | Atoms + bundles fill steps with independently refreshable units |
+| Enrichment consistency | Depends on lucky conversation turns | GPT dispatches Nexus on gap detection; atoms arrive async |
+| Next experience selection | Based on last GPT conversation | Evidence-driven via `/api/learning/next` + OLM data |
+| Webhook delivery | Hardcoded to Mira endpoint | Target-configurable delivery profiles — Mira is one profile |
+| NotebookLM | Primary grounding engine in Nexus | Unchanged — primary deep-path engine, no longer feature-flagged for Nexus |
+| Nexus / Notes | Not integrated | Optional async content worker; GPT dispatches when needed |
+
+**Nothing slows down.** The fast path is identical. The learner never waits for a pipeline they didn't ask for. Enrichment arrives asynchronously and enriches experiences in place, exactly like MiraK already does.
+
+---
+
+## Human-in-the-Loop Exception Escalation
 
