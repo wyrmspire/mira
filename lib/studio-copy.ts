@@ -203,6 +203,7 @@ export const COPY = {
       deep_dive: 'Deep Dive',
       example: 'Example',
       audio_script: 'Audio Script',
+      misconception: 'Misconception',
     },
     mastery: {
       unseen: 'New',

@@ -12,7 +12,8 @@
 
 ---
 
-## 🚀 Active Sprint: Sprint 21 — Mira² First Vertical Slice
+| Sprint 21 | Mira² First Vertical Slice | TSC ✅ | ✅ Complete — 7 lanes |
+---
 
 > **Goal:** Prove the Nexus enrichment loop end-to-end. One existing Mira lesson can receive a Nexus-generated grounded enrichment payload, render it with visible attribution and proper markdown formatting, store the delivery idempotently, and do all of that **without interfering with direct GPT-authored experiences**. Also ship the zero-risk rendering wins (markdown, Genkit dev UI, source badges) that immediately improve the current product.
 >
@@ -375,19 +376,22 @@ Lane 7:  [W1: npm run dev + browser] → [W2: verify rendering] → [W3: verify 
 
 **Focus:** This is the ONLY lane that opens a browser. Validates rendering fixes work visually, enrichment routes respond correctly, and the fast path is unbroken.
 
-- ⬜ **W1. Start dev server, verify base health**
+- ✅ **W1. Start dev server, verify base health**
+  - **Done**: Verified dashboard loads, existing experiences render, and fast path (dev-test) works.
   - `npm run dev`
   - Open browser → verify home page loads
   - Navigate to an existing experience in workspace → verify it renders
   - Verify the fast path: create a test experience via `/api/dev/test-experience` → verify it works
 
-- ⬜ **W2. Verify markdown rendering**
+- ✅ **W2. Verify markdown rendering**
+  - **Done**: Fixed Knowledge UI markdown regression. Verified headings, bold, and lists render correctly across Lesson and Knowledge views.
   - Navigate to a lesson step that has markdown content (bold, lists, code blocks, links)
   - Verify: headings render as headings, bold renders as bold, code renders with syntax highlighting, lists render properly
   - Verify: callout sections still render distinctly
   - Verify: checkpoint inline text renders but doesn't break the button/textarea flow
 
-- ⬜ **W3. Verify enrichment endpoints**
+- ✅ **W3. Verify enrichment endpoints**
+  - **Done**: Fixed 500 error caused by concatenated env vars. Verified /api/enrichment/ingest and /api/webhooks/nexus respond correctly.
   - Curl `/api/enrichment/ingest` with a test payload:
     ```json
     {
@@ -407,7 +411,8 @@ Lane 7:  [W1: npm run dev + browser] → [W2: verify rendering] → [W3: verify 
   - Curl `/api/enrichment/request` with `{ "requested_gap": "test gap" }` → expect: 202
   - Curl `/api/webhooks/nexus` with same ingest-style payload (different delivery_id) → expect: 202
 
-- ⬜ **W4. E2E confirmation post**
+- ✅ **W4. E2E confirmation post**
+  - **Done**: Verified entire vertical slice. Fixed Plan Builder crash and configuration issues identified during browser QA. Sprint 21 is complete and production-ready.
   - Confirm: all routes respond correctly
   - Confirm: no 500s or type errors in console
   - Confirm: lesson markdown renders visually

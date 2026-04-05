@@ -17,7 +17,12 @@ export async function POST(request: NextRequest) {
   const expectedSecret = process.env.NEXUS_WEBHOOK_SECRET;
 
   // 1. Authentication
-  if (expectedSecret && secret !== expectedSecret) {
+  if (!expectedSecret) {
+    console.error('[enrichment/ingest] NEXUS_WEBHOOK_SECRET not configured');
+    return NextResponse.json({ error: 'Server authentication misconfigured' }, { status: 500 });
+  }
+
+  if (secret !== expectedSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -14,7 +14,12 @@ export async function POST(request: NextRequest) {
   const expectedSecret = process.env.NEXUS_WEBHOOK_SECRET;
 
   // 1. Authentication
-  if (expectedSecret && secret !== expectedSecret) {
+  if (!expectedSecret) {
+    console.error('[webhooks/nexus] NEXUS_WEBHOOK_SECRET not configured');
+    return NextResponse.json({ error: 'Server authentication misconfigured' }, { status: 500 });
+  }
+
+  if (secret !== expectedSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -29,42 +34,28 @@ export async function POST(request: NextRequest) {
 
     // 3. Idempotency Check
     const baseKey = data.delivery_id;
+    // Check base key AND first atom key to be safe on multi-atom retries
     const existing = await getDeliveryByIdempotencyKey(baseKey);
-    if (existing) {
+    const existingAtom0 = await getDeliveryByIdempotencyKey(`${baseKey}:0`);
+    
+    if (existing || existingAtom0) {
       return NextResponse.json({ 
         message: 'Already processed', 
         idempotency_hit: true 
-      }, { status: 202 }); // Signals we already processed it
+      }, { status: 202 });
     }
 
-    // --- TODO: Move the actual processing logic into lib/enrichment/nexus-bridge.ts (Lane 5) ---
-    // At this stage, Lane 4 ensures the delivery is recorded.
-    
-    // Create initial delivery records in the background? 
-    // In current sync phase (as per board), we process it synchronously but return the 202.
-    for (let i = 0; i < data.atoms.length; i++) {
-      const atom = data.atoms[i];
-      const atomKey = data.atoms.length === 1 ? baseKey : `${baseKey}:${i}`;
-      
-      await createEnrichmentDelivery({
-        requestId: data.request_id || null,
-        idempotencyKey: atomKey,
-        sourceService: 'nexus',
-        atomType: atom.atom_type,
-        atomPayload: atom,
-        targetExperienceId: data.target_experience_id || null,
-        targetStepId: data.target_step_id || null,
-        status: 'received',
-      });
-      
-      // --- TODO: Wire Lane 5 mapper bridge call here ---
-      // const result = await mapAtomToMiraEntity(atom, { ... });
-    }
+    // 4. Process delivery via bridge (Lane 5 integration)
+    // We import this here to avoid circular dependencies if any, 
+    // though bridge is the orchestrator.
+    const { processNexusDelivery } = await import('@/lib/enrichment/nexus-bridge');
+    const result = await processNexusDelivery(data, DEFAULT_USER_ID);
 
     return NextResponse.json({ 
       delivery_id: baseKey, 
       status: 'accepted',
-      message: 'Nexus delivery queued for processing'
+      processed: result.processedCount,
+      message: 'Nexus delivery processed'
     }, { status: 202 });
   } catch (error: any) {
     console.error('[webhooks/nexus] Error:', error);

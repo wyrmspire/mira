@@ -31,8 +31,10 @@ export async function processNexusDelivery(
 
   // 1. Double-check idempotency (the route should have checked this but we check per-atom too)
   const existingDelivery = await getDeliveryByIdempotencyKey(baseKey);
-  if (existingDelivery) {
-    console.log(`[nexus-bridge] Delivery batch ${baseKey} already processed.`);
+  const existingAtom0 = await getDeliveryByIdempotencyKey(`${baseKey}:0`);
+  
+  if (existingDelivery || existingAtom0) {
+    console.log(`[nexus-bridge] Delivery batch ${baseKey} (or atom 0) already processed.`);
     return {
       deliveryId: baseKey,
       status: 'already_delivered',

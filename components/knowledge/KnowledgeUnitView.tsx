@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 import { KnowledgeUnit, MasteryStatus } from '@/types/knowledge';
 import { COPY } from '@/lib/studio-copy';
 import { ROUTES } from '@/lib/routes';
@@ -53,6 +54,7 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
       case 'playbook': return 'text-teal-400 bg-teal-500/10 border-teal-500/20';
       case 'deep_dive': return 'text-violet-400 bg-violet-500/10 border-violet-500/20';
       case 'example': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+      case 'misconception': return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
       default: return 'text-[#94a3b8] bg-[#1e1e2e] border-[#1e1e2e]';
     }
   };
@@ -105,16 +107,14 @@ export default function KnowledgeUnitView({ unit }: KnowledgeUnitViewProps) {
             <div className="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl relative overflow-hidden group">
               <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500" />
               <h3 className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-3">Thesis</h3>
-              <p className="text-xl text-[#f1f5f9] font-medium leading-relaxed italic">
-                "{unit.thesis}"
-              </p>
+              <div className="text-xl text-[#f1f5f9] font-medium leading-relaxed italic prose prose-invert max-w-none">
+                <ReactMarkdown>{unit.thesis}</ReactMarkdown>
+              </div>
             </div>
 
             {/* Deep Read Body */}
-            <div className="prose prose-invert prose-sm max-w-none">
-              <div className="text-[#e2e8f0] leading-relaxed text-base space-y-4 whitespace-pre-wrap">
-                {unit.content}
-              </div>
+            <div className="prose prose-invert prose-indigo max-w-none prose-p:leading-relaxed prose-p:text-base prose-headings:mb-4 prose-headings:mt-8">
+              <ReactMarkdown>{unit.content}</ReactMarkdown>
             </div>
 
             {/* Key Ideas */}

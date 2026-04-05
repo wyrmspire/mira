@@ -98,8 +98,8 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
     onComplete({ acknowledged: true, sections });
   };
 
-  const allItems = sections.flatMap((s, si) =>
-    s.items.map((_, ii) => `${si}-${ii}`)
+  const allItems = (sections || []).flatMap((s, si) =>
+    (s.items || []).map((_, ii) => `${si}-${ii}`)
   );
   const allChecked = allItems.length === 0 || allItems.every((key) => !!checked[key]);
 
@@ -117,9 +117,9 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
           </div>
         )}
         
-        {sections.map((section, sIdx) => {
-          const sectionCheckedCount = section.items.filter((_, iIdx) => checked[`${sIdx}-${iIdx}`]).length;
-          const sectionTotal = section.items.length;
+        {(sections || []).map((section, sIdx) => {
+          const sectionCheckedCount = (section.items || []).filter((_, iIdx) => checked[`${sIdx}-${iIdx}`]).length;
+          const sectionTotal = (section.items || []).length;
           const isSectionDone = sectionTotal > 0 && sectionCheckedCount === sectionTotal;
 
           return (
@@ -147,7 +147,7 @@ export default function PlanBuilderStep({ step, onComplete, onSkip, onDraft }: P
               </div>
 
               <div className="grid gap-4">
-                {section.items.map((item, iIdx) => {
+                {(section.items || []).map((item, iIdx) => {
                   const key = `${sIdx}-${iIdx}`;
                   // Canonical contract: { id, text }. Fallback reads title/description for legacy data.
                   const label = typeof item === 'string' ? item : item.text || item.title || item.description || 'Untitled';
