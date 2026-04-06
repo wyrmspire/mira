@@ -1,3 +1,48 @@
+
+        if run_id:
+            from ..agents.pipeline_runner import emit_event
+            await emit_event(run_id, "success", f"Atom saved: {atom_type} ({concept_id})")
+
+        return atom
+
+atom_generator = AtomGenerator()
+
+```
+
+### nexus/service/agents/discovery.py
+
+```python
+# ==============================================================================
+# Nexus Service — Discovery Agents (Lane 5 — W1)
+# ==============================================================================
+# Ported from MiraK v0.4 research_strategist and deep_readers.
+# Uses ADK LlmAgent with GoogleSearchTool and url_context.
+# ==============================================================================
+
+import logging
+from typing import List, Optional
+from google.adk.agents import LlmAgent
+from google.adk.tools import agent_tool
+from google.adk.tools.google_search_tool import GoogleSearchTool
+from google.adk.tools import url_context
+
+logger = logging.getLogger("nexus.discovery")
+
+# ── Strategist Sub-Agents ────────────────────────────────────────────────────
+
+strategist_search = LlmAgent(
+    name='strategist_search',
+    model='gemini-3-flash-preview',
+    description='Searches the web.',
+    sub_agents=[],
+    instruction='Use GoogleSearchTool to search the web. Return all results with URLs and snippets.',
+    tools=[GoogleSearchTool()],
+)
+
+strategist_url = LlmAgent(
+    name='strategist_url',
+    model='gemini-3-flash-preview',
+    description='Reads URLs to extract their content.',
     sub_agents=[],
     instruction='Use UrlContextTool to read and extract the full content of URLs. Return as much content as possible.',
     tools=[url_context],
@@ -51,7 +96,7 @@ CRITICAL RULES:
 
 research_strategist = LlmAgent(
     name='research_strategist',
-    model='gemini-2.5-flash',
+    model='gemini-3-flash-preview',
     description='Plans research, executes searches, and scrapes top sources.',
     sub_agents=[],
     instruction=research_strategist_instruction,
@@ -67,7 +112,7 @@ def make_deep_reader(reader_name: str) -> LlmAgent:
     """Factory for pure-analysis reader agents (no search tools)."""
     return LlmAgent(
         name=reader_name,
-        model='gemini-2.5-flash',
+        model='gemini-2.5-pro',
         description=f'Analyzes pre-scraped source content and extracts structured findings.',
         sub_agents=[],
         instruction=f'''You are {reader_name} — an elite technical reader extracting signal from noise.
@@ -182,10 +227,10 @@ async def run_pipeline(run_id: str, pipeline_id: str, topic: str, user_id: str):
         await emit_event(run_id, "info", f"Pipeline sorted: {[n['id'] for n in sorted_nodes]}")
 
         # 4. Iterate and Execute Nodes
-        current_input = topic
+        current_input = None
         intermediate_outputs = {}
 
-        for node in sorted_nodes:
+        for i, node in enumerate(sorted_nodes):
             agent_id = node.get("agent_template_id")
             node_id = node.get("id")
             
@@ -202,7 +247,20 @@ async def run_pipeline(run_id: str, pipeline_id: str, topic: str, user_id: str):
             
             # Execute agent
             try:
-                output = await _execute_agent_node(run_id, node_id, agent_template, current_input, user_id)
+                # Inject structured context
+                if i == 0:
+                    node_input = f"ORIGINAL TOPIC: {topic}"
+                else:
+                    node_input = f"ORIGINAL TOPIC: {topic}\n\nUPSTREAM CONTENT:\n{current_input}"
+
+                output = await _execute_agent_node(run_id, node_id, agent_template, node_input, user_id)
+                
+                # Fail closed if silence or trivial data
+                if output == "[No output produced]" or not output.strip():
+                    raise ValueError(f"Agent {agent_name} returned no text output.")
+                if i == 0 and len(output.strip()) < 100:
+                    raise ValueError(f"Agent {agent_name} produced a trivial source bundle (<100 chars).")
+
                 elapsed = round(time.time() - start_time, 2)
                 
                 await emit_event(run_id, "success", f"Node {agent_name} completed in {elapsed}s", source=node_id)
@@ -323,7 +381,7 @@ async def _execute_agent_node(run_id: str, node_id: str, template: Dict, user_in
     # 2. Instantiate Agent
     agent = LlmAgent(
         name=template["name"],
-        model=template.get("model", "gemini-2.1-flash"), # Default if empty
+        model=template.get("model", "gemini-3-flash-preview"), # Default if empty
         description=f"Nexus agent: {template['name']}",
         instruction=template["instruction"],
         tools=tools,
@@ -474,56 +532,81 @@ def delete_template(template_id: str) -> bool:
     return True
 
 def seed_templates_if_empty():
-    """Seed with MiraK's 7 agents if table is empty."""
+    """Seed with MiraK's 7 agents (or upgrade existing default agents)."""
     if not supabase: return
-    existing = list_templates()
-    if existing:
-        logger.info(f"Templates table already has {len(existing)} records. Skipping seed.")
-        return
-
-    logger.info("Seeding MiraK templates...")
-    # NOTE: These are simplified versions of the MiraK instructions
-    mirak_agents = [
-        {
+    
+    from .discovery import research_strategist_instruction, make_deep_reader
+    
+    mirak_agents = {
+        "research_strategist": {
             "name": "research_strategist",
-            "instruction": "Plans research, executes searches, and scrapes top sources.",
-            "tools": ["GoogleSearchTool", "url_context"]
+            "instruction": research_strategist_instruction,
+            "tools": ["GoogleSearchTool", "url_context"],
+            "model": "gemini-3-flash-preview"
         },
-        {
+        "deep_reader_1": {
             "name": "deep_reader_1",
-            "instruction": "Analyzes pre-scraped source content for foundational mechanisms.",
-            "tools": []
+            "instruction": make_deep_reader("deep_reader_1").instruction,
+            "tools": [],
+            "model": "gemini-2.5-pro"
         },
-        {
+        "deep_reader_2": {
             "name": "deep_reader_2",
-            "instruction": "Analyzes pre-scraped source content for practical implementation.",
-            "tools": []
+            "instruction": make_deep_reader("deep_reader_2").instruction,
+            "tools": [],
+            "model": "gemini-2.5-pro"
         },
-        {
+        "deep_reader_3": {
             "name": "deep_reader_3",
-            "instruction": "Analyzes pre-scraped source content for trends and statistics.",
-            "tools": []
+            "instruction": make_deep_reader("deep_reader_3").instruction,
+            "tools": [],
+            "model": "gemini-2.5-pro"
         },
-        {
+        "final_synthesizer": {
             "name": "final_synthesizer",
             "instruction": "Produces the final comprehensive knowledge-base document.",
-            "tools": []
+            "tools": [],
+            "model": "gemini-3-flash-preview"
         },
-        {
+        "playbook_builder": {
             "name": "playbook_builder",
             "instruction": "Produces a practical, tactical playbook from research findings.",
-            "tools": []
+            "tools": [],
+            "model": "gemini-3-flash-preview"
         },
-        {
+        "webhook_packager": {
             "name": "webhook_packager",
             "instruction": "Packages research metadata and experience proposals into JSON.",
-            "tools": []
+            "tools": [],
+            "model": "gemini-3-flash-preview"
         }
-    ]
+    }
     
-    for agent_data in mirak_agents:
-        supabase.table("nexus_agent_templates").insert(agent_data).execute()
-    logger.info("Seed complete.")
+    existing = list_templates()
+    existing_map = {t["name"]: t for t in existing}
+    
+    # Model sweep
+    for t in existing:
+        if t.get("model") == "gemini-3.0-flash":
+            logger.info(f"Sweeping old model name in template: {t['name']}")
+            supabase.table("nexus_agent_templates").update({"model": "gemini-3-flash-preview"}).eq("id", t["id"]).execute()
+            existing_map[t["name"]]["model"] = "gemini-3-flash-preview"
+
+    for agent_name, agent_data in mirak_agents.items():
+        if agent_name in existing_map:
+            # Upgrade existing template if it resembles the thin one
+            current_instr = existing_map[agent_name].get("instruction", "")
+            if len(current_instr) < 150: # The thin templates were short
+                logger.info(f"Upgrading thin template: {agent_name}")
+                supabase.table("nexus_agent_templates").update({
+                    "instruction": agent_data["instruction"],
+                    "tools": agent_data["tools"]
+                }).eq("id", existing_map[agent_name]["id"]).execute()
+        else:
+            logger.info(f"Seeding missing template: {agent_name}")
+            supabase.table("nexus_agent_templates").insert(agent_data).execute()
+            
+    logger.info("Seed/upgrade complete.")
 
 
 # ==============================================================================
@@ -561,7 +644,7 @@ Convert a plain-English agent description into a well-structured AgentTemplate J
 The JSON must conform EXACTLY to this schema:
 {
   "name": "snake_case_name",
-  "model": "gemini-2.5-flash",
+  "model": "gemini-3-flash-preview",
   "instruction": "<full production-quality system prompt>",
   "tools": ["GoogleSearchTool"],
   "sub_agents": [],
@@ -575,7 +658,7 @@ The JSON must conform EXACTLY to this schema:
 
 RULES:
 - name: snake_case, short (e.g., "pricing_reader", "trend_aggregator")
-- model: "gemini-2.5-flash" unless description asks for Pro/advanced reasoning
+- model: "gemini-3-flash-preview" unless description asks for Pro/advanced reasoning
 - instruction: full system prompt — include persona, task steps, output format, critical rules.
   Production-quality. No placeholders.
 - tools: ["GoogleSearchTool"] for web search, ["url_context"] for scraping, [] for pure analysis
@@ -621,7 +704,7 @@ def _call_gemini_json_l4(system_prompt: str, user_prompt: str) -> dict:
     """Call Gemini with JSON output mode. Returns parsed dict."""
     client = _get_gemini_l4()
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-3-flash-preview",
         contents=user_prompt,
         config=genai_types.GenerateContentConfig(
             system_instruction=system_prompt,
@@ -657,7 +740,7 @@ def nl_create_agent(description: str) -> dict:
 
     # Fill defaults for any missing fields
     template.setdefault("name", "unnamed_agent")
-    template.setdefault("model", "gemini-2.5-flash")
+    template.setdefault("model", "gemini-3-flash-preview")
     template.setdefault("instruction", description)
     template.setdefault("tools", [])
     template.setdefault("sub_agents", [])
@@ -794,7 +877,7 @@ def test_agent(agent_id: str, sample_input: str) -> dict:
 
         agent = LlmAgent(
             name=template["name"],
-            model=template.get("model", "gemini-2.5-flash"),
+            model=template.get("model", "gemini-3-flash-preview"),
             description=f"Nexus agent: {template['name']}",
             instruction=template["instruction"],
             tools=tools,
@@ -918,7 +1001,7 @@ from google.adk.agents import LlmAgent
 
 agent = LlmAgent(
     name="{agent_name}",
-    model="{template.get("model", "gemini-2.5-flash")}",
+    model="{template.get("model", "gemini-3-flash-preview")}",
     description="Nexus agent: {agent_name}",
     instruction="""{instr_esc}""",
     tools={tools_str},
@@ -2520,7 +2603,7 @@ class ResearchExtractor:
             if not cached_bundle:
                 urls = list(set(re.findall(r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+[^\s\)]+', strategist_output)))
                 if not urls:
-                    urls = ["https://en.wikipedia.org/wiki/Main_Page"] # Fallback if none found
+                    raise ValueError("Discovery found no URLs. Check agent model configuration.")
                 set_research_cache(topic, goal_id, pipeline_version, "", {"urls": urls, "strategist_output": strategist_output})
             await emit_event(run_id, "info", f"Discovery found {len(urls)} URLs for grounding.")
             

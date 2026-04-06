@@ -1,3 +1,10 @@
+  };
+  readiness_state: {
+    current_topic_readiness: number; // 0.0–1.0
+    is_ready_for_next_topic: boolean;
+    blocking_concepts: string[];
+  };
+}
 ```
 
 **What the OLM does NOT do:**
@@ -5129,7 +5136,9 @@ service/                ← FastAPI backend (Python)
   Dockerfile            ← Cloud Run container
   .dockerignore         ← Excludes .env
 
+nexus_cli.py            ← Developer CLI: dispatch pipelines, inspect runs, stress-test endpoints
 nexus_gpt_action.yaml   ← OpenAPI schema for Custom GPT
+changes.md              ← Edge case findings (will be deleted by Lane 3)
 NOTEBOOKLM_EVAL.md      ← Cloud viability evaluation doc
 roadmap.md              ← Product roadmap (includes strategic reframe, caching strategy, delivery profiles)
 agents.md               ← This file
@@ -5180,8 +5189,8 @@ The Next.js UI uses `.env.local` (with `NEXT_PUBLIC_*` vars). The FastAPI servic
 Don't collide. If both are running locally, they must be on different ports.
 
 ### Nexus Supabase tables are prefixed `nexus_`
-Current tables: `nexus_agent_templates`, `nexus_pipelines`, `nexus_runs`, `nexus_notebooks`, `nexus_assets`.
-Planned (Phase 4): `nexus_learning_atoms`, `nexus_learner_evidence`, `nexus_concept_coverage`, `nexus_cache_metadata`.
+Current tables: `nexus_agent_templates`, `nexus_pipelines`, `nexus_runs`, `nexus_notebooks`, `nexus_assets`, `nexus_learning_atoms`, `nexus_cache_metadata`, `nexus_delivery_profiles`.
+Planned: `nexus_learner_evidence`, `nexus_concept_coverage`.
 
 ### React Flow requires `ReactFlowProvider`
 The `TopologyCanvas` must be wrapped in `ReactFlowProvider`. This is handled in `app/page.tsx`.
@@ -5262,10 +5271,34 @@ Canonical learner memory stays in Mira. Nexus stores content-side memory (atoms,
 - ✅ Use `SKIP_AUDIO=true` environment variable or config flag during test runs
 - ✅ Only enable audio generation when specifically testing audio output or in production delivery
 
+### SOP-9: Pipeline Context Fidelity and Node Contracts
+**Learned from**: Pipeline relay failure deep-dive (2026-04-05)
+
+- ❌ Sequential string pass-through without preserving original topic or role boundaries.
+- ❌ Treating silent tool calls (empty text output) as valid downstream payload.
+- ❌ Maintaining separate logic truths (DB templates vs codebase templates).
+- ✅ Inject structured context into every node (e.g. `ORIGINAL TOPIC` + `UPSTREAM CONTENT`).
+- ✅ Node 0 must fail closed. If the strategist doesn't emit a nontrivial source bundle, stop the pipeline.
+- ✅ DB templates (`nexus_agent_templates`) are canonical but must be strictly synchronized and upgraded from codebase logic (`discovery.py`).
+
+### SOP-10: Strict Model Identifier Usage
+**Learned from**: GPT stress test (2026-04-05)
+
+- ❌ Using shorthand or conversational model names like `gemini-3.0-flash`.
+- ✅ Model identifiers must use exact API names. Check `ai.google.dev/gemini-api/docs/models` for canonical names (e.g., `gemini-3-flash-preview`).
+
+### SOP-11: Atomic Instructional Updates
+**Learned from**: GPT stress test (2026-04-05)
+
+- ❌ Shipping an endpoint or schema change without updating GPT instructions.
+- ✅ GPT instructions must be updated IN THE SAME SPRINT as any endpoint/schema change. Never ship code without matching instructions.
+
 ---
 
 ## Lessons Learned (Changelog)
 
+- **2026-04-05 (Sprint 4 — Runtime Alignment)**: The first GPT stress test revealed systemic contract drift: model name drift (`gemini-3.0-flash` vs `gemini-3-flash-preview`), method name mismatches, and aspirational instructions steering GPT to broken paths. Re-aligned OpenAPI schema, `nexus_cli.py` HTTP tester, and GPT instructions (now strictly runtime-first). Added SOP-10 and SOP-11 to enforce strict model naming and atomic instructional updates.
+- **2026-04-05 (Fixing the Runner Relay Race)**: Diagnosed and fixed massive hallucinations in the multi-agent pipeline. The runner was treating silence (pure tool calls) as valid pass-through data, sending subsequent agents empty context ("No output produced"). Readers were then hallucinating to fulfill instructions. The fix: (1) Added strict fail-closed logic if Strategist returns trivial text, (2) Injected structured `ORIGINAL TOPIC` + `UPSTREAM CONTENT` payloads into each step instead of blind sequential pass-through, and (3) Re-wrote `seed_templates_if_empty` to enforce rich, granular instructions from `discovery.py` rather than maintaining a split brain with thin DB templates. SOP-9 added.
 - **2026-04-04 (Sprint 3B — Golden Path Validated + Docs Finalized)**: Full golden path validated: research → atoms → bundles → delivery. 23 atoms, 1,139 citations produced. Gemini fallback completely removed — strict NLM-only grounding policy. Cloud Viability Gate resolved: 🔴 NO-GO for Cloud Run, 🟢 GO for Local Tunnel. SOP-2 updated to reflect NLM-only policy. SOP-8 added (skip audio during tests). `mira2.md` updated with Agent Operational Memory, research.md insights (agentic knowledge graphs, GitHub Models API, TraceCapsules). `printcode.sh` updated to dump Nexus instead of MiraK. Roadmap fully updated with Phase 3 completion.
 - **2026-04-04 (Sprint 3A — Golden Path Attempt)**: Attempted to test the golden path (research → atoms → bundles → delivery). FastAPI failed on startup with `ModuleNotFoundError: No module named 'pydantic'`. Root cause: `start.sh` had a venv activation block pointing at `service/venv/` but the actual package install location was never verified. An agent blindly added venv creation and `pip install` to `start.sh`, triggering a full dependency reinstall into a venv that may not have been the right environment. **Resolved** — Python environment diagnosed and fixed.
 - **2026-04-04 (Sprint 3 / Lane 5)**: Completed NotebookLM Cloud Viability Gate. Verdict: **🔴 NO-GO for Cloud Run (but 🟢 GO for Local Tunnel)**. The `notebooklm-py` library strictly expects a Playwright browser session cookie dump which cannot be generated or maintained headlessly. Decided to host Nexus locally via a Cloudflare Tunnel (similar to Mira's `start.sh`) for personal use to bypass the cloud headless restriction.
@@ -5274,8 +5307,9 @@ Canonical learner memory stays in Mira. Nexus stores content-side memory (atoms,
 - **2026-04-03 (Sprint 1 Retro)**: Model dropdown stale (updated to Gemini 3.0/3.1). Board.md had false checkmarks on Lane 3. Components use `nexusApi` abstraction but many fields still use local-only state.
 - **2026-04-03 (Sprint 2 / Lane 4)**: Finalized NotebookLM evaluation. Verdict: **Local experimentation GO, autonomous production needs cloud viability gate.** Gemini Grounding Fallback is the primary production engine.
 - **2026-04-03**: Initial `agents.md` created during boardinit. No prior sprints.
+- **2026-04-05 (GPT Stress Test — Runtime Alignment)**: First Custom GPT stress test revealed systemic contract drift: model identifier `gemini-3.0-flash` (correct ID: `gemini-3-flash-preview`) was hardcoded in ~15 places causing 404 on all NL endpoints; `queryNotebook` called nonexistent `query_notebook()` method; `deleteAtom` crashed on non-UUID IDs; `createAtom` required `content` field the GPT didn't send; discovery agent silently fell back to Wikipedia when it found no URLs; and GPT instructions steered toward broken NL paths as primary. Key lesson: code, schema, instructions, and DB seed data must be updated in the same sprint — never separately.
 
-Current status: ✅ **READY** — Phase 3 complete. Pipeline validated. FastAPI + Cloudflare Tunnel operational. NLM grounding proven. Ready to start Phase 4 (Mira² integration).
+Current status: 🟡 **Sprint 4 Active** — Runtime alignment in progress. Fixing contract drift between service, schema, CLI, and GPT instructions.
 
 ```
 
@@ -5369,7 +5403,7 @@ info:
     - Agent template design, testing, and export
     - Pipeline composition and dispatch
     - NotebookLM notebook management and grounded Q&A
-  version: 0.4.0
+  version: 0.5.0
 servers:
   - url: https://nexus.mytsapi.us
     description: Production (Cloudflare Tunnel → localhost:8002)
@@ -5731,6 +5765,7 @@ paths:
     post:
       operationId: createPipeline
       summary: Create a new pipeline
+      description: Create a pipeline shell. Note that pipelines without nodes cannot be dispatched.
       requestBody:
         required: true
         content:
@@ -5793,6 +5828,7 @@ paths:
               type: object
               properties:
                 input:
+                  type: string
                   description: Topic string or structured input object
       responses:
         "200":
@@ -5920,7 +5956,7 @@ components:
           type: string
         model:
           type: string
-          default: gemini-2.5-flash
+          default: gemini-3-flash-preview
         instruction:
           type: string
         tools:
@@ -5963,6 +5999,8 @@ components:
       properties:
         id:
           type: string
+          format: uuid
+          description: Must be a valid UUID.
         atom_type:
           type: string
           enum: [concept_explanation, worked_example, analogy, misconception_correction, practice_item, reflection_prompt, checkpoint_block, content_bundle]
@@ -5977,7 +6015,7 @@ components:
           enum: [beginner, intermediate, advanced]
         pipeline_run_id:
           type: string
-      required: [id, atom_type, concept_id, content, source_bundle_hash, level]
+      required: [id, atom_type, concept_id, source_bundle_hash, level]
 
     DeliveryProfileCreate:
       type: object
@@ -7364,7 +7402,14 @@ def create_atom(req: LearningAtom):
 @app.delete("/atoms/{id}")
 def delete_atom(id: str):
     if not supabase: return {"status": "success"}
-    supabase.table("nexus_learning_atoms").delete().eq("id", id).execute()
+    try:
+        uuid.UUID(id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid UUID format")
+        
+    res = supabase.table("nexus_learning_atoms").delete().eq("id", id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Atom not found")
     return {"status": "success"}
 
 # ─── BUNDLES (Lane 2) ────────────────────────────────────────────────────────
@@ -7445,7 +7490,7 @@ def remove_source(id: str, source_id: str):
 @app.post("/notebooks/{id}/query")
 async def query_notebook(id: str, req: NotebookQuery):
     try:
-        return await nlm_manager.query_notebook(id, req.query)
+        return await nlm_manager.query(id, req.query)
     except Exception as e:
         logger.error(f"Error querying notebook: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -7593,7 +7638,7 @@ class PromptBuckets(BaseModel):
 
 class AgentTemplateCreate(BaseModel):
     name: str
-    model: str = "gemini-2.5-flash"
+    model: str = "gemini-3-flash-preview"
     instruction: str
     tools: List[str] = []
     sub_agents: List[str] = []
@@ -7742,7 +7787,7 @@ class LearningAtom(BaseModel):
     id: str
     atom_type: str
     concept_id: str
-    content: Dict[str, Any]
+    content: Dict[str, Any] = Field(default_factory=dict)
     source_bundle_hash: str
     level: str
     pipeline_run_id: Optional[str] = None
@@ -7953,48 +7998,3 @@ class AtomGenerator:
                 }).execute()
             except Exception as e:
                 logger.error(f"DB insertion error for atom: {e}")
-
-        if run_id:
-            from ..agents.pipeline_runner import emit_event
-            await emit_event(run_id, "success", f"Atom saved: {atom_type} ({concept_id})")
-
-        return atom
-
-atom_generator = AtomGenerator()
-
-```
-
-### nexus/service/agents/discovery.py
-
-```python
-# ==============================================================================
-# Nexus Service — Discovery Agents (Lane 5 — W1)
-# ==============================================================================
-# Ported from MiraK v0.4 research_strategist and deep_readers.
-# Uses ADK LlmAgent with GoogleSearchTool and url_context.
-# ==============================================================================
-
-import logging
-from typing import List, Optional
-from google.adk.agents import LlmAgent
-from google.adk.tools import agent_tool
-from google.adk.tools.google_search_tool import GoogleSearchTool
-from google.adk.tools import url_context
-
-logger = logging.getLogger("nexus.discovery")
-
-# ── Strategist Sub-Agents ────────────────────────────────────────────────────
-
-strategist_search = LlmAgent(
-    name='strategist_search',
-    model='gemini-2.5-flash',
-    description='Searches the web.',
-    sub_agents=[],
-    instruction='Use GoogleSearchTool to search the web. Return all results with URLs and snippets.',
-    tools=[GoogleSearchTool()],
-)
-
-strategist_url = LlmAgent(
-    name='strategist_url',
-    model='gemini-2.5-flash',
-    description='Reads URLs to extract their content.',

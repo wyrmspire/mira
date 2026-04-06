@@ -113,6 +113,8 @@ app/
   library/              ← Experience library (Active, Completed, Moments, Suggested)
     page.tsx            ← Server component: fetches + groups experiences
     LibraryClient.tsx   ← Client component: "Accept & Start" actions
+  memory/               ← Memory Explorer (agent memory viewer)
+    page.tsx            ← Server component: fetches + groups memories by topic → kind
   workspace/            ← Lived experience surface
     [instanceId]/
       page.tsx          ← Server component: fetch instance + steps
@@ -130,6 +132,8 @@ app/
       create/route.ts    ← POST: experiences, ideas, steps (discriminated by type)
       update/route.ts    ← POST: step edits, reorder, transitions (discriminated by action)
       discover/route.ts  ← GET: progressive disclosure — returns schemas + examples by capability
+      memory/route.ts    ← GET/POST: agent memory CRUD (list with filters, record with dedup)
+      memory/[id]/route.ts ← PATCH/DELETE: agent memory correction (edit, remove)
     coach/               ← Coach API (frontend-facing inline tutor — Sprint 10)
       chat/route.ts      ← POST: contextual tutor Q&A within active step (Genkit tutorChatFlow)
       grade/route.ts     ← POST: semantic checkpoint grading (Genkit gradeCheckpointFlow)
@@ -170,6 +174,9 @@ app/
       mark-shipped/      ← POST
       kill-idea/         ← POST
       merge-pr/          ← POST
+    mindmap/
+      boards/route.ts    ← GET/POST boards
+      boards/[id]/route.ts ← DELETE board (cascade: edges → nodes → board)
     github/              ← GitHub-specific API routes
       test-connection/   ← GET  validate token + repo access
       create-issue/      ← POST create GitHub issue from project
@@ -217,7 +224,9 @@ components/
   common/                ← EmptyState, StatusBadge, TimePill, ConfirmDialog, DraftIndicator,
                            FocusTodayCard (home page resume link),
                            ResearchStatusBadge (MiraK research arrival indicator)
-  think/                 ← ThinkNode, ThinkCanvas (React Flow mind map)
+  think/                 ← ThinkNode, ThinkCanvas (React Flow mind map),
+                           MapSidebar (full sidebar replacing dropdown switcher)
+  memory/                ← MemoryExplorer, MemoryEntryCard (agent memory viewer)
   drawers/               ← ThinkNodeDrawer (node detail editor)
   layout/                ← SlideOutDrawer (global drawer system)
   timeline/              ← TimelineEventCard, TimelineFilterBar
@@ -242,8 +251,9 @@ lib/
   supabase/
     client.ts            ← Server-side Supabase client
     browser.ts           ← Browser-side Supabase client
-    migrations/          ← SQL migration files (001–012)
+    migrations/          ← SQL migration files (001–013)
       012_enrichment_tables.sql ← Nexus enrichment tables
+      013_agent_memory_and_board_types.sql ← Agent memory table + board purpose/layout columns
   ai/
     genkit.ts            ← Genkit initialization + Google AI plugin
     schemas.ts           ← Shared Zod schemas for AI flow outputs
@@ -289,7 +299,7 @@ lib/
                            agent-runs, external-refs, github-factory, github-sync,
                            experience, interaction, synthesis, graph, timeline, facet,
                            draft, knowledge, enrichment, curriculum-outline, goal, skill-domain,
-                           home-summary, mind-map services
+                           home-summary, mind-map, agent-memory services
   adapters/              ← github (real Octokit client), gpt, vercel, notifications
   formatters/            ← idea, project, pr, inbox formatters
   validators/            ← idea, project, drill, webhook, experience, step-payload, knowledge, goal, enrichment-validator
@@ -305,7 +315,8 @@ types/
   curriculum.ts          ← CurriculumOutline, StepKnowledgeLink
   goal.ts                ← Goal, GoalRow, GoalStatus (Sprint 13)
   skill.ts               ← SkillDomain, SkillDomainRow, SkillMasteryLevel (Sprint 13)
-  mind-map.ts            ← ThinkBoard, ThinkNode, ThinkEdge
+  mind-map.ts            ← ThinkBoard (+ BoardPurpose, LayoutMode), ThinkNode, ThinkEdge
+  agent-memory.ts        ← AgentMemoryEntry, MemoryEntryKind, MemoryClass, AgentMemoryPacket
 
 content/                 ← Product copy markdown
 docs/
@@ -732,9 +743,52 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 ### SOP-43: Dev test harness must accept both monolithic AND block payloads
 **Learned from**: Sprint 22 Lane 7 QA — test harness rejected block-based step payloads
 
+
 - ❌ Validating step payloads strictly for `sections` or `prompts` arrays only.
 - ✅ Accept EITHER `sections`/`prompts` (monolithic) OR `blocks` (granular). Both are valid under the Fast Path Guarantee.
 - Why: Sprint 22 introduced `blocks[]` as an alternative to `sections[]`. The dev test harness at `/api/dev/test-experience` was still validating the old-only shape, causing all block-based test experiences to fail creation.
+
+### SOP-44: Agent Memory is a Notebook, Not a Database
+**Learned from**: Sprint 24 architecture — memory design review
+
+- ❌ Storing structured data (scores, mastery levels, user profiles) in the agent memory table.
+- ✅ Store GPT's *thoughts*: observations, strategies, ideas, hunches, assessments, preferences.
+- Why: Supabase tables hold structured runtime data (mastery, interactions, goals). Agent memory holds the GPT's qualitative reasoning — what it noticed, what worked, what it wants to try. These are different concerns.
+
+### SOP-45: Board Purpose Drives Template — Never Create Empty Purpose Boards
+**Learned from**: Sprint 24 architecture — board template review
+
+- ❌ Creating a `curriculum_review` board that starts as a blank canvas.
+- ✅ Set `purpose` on creation → service auto-creates template starter nodes → GPT expands from there.
+- Why: A purpose board without template structure is no better than a general board. The template is the payoff — it gives GPT and the user a head start.
+
+### SOP-46: Memory Deduplication — Boost, Don't Duplicate
+**Learned from**: Sprint 24 architecture — memory bloat prevention
+
+- ❌ Inserting a new row every time GPT records a similar observation.
+- ✅ If content + topic + kind all match an existing entry (case-insensitive trim), boost `confidence` by +0.1 (capped at 1.0) and increment `usage_count`.
+- Why: Without dedup, the memory table fills with near-identical entries. The GPT's recall quality degrades because it retrieves duplicates instead of diverse memories.
+
+### SOP-47: State Packet Carries Handles, Not Full Content
+**Learned from**: Sprint 24 architecture — state packet weight review
+
+- ❌ Inlining 10 full memory entries (with content, tags, metadata) into the `GET /api/gpt/state` response.
+- ✅ Return `memory_handles` with IDs + counts only in `operational_context`. GPT fetches full content via `GET /api/gpt/memory` when it needs details.
+- Why: The state packet is fetched on every GPT session open. Bloating it with full memory content adds latency and token cost. Handles are cheap; detail-on-demand is the pattern.
+
+### SOP-48: Memory Without Correction is Memory Bloat
+**Learned from**: Sprint 24 architecture — trust review
+
+- ❌ Write-only memory endpoint where entries accumulate forever without cleanup or editing.
+- ✅ Expose `PATCH /api/gpt/memory/[id]` (edit content, topic, tags, confidence, pin) and `DELETE /api/gpt/memory/[id]` (remove). Frontend must show edit/delete/pin controls.
+- Why: If the user can see that GPT recorded something wrong and can't fix it, they stop trusting the system. Correction is a product trust requirement, not a nice-to-have.
+
+### SOP-49: Maps Expose Macro Actions, Not Just CRUD
+**Learned from**: Sprint 24 architecture — GPT map interaction review
+
+- ❌ GPT micromanaging nodes with sequential read → create node → create edge → position loops (5+ API calls per concept).
+- ✅ Expose macro actions: `board_from_text` (one text → full board), `expand_board_branch` (one node → N children), `suggest_board_gaps` (one board → suggestions). One action, many nodes.
+- Why: Brittle multi-step CRUD sequences are error-prone and slow. The GPT should express intent ("expand this branch") and let the backend handle the graph operations.
 
 ---
 
@@ -781,5 +835,6 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
     - **API Dev Testbed Payload Compliance**: Refactored `/api/dev/test-experience` validators from strictly enforcing monolithic payloads to flexibly accepting *either* `sections`/`prompts` arrays or `blocks` arrays, proving backend readiness for hybrid UX payload strategies.
 - **Status**: Visual regression check on all fallback monolithic properties succeeded without data loss.
 - **2026-04-05**: Halting structured engineering sprints to execute a Custom GPT Acceptance Test pass. This is a QA and stress-test phase of Mira/Nexus integrations ensuring real GPT conversational inputs can successfully orchestrate discovery, fast paths, and the new Sprint 22 block schemas. See `test.md` for the test protocol and rules.
+- **2026-04-05**: Sprint 23 completed (GPT Acceptance & Observed Friction). Lanes 1–7 all ✅. Fixed: reentry contract persistence (Lane 1), step surgery pipeline with enriched create response (Lane 2), GPT state enrichment with pending enrichments + knowledge counts (Lane 3), proactive coach triggers — checkpoint fail, dwell, unread (Lane 4), completion synthesis with mastery transitions + next-experience cards (Lane 5), mastery evidence wiring — checkpoint grades flow to knowledge_progress with threshold-based auto-promote (Lane 6), home page coherence — focus story, reentry priority, path narrative (Lane 7). Lane 8 (acceptance QA) carried to Sprint 24. Added SOPs 44–49 for Sprint 24 preparation.
 
 Current test count: **223 passing** | Build: clean | TSC: clean
