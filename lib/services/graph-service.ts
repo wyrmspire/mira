@@ -260,18 +260,21 @@ export async function getAISuggestionsForCompletion(instanceId: string, userId: 
   }));
 
   // Run AI flow with safe wrapper
-  return await runFlowSafe(
-    async () => {
-      const result = await suggestNextExperienceFlow(context);
-      return result.suggestions.map(s => ({
+  const result = await runFlowSafe(
+    suggestNextExperienceFlow,
+    context,
+    async (output: any) => {
+      if (!output || output.error) return null;
+      return output.suggestions.map((s: any) => ({
         templateClass: s.templateClass,
         reason: s.reason,
         resolution: s.suggestedResolution,
         confidence: s.confidence
       }));
-    },
-    fallback
+    }
   );
+
+  return result || fallback;
 }
 
 /**

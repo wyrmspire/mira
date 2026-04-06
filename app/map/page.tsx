@@ -1,8 +1,6 @@
 import { DEFAULT_USER_ID } from '@/lib/constants'
-import { getBoards, createBoard, getBoardGraph } from '@/lib/services/mind-map-service'
+import { createBoard, getBoardGraph, getBoardSummaries } from '@/lib/services/mind-map-service'
 import { ThinkCanvas } from '@/components/think/think-canvas'
-import { ThinkBoardSwitcher } from '@/components/think/think-board-switcher'
-import { COPY } from '@/lib/studio-copy'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,37 +10,38 @@ interface MapPageProps {
 
 export default async function MapPage({ searchParams }: MapPageProps) {
   const userId = DEFAULT_USER_ID
-  let boards = await getBoards(userId)
+  let summaries = await getBoardSummaries(userId)
 
-  if (boards.length === 0) {
-    // Auto-create a default board if none exists
-    const newBoard = await createBoard(userId, 'My Thinking Space')
-    boards = [newBoard]
+  if (summaries.length === 0) {
+    // Auto-create a strategic board if none exists
+    await createBoard(userId, 'Strategic Focus', 'strategy')
+    summaries = await getBoardSummaries(userId)
   }
 
-  const activeBoardId = searchParams.boardId || boards[0].id
-  const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0]
+  const activeBoardId = searchParams.boardId || summaries[0].id
+  const activeBoard = summaries.find(b => b.id === activeBoardId) || summaries[0]
+  
+  // Parallel fetch board graph
   const { nodes, edges } = await getBoardGraph(activeBoard.id)
 
   return (
-    <div className="flex flex-col h-screen bg-[#050510]">
-      <div className="flex items-center justify-between p-4 border-b border-[#1e1e2e] bg-[#0a0a1a]">
-        <div>
-          <h1 className="text-xl font-bold text-[#e2e8f0]">{COPY.mindMap.heading}</h1>
-          <p className="text-sm text-[#94a3b8]">{COPY.mindMap.subheading}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ThinkBoardSwitcher boards={boards} activeBoardId={activeBoard.id} />
-        </div>
-      </div>
-      
-      <div className="flex-1 relative overflow-hidden">
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050510]">
+      <div className="flex-1 relative overflow-hidden h-full">
         <ThinkCanvas 
           boardId={activeBoard.id}
           initialNodes={nodes}
           initialEdges={edges}
           userId={userId}
+          boards={summaries as any}
         />
+        
+        {/* Board Context Overlay */}
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none select-none flex flex-col items-center">
+          <h1 className="text-sm font-bold text-[#f1f5f9]/60 tracking-wide drop-shadow-md">{activeBoard.name}</h1>
+          <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-[0.2em] mt-0.5 drop-shadow-sm">
+            {activeBoard.purpose.replace('_', ' ')}
+          </span>
+        </div>
       </div>
     </div>
   )

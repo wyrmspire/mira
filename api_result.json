@@ -20,7 +20,7 @@
     "response": {
       "action": "create_outline",
       "outline": {
-        "id": "3d0fb2cb-4798-44a2-b8eb-11bb4316df1a",
+        "id": "0166f8d2-a17e-45b3-981b-c6a0a236dd49",
         "userId": "a0000000-0000-0000-0000-000000000001",
         "topic": "SaaS Pricing Strategy",
         "domain": "Business",
@@ -38,8 +38,8 @@
         "estimatedExperienceCount": null,
         "status": "planning",
         "goalId": null,
-        "createdAt": "2026-04-05T04:20:50.285+00:00",
-        "updatedAt": "2026-04-05T04:20:50.285+00:00"
+        "createdAt": "2026-04-06T02:06:51.396+00:00",
+        "updatedAt": "2026-04-06T02:06:51.396+00:00"
       },
       "message": "Curriculum outline created for \"SaaS Pricing Strategy\". Use POST /api/gpt/create to generate experiences for each subtopic."
     }
@@ -78,8 +78,8 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "83519a00-cca6-489b-bed5-145b27a8a06b",
-      "user_id": null,
+      "id": "56dbc101-ca47-47d4-996e-93c5ffcb5459",
+      "user_id": "a0000000-0000-0000-0000-000000000001",
       "idea_id": null,
       "template_id": null,
       "title": "Pricing Fundamentals for SaaS",
@@ -103,19 +103,26 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T04:20:50.471+00:00",
+      "created_at": "2026-04-06T02:06:53.266+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "6566fedb-dc97-4f29-8c79-117c07e3fdf7",
-          "instance_id": "83519a00-cca6-489b-bed5-145b27a8a06b",
+          "id": "fa972d2a-a3b8-48f6-b8ab-a3d7f544ab70",
+          "instance_id": "56dbc101-ca47-47d4-996e-93c5ffcb5459",
           "step_order": 0,
           "step_type": "lesson",
           "title": "What is a Value Metric?",
-          "payload": {},
+          "payload": {
+            "blocks": [
+              {
+                "type": "content",
+                "content": "A value metric is the way you measure the value your customer receives."
+              }
+            ]
+          },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:50.816234+00:00",
+          "created_at": "2026-04-06T02:06:53.441646+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -188,8 +195,8 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
-      "user_id": null,
+      "id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
+      "user_id": "a0000000-0000-0000-0000-000000000001",
       "idea_id": null,
       "template_id": null,
       "title": "Beginner Lesson: Customer Interviews",
@@ -213,19 +220,39 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T04:20:50.696+00:00",
+      "created_at": "2026-04-06T02:06:53.535+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
-          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+          "id": "5a7c2d26-bd24-4a6f-b49f-07362d5ab850",
+          "instance_id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics",
-          "payload": {},
+          "payload": {
+            "blocks": [
+              {
+                "type": "prediction",
+                "question": "What is the biggest mistake in customer interviews?",
+                "reveal_content": "Asking leading questions! It biases the user completely."
+              },
+              {
+                "type": "exercise",
+                "title": "Write an open-ended question",
+                "instructions": "Write a question avoiding bias.",
+                "validation_criteria": "Must not be a yes/no question."
+              },
+              {
+                "type": "checkpoint",
+                "question": "True or False: You should pitch your solution first.",
+                "explanation": "Never pitch first. Always explore the problem.",
+                "expected_answer": "False"
+              }
+            ]
+          },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.014334+00:00",
+          "created_at": "2026-04-06T02:06:53.677616+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -234,14 +261,26 @@
           "order_index": 0
         },
         {
-          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
-          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+          "id": "002503d2-e865-47fe-a80a-50a3c810fa0a",
+          "instance_id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
-          "payload": {},
+          "payload": {
+            "blocks": [
+              {
+                "type": "content",
+                "content": "Reflection time."
+              }
+            ],
+            "prompts": [
+              {
+                "prompt": "What are you most nervous about when interviewing?"
+              }
+            ]
+          },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.099639+00:00",
+          "created_at": "2026-04-06T02:06:53.785191+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -297,8 +336,8 @@
     "status": 201,
     "statusText": "Created",
     "response": {
-      "id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
-      "user_id": null,
+      "id": "32c94334-ef77-4199-bc14-191fb6bc12c2",
+      "user_id": "a0000000-0000-0000-0000-000000000001",
       "idea_id": null,
       "template_id": null,
       "title": "Better Outreach Emails",
@@ -322,19 +361,27 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T04:20:50.979+00:00",
+      "created_at": "2026-04-06T02:06:53.875+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "a9aee5e2-8fce-4db8-a899-d218fb3d0d4f",
-          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
+          "id": "eb1151d5-dde5-46d6-a10a-6fbc50728edd",
+          "instance_id": "32c94334-ef77-4199-bc14-191fb6bc12c2",
           "step_order": 0,
           "step_type": "lesson",
           "title": "The Hook",
-          "payload": {},
+          "payload": {
+            "sections": [
+              {
+                "body": "Keep it under 3 sentences.",
+                "type": "text",
+                "heading": "Rule 1"
+              }
+            ]
+          },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.267561+00:00",
+          "created_at": "2026-04-06T02:06:53.997606+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -343,8 +390,8 @@
           "order_index": 0
         },
         {
-          "id": "133db81e-e83c-4437-ba9c-23d58df0973b",
-          "instance_id": "7940926e-cffc-4e0b-8305-f3bcd09fff85",
+          "id": "dc9a8c5e-1bf0-4b7e-a811-d1989a3293a4",
+          "instance_id": "32c94334-ef77-4199-bc14-191fb6bc12c2",
           "step_order": 1,
           "step_type": "challenge",
           "title": "Draft It",
@@ -355,7 +402,7 @@
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.343757+00:00",
+          "created_at": "2026-04-06T02:06:54.094416+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -389,8 +436,8 @@
     "url": "/update",
     "payload": {
       "action": "update_step",
-      "experienceId": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
-      "stepId": "51a49637-2a9c-4b02-9543-a3392d81d077",
+      "experienceId": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
+      "stepId": "5a7c2d26-bd24-4a6f-b49f-07362d5ab850",
       "stepPayload": {
         "title": "Interview Mechanics - Worked Example",
         "blocks": [
@@ -410,8 +457,8 @@
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
-      "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+      "id": "5a7c2d26-bd24-4a6f-b49f-07362d5ab850",
+      "instance_id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
       "step_order": 0,
       "step_type": "lesson",
       "title": "Interview Mechanics - Worked Example",
@@ -430,7 +477,7 @@
         ]
       },
       "completion_rule": null,
-      "created_at": "2026-04-05T04:20:51.014334+00:00",
+      "created_at": "2026-04-06T02:06:53.677616+00:00",
       "status": "pending",
       "scheduled_date": null,
       "due_date": null,
@@ -440,13 +487,13 @@
   },
   {
     "name": "5b. Verify Surgery",
-    "url": "/experiences/d04846eb-8bf7-41e2-a12e-942774b6c1af",
+    "url": "/experiences/9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
     "payload": null,
     "status": 200,
     "statusText": "OK",
     "response": {
-      "id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
-      "user_id": null,
+      "id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
+      "user_id": "a0000000-0000-0000-0000-000000000001",
       "idea_id": null,
       "template_id": null,
       "title": "Beginner Lesson: Customer Interviews",
@@ -470,13 +517,13 @@
       "source_conversation_id": null,
       "generated_by": "gpt",
       "realization_id": null,
-      "created_at": "2026-04-05T04:20:50.696+00:00",
+      "created_at": "2026-04-06T02:06:53.535+00:00",
       "published_at": null,
       "curriculum_outline_id": null,
       "steps": [
         {
-          "id": "51a49637-2a9c-4b02-9543-a3392d81d077",
-          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+          "id": "5a7c2d26-bd24-4a6f-b49f-07362d5ab850",
+          "instance_id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
           "step_order": 0,
           "step_type": "lesson",
           "title": "Interview Mechanics - Worked Example",
@@ -495,7 +542,7 @@
             ]
           },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.014334+00:00",
+          "created_at": "2026-04-06T02:06:53.677616+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -503,14 +550,26 @@
           "completed_at": null
         },
         {
-          "id": "b4ed59de-b55b-4a37-aa39-c9bb246cc497",
-          "instance_id": "d04846eb-8bf7-41e2-a12e-942774b6c1af",
+          "id": "002503d2-e865-47fe-a80a-50a3c810fa0a",
+          "instance_id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
           "step_order": 1,
           "step_type": "reflection",
           "title": "Reflect on Bias",
-          "payload": {},
+          "payload": {
+            "blocks": [
+              {
+                "type": "content",
+                "content": "Reflection time."
+              }
+            ],
+            "prompts": [
+              {
+                "prompt": "What are you most nervous about when interviewing?"
+              }
+            ]
+          },
           "completion_rule": null,
-          "created_at": "2026-04-05T04:20:51.099639+00:00",
+          "created_at": "2026-04-06T02:06:53.785191+00:00",
           "status": "pending",
           "scheduled_date": null,
           "due_date": null,
@@ -533,6 +592,246 @@
     "statusText": "OK",
     "response": {
       "latestExperiences": [
+        {
+          "id": "32c94334-ef77-4199-bc14-191fb6bc12c2",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": null,
+          "title": "Better Outreach Emails",
+          "goal": "Draft a concise outreach email.",
+          "instance_type": "ephemeral",
+          "status": "injected",
+          "resolution": {
+            "mode": "illuminate",
+            "depth": "light",
+            "intensity": "low",
+            "timeScope": "immediate"
+          },
+          "reentry": {
+            "prompt": "Done?",
+            "trigger": "completion",
+            "contextScope": "minimal"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-06T02:06:53.875+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "9e1c3fd2-8b62-47f7-84b3-8a307ee40dbb",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": null,
+          "title": "Beginner Lesson: Customer Interviews",
+          "goal": "Master the mechanics of open-ended customer interviews.",
+          "instance_type": "ephemeral",
+          "status": "injected",
+          "resolution": {
+            "mode": "practice",
+            "depth": "heavy",
+            "intensity": "high",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Ready to move on?",
+            "trigger": "completion",
+            "contextScope": "minimal"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-06T02:06:53.535+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "56dbc101-ca47-47d4-996e-93c5ffcb5459",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": null,
+          "title": "Pricing Fundamentals for SaaS",
+          "goal": "Understand value metrics and basic pricing models.",
+          "instance_type": "ephemeral",
+          "status": "injected",
+          "resolution": {
+            "mode": "illuminate",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "How did that go?",
+            "trigger": "completion",
+            "contextScope": "minimal"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-06T02:06:53.266+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "a6fe48fc-0c82-4ca4-8fb4-c9d5dd86560d",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Service-to-Software Offer Ladder",
+          "goal": "Design a practical ladder from AI social-media service offers to internal tools and eventually SaaS.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which parts of your current service workflow should stay custom, which should be productized, and which deserve to become internal software first.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T05:48:03.339+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "663d1c0c-996b-42a1-9fae-13c5b0ca3fbf"
+        },
+        {
+          "id": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000003",
+          "title": "Cold Outreach Emails",
+          "goal": "Write better hooks",
+          "instance_type": "ephemeral",
+          "status": "completed",
+          "resolution": {
+            "mode": "practice",
+            "depth": "light",
+            "intensity": "low",
+            "timeScope": "immediate"
+          },
+          "reentry": {
+            "prompt": "Completed cold outreach fast path",
+            "trigger": "completion",
+            "contextScope": "minimal"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": "low",
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:24:54.706+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "eba12593-3c0f-4759-8a6e-ecfb6ad25b30",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000003",
+          "title": "Cold Outreach Emails",
+          "goal": "Write better hooks",
+          "instance_type": "ephemeral",
+          "status": "completed",
+          "resolution": {
+            "mode": "practice",
+            "depth": "light",
+            "intensity": "low",
+            "timeScope": "immediate"
+          },
+          "reentry": {
+            "prompt": "Completed cold outreach fast path",
+            "trigger": "completion",
+            "contextScope": "minimal"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": "low",
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:24:26.284+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "a3c45d70-8416-4a67-a432-21229c5834c8",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Beginner Lesson: Customer Interviews",
+          "goal": "Master the art of customer interviews via block-based interaction",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "practice",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Good job",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:24:10.412+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "a321b096-8ef8-4525-8c1d-15f0b404dc49",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Fundamentals of SaaS Pricing",
+          "goal": "Understand value-based vs per-seat pricing models and psychology",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "illuminate",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "You just finished Fundamentals of Pricing rules. Ready for the next?",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:23:53.085+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f"
+        },
         {
           "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -592,246 +891,6 @@
           "created_at": "2026-04-05T02:52:59.728+00:00",
           "published_at": "2026-04-05T02:53:58.247+00:00",
           "curriculum_outline_id": null
-        },
-        {
-          "id": "c6ba6b44-df7d-4c4b-b022-e9d0ca1b350b",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000001",
-          "title": "[Test] Ephemeral Quick Prompt",
-          "goal": "Verify ephemeral experiences appear in Library > Moments",
-          "instance_type": "ephemeral",
-          "status": "injected",
-          "resolution": {
-            "mode": "reflect",
-            "depth": "light",
-            "intensity": "low",
-            "timeScope": "immediate"
-          },
-          "reentry": null,
-          "previous_experience_id": null,
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "dev-harness",
-          "realization_id": null,
-          "created_at": "2026-04-05T02:52:59.296+00:00",
-          "published_at": null,
-          "curriculum_outline_id": null
-        },
-        {
-          "id": "b9c4c1f9-012d-45cf-80f0-4aedcbe45878",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Building Resilient Webhook Ingestion Systems",
-          "goal": "Learn to design, implement, and test a secure, scalable, and resilient webhook ingestion system capable of handling \"at-least-once\" delivery and meeting critical provider SLAs.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "medium",
-            "timeScope": "multi_day"
-          },
-          "reentry": null,
-          "previous_experience_id": null,
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "mirak",
-          "realization_id": null,
-          "created_at": "2026-04-05T01:34:58.658+00:00",
-          "published_at": null,
-          "curriculum_outline_id": null
-        },
-        {
-          "id": "3039c5c8-b392-4208-9962-ca50d0ab389c",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 05: Social Automation and Publishing Intelligence",
-          "goal": "Design a practical social automation system that uses competitor and research signals to support content planning, packaging analysis, publishing operations, and follow-up review without over-automating brand judgment or platform-risky behavior.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which parts of your social workflow deserve automation, which ones still require human judgment, and what publishing intelligence loop should become part of your weekly system.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T03:33:56.418+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 04: Competitor Video Intelligence Workflow",
-          "goal": "Build a repeatable competitor-video intelligence workflow that collects packaging, transcript, CTA, and topic signals from creator competitors, stores them with useful metadata, and turns them into weekly content and strategy decisions.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which competitor fields gave you the most signal, which visual patterns required screenshots, and what recurring topic or packaging moves should influence your next content cycle.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
-          "next_suggested_ids": [
-            "3039c5c8-b392-4208-9962-ca50d0ab389c"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T02:57:17.528+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 03: Competitor Loops, Alerts, and Action Outputs",
-          "goal": "Build the back end of your founder data engine by turning competitor and social intelligence into repeatable loops, alerts, weekly digests, idea banks, and decision outputs that influence what you build, publish, or ignore.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which loops deserve automation, which alerts are actually useful, and which action outputs most directly improve your weekly founder decisions.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
-          "next_suggested_ids": [
-            "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T02:54:35.361+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 02: Storage, Metadata, Embeddings, and NotebookLM",
-          "goal": "Design the middle layer of your founder data engine so collected sources are stored cleanly, chunked usefully, tagged with actionable metadata, embedded appropriately, and routed into NotebookLM only when curated synthesis is the right move.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review whether your storage model, metadata fields, and embedding choices are good enough to support actual retrieval and synthesis instead of becoming another messy archive.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
-          "next_suggested_ids": [
-            "16b8748f-5e37-4caf-8a8c-7ee289587e55"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T01:13:17.389+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "ab3e55b7-a061-4ca9-a128-46eeaf1f7759",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 01: Acquisition Decisions and Visual Capture",
-          "goal": "Build the front end of your founder data engine by deciding which decisions the system should improve, when to use scraping versus browser automation versus computer use, and when screenshots or visual capture are necessary for competitive and creator research.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which acquisition methods match your real workflows best, where screenshots are genuinely necessary, and what your first repeatable competitor-intel pipeline should look like.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": null,
-          "next_suggested_ids": [
-            "32eec1ed-e7ca-43d7-913b-09bdf5ff6578"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-02T22:35:54.802+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "afa1dd16-fe01-422b-bfe4-ae915ffd5ecf",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Build Your YouTube SaaS Growth Engine (Expanded v2)",
-          "goal": "Design a YouTube growth system that turns channel strategy, topic selection, packaging, retention, calls to action, and follow-up assets into a repeatable acquisition engine for a SaaS business.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "medium",
-            "timeScope": "multi_day"
-          },
-          "reentry": {
-            "prompt": "Review which part of the engine is currently weakest: topic system, packaging, retention, CTA path, or follow-up conversion structure.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": null,
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-02T22:29:47.472+00:00",
-          "published_at": null,
-          "curriculum_outline_id": null
         }
       ],
       "activeReentryPrompts": [
@@ -842,12 +901,152 @@
           "trigger": "completion",
           "contextScope": "full",
           "priority": "medium"
+        },
+        {
+          "instanceId": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+          "instanceTitle": "Cold Outreach Emails",
+          "prompt": "Completed cold outreach fast path",
+          "trigger": "completion",
+          "contextScope": "minimal",
+          "priority": "medium"
+        },
+        {
+          "instanceId": "eba12593-3c0f-4759-8a6e-ecfb6ad25b30",
+          "instanceTitle": "Cold Outreach Emails",
+          "prompt": "Completed cold outreach fast path",
+          "trigger": "completion",
+          "contextScope": "minimal",
+          "priority": "medium"
         }
       ],
-      "frictionSignals": [],
+      "frictionSignals": [
+        {
+          "instanceId": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+          "level": "low"
+        },
+        {
+          "instanceId": "eba12593-3c0f-4759-8a6e-ecfb6ad25b30",
+          "level": "low"
+        },
+        {
+          "instanceId": "c6ba6b44-df7d-4c4b-b022-e9d0ca1b350b",
+          "level": "low"
+        }
+      ],
       "suggestedNext": [],
-      "synthesisSnapshot": null,
+      "synthesisSnapshot": {
+        "id": "d245ab4b-b829-45a7-b043-b80c8cc5e440",
+        "user_id": "a0000000-0000-0000-0000-000000000001",
+        "source_type": "experience",
+        "source_id": "63386cbf-d4d9-41cc-8411-d92cc0996e2b",
+        "summary": "The user began the \"Cold Outreach Emails\" experience, aimed at writing better hooks. They navigated directly to the single \"Revised Email Step,\" spent approximately 2.2 seconds on it, and immediately completed the task and the entire experience. This suggests a very quick, surface-level engagement.",
+        "key_signals": {
+          "signal_0": "Very fast completion (2.2 seconds on the sole step)",
+          "signal_1": "Immediate task completion after viewing the step",
+          "signal_2": "No evident struggle or deep interaction",
+          "signal_3": "Experience resolution was light and low intensity, matching quick engagement",
+          "frictionLevel": "low",
+          "interactionCount": 5,
+          "frictionAssessment": "The user was coasting, completing the experience with minimal time and effort, indicating it was likely too easy or not engaging enough to hold their attention."
+        },
+        "next_candidates": [
+          "A more challenging practice focused on hooks: To encourage deeper engagement, offer a practice experience with higher intensity or depth on crafting compelling hooks.",
+          "Apply hooks to a full email draft: Provide an experience where the user has to integrate new hook strategies into a complete cold email.",
+          "Peer review or expert feedback on hooks: Offer an experience to get qualitative feedback on their self-generated hooks, promoting refinement and learning."
+        ],
+        "created_at": "2026-04-05T18:32:38.758+00:00"
+      },
       "proposedExperiences": [
+        {
+          "id": "a6fe48fc-0c82-4ca4-8fb4-c9d5dd86560d",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Service-to-Software Offer Ladder",
+          "goal": "Design a practical ladder from AI social-media service offers to internal tools and eventually SaaS.",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "build",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Review which parts of your current service workflow should stay custom, which should be productized, and which deserve to become internal software first.",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T05:48:03.339+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "663d1c0c-996b-42a1-9fae-13c5b0ca3fbf"
+        },
+        {
+          "id": "a3c45d70-8416-4a67-a432-21229c5834c8",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Beginner Lesson: Customer Interviews",
+          "goal": "Master the art of customer interviews via block-based interaction",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "practice",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "Good job",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:24:10.412+00:00",
+          "published_at": null,
+          "curriculum_outline_id": null
+        },
+        {
+          "id": "a321b096-8ef8-4525-8c1d-15f0b404dc49",
+          "user_id": "a0000000-0000-0000-0000-000000000001",
+          "idea_id": null,
+          "template_id": "b0000000-0000-0000-0000-000000000002",
+          "title": "Fundamentals of SaaS Pricing",
+          "goal": "Understand value-based vs per-seat pricing models and psychology",
+          "instance_type": "persistent",
+          "status": "proposed",
+          "resolution": {
+            "mode": "illuminate",
+            "depth": "medium",
+            "intensity": "medium",
+            "timeScope": "session"
+          },
+          "reentry": {
+            "prompt": "You just finished Fundamentals of Pricing rules. Ready for the next?",
+            "trigger": "completion",
+            "contextScope": "focused"
+          },
+          "previous_experience_id": null,
+          "next_suggested_ids": [],
+          "friction_level": null,
+          "source_conversation_id": null,
+          "generated_by": "gpt",
+          "realization_id": null,
+          "created_at": "2026-04-05T04:23:53.085+00:00",
+          "published_at": null,
+          "curriculum_outline_id": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f"
+        },
         {
           "id": "6235154a-0f27-4583-a96e-d607c777a3a4",
           "user_id": "a0000000-0000-0000-0000-000000000001",
@@ -903,114 +1102,10 @@
           "created_at": "2026-04-05T01:34:58.658+00:00",
           "published_at": null,
           "curriculum_outline_id": null
-        },
-        {
-          "id": "3039c5c8-b392-4208-9962-ca50d0ab389c",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 05: Social Automation and Publishing Intelligence",
-          "goal": "Design a practical social automation system that uses competitor and research signals to support content planning, packaging analysis, publishing operations, and follow-up review without over-automating brand judgment or platform-risky behavior.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which parts of your social workflow deserve automation, which ones still require human judgment, and what publishing intelligence loop should become part of your weekly system.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
-          "next_suggested_ids": [],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T03:33:56.418+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 04: Competitor Video Intelligence Workflow",
-          "goal": "Build a repeatable competitor-video intelligence workflow that collects packaging, transcript, CTA, and topic signals from creator competitors, stores them with useful metadata, and turns them into weekly content and strategy decisions.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which competitor fields gave you the most signal, which visual patterns required screenshots, and what recurring topic or packaging moves should influence your next content cycle.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
-          "next_suggested_ids": [
-            "3039c5c8-b392-4208-9962-ca50d0ab389c"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T02:57:17.528+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
-        },
-        {
-          "id": "16b8748f-5e37-4caf-8a8c-7ee289587e55",
-          "user_id": "a0000000-0000-0000-0000-000000000001",
-          "idea_id": null,
-          "template_id": "b0000000-0000-0000-0000-000000000002",
-          "title": "Founder Research & Data Engine — Sprint 03: Competitor Loops, Alerts, and Action Outputs",
-          "goal": "Build the back end of your founder data engine by turning competitor and social intelligence into repeatable loops, alerts, weekly digests, idea banks, and decision outputs that influence what you build, publish, or ignore.",
-          "instance_type": "persistent",
-          "status": "proposed",
-          "resolution": {
-            "mode": "build",
-            "depth": "heavy",
-            "intensity": "high",
-            "timeScope": "session"
-          },
-          "reentry": {
-            "prompt": "Review which loops deserve automation, which alerts are actually useful, and which action outputs most directly improve your weekly founder decisions.",
-            "trigger": "completion",
-            "contextScope": "focused"
-          },
-          "previous_experience_id": "32eec1ed-e7ca-43d7-913b-09bdf5ff6578",
-          "next_suggested_ids": [
-            "8123e6f4-3eaa-4f15-8c37-5ea00a07af5c"
-          ],
-          "friction_level": null,
-          "source_conversation_id": null,
-          "generated_by": "gpt",
-          "realization_id": null,
-          "created_at": "2026-04-03T02:54:35.361+00:00",
-          "published_at": null,
-          "curriculum_outline_id": "0119f14a-6aa2-4101-a350-76c4293d8ee9"
         }
       ],
-      "reentryCount": 1,
-      "compressedState": {
-        "narrative": "The user is highly engaged, demonstrating advanced domain mastery in building complex data and automation systems. Their primary active goal revolves around constructing a \"Founder Research & Data Engine,\" with all five sprints (01-05) currently in a proposed state, indicating a structured, multi-stage project they are planning or working through. Additionally, they have proposed two other significant, long-term goals: \"Building Resilient Webhook Ingestion Systems\" and \"Build Your YouTube SaaS Growth Engine.\" Recently, they completed a \"[Test] Persistent Planning Journey,\" which has generated an active reentry prompt. They also initiated a \"QA Smoke Reentry\" and an \"[Test] Ephemeral Quick Prompt,\" suggesting active engagement with platform features and testing. There are no reported friction signals.",
-        "prioritySignals": [
-          "Active reentry prompt for '[Test] Persistent Planning Journey' (ID: 87b9c4bf-df01-4992-a737-6cf704061349)",
-          "Ongoing 'Founder Research & Data Engine' goal with 5 proposed sprints (ID: 0119f14a-6aa2-4101-a350-76c4293d8ee9)",
-          "Newly proposed 'Building Resilient Webhook Ingestion Systems' (ID: b9c4c1f9-012d-45cf-80f0-4aedcbe45878)",
-          "Active engagement with platform testing (evidenced by 'QA Smoke Reentry' and '[Test]' experiences)",
-          "No reported friction levels across experiences"
-        ],
-        "suggestedOpeningTopic": "Reviewing priorities for the '[Test] Persistent Planning Journey' experience"
-      },
+      "reentryCount": 3,
+      "compressedState": {},
       "knowledgeSummary": {
         "domains": {
           "SaaS Growth Strategy": 2,
@@ -1031,10 +1126,27 @@
         {
           "id": "4af83b6a-64fb-4840-b124-c0aa3814be34",
           "name": "Default Board",
-          "nodeCount": 72,
-          "edgeCount": 76
+          "nodeCount": 78,
+          "edgeCount": 81,
+          "purpose": "general",
+          "layoutMode": "radial",
+          "linkedEntityType": null
         }
       ],
+      "operationalContext": {
+        "memory_count": 0,
+        "recent_memory_ids": [],
+        "last_recorded_at": null,
+        "active_topics": [],
+        "boards": [
+          {
+            "id": "4af83b6a-64fb-4840-b124-c0aa3814be34",
+            "name": "Default Board",
+            "purpose": "general",
+            "nodeCount": 78
+          }
+        ]
+      },
       "curriculum": {
         "active_outlines": [
           {
@@ -1113,11 +1225,61 @@
             "status": "planning",
             "subtopic_count": 1,
             "completed_subtopics": 0
+          },
+          {
+            "id": "7c7d1215-e35b-46f0-8e4a-571c66a62964",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 2,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "94b0eb1e-0263-4a68-8e3c-f3e258f6db5f",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 2,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "663d1c0c-996b-42a1-9fae-13c5b0ca3fbf",
+            "topic": "Agency-to-SaaS Flywheel for AI Social Automation",
+            "status": "planning",
+            "subtopic_count": 5,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "762a9691-6bcf-49b7-83ad-189787e282fb",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
+          },
+          {
+            "id": "0166f8d2-a17e-45b3-981b-c6a0a236dd49",
+            "topic": "SaaS Pricing Strategy",
+            "status": "planning",
+            "subtopic_count": 1,
+            "completed_subtopics": 0
           }
         ],
         "recent_completions": []
       },
       "pending_enrichments": [
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-06T02:06:54.315+00:00"
+        },
+        {
+          "topic": "Unit Economics (CAC/LTV ratios)",
+          "status": "dispatched",
+          "requested_at": "2026-04-06T02:00:22.114+00:00"
+        },
+        {
+          "topic": "Unit Economics",
+          "status": "dispatched",
+          "requested_at": "2026-04-05T04:25:08.456+00:00"
+        },
         {
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
@@ -1127,21 +1289,6 @@
           "topic": "Unit Economics (CAC/LTV ratios)",
           "status": "dispatched",
           "requested_at": "2026-04-05T04:20:11.471+00:00"
-        },
-        {
-          "topic": "Unit Economics (CAC/LTV ratios)",
-          "status": "dispatched",
-          "requested_at": "2026-04-05T03:52:02.791+00:00"
-        },
-        {
-          "topic": "Unit Economics (CAC/LTV ratios)",
-          "status": "dispatched",
-          "requested_at": "2026-04-05T03:45:27.079+00:00"
-        },
-        {
-          "topic": "Unit Economics (CAC/LTV ratios)",
-          "status": "dispatched",
-          "requested_at": "2026-04-05T03:42:48.638+00:00"
         }
       ],
       "goal": {
@@ -1172,12 +1319,25 @@
           "mastery_level": "aware"
         }
       ],
+      "boards": [
+        {
+          "id": "4af83b6a-64fb-4840-b124-c0aa3814be34",
+          "name": "Default Board",
+          "nodeCount": 78,
+          "edgeCount": 81,
+          "purpose": "general",
+          "layoutMode": "radial",
+          "linkedEntityType": null
+        }
+      ],
       "graph": {
-        "activeChains": 1,
-        "totalCompleted": 1,
+        "activeChains": 4,
+        "totalCompleted": 4,
         "loopingTemplates": [
           "b0000000-0000-0000-0000-000000000002",
-          "b0000000-0000-0000-0000-000000000001"
+          "b0000000-0000-0000-0000-000000000003",
+          "b0000000-0000-0000-0000-000000000001",
+          "null"
         ],
         "deepestChain": 0
       }

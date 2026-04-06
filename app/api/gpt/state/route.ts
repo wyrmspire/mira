@@ -6,6 +6,7 @@ import { getGoalsForUser, getActiveGoal } from '@/lib/services/goal-service'
 import { getSkillDomainsForGoal, getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
 import { getEnrichmentSummaryForState } from '@/lib/services/enrichment-service'
 import { getGraphSummaryForGPT } from '@/lib/services/graph-service'
+import { getBoardSummaries } from '@/lib/services/mind-map-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
@@ -13,13 +14,14 @@ export async function GET(request: Request) {
   const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
-    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments] = await Promise.all([
+    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments, boards] = await Promise.all([
       buildGPTStatePacket(userId),
       getKnowledgeSummaryForGPT(userId),
       getCurriculumSummaryForGPT(userId),
       getActiveGoal(userId),
       getGraphSummaryForGPT(userId),
-      getEnrichmentSummaryForState(userId)
+      getEnrichmentSummaryForState(userId),
+      getBoardSummaries(userId)
     ])
 
     // SOP-40: If no active goal, fall back to most recent intake goal
@@ -64,6 +66,7 @@ export async function GET(request: Request) {
         name: d.name,
         mastery_level: d.masteryLevel
       })),
+      boards,
       graph: graphSummary
     })
   } catch (error) {

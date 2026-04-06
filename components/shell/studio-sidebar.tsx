@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { label: COPY.skills.heading, href: ROUTES.skills, icon: '⌬' },
   { label: COPY.mindMap.heading, href: ROUTES.mindMap, icon: '⊹' },
   { label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' },
+  { label: COPY.memory.heading, href: ROUTES.memory, icon: '⦿' },
   { label: COPY.experience.timelinePage.heading, href: ROUTES.timeline, icon: '◷' },
   { label: COPY.profilePage.heading, href: ROUTES.profile, icon: '👤' },
   { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },

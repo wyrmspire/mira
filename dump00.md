@@ -1,12 +1,12 @@
 # Mira + Nexus Project Code Dump
-Generated: Sun, Apr  5, 2026  7:49:46 PM
+Generated: Sun, Apr  5, 2026  9:43:31 PM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 357
+- **Files selected:** 368
 
 ## Project Overview
 
@@ -86,6 +86,8 @@ app/api/goals/route.ts
 app/api/gpt/changes/route.ts
 app/api/gpt/create/route.ts
 app/api/gpt/discover/route.ts
+app/api/gpt/memory/[id]/route.ts
+app/api/gpt/memory/route.ts
 app/api/gpt/plan/route.ts
 app/api/gpt/state/route.ts
 app/api/gpt/update/route.ts
@@ -97,6 +99,7 @@ app/api/knowledge/[id]/progress/route.ts
 app/api/knowledge/[id]/route.ts
 app/api/knowledge/batch/route.ts
 app/api/knowledge/route.ts
+app/api/mindmap/boards/[id]/route.ts
 app/api/mindmap/boards/route.ts
 app/api/mindmap/nodes/[id]/position/route.ts
 app/api/mindmap/nodes/[id]/route.ts
@@ -130,6 +133,7 @@ app/layout.tsx
 app/library/LibraryClient.tsx
 app/library/page.tsx
 app/map/page.tsx
+app/memory/page.tsx
 app/page.tsx
 app/profile/page.tsx
 app/profile/ProfileClient.tsx
@@ -215,6 +219,8 @@ components/knowledge/KnowledgeUnitCard.tsx
 components/knowledge/KnowledgeUnitView.tsx
 components/knowledge/MasteryBadge.tsx
 components/layout/slide-out-drawer.tsx
+components/memory/MemoryEntryCard.tsx
+components/memory/MemoryExplorer.tsx
 components/profile/DirectionSummary.tsx
 components/profile/FacetCard.tsx
 components/profile/SkillTrajectory.tsx
@@ -237,6 +243,7 @@ components/shell/studio-header.tsx
 components/shell/studio-sidebar.tsx
 components/skills/SkillTreeCard.tsx
 components/skills/SkillTreeGrid.tsx
+components/think/map-sidebar.tsx
 components/think/node-content-modal.tsx
 components/think/node-context-menu.tsx
 components/think/think-board-switcher.tsx
@@ -266,6 +273,7 @@ lib/adapters/notifications-adapter.ts
 lib/adapters/vercel-adapter.ts
 lib/ai/context/facet-context.ts
 lib/ai/context/suggestion-context.ts
+lib/ai/flows/board-macros.ts
 lib/ai/flows/compress-gpt-state.ts
 lib/ai/flows/extract-facets.ts
 lib/ai/flows/grade-checkpoint-flow.ts
@@ -313,6 +321,7 @@ lib/hooks/useDraftPersistence.ts
 lib/hooks/useInteractionCapture.ts
 lib/routes.ts
 lib/seed-data.ts
+lib/services/agent-memory-service.ts
 lib/services/agent-runs-service.ts
 lib/services/change-report-service.ts
 lib/services/curriculum-outline-service.ts
@@ -358,6 +367,7 @@ lib/supabase/migrations/009_change_reports.sql
 lib/supabase/migrations/010_ideas_user_id_and_knowledge_constraint.sql
 lib/supabase/migrations/011_think_node_content.sql
 lib/supabase/migrations/012_enrichment_tables.sql
+lib/supabase/migrations/013_agent_memory_and_board_types.sql
 lib/utils.ts
 lib/validators/curriculum-validator.ts
 lib/validators/drill-validator.ts
@@ -384,6 +394,7 @@ public/prompt.html
 README.md
 roadmap.md
 run_api_tests.mjs
+sprint.md
 start.sh
 tailwind.config.ts
 test.md
@@ -392,6 +403,7 @@ test_synthesis.js
 tsc_output.txt
 tsconfig.json
 tsconfig.tsbuildinfo
+types/agent-memory.ts
 types/agent-run.ts
 types/api.ts
 types/change-report.ts
@@ -944,6 +956,7 @@ export default async function HomePage() {
     "@supabase/supabase-js": "^2.100.0",
     "@tailwindcss/typography": "^0.5.19",
     "@xyflow/react": "^12.10.2",
+    "date-fns": "^4.1.0",
     "genkit": "^1.30.1",
     "lucide-react": "^1.7.0",
     "next": "14.2.29",
@@ -1451,17 +1464,16 @@ export async function POST(request: Request) {
     const { tutorChatFlow } = await import('@/lib/ai/flows/tutor-chat-flow');
 
     const result = await runFlowSafe(
-      () =>
-        tutorChatFlow({
-          stepId,
-          knowledgeUnitContent,
-          conversationHistory,
-          userMessage: message,
-        }),
-      fallback
+      tutorChatFlow,
+      {
+        stepId,
+        knowledgeUnitContent,
+        conversationHistory,
+        userMessage: message,
+      }
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(result || fallback);
   } catch (error) {
     console.error('[coach/chat] Error:', error);
     return NextResponse.json(
@@ -1526,20 +1538,16 @@ export async function POST(request: Request) {
       fallback: true,
     };
 
-    const { result } = await (async () => {
-      const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
-      const result = await runFlowSafe(
-        () =>
-          gradeCheckpointFlow({
-            question,
-            expectedAnswer,
-            userAnswer: answer,
-            unitContext,
-          }),
-        fallback
-      );
-      return { result };
-    })();
+    const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
+    const result = await runFlowSafe(
+      gradeCheckpointFlow,
+      {
+        question,
+        expectedAnswer,
+        userAnswer: answer,
+        unitContext,
+      }
+    ) || fallback;
 
     // Mastery strategy & Interactions: Lane 6
     // Fetch step to get instanceInfo for progress & interactions
@@ -1676,15 +1684,14 @@ export async function POST(request: Request) {
     // 3. Execute grading in parallel
     const gradingPromises = questions.map(async (q) => {
       const gradingResult = await runFlowSafe(
-        () =>
-          gradeCheckpointFlow({
-            question: q.question,
-            expectedAnswer: q.expectedAnswer,
-            userAnswer: q.answer,
-            unitContext,
-          }),
-        fallback(q.questionId)
-      );
+        gradeCheckpointFlow,
+        {
+          question: q.question,
+          expectedAnswer: q.expectedAnswer,
+          userAnswer: q.answer,
+          unitContext,
+        }
+      ) || (fallback(q.questionId) as any);
       return { ...gradingResult, questionId: q.questionId };
     });
 
@@ -2061,6 +2068,10 @@ export async function POST() {
   const templateId = 'b0000000-0000-0000-0000-000000000001'
 
   try {
+    // --- Seed default memories ---
+    const { seedDefaultMemory } = await import('@/lib/services/agent-memory-service');
+    await seedDefaultMemory(userId);
+
     // --- Ephemeral experience ---
     const ephemeralData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
       user_id: userId,
@@ -4178,6 +4189,7 @@ export async function GET() {
 ```typescript
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchCreate } from '@/lib/gateway/gateway-router';
+import { DEFAULT_USER_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -4225,7 +4237,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const result = await dispatchCreate(type, payload);
+    // Support both camelCase and snake_case user ID from GPT payloads, with fallback to DEFAULT_USER_ID
+    const userId = payload.userId ?? payload.user_id ?? DEFAULT_USER_ID;
+    
+    // Ensure userId is in the payload for dispatchCreate
+    const finalPayload = { ...payload, userId };
+
+    const result = await dispatchCreate(type, finalPayload);
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
     const msg = error.message || 'Failed to process creation request';
@@ -4277,6 +4295,138 @@ export async function GET(request: NextRequest) {
       }, 
       { status: 404 }
     );
+  }
+}
+
+```
+
+### app/api/gpt/memory/[id]/route.ts
+
+```typescript
+// app/api/gpt/memory/[id]/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { updateMemory, deleteMemory, getMemoryById } from '@/lib/services/agent-memory-service';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * PATCH /api/gpt/memory/[id]
+ * Correct memory entry (editing).
+ */
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const body = await req.json();
+    const id = params.id;
+
+    if (!id) return NextResponse.json({ error: 'Missing memory ID' }, { status: 400 });
+
+    const updated = await updateMemory(id, body);
+    return NextResponse.json(updated);
+  } catch (error: any) {
+    console.error('[API Memory PATCH] Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/gpt/memory/[id]
+ * Remove memory entry.
+ */
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const id = params.id;
+    if (!id) return NextResponse.json({ error: 'Missing memory ID' }, { status: 400 });
+
+    await deleteMemory(id);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('[API Memory DELETE] Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+```
+
+### app/api/gpt/memory/route.ts
+
+```typescript
+// app/api/gpt/memory/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { recordMemory, getMemories } from '@/lib/services/agent-memory-service';
+import { DEFAULT_USER_ID } from '@/lib/constants';
+import { MemoryEntryKind } from '@/types/agent-memory';
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/gpt/memory
+ * List memories with filters (topic, kind, pinned).
+ * Used by GPT to retrieve full content after seeing handles in state.
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get('userId') || DEFAULT_USER_ID;
+    const topic = searchParams.get('topic') || undefined;
+    const kind = (searchParams.get('kind') as MemoryEntryKind) || undefined;
+    const pinned =
+      searchParams.get('pinned') === 'true'
+        ? true
+        : searchParams.get('pinned') === 'false'
+        ? false
+        : undefined;
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : 20;
+
+    const entries = await getMemories(userId, { topic, kind, pinned, limit });
+
+    return NextResponse.json({
+      entries,
+      totalCount: entries.length,
+      lastRecordedAt: entries.length > 0 ? entries[0].createdAt : null, // Order by pinned desc anyway
+    });
+  } catch (error: any) {
+    console.error('[API Memory GET] Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/gpt/memory
+ * Record a new memory or boost existing (dedup).
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const {
+      userId = DEFAULT_USER_ID,
+      kind,
+      topic,
+      content,
+      memoryClass = 'semantic',
+      tags = [],
+      metadata = {},
+      source = 'gpt_learned',
+    } = body;
+
+    if (!kind || !topic || !content) {
+      return NextResponse.json({ error: 'Missing required fields: kind, topic, content' }, { status: 400 });
+    }
+
+    const memory = await recordMemory({
+      userId,
+      kind,
+      topic,
+      content,
+      memoryClass,
+      tags,
+      metadata,
+      source,
+    });
+
+    return NextResponse.json(memory);
+  } catch (error: any) {
+    console.error('[API Memory POST] Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -4490,57 +4640,16 @@ export async function POST(request: Request) {
     }
 
     // ------------------------------------------------------------------
-    // Action: read_map
+    // Consolidate Remaining Planning Actions to Gateway Router
+    // (list_boards, read_board/read_map)
     // ------------------------------------------------------------------
-    if (action === 'read_map') {
-      const { boardId } = payload;
-
-      if (!boardId || typeof boardId !== 'string') {
-        return NextResponse.json(
-          { error: 'read_map requires a valid `boardId` string in payload.' },
-          { status: 400 }
-        );
-      }
-
-      const { getBoardGraph, getBoards } = await import('@/lib/services/mind-map-service');
-      const boards = await getBoards(userId);
-      const board = boards.find(b => b.id === boardId);
-
-      if (!board) {
-        return NextResponse.json({ error: `Board ${boardId} not found.` }, { status: 404 });
-      }
-
-      const { nodes, edges } = await getBoardGraph(boardId);
-
-      // Compress graph into a readable format for GPT
-      const nodeMap = nodes.reduce((acc, n) => ({ ...acc, [n.id]: n }), {} as Record<string, any>);
-      
-      const compressedNodes = nodes.map(n => ({
-        id: n.id,
-        label: n.label,
-        type: n.nodeType,
-        description: n.description,
-        content: n.content,
-        metadata: n.metadata,
-        position: { x: Math.round(n.positionX), y: Math.round(n.positionY) }
-      }));
-
-      const compressedEdges = edges.map(e => ({
-        id: e.id,
-        source: e.sourceNodeId,
-        target: e.targetNodeId,
-        sourceLabel: nodeMap[e.sourceNodeId]?.label ?? 'unknown',
-        targetLabel: nodeMap[e.targetNodeId]?.label ?? 'unknown'
-      }));
-
-      return NextResponse.json({
-        action: 'read_map',
-        boardId,
-        name: board.name,
-        nodes: compressedNodes,
-        edges: compressedEdges,
-        summary: `Mind map "${board.name}" contains ${nodes.length} nodes and ${edges.length} edges.`
-      });
+    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map'];
+    if (ROUTER_ACTIONS.includes(action)) {
+      const { dispatchPlan } = await import('@/lib/gateway/gateway-router');
+      // Normalize read_map -> read_board for router consistency
+      const routerAction = action === 'read_map' ? 'read_board' : action;
+      const result = await dispatchPlan(routerAction, { ...payload, userId });
+      return NextResponse.json(result);
     }
 
     // ------------------------------------------------------------------
@@ -4549,7 +4658,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: `Unknown action: "${action}"`,
-        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'read_map'],
+        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board'],
       },
       { status: 400 }
     );
@@ -4576,6 +4685,7 @@ import { getGoalsForUser, getActiveGoal } from '@/lib/services/goal-service'
 import { getSkillDomainsForGoal, getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
 import { getEnrichmentSummaryForState } from '@/lib/services/enrichment-service'
 import { getGraphSummaryForGPT } from '@/lib/services/graph-service'
+import { getBoardSummaries } from '@/lib/services/mind-map-service'
 import { DEFAULT_USER_ID } from '@/lib/constants'
 
 export async function GET(request: Request) {
@@ -4583,13 +4693,14 @@ export async function GET(request: Request) {
   const userId = searchParams.get('userId') || DEFAULT_USER_ID
 
   try {
-    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments] = await Promise.all([
+    const [packet, knowledgeSummary, curriculum, activeGoal, graphSummary, enrichments, boards] = await Promise.all([
       buildGPTStatePacket(userId),
       getKnowledgeSummaryForGPT(userId),
       getCurriculumSummaryForGPT(userId),
       getActiveGoal(userId),
       getGraphSummaryForGPT(userId),
-      getEnrichmentSummaryForState(userId)
+      getEnrichmentSummaryForState(userId),
+      getBoardSummaries(userId)
     ])
 
     // SOP-40: If no active goal, fall back to most recent intake goal
@@ -4634,6 +4745,7 @@ export async function GET(request: Request) {
         name: d.name,
         mastery_level: d.masteryLevel
       })),
+      boards,
       graph: graphSummary
     })
   } catch (error) {
@@ -5053,6 +5165,56 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('[api/knowledge] Error fetching units:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+```
+
+### app/api/mindmap/boards/[id]/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { updateBoard, deleteBoard } from '@/lib/services/mind-map-service';
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = params.id;
+    const body = await request.json();
+    
+    const board = await updateBoard(id, body);
+    
+    if (!board) {
+      return NextResponse.json({ error: 'Board not found' }, { status: 404 });
+    }
+    
+    return NextResponse.json(board);
+  } catch (error: any) {
+    console.error(`[api/mindmap/boards/${params.id}] PATCH error:`, error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = params.id;
+    
+    // Lock 6: Cascade delete removes edges -> nodes -> board
+    const success = await deleteBoard(id);
+    
+    if (!success) {
+      return NextResponse.json({ error: 'Board not found or deletion failed' }, { status: 404 });
+    }
+    
+    return NextResponse.json({ success: true, message: `Board ${id} deleted with all nodes and edges.` });
+  } catch (error: any) {
+    console.error(`[api/mindmap/boards/${params.id}] DELETE error:`, error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
@@ -7836,165 +7998,3 @@ export default async function LibraryPage() {
     getProposedExperiences(userId),
     getCurriculumOutlinesForUser(userId),
   ]);
-
-  console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length} outlines=${outlines.length}`);
-  active.forEach(e => console.log(`  [ACTIVE] ${e.title}`));
-  proposed.forEach(e => console.log(`  [PROPOSED] ${e.title}`));
-
-  return (
-    <AppShell>
-      <div className="max-w-5xl mx-auto pb-20 px-4 md:px-8">
-        <header className="mb-20 space-y-2">
-          <h1 className="text-5xl font-extrabold text-[#f1f5f9] tracking-tighter leading-none">{COPY.library.heading}</h1>
-          <p className="text-[#94a3b8] tracking-tight">{COPY.library.subheading}</p>
-        </header>
-
-        <LibraryClient 
-          active={active}
-          completed={completed}
-          moments={moments}
-          proposed={proposed}
-          outlines={outlines}
-        />
-      </div>
-    </AppShell>
-  );
-}
-
-```
-
-### app/map/page.tsx
-
-```tsx
-import { DEFAULT_USER_ID } from '@/lib/constants'
-import { getBoards, createBoard, getBoardGraph } from '@/lib/services/mind-map-service'
-import { ThinkCanvas } from '@/components/think/think-canvas'
-import { ThinkBoardSwitcher } from '@/components/think/think-board-switcher'
-import { COPY } from '@/lib/studio-copy'
-
-export const dynamic = 'force-dynamic'
-
-interface MapPageProps {
-  searchParams: { boardId?: string }
-}
-
-export default async function MapPage({ searchParams }: MapPageProps) {
-  const userId = DEFAULT_USER_ID
-  let boards = await getBoards(userId)
-
-  if (boards.length === 0) {
-    // Auto-create a default board if none exists
-    const newBoard = await createBoard(userId, 'My Thinking Space')
-    boards = [newBoard]
-  }
-
-  const activeBoardId = searchParams.boardId || boards[0].id
-  const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0]
-  const { nodes, edges } = await getBoardGraph(activeBoard.id)
-
-  return (
-    <div className="flex flex-col h-screen bg-[#050510]">
-      <div className="flex items-center justify-between p-4 border-b border-[#1e1e2e] bg-[#0a0a1a]">
-        <div>
-          <h1 className="text-xl font-bold text-[#e2e8f0]">{COPY.mindMap.heading}</h1>
-          <p className="text-sm text-[#94a3b8]">{COPY.mindMap.subheading}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <ThinkBoardSwitcher boards={boards} activeBoardId={activeBoard.id} />
-        </div>
-      </div>
-      
-      <div className="flex-1 relative overflow-hidden">
-        <ThinkCanvas 
-          boardId={activeBoard.id}
-          initialNodes={nodes}
-          initialEdges={edges}
-          userId={userId}
-        />
-      </div>
-    </div>
-  )
-}
-
-```
-
-### app/profile/page.tsx
-
-```tsx
-import { buildUserProfile } from '@/lib/services/facet-service'
-import { getGoalsForUser } from '@/lib/services/goal-service'
-import { getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
-import { DEFAULT_USER_ID } from '@/lib/constants'
-import { AppShell } from '@/components/shell/app-shell'
-import { DirectionSummary } from '@/components/profile/DirectionSummary'
-import { SkillTrajectory } from '@/components/profile/SkillTrajectory'
-import { ProfileClient } from './ProfileClient'
-import { COPY } from '@/lib/studio-copy'
-
-export const dynamic = 'force-dynamic'
-
-export default async function ProfilePage() {
-  const [profile, goals, skillDomains] = await Promise.all([
-    buildUserProfile(DEFAULT_USER_ID),
-    getGoalsForUser(DEFAULT_USER_ID),
-    getSkillDomainsForUser(DEFAULT_USER_ID)
-  ])
-
-  // Get active goal for trajectory
-  const activeGoal = goals.find(g => g.status === 'active') || goals[0]
-  const goalDomains = activeGoal 
-    ? skillDomains.filter(d => d.goalId === activeGoal.id)
-    : []
-
-  return (
-    <AppShell>
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-12">
-        {/* Header */}
-        <header>
-          <h1 className="text-4xl font-bold text-white tracking-tight">
-            {COPY.profilePage.heading}
-          </h1>
-          <p className="text-slate-400 mt-2 text-lg">
-            {COPY.profilePage.subheading}
-          </p>
-        </header>
-
-        {/* Direction Summary */}
-        <section>
-          <DirectionSummary 
-            profile={profile} 
-            activeGoal={activeGoal} 
-            skillDomains={skillDomains}
-          />
-        </section>
-
-        {/* Skill Trajectory */}
-        {activeGoal && (
-          <section className="pt-8 border-t border-slate-800">
-            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
-              <span className="w-1.5 h-6 bg-indigo-500 rounded-full" />
-              Active Trajectory: {activeGoal.title}
-            </h2>
-            <SkillTrajectory domains={goalDomains} />
-          </section>
-        )}
-
-        {/* Facet Engine */}
-        <section className="pt-12 border-t border-slate-800">
-          <ProfileClient profile={profile} />
-        </section>
-      </div>
-    </AppShell>
-  )
-}
-
-```
-
-### app/profile/ProfileClient.tsx
-
-```tsx
-// app/profile/ProfileClient.tsx
-'use client'
-
-import { useState } from 'react'
-import { UserProfile, FacetType } from '@/types/profile'

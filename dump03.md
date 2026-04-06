@@ -1,3 +1,1061 @@
+
+export async function computeFrictionLevel(instanceId: string): Promise<'low' | 'medium' | 'high' | null> {
+  const interactions = await getInteractionsByInstance(instanceId);
+  if (interactions.length === 0) return null;
+  
+  const stepIds = new Set(interactions.filter(i => !!i.step_id).map(i => i.step_id));
+  const totalStepsEngaged = stepIds.size;
+  const skipEvents = interactions.filter(i => i.event_type === 'step_skipped');
+  
+  // High skip rate (>50% step_skipped events)
+  if (totalStepsEngaged > 0 && skipEvents.length / totalStepsEngaged > 0.5) {
+    return 'high';
+  }
+  
+  // Mid-step abandonment (viewed but no completion after 48h)
+  const views = interactions.filter(i => i.event_type === 'step_viewed');
+  const completions = interactions.filter(i => i.event_type === 'task_completed');
+  const completedStepIds = new Set(completions.map(c => c.step_id));
+  
+  const abandoned = views.some(v => {
+    if (completedStepIds.has(v.step_id)) return false;
+    const viewTime = new Date(v.created_at).getTime();
+    const fortyEightHoursAgo = Date.now() - (48 * 60 * 60 * 1000);
+    return viewTime < fortyEightHoursAgo;
+  });
+  
+  if (abandoned) return 'medium';
+  
+  // Long dwell + eventual completion
+  const isExperienceCompleted = interactions.some(i => i.event_type === 'experience_completed');
+  if (isExperienceCompleted) {
+    const sorted = [...interactions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    for (let i = 1; i < sorted.length; i++) {
+      const gap = new Date(sorted[i].created_at).getTime() - new Date(sorted[i-1].created_at).getTime();
+      if (gap > 5 * 60 * 1000) { // > 5 minutes dwell
+        return 'low'; // This actually means the user is taking their time, which we classify as low friction (high engagement)
+      }
+    }
+  }
+  
+  return 'low';
+}
+
+export async function updateInstanceFriction(instanceId: string): Promise<void> {
+  const frictionLevel = await computeFrictionLevel(instanceId);
+  if (frictionLevel) {
+    await updateExperienceInstance(instanceId, { friction_level: frictionLevel });
+  }
+}
+
+```
+
+### lib/experience/progression-rules.ts
+
+```typescript
+import { ProgressionRule } from '@/types/graph';
+import { ResolutionDepth } from '@/lib/constants';
+
+/**
+ * PROGRESSION_RULES: The canonical chain map.
+ * Defines how experiences lead to each other.
+ */
+export const PROGRESSION_RULES: ProgressionRule[] = [
+  { 
+    fromClass: 'questionnaire', 
+    toClass: 'plan_builder', 
+    condition: 'always', 
+    resolutionEscalation: false, 
+    reason: 'Structure your answers into action' 
+  },
+  { 
+    fromClass: 'questionnaire', 
+    toClass: 'challenge', 
+    condition: 'always', 
+    resolutionEscalation: false, 
+    reason: 'Put your thinking into practice' 
+  },
+  { 
+    fromClass: 'lesson', 
+    toClass: 'challenge', 
+    condition: 'always', 
+    resolutionEscalation: false, 
+    reason: 'Apply what you learned' 
+  },
+  { 
+    fromClass: 'lesson', 
+    toClass: 'reflection', 
+    condition: 'completion', 
+    resolutionEscalation: false, 
+    reason: 'Reflect on what you absorbed' 
+  },
+  { 
+    fromClass: 'plan_builder', 
+    toClass: 'challenge', 
+    condition: 'always', 
+    resolutionEscalation: false, 
+    reason: 'Execute your plan' 
+  },
+  { 
+    fromClass: 'challenge', 
+    toClass: 'reflection', 
+    condition: 'completion', 
+    resolutionEscalation: false, 
+    reason: 'Process the challenge' 
+  },
+  { 
+    fromClass: 'reflection', 
+    toClass: 'questionnaire', 
+    condition: 'always', 
+    resolutionEscalation: false, 
+    reason: 'Weekly loop — check in again' 
+  },
+  { 
+    fromClass: 'essay_tasks', 
+    toClass: 'reflection', 
+    condition: 'completion', 
+    resolutionEscalation: false, 
+    reason: 'Synthesize your reading' 
+  },
+];
+
+/**
+ * Returns suggested progression rules for a given experience class.
+ */
+export function getProgressionSuggestions(fromClass: string): ProgressionRule[] {
+  return PROGRESSION_RULES.filter(rule => rule.fromClass === fromClass);
+}
+
+/**
+ * Determines if the resolution should be escalated based on the rule.
+ */
+export function shouldEscalateResolution(rule: ProgressionRule, currentDepth: ResolutionDepth): ResolutionDepth {
+  if (!rule.resolutionEscalation) return currentDepth;
+  
+  if (currentDepth === 'light') return 'medium';
+  if (currentDepth === 'medium') return 'heavy';
+  return 'heavy';
+}
+
+```
+
+### lib/experience/reentry-engine.ts
+
+```typescript
+import { getExperienceInstances } from '@/lib/services/experience-service'
+import { getInteractionsForInstances } from '@/lib/services/interaction-service'
+import { InteractionEvent } from '@/types/interaction'
+
+export interface ActiveReentryPrompt {
+  instanceId: string;
+  instanceTitle: string;
+  prompt: string;
+  trigger: 'time' | 'completion' | 'inactivity' | 'manual';
+  contextScope: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+function parseDuration(duration: string): number {
+  if (!duration) return 0;
+  const match = duration.match(/^(\d+)([hdm])$/);
+  if (!match) return 0;
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  switch (unit) {
+    case 'h': return value * 60 * 60 * 1000;
+    case 'd': return value * 24 * 60 * 60 * 1000;
+    case 'm': return value * 30 * 24 * 60 * 60 * 1000;
+    default: return 0;
+  }
+}
+
+export async function evaluateReentryContracts(userId: string): Promise<ActiveReentryPrompt[]> {
+  const experiences = await getExperienceInstances({ userId })
+  const prompts: ActiveReentryPrompt[] = []
+  
+  const now = new Date()
+  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000)
+
+  // Identify experiences that need interaction history (inactivity trigger)
+  const experiencesNeedingInteractions = experiences.filter(exp => 
+    exp.reentry?.trigger === 'inactivity' && exp.status === 'active'
+  )
+  
+  const instanceIds = experiencesNeedingInteractions.map(exp => exp.id)
+  const allInteractions = await getInteractionsForInstances(instanceIds)
+  
+  // Group interactions by instanceId
+  const interactionsByInstance = allInteractions.reduce((acc, interaction) => {
+    if (interaction.instance_id) {
+      if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
+      acc[interaction.instance_id].push(interaction)
+    }
+    return acc
+  }, {} as Record<string, InteractionEvent[]>)
+
+  for (const exp of experiences) {
+    if (!exp.reentry) continue
+
+    const trigger = exp.reentry.trigger
+    let shouldAdd = false
+    let priority: 'high' | 'medium' | 'low' = 'medium'
+
+    // Manual: Always returns
+    if (trigger === 'manual') {
+      shouldAdd = true
+      priority = 'high'
+    }
+
+    // Completion: status = 'completed'
+    if (trigger === 'completion' && exp.status === 'completed') {
+      shouldAdd = true
+      priority = 'medium'
+    }
+
+    // Time: check timeAfterCompletion against published_at or created_at
+    if (trigger === 'time' && (exp.status === 'completed' || exp.status === 'published' || exp.status === 'active')) {
+      const baseTimeStr = exp.published_at || exp.created_at
+      const baseTime = new Date(baseTimeStr)
+      const durationMs = parseDuration(exp.reentry.timeAfterCompletion || '24h')
+      
+      if (now.getTime() >= baseTime.getTime() + durationMs) {
+        shouldAdd = true
+        priority = 'high'
+      }
+    }
+
+    // Inactivity: status = 'active' and no interactions in 48h
+    if (trigger === 'inactivity' && exp.status === 'active') {
+      const interactions = interactionsByInstance[exp.id] || []
+      const lastInteraction = interactions.length > 0
+        ? interactions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+        : null
+
+      const lastInteractionTime = lastInteraction ? new Date(lastInteraction.created_at) : new Date(exp.created_at)
+
+      if (lastInteractionTime < fortyEightHoursAgo) {
+        shouldAdd = true
+        priority = 'medium'
+      }
+    }
+
+    if (shouldAdd) {
+      prompts.push({
+        instanceId: exp.id,
+        instanceTitle: exp.title,
+        prompt: exp.reentry.prompt,
+        trigger: trigger as any,
+        contextScope: exp.reentry.contextScope,
+        priority
+      })
+    }
+  }
+
+  // Sort by priority (high first) and then by trigger type
+  const priorityOrder = { high: 0, medium: 1, low: 2 }
+  const triggerOrder = { completion: 0, inactivity: 1, time: 2, manual: -1 }
+  
+  return prompts.sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    }
+    return triggerOrder[a.trigger] - triggerOrder[b.trigger]
+  })
+}
+
+```
+
+### lib/experience/renderer-registry.tsx
+
+```tsx
+import React from 'react';
+import type { ExperienceStep } from '@/types/experience';
+import CheckpointStep from '@/components/experience/steps/CheckpointStep';
+
+export type StepRenderer = React.ComponentType<{
+  step: ExperienceStep;
+  onComplete: (payload?: unknown) => void;
+  onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
+}>;
+
+const registry: Record<string, StepRenderer> = {};
+
+export function registerRenderer(stepType: string, component: StepRenderer) {
+  registry[stepType] = component;
+}
+
+export function getRenderer(stepType: string): StepRenderer {
+  return registry[stepType] || FallbackStep;
+}
+
+function FallbackStep({ step }: { step: ExperienceStep }) {
+  return (
+    <div className="p-6 border border-[#1e1e2e] rounded-xl bg-[#12121a]">
+      <h3 className="text-xl font-bold text-red-400 mb-2">Unsupported Step Type</h3>
+      <p className="text-[#94a3b8]">The step type <code className="text-indigo-300">&quot;{step.step_type}&quot;</code> is not registered in the system.</p>
+    </div>
+  );
+}
+
+```
+
+### lib/experience/skill-mastery-engine.ts
+
+```typescript
+import { SkillDomain } from '@/types/skill';
+import { ExperienceInstance } from '@/types/experience';
+import { updateSkillDomain, getSkillDomain } from '@/lib/services/skill-domain-service';
+import { getKnowledgeUnitsByIds } from '@/lib/services/knowledge-service';
+import { getExperienceInstances } from '@/lib/services/experience-service';
+import { SkillMasteryLevel, MasteryStatus } from '@/lib/constants';
+import { getStorageAdapter } from '@/lib/storage-adapter';
+import { InteractionEvent } from '@/types/interaction';
+import { KnowledgeProgress } from '@/types/knowledge';
+import { promoteKnowledgeProgress } from '@/lib/services/knowledge-service';
+
+/**
+ * Computes skill mastery level based on evidence count rules from goal-os-contract.md.
+ * Evidence is the sum of completed experiences and confident knowledge units.
+ * 
+ * Mastery Levels:
+ * - undiscovered: 0 evidence
+ * - aware: 1+ linked knowledge unit OR experience (any status)
+ * - beginner: 1+ completed experience
+ * - practicing: 3+ completed experiences
+ * - proficient: 5+ completed experiences AND 2+ knowledge units at 'confident'
+ * - expert: 8+ completed experiences AND all linked knowledge units at 'confident'
+ */
+export async function computeSkillMastery(domain: SkillDomain, skipExperienceId?: string, preFetchedInstances?: ExperienceInstance[]): Promise<{ 
+  masteryLevel: SkillMasteryLevel; 
+  evidenceCount: number;
+}> {
+  let completedExperiences = 0;
+  let confidentUnits = 0;
+  const hasAnyLink = domain.linkedUnitIds.length > 0 || domain.linkedExperienceIds.length > 0;
+  
+  // 1. Fetch ALL user instances once, then filter locally (SOP-30: no N+1)
+  if (domain.linkedExperienceIds.length > 0) {
+    const allInstances = preFetchedInstances || await getExperienceInstances({ userId: domain.userId });
+    const linkedSet = new Set(domain.linkedExperienceIds);
+    for (const inst of allInstances) {
+      if (skipExperienceId && inst.id === skipExperienceId) continue;
+      if (linkedSet.has(inst.id) && inst.status === 'completed') {
+        completedExperiences++;
+      }
+    }
+  }
+  
+  // 2. Batch-fetch linked knowledge units (SOP-30: one query, not N)
+  if (domain.linkedUnitIds.length > 0) {
+    const units = await getKnowledgeUnitsByIds(domain.linkedUnitIds);
+    confidentUnits = units.filter(u => u.mastery_status === 'confident').length;
+  }
+  
+  const evidenceCount = completedExperiences + confidentUnits;
+  let level: SkillMasteryLevel = 'undiscovered';
+  
+  // Apply rules (ordered by highest first)
+  // Vacuously true if no units are linked: all 0 units are confident.
+  const allUnitsConfident = domain.linkedUnitIds.length === 0 || confidentUnits === domain.linkedUnitIds.length;
+  
+  if (completedExperiences >= 8 && allUnitsConfident) {
+    level = 'expert';
+  } else if (completedExperiences >= 5 && confidentUnits >= 2) {
+    level = 'proficient';
+  } else if (completedExperiences >= 3) {
+    level = 'practicing';
+  } else if (completedExperiences >= 1) {
+    level = 'beginner';
+  } else if (hasAnyLink) {
+    level = 'aware';
+  }
+  
+  return { masteryLevel: level, evidenceCount };
+}
+
+/**
+ * Recomputes and persists domain mastery.
+ * Mastery is monotonically increasing within a goal lifecycle — it never decreases.
+ */
+export async function updateDomainMastery(goalId: string, domainId: string): Promise<SkillDomain | null> {
+  const domain = await getSkillDomain(domainId);
+  if (!domain) return null;
+  
+  // Verify it belongs to the goal (safety check)
+  if (domain.goalId !== goalId) {
+    console.warn(`[skill-mastery-engine] Domain ${domainId} does not belong to goal ${goalId}`);
+    return null;
+  }
+  
+  const { masteryLevel, evidenceCount } = await computeSkillMastery(domain);
+  
+  const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert'];
+  const currentIndex = LEVELS.indexOf(domain.masteryLevel);
+  const nextIndex = LEVELS.indexOf(masteryLevel);
+  
+  // Mastery is monotonically increasing — only update if level advances 
+  // or if evidence count changed despite level staying same.
+  if (nextIndex > currentIndex || evidenceCount !== domain.evidenceCount) {
+    return updateSkillDomain(domainId, { 
+      masteryLevel: nextIndex > currentIndex ? masteryLevel : domain.masteryLevel, 
+      evidenceCount 
+    });
+  }
+  
+  return domain;
+}
+
+/**
+ * Knowledge Mastery Evidence Logic (Lane 6 — Sprint 23)
+ * Enforces thresholds for promotion to 'confident' and 'practiced'.
+ * Rules:
+ * - 'practiced': ≥ 1 practice attempt OR passed a checkpoint.
+ * - 'confident': ≥ 3 practice attempts AND passed a checkpoint.
+ */
+export async function syncKnowledgeMastery(
+  userId: string, 
+  unitId: string, 
+  trigger: { type: 'checkpoint_pass' | 'practice_attempt'; correct: boolean }
+): Promise<void> {
+  const adapter = getStorageAdapter();
+  
+  // 1. Fetch current status
+  const progresses = await adapter.query<KnowledgeProgress>('knowledge_progress', { 
+    user_id: userId, 
+    unit_id: unitId 
+  });
+  const currentStatus = (progresses[0]?.mastery_status as MasteryStatus) || 'unseen';
+
+  // 2. Fetch evidence from interactions
+  // SOP-30 optimization: Only fetch related events.
+  // Note: practice_attempt events store unit_id in event_payload.
+  // We fetch all interaction events for this user across instances if we can,
+  // but for now, we'll fetch all and filter (local-first dev env).
+  const interactions = await adapter.getCollection<InteractionEvent>('interaction_events');
+  
+  const practiceAttempts = interactions.filter(i => 
+    i.event_type === 'practice_attempt' && 
+    i.event_payload?.unit_id === unitId &&
+    i.event_payload?.correct === true
+  ).length;
+
+  const hasPassedCheckpoint = interactions.some(i => 
+    i.event_type === 'checkpoint_graded' && 
+    i.event_payload?.knowledgeUnitId === unitId && 
+    i.event_payload?.correct === true
+  ) || (trigger.type === 'checkpoint_pass' && trigger.correct);
+
+  // 3. Evaluate next status
+  let nextStatus: MasteryStatus = currentStatus;
+  
+  // Confident check (Threshold: ≥ 3 + checkpoint)
+  if (hasPassedCheckpoint && practiceAttempts >= 3) {
+    nextStatus = 'confident';
+  } 
+  // Practiced check (Threshold: ≥ 1 OR checkpoint)
+  else if (hasPassedCheckpoint || practiceAttempts >= 1) {
+    if (currentStatus === 'unseen' || currentStatus === 'read') {
+      nextStatus = 'practiced';
+    }
+  } 
+  // Read check
+  else if (currentStatus === 'unseen') {
+    nextStatus = 'read';
+  }
+
+  // 4. Update if advanced
+  const ORDER: MasteryStatus[] = ['unseen', 'read', 'practiced', 'confident'];
+  if (ORDER.indexOf(nextStatus) > ORDER.indexOf(currentStatus)) {
+    // We use the existing service to handle the update logic (monotonicity, unit sync)
+    // but we might need to call it multiple times if skipping levels.
+    // Actually, promoteKnowledgeProgress just bumps by 1.
+    // Let's call it until we reach nextStatus.
+    let tempStatus = currentStatus;
+    while (tempStatus !== nextStatus && ORDER.indexOf(tempStatus) < ORDER.indexOf(nextStatus)) {
+      await promoteKnowledgeProgress(userId, unitId);
+      tempStatus = ORDER[ORDER.indexOf(tempStatus) + 1] as MasteryStatus;
+    }
+  }
+}
+
+
+```
+
+### lib/experience/step-scheduling.ts
+
+```typescript
+import { ExperienceStep } from '@/types/experience';
+
+/**
+ * Assigns a schedule to a list of steps based on a start date and pacing mode.
+ * 
+ * - daily: One step per day starting from startDate
+ * - weekly: Monday-Friday scheduling, skipping weekends
+ * - custom: Pack steps into ~60min sessions using estimated_minutes
+ * 
+ * Returns steps with scheduled_date and due_date populated.
+ * (v1 implementation: due_date is set same as scheduled_date)
+ * 
+ * @evolving - v1.1
+ */
+export function assignSchedule(
+  steps: ExperienceStep[],
+  startDate: string,
+  pacingMode: 'daily' | 'weekly' | 'custom'
+): ExperienceStep[] {
+  // Defensive copy to avoid mutating original objects if they are reused
+  const result: ExperienceStep[] = steps.map(s => ({ ...s }));
+  let currentDate = new Date(startDate);
+  
+  // Ensure we have a valid date
+  if (isNaN(currentDate.getTime())) {
+    currentDate = new Date();
+  }
+  
+  let sessionMinutes = 0;
+
+  for (let i = 0; i < result.length; i++) {
+    const step = result[i];
+
+    if (pacingMode === 'daily') {
+      step.scheduled_date = currentDate.toISOString().split('T')[0];
+      step.due_date = step.scheduled_date;
+      currentDate.setDate(currentDate.getDate() + 1);
+    } else if (pacingMode === 'weekly') {
+      // Skip weekends (0=Sun, 6=Sat)
+      while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      step.scheduled_date = currentDate.toISOString().split('T')[0];
+      step.due_date = step.scheduled_date;
+      currentDate.setDate(currentDate.getDate() + 1);
+    } else if (pacingMode === 'custom') {
+      const est = step.estimated_minutes || 15; // default 15 if null
+      
+      // If adding this step exceeds 60 min session, move to next day
+      if (sessionMinutes > 0 && sessionMinutes + est > 60) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        sessionMinutes = est;
+      } else {
+        sessionMinutes += est;
+      }
+      
+      step.scheduled_date = currentDate.toISOString().split('T')[0];
+      step.due_date = step.scheduled_date;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Filters steps scheduled for a specific date (YYYY-MM-DD).
+ */
+export function getStepsForDate(steps: ExperienceStep[], date: string): ExperienceStep[] {
+  return steps.filter((s) => s.scheduled_date === date);
+}
+
+/**
+ * Filters steps past due_date that aren't completed or skipped.
+ * Uses lexicographical string comparison for YYYY-MM-DD.
+ */
+export function getOverdueSteps(steps: ExperienceStep[]): ExperienceStep[] {
+  const today = new Date().toISOString().split('T')[0];
+  return steps.filter((s) => {
+    if (!s.due_date || s.status === 'completed' || s.status === 'skipped') return false;
+    // Lexicographical comparison works for ISO dates
+    return s.due_date < today;
+  });
+}
+
+```
+
+### lib/experience/step-state-machine.ts
+
+```typescript
+import { StepStatus } from '@/types/experience';
+
+/**
+ * Step Transition Actions
+ * @evolving - v1.1
+ */
+export type StepTransitionAction = 'start' | 'complete' | 'skip' | 'reopen';
+
+/**
+ * Valid step transitions
+ * pending -> in_progress (start)
+ * pending -> skipped (skip)
+ * in_progress -> completed (complete)
+ * in_progress -> skipped (skip)
+ * completed -> in_progress (reopen)
+ * skipped -> in_progress (start)
+ */
+const STEP_TRANSITIONS: Record<StepStatus, { action: StepTransitionAction; to: StepStatus }[]> = {
+  pending: [
+    { action: 'start', to: 'in_progress' },
+    { action: 'skip', to: 'skipped' },
+  ],
+  in_progress: [
+    { action: 'complete', to: 'completed' },
+    { action: 'skip', to: 'skipped' },
+  ],
+  completed: [
+    { action: 'reopen', to: 'in_progress' },
+  ],
+  skipped: [
+    { action: 'start', to: 'in_progress' },
+  ],
+};
+
+/**
+ * Checks if a step can transition from its current status via a given action.
+ */
+export function canTransitionStep(current: StepStatus, action: StepTransitionAction): boolean {
+  const possible = STEP_TRANSITIONS[current];
+  return possible?.some((t) => t.action === action) ?? false;
+}
+
+/**
+ * Returns the next status for a step based on its current status and an action.
+ * Returns null if the transition is invalid.
+ */
+export function getNextStepStatus(current: StepStatus, action: StepTransitionAction): StepStatus | null {
+  const possible = STEP_TRANSITIONS[current];
+  const transition = possible?.find((t) => t.action === action);
+  return transition ? transition.to : null;
+}
+
+```
+
+### lib/formatters/idea-formatters.ts
+
+```typescript
+import type { Idea } from '@/types/idea'
+
+export function formatIdeaStatus(status: Idea['status']): string {
+  const labels: Record<Idea['status'], string> = {
+    captured: 'Captured',
+    drilling: 'In Drill',
+    arena: 'In Progress',
+    icebox: 'Icebox',
+    shipped: 'Shipped',
+    killed: 'Killed',
+  }
+  return labels[status] ?? status
+}
+
+```
+
+### lib/formatters/inbox-formatters.ts
+
+```typescript
+import type { InboxEvent } from '@/types/inbox'
+
+export function formatEventType(type: InboxEvent['type']): string {
+  const labels: Record<InboxEvent['type'], string> = {
+    idea_captured: 'Idea captured',
+    idea_deferred: 'Idea put on hold',
+    drill_completed: 'Drill completed',
+    project_promoted: 'Project promoted',
+    task_created: 'Task created',
+    pr_opened: 'PR opened',
+    preview_ready: 'Preview ready',
+    build_failed: 'Build failed',
+    merge_completed: 'Merge completed',
+    project_shipped: 'Project shipped',
+    project_killed: 'Project killed',
+    changes_requested: 'Changes requested',
+    // GitHub lifecycle events
+    github_issue_created: 'GitHub issue created',
+    github_issue_closed: 'GitHub issue closed',
+    github_workflow_dispatched: 'Workflow dispatched',
+    github_workflow_failed: 'Workflow failed',
+    github_workflow_succeeded: 'Workflow succeeded',
+    github_pr_opened: 'GitHub PR opened',
+    github_pr_merged: 'GitHub PR merged',
+    github_review_requested: 'Review requested',
+    github_changes_requested: 'Changes requested on GitHub',
+    github_copilot_assigned: 'Copilot assigned',
+    github_sync_failed: 'GitHub sync failed',
+    github_connection_error: 'GitHub connection error',
+    // Knowledge lifecycle events
+    knowledge_ready: 'New knowledge ready',
+    knowledge_updated: 'Knowledge updated',
+  }
+  return labels[type] ?? type
+}
+
+
+```
+
+### lib/formatters/pr-formatters.ts
+
+```typescript
+import type { PullRequest } from '@/types/pr'
+
+export function formatBuildState(state: PullRequest['buildState']): string {
+  const labels: Record<PullRequest['buildState'], string> = {
+    pending: 'Pending',
+    running: 'Building',
+    success: 'Build passed',
+    failed: 'Build failed',
+  }
+  return labels[state] ?? state
+}
+
+export function formatPRStatus(status: PullRequest['status']): string {
+  const labels: Record<PullRequest['status'], string> = {
+    open: 'Open',
+    merged: 'Merged',
+    closed: 'Closed',
+  }
+  return labels[status] ?? status
+}
+
+```
+
+### lib/formatters/project-formatters.ts
+
+```typescript
+import type { Project } from '@/types/project'
+
+export function formatProjectState(state: Project['state']): string {
+  const labels: Record<Project['state'], string> = {
+    arena: 'In Progress',
+    icebox: 'Icebox',
+    shipped: 'Shipped',
+    killed: 'Killed',
+  }
+  return labels[state] ?? state
+}
+
+export function formatProjectHealth(health: Project['health']): string {
+  const labels: Record<Project['health'], string> = {
+    green: 'On track',
+    yellow: 'Needs attention',
+    red: 'Blocked',
+  }
+  return labels[health] ?? health
+}
+
+```
+
+### lib/gateway/discover-registry.ts
+
+```typescript
+import { DiscoverCapability, DiscoverResponse } from './gateway-types';
+import { DEFAULT_TEMPLATE_IDS } from '../constants';
+
+const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => DiscoverResponse> = {
+  templates: () => ({
+    capability: 'templates',
+    endpoint: 'GET /api/gpt/discover?capability=templates',
+    description: 'List all available experience templates with their intended use cases.',
+    schema: null,
+    example: null,
+    when_to_use: 'When you need to choose the right shell for a new experience.',
+    relatedCapabilities: ['create_experience', 'create_ephemeral']
+  }),
+
+  create_experience: () => ({
+    capability: 'create_experience',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a persistent experience. Flat payload (no nesting under "payload" key). Steps can be included inline or added later via type="step".',
+    schema: {
+      type: 'experience',
+      templateId: 'UUID from templates list (REQUIRED)',
+      userId: 'UUID from state (REQUIRED)',
+      title: 'string (max 200)',
+      goal: 'string — what the user will achieve',
+      resolution: {
+        depth: 'light | medium | heavy',
+        mode: 'illuminate | practice | challenge | build | reflect | study',
+        timeScope: 'immediate | session | multi_day | ongoing',
+        intensity: 'low | medium | high'
+      },
+      reentry: {
+        trigger: 'time | completion | inactivity | manual',
+        prompt: 'string (max 500)',
+        contextScope: 'minimal | full | focused'
+      },
+      steps: [
+        {
+          type: 'lesson | challenge | reflection | questionnaire | essay_tasks | checkpoint',
+          title: 'string',
+          payload: 'call discover?capability=step_payload&step_type=X'
+        }
+      ],
+      curriculum_outline_id: 'optional UUID',
+      previousExperienceId: 'optional UUID'
+    },
+    example: {
+      type: 'experience',
+      templateId: DEFAULT_TEMPLATE_IDS.lesson,
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Introduction to Unit Economics',
+      goal: 'Master the concept of LTV and CAC',
+      resolution: {
+        depth: 'medium',
+        mode: 'practice',
+        timeScope: 'session',
+        intensity: 'medium'
+      },
+      steps: [
+        {
+          type: 'lesson',
+          title: 'What is LTV?',
+          payload: {
+            sections: [
+              { heading: 'Definition', body: 'LTV is Lifetime Value...', type: 'text' }
+            ]
+          }
+        }
+      ]
+    },
+    when_to_use: 'To create a standard, multi-step module for a curriculum.',
+    relatedCapabilities: ['templates', 'step_payload', 'create_outline']
+  }),
+
+  create_ephemeral: () => ({
+    capability: 'create_ephemeral',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create an instant, temporary experience. Bypasses review. Great for micro-nudges and immediate practice.',
+    schema: {
+      type: 'ephemeral',
+      templateId: 'UUID',
+      userId: 'UUID',
+      title: 'string',
+      goal: 'string',
+      urgency: 'low | medium | high (controls notification toast duration)',
+      resolution: '{...}',
+      reentry: '{...} — trigger, prompt, contextScope',
+      steps: '[...]'
+    },
+    example: {
+      type: 'ephemeral',
+      templateId: DEFAULT_TEMPLATE_IDS.challenge,
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Quick LTV Check',
+      goal: 'Verify understanding of Unit Economics',
+      urgency: 'medium',
+      resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
+      reentry: { trigger: 'completion', prompt: 'Great job. Want to dive deeper into Unit Economics?', contextScope: 'full' },
+      steps: [
+        {
+          type: 'checkpoint',
+          title: 'Refresher Check',
+          payload: {
+            questions: [{ id: '1', question: 'What does LTV stand for?', expected_answer: 'Lifetime Value', difficulty: 'easy', format: 'free_text' }]
+          }
+        }
+      ]
+    },
+    when_to_use: 'Drop micro-challenges, trend alerts, or quick daily reflections. Fire-and-forget. User sees a toast and can choose to engage.',
+    relatedCapabilities: ['create_experience', 'step_payload']
+  }),
+
+  create_idea: () => ({
+    capability: 'create_idea',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Capture a raw idea to be developed later. Use when the user makes a statement that shouldn\'t be an experience yet.',
+    schema: {
+      type: 'idea',
+      userId: 'UUID',
+      title: 'string',
+      rawPrompt: 'string',
+      gptSummary: 'string'
+    },
+    example: {
+      type: 'idea',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Build a SaaS for coffee shops',
+      rawPrompt: 'I want to build something for coffee owners to manage beans.',
+      gptSummary: 'Idea for a vertical SaaS for coffee inventory.'
+    },
+    when_to_use: 'When a concept is valid but not ready for planning.'
+  }),
+
+  step_payload: (params) => {
+    const stepType = params?.step_type;
+    const schemas: Record<string, any> = {
+      lesson: {
+        sections: [
+          { heading: 'string', body: 'markdown', type: 'text | callout | checkpoint' }
+        ],
+        blocks: [
+          { type: 'content', content: 'markdown' },
+          { type: 'prediction', question: 'string', reveal_content: 'markdown' },
+          { type: 'callout', intent: 'info | warning | tip | success', content: 'markdown' },
+          { type: 'media', media_type: 'image | video | audio', url: 'string', caption: 'string' }
+        ]
+      },
+      challenge: {
+        objectives: [{ id: 'string', description: 'string' }],
+        blocks: [{ type: 'exercise', title: 'string', instructions: 'string', validation_criteria: 'string' }]
+      },
+      reflection: {
+        prompts: [{ id: 'string', text: 'string' }],
+        blocks: [{ type: 'content', content: 'markdown' }]
+      },
+      questionnaire: {
+        questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }],
+        blocks: []
+      },
+      plan_builder: {
+        sections: [
+          { type: 'goals | milestones | resources', items: [{ id: 'string', text: 'string' }] }
+        ],
+        blocks: []
+      },
+      essay_tasks: {
+        content: 'string',
+        tasks: [{ id: 'string', description: 'string' }],
+        blocks: []
+      },
+      checkpoint: {
+        knowledge_unit_id: 'UUID',
+        questions: [
+          { id: 'string', question: 'string', expected_answer: 'string', difficulty: 'easy|medium|hard', format: 'free_text|choice', options: ['string'] }
+        ],
+        passing_threshold: 'number',
+        on_fail: 'retry | continue | tutor_redirect',
+        blocks: [{ type: 'checkpoint', question: 'string', expected_answer: 'string', explanation: 'string' }]
+      }
+    };
+
+    return {
+      capability: 'step_payload',
+      endpoint: 'GET /api/gpt/discover?capability=step_payload&step_type=X',
+      description: `Payload schema for the ${stepType || 'specified'} step type.`,
+      schema: stepType ? (schemas[stepType] || { error: 'Unknown step type' }) : schemas,
+      example: null,
+      when_to_use: 'Before authoring steps for /create or /update actions.'
+    };
+  },
+
+  resolution: () => ({
+    capability: 'resolution',
+    endpoint: 'GET /api/gpt/discover?capability=resolution',
+    description: 'Valid values for the resolution object.',
+    schema: {
+      depth: ['light', 'medium', 'heavy'],
+      mode: ['illuminate', 'practice', 'challenge', 'build', 'reflect', 'study'],
+      timeScope: ['immediate', 'session', 'multi_day', 'ongoing'],
+      intensity: ['low', 'medium', 'high']
+    },
+    example: { depth: 'medium', mode: 'practice', timeScope: 'session', intensity: 'medium' }
+  }),
+
+  create_outline: () => ({
+    capability: 'create_outline',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Create a curriculum outline to scope a broad topic before generating experiences.',
+    schema: {
+      action: 'create_outline',
+      topic: 'string',
+      domain: 'optional string',
+      subtopics: [
+        { title: 'string', description: 'string', order: 'number' }
+      ],
+      pedagogical_intent: 'build_understanding | develop_skill | explore_concept | problem_solve'
+    },
+    example: {
+      action: 'create_outline',
+      topic: 'Product Management',
+      subtopics: [
+        { title: 'Customer Discovery', description: 'Methods for finding truth', order: 0 },
+        { title: 'Prioritization', description: 'RICE and other models', order: 1 }
+      ]
+    },
+    when_to_use: 'Before generating serious experiences for a new learning domain.',
+    relatedCapabilities: ['create_experience', 'dispatch_research']
+  }),
+
+  dispatch_research: () => ({
+    capability: 'dispatch_research',
+    endpoint: 'Nexus GPT Action — POST /research (dispatchResearch)',
+    description: 'Dispatch deep research on a topic via Nexus. This is a SEPARATE GPT Action (not a Mira endpoint). Nexus runs ADK discovery agents → URL scraping → NotebookLM grounding → typed atom extraction. Fire-and-forget — poll getRunStatus for completion.',
+    schema: {
+      topic: 'string — the research topic',
+      user_id: 'string — defaults to dev user',
+      experience_id: 'optional string — if provided, Nexus can enrich this experience with research results',
+      goal_id: 'optional string — links research to a learning goal',
+    },
+    example: {
+      topic: 'SaaS unit economics: CAC, LTV, churn, payback period',
+      user_id: 'a0000000-0000-0000-0000-000000000001',
+      experience_id: '<ID from POST /api/gpt/create response>',
+    },
+    when_to_use: 'After creating an experience or outline. Nexus produces learning atoms (concept explanations, analogies, worked examples, practice items). Poll getRunStatus to check completion. After research finishes, use listAtoms and assembleBundle (Nexus actions) to retrieve and package results.',
+    relatedCapabilities: ['create_experience', 'create_outline']
+  }),
+ 
+  goal: () => ({
+    capability: 'goal',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a long-term goal. Flat payload. If domains[] is provided, skill domains are auto-created (best-effort).',
+    schema: {
+      type: 'goal',
+      userId: 'UUID from state',
+      title: 'string (max 200) — REQUIRED',
+      description: 'string (max 1000) — what you want to achieve',
+      domains: 'optional string[] — auto-creates skill domains'
+    },
+    example: {
+      type: 'goal',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      title: 'Learn Systems Programming',
+      description: 'Deep dive into low-level systems, memory management, and performance optimization.',
+      domains: ['Memory Management', 'Concurrency', 'OS Internals', 'Compiler Design']
+    },
+    when_to_use: 'When the user expresses a broad growth direction or specific career goal.',
+    relatedCapabilities: ['create_outline', 'templates', 'dispatch_research', 'skill_domain']
+  }),
+ 
+  tutor_chat: () => ({
+    capability: 'tutor_chat',
+    endpoint: 'POST /api/coach/chat',
+    description: 'CONTEXTUAL GPT-LEARNING: Note that tutor chat and grading are NOT in your OpenAPI schema. They are handled by the frontend Coach API. Mention them in your persona to educate the user.',
+    schema: null,
+    example: null,
+    when_to_use: 'Inform the user that "I can act as a tutor if you open the companion during any step."'
+  }),
+
+  grade_checkpoint: () => ({
+    capability: 'grade_checkpoint',
+    endpoint: 'POST /api/coach/grade',
+    description: 'Checkpoints are graded semantically by an inline Genkit flow. You define the questions, the system grades them.',
+    schema: null,
+    example: null,
+    when_to_use: 'When creating checkpoint steps.'
+  }),
+ 
+  create_knowledge: () => ({
+    capability: 'create_knowledge',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Manually create a knowledge unit. Use when you have high-quality content that doesn\'t require Nexus research.',
+    schema: {
+      type: 'knowledge',
+      userId: 'UUID from state',
+      topic: 'string',
+      domain: 'string',
+      unit_type: 'foundation | playbook | deep_dive | example | audio_script',
+      title: 'string',
+      thesis: 'string (one-sentence core claim)',
+      content: 'markdown (the full body)',
+      key_ideas: 'string[]',
+      common_mistake: 'optional string',
+      action_prompt: 'optional string'
+    },
+    example: {
+      type: 'knowledge',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      topic: 'LTV/CAC Ratio',
+      domain: 'Unit Economics',
+      unit_type: 'foundation',
+      title: 'The Golden Ratio: 3:1 LTV/CAC',
+      thesis: 'A healthy SaaS business maintains a lifetime value at least 3x its customer acquisition cost.',
       content: '# The 3:1 Rule\n\nIn venture-backed SaaS...',
       key_ideas: ['3:1 is the target', 'Lower suggests inefficient spend', 'Higher may suggest under-investing in growth']
     },
@@ -25,6 +1083,44 @@
     },
     when_to_use: 'When breaking down a broad goal into measurable sub-skills. goalId must reference an existing goal.',
     relatedCapabilities: ['goal', 'link_knowledge']
+  }),
+
+  create_board: () => ({
+    capability: 'create_board',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a new purpose-typed think board.',
+    schema: {
+      type: 'board',
+      userId: 'UUID from state (REQUIRED)',
+      name: 'string (REQUIRED)',
+      purpose: 'general | idea_planning | curriculum_review | lesson_plan | research_tracking | strategy',
+      linkedEntityId: 'optional UUID',
+      linkedEntityType: 'optional "goal" | "experience" | "knowledge"'
+    },
+    example: {
+      type: 'board',
+      userId: 'user-123',
+      name: 'SaaS Launch Roadmap',
+      purpose: 'strategy'
+    },
+    when_to_use: 'When you need a new spatial workspace for a specific topic or goal.'
+  }),
+
+  board_from_text: () => ({
+    capability: 'board_from_text',
+    endpoint: 'POST /api/gpt/create',
+    description: 'AI-GEN: Generate a full board structure (nodes + edges) from a text prompt or conversation context.',
+    schema: {
+      type: 'board_from_text',
+      userId: 'UUID from state (REQUIRED)',
+      prompt: 'string (REQUIRED) — instructions for what should be on the map'
+    },
+    example: {
+      type: 'board_from_text',
+      userId: 'user-123',
+      prompt: 'Map out the core concepts of Kubernetes for a beginner.'
+    },
+    when_to_use: 'When you want to bootstrap a large board quickly using AI instead of manual node creation.'
   }),
 
   create_map_node: () => ({
@@ -169,20 +1265,118 @@
     when_to_use: 'When you want to expand a concept into multiple sub-topics at once. Highly efficient for building trees.'
   }),
  
-  read_map: () => ({
-    capability: 'read_map',
+  read_board: () => ({
+    capability: 'read_board',
     endpoint: 'POST /api/gpt/plan',
-    description: 'Fetch the full content (nodes and edges) of a mind map. Use this before updating or expanding a map if you dont have the full context.',
+    description: 'Fetch the full content (nodes and edges) of a think board (mind map). Use before updating or expanding a board.',
     schema: {
-      action: 'read_map',
+      action: 'read_board',
       boardId: 'UUID of the think board to read'
     },
     example: {
-      action: 'read_map',
+      action: 'read_board',
       boardId: 'board-uuid-123'
     },
-    when_to_use: 'When you need to see the current state of a mind map to decide where to add new nodes or how to restructure it.',
-    relatedCapabilities: ['create_map_node', 'create_map_cluster', 'update_map_node']
+    when_to_use: 'When you need to see the spatial arrangement of nodes and edges to decide where to add new branches.',
+    relatedCapabilities: ['create_map_node', 'expand_board_branch', 'suggest_board_gaps']
+  }),
+
+  read_map: () => ({
+    capability: 'read_map',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Legacy alias for read_board. Fetches full board content.',
+    schema: { action: 'read_map', boardId: 'UUID' },
+    example: { action: 'read_map', boardId: 'board-123' },
+    when_to_use: 'Same as read_board (legacy name).'
+  }),
+
+  list_boards: () => ({
+    capability: 'list_boards',
+    endpoint: 'GET /api/gpt/discover?capability=list_boards',
+    description: 'Fetch summaries of all active boards for the user.',
+    schema: null,
+    example: null,
+    when_to_use: 'When you need to see what boards exist before selecting one to read or modify.'
+  }),
+
+  rename_board: () => ({
+    capability: 'rename_board',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Rename an existing think board.',
+    schema: {
+      action: 'rename_board',
+      boardId: 'UUID (REQUIRED)',
+      name: 'string (REQUIRED)'
+    },
+    example: {
+      action: 'rename_board',
+      boardId: 'board-123',
+      name: 'Better Board Name'
+    }
+  }),
+
+  archive_board: () => ({
+    capability: 'archive_board',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Archive a board (hides it from standard views).',
+    schema: {
+      action: 'archive_board',
+      boardId: 'UUID (REQUIRED)'
+    },
+    example: {
+      action: 'archive_board',
+      boardId: 'board-123'
+    }
+  }),
+
+  reparent_node: () => ({
+    capability: 'reparent_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Change the parent of a node by moving its incoming edge.',
+    schema: {
+      action: 'reparent_node',
+      boardId: 'UUID (REQUIRED)',
+      nodeId: 'UUID of node to move (REQUIRED)',
+      sourceNodeId: 'UUID of the new parent (REQUIRED)'
+    },
+    example: {
+      action: 'reparent_node',
+      boardId: 'board-123',
+      nodeId: 'node-child',
+      sourceNodeId: 'node-new-parent'
+    }
+  }),
+
+  expand_board_branch: () => ({
+    capability: 'expand_board_branch',
+    endpoint: 'POST /api/gpt/update',
+    description: 'AI-GEN: Suggest and create additional nodes branching off a specific point.',
+    schema: {
+      action: 'expand_board_branch',
+      boardId: 'UUID (REQUIRED)',
+      nodeId: 'UUID of node to expand from (REQUIRED)',
+      count: 'optional number (default 3)',
+      depth: 'optional number (default 1)'
+    },
+    example: {
+      action: 'expand_board_branch',
+      boardId: 'board-123',
+      nodeId: 'node-pm'
+    }
+  }),
+
+  suggest_board_gaps: () => ({
+    capability: 'suggest_board_gaps',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'AI-GEN: Analyze current board state and suggest missing concepts or connections.',
+    schema: {
+      action: 'suggest_board_gaps',
+      boardId: 'UUID (REQUIRED)'
+    },
+    example: {
+      action: 'suggest_board_gaps',
+      boardId: 'board-123'
+    }
   }),
 
   assess_gaps: () => ({
@@ -360,6 +1554,91 @@
     },
     when_to_use: 'When the user starts, pauses, or completes a broad goal.',
     relatedCapabilities: ['goal', 'skill_domain']
+  }),
+
+  memory_record: () => ({
+    capability: 'memory_record',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Record a persistent agent memory. Match content + topic + kind to dedup and boost confidence.',
+    schema: {
+      type: 'memory',
+      userId: 'UUID from state (REQUIRED)',
+      kind: 'observation | strategy | idea | preference | tactic | assessment | note (REQUIRED)',
+      topic: 'string (REQUIRED)',
+      content: 'string (REQUIRED)',
+      tags: 'optional string[]',
+      pinned: 'optional boolean',
+      confidence: 'optional number (0-1)'
+    },
+    example: {
+      type: 'memory',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      kind: 'preference',
+      topic: 'Product Management',
+      content: 'User prefers "RICE" over "MoSCoW" for feature prioritization.',
+      tags: ['prioritization', 'frameworks'],
+      pinned: true
+    },
+    when_to_use: 'When you learn something about the user, their goals, or their world that should persist across all future conversations.',
+    relatedCapabilities: ['memory_read', 'memory_correct']
+  }),
+
+  memory_read: () => ({
+    capability: 'memory_read',
+    endpoint: 'GET /api/gpt/memory',
+    description: 'Query recorded memories with filters. Use substring match in query for keyword search.',
+    schema: {
+      userId: 'UUID from state',
+      kind: 'optional kind',
+      topic: 'optional topic',
+      query: 'optional search string',
+      limit: 'optional number'
+    },
+    example: {
+      userId: 'user-123',
+      query: 'prioritization'
+    },
+    when_to_use: 'When you need to recall specific past observations or strategies to inform the current task.',
+    relatedCapabilities: ['memory_record', 'memory_correct', 'consolidate_memory']
+  }),
+
+  memory_correct: () => ({
+    capability: 'memory_correct',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update or delete a memory entry. Use action="delete_memory" for removal.',
+    schema: {
+      action: 'memory_update | memory_delete',
+      memoryId: 'UUID (REQUIRED)',
+      updates: {
+        content: 'optional string',
+        topic: 'optional string',
+        pinned: 'optional boolean',
+        tags: 'optional string[]'
+      }
+    },
+    example: {
+      action: 'memory_update',
+      memoryId: 'mem-123',
+      updates: { pinned: true }
+    },
+    when_to_use: 'When a memory is incorrect, outdated, or needs to be elevated (pinned).',
+    relatedCapabilities: ['memory_read']
+  }),
+
+  consolidate_memory: () => ({
+    capability: 'consolidate_memory',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Automated background task to extract memories from recent interactions and experiences.',
+    schema: {
+      action: 'consolidate_memory',
+      userId: 'UUID from state (REQUIRED)',
+      lookbackHours: 'optional number (default 24)'
+    },
+    example: {
+      action: 'consolidate_memory',
+      userId: 'user-123'
+    },
+    when_to_use: 'Periodically or after a major milestone to ensure the "Notebook" memory layer is up to date.'
   })
 };
 
@@ -423,6 +1702,9 @@ import { createSkillDomain } from '@/lib/services/skill-domain-service';
 // Note: Lane 4 builds this service. We import it to ensure we provide the link_knowledge capability.
 // If it fails to import (e.g. file doesn't exist yet), it will be a TSC error later which Lane 2 or 7 will fix.
 import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'; 
+import { recordMemory, updateMemory, deleteMemory, consolidateMemory } from '@/lib/services/agent-memory-service';
+import { runFlowSafe } from '@/lib/ai/safe-flow';
+import { boardFromTextFlow, expandBranchFlow, suggestGapsFlow } from '@/lib/ai/flows/board-macros';
 
 /**
  * Dispatches creation requests to the appropriate services.
@@ -719,6 +2001,80 @@ export async function dispatchCreate(type: string, payload: any) {
         edges: createdEdges
       };
     }
+    case 'memory': {
+      return recordMemory({
+        userId: payload.userId ?? payload.user_id,
+        kind: payload.kind,
+        topic: payload.topic,
+        content: payload.content,
+        memoryClass: payload.memoryClass ?? payload.memory_class ?? 'semantic',
+        tags: payload.tags ?? [],
+        metadata: payload.metadata ?? {},
+        source: 'gpt_learned'
+      });
+    }
+    case 'board': {
+      const { createBoard } = await import('@/lib/services/mind-map-service');
+      return createBoard(
+        payload.userId ?? payload.user_id,
+        payload.name || 'New Board',
+        payload.purpose || 'general',
+        payload.linkedEntityId || null,
+        payload.linkedEntityType || null
+      );
+    }
+    case 'board_from_text': {
+      return runFlowSafe(boardFromTextFlow, {
+        prompt: payload.prompt,
+        userId: payload.userId ?? payload.user_id
+      }, async (output: any) => {
+        if (!output || output.error) return output;
+        const { createBoard, createNode, createEdge } = await import('@/lib/services/mind-map-service');
+        const board = await createBoard(payload.userId ?? payload.user_id, output.title, 'general');
+        
+        const nodeMap: Record<string, string> = {};
+        
+        // Create root node first if exists
+        const rootNodeData = (output.nodes as any[]).find((n: any) => n.type === 'root');
+        if (rootNodeData) {
+          const rootNode = await createNode(payload.userId ?? payload.user_id, board.id, {
+            label: rootNodeData.label,
+            description: rootNodeData.description,
+            content: rootNodeData.content,
+            color: rootNodeData.color,
+            positionX: rootNodeData.x,
+            positionY: rootNodeData.y,
+            nodeType: 'root'
+          });
+          nodeMap[rootNodeData.label] = rootNode.id;
+        }
+
+        // Create other nodes
+        for (const n of (output.nodes as any[]).filter(n => n.type !== 'root')) {
+          const node = await createNode(payload.userId ?? payload.user_id, board.id, {
+            label: n.label,
+            description: n.description,
+            content: n.content,
+            color: n.color,
+            positionX: n.x,
+            positionY: n.y,
+            nodeType: 'ai_generated'
+          });
+          nodeMap[n.label] = node.id;
+        }
+
+        // Create edges based on parentLabel
+        const edges: any[] = [];
+        for (const n of (output.nodes as any[])) {
+          if (n.parentLabel && nodeMap[n.parentLabel] && nodeMap[n.label]) {
+            const edge = await createEdge(board.id, nodeMap[n.parentLabel], nodeMap[n.label]);
+            edges.push(edge);
+          }
+        }
+
+        return { ...board, nodesCreated: output.nodes.length, edgesCreated: edges.length };
+      });
+    }
     default:
       throw new Error(`Unknown create type: "${type}"`);
   }
@@ -831,8 +2187,100 @@ export async function dispatchUpdate(action: string, payload: any) {
       return transitionGoalStatus(payload.goalId, payload.transitionAction);
     }
 
+    case 'memory_update': {
+      if (!payload.memoryId) throw new Error('Missing memoryId');
+      return updateMemory(payload.memoryId, payload.updates);
+    }
+    case 'memory_delete': {
+      if (!payload.memoryId) throw new Error('Missing memoryId');
+      await deleteMemory(payload.memoryId);
+      return { success: true };
+    }
+    case 'consolidate_memory': {
+      return consolidateMemory(payload.userId ?? payload.user_id, payload.lookbackHours ?? 24);
+    }
+
+    case 'rename_board': {
+      if (!payload.boardId || !payload.name) throw new Error('Missing boardId or name');
+      const { updateBoard } = await import('@/lib/services/mind-map-service');
+      return updateBoard(payload.boardId, { name: payload.name });
+    }
+
+    case 'archive_board': {
+      if (!payload.boardId) throw new Error('Missing boardId');
+      const { updateBoard } = await import('@/lib/services/mind-map-service');
+      return updateBoard(payload.boardId, { isArchived: true });
+    }
+
+    case 'reparent_node': {
+      if (!payload.nodeId || !payload.sourceNodeId) throw new Error('Missing nodeId or sourceNodeId');
+      const { getBoardGraph, deleteEdge, createEdge } = await import('@/lib/services/mind-map-service');
+      
+      // Lock 4: reparent is EDGE-BASED
+      const boardId = payload.boardId;
+      if (!boardId) throw new Error('Missing boardId for reparenting');
+      
+      const { edges } = await getBoardGraph(boardId);
+      const incomingEdges = edges.filter(e => e.targetNodeId === payload.nodeId);
+      
+      for (const edge of incomingEdges) {
+        await deleteEdge(edge.id);
+      }
+      
+      return createEdge(boardId, payload.sourceNodeId, payload.nodeId);
+    }
+
+    case 'expand_board_branch': {
+      return runFlowSafe(expandBranchFlow, payload, async (output: any) => {
+        if (!output || output.error) return output;
+        const { createNode, createEdge } = await import('@/lib/services/mind-map-service');
+        const results = [];
+        for (const n of (output.nodes as any[])) {
+          const node = await createNode(payload.userId ?? payload.user_id, payload.boardId, {
+            ...n,
+            nodeType: 'ai_generated'
+          });
+          if (n.parentNodeId) {
+            await createEdge(payload.boardId, n.parentNodeId, node.id);
+          }
+          results.push(node);
+        }
+        return results;
+      });
+    }
+
+    case 'suggest_board_gaps': {
+      return runFlowSafe(suggestGapsFlow, payload);
+    }
+
     default:
       throw new Error(`Unknown update action: "${action}"`);
+  }
+}
+
+/**
+ * Dispatches planning and retrieval requests.
+ */
+export async function dispatchPlan(action: string, payload: any) {
+  switch (action) {
+    case 'list_boards': {
+      const { getBoardSummaries } = await import('@/lib/services/mind-map-service');
+      return getBoardSummaries(payload.userId ?? payload.user_id);
+    }
+    case 'read_board': {
+      const { getBoardGraph, getBoards } = await import('@/lib/services/mind-map-service');
+      const boards = await getBoards(payload.userId ?? payload.user_id);
+      const board = boards.find(b => b.id === payload.boardId);
+      if (!board) throw new Error(`Board ${payload.boardId} not found`);
+      
+      const graph = await getBoardGraph(payload.boardId);
+      return {
+        ...board,
+        ...graph
+      };
+    }
+    default:
+      throw new Error(`Unknown plan action: "${action}"`);
   }
 }
 
@@ -875,7 +2323,21 @@ export type DiscoverCapability =
   | 'link_knowledge'
   | 'update_knowledge'
   | 'update_skill_domain'
-  | 'transition_goal';
+  | 'transition_goal'
+  | 'memory_record'
+  | 'memory_read'
+  | 'memory_correct'
+  | 'consolidate_memory'
+  | 'create_board'
+  | 'board_from_text'
+  | 'list_boards'
+  | 'read_map'
+  | 'read_board'
+  | 'rename_board'
+  | 'archive_board'
+  | 'reparent_node'
+  | 'expand_board_branch'
+  | 'suggest_board_gaps';
 
 
 /**
@@ -1661,6 +3123,8 @@ export const ROUTES = {
   skillDomain: (id: string) => `/skills/${id}`,
   // --- Sprint 17: Mind Map Station ---
   mindMap: '/map',
+  // --- Sprint 24: Agent Memory ---
+  memory: '/memory',
 } as const
 
 ```
@@ -1867,6 +3331,453 @@ export function getSeedData(): StudioStore {
     // Sprint 2: new collections (start empty)
     agentRuns: [],
     externalRefs: [],
+  }
+}
+
+```
+
+### lib/services/agent-memory-service.ts
+
+```typescript
+// lib/services/agent-memory-service.ts
+import { AgentMemoryEntry, OperationalContext, MemoryEntryKind, MemoryClass } from '@/types/agent-memory';
+import { getStorageAdapter } from '@/lib/storage-adapter';
+import { generateId } from '@/lib/utils';
+import { getSupabaseClient } from '@/lib/supabase/client';
+
+/**
+ * Normalizes a DB row (snake_case) to the TS AgentMemoryEntry shape (camelCase).
+ */
+function fromDB(row: any): AgentMemoryEntry {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    kind: row.kind,
+    memoryClass: row.memory_class,
+    topic: row.topic,
+    content: row.content,
+    tags: row.tags || [],
+    confidence: Number(row.confidence),
+    usageCount: row.usage_count,
+    pinned: row.pinned,
+    source: row.source,
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at,
+    metadata: row.metadata || {},
+  };
+}
+
+/**
+ * Normalizes a TS AgentMemoryEntry (camelCase) to DB row shape (snake_case).
+ */
+function toDB(memory: Partial<AgentMemoryEntry>): Record<string, any> {
+  const row: Record<string, any> = {};
+  if (memory.id) row.id = memory.id;
+  if (memory.userId) row.user_id = memory.userId;
+  if (memory.kind) row.kind = memory.kind;
+  if (memory.memoryClass) row.memory_class = memory.memoryClass;
+  if (memory.topic) row.topic = memory.topic;
+  if (memory.content) row.content = memory.content;
+  if (memory.tags) row.tags = memory.tags;
+  if (memory.confidence !== undefined) row.confidence = memory.confidence;
+  if (memory.usageCount !== undefined) row.usage_count = memory.usageCount;
+  if (memory.pinned !== undefined) row.pinned = memory.pinned;
+  if (memory.source) row.source = memory.source;
+  if (memory.createdAt) row.created_at = memory.createdAt;
+  if (memory.lastUsedAt) row.last_used_at = memory.lastUsedAt;
+  if (memory.metadata) row.metadata = memory.metadata;
+  return row;
+}
+
+/**
+ * Records a new memory or boosts an existing one if matches precisely (user, topic, kind, content).
+ * Lock 2: Deduplication on (user_id, topic, kind, content).
+ */
+export async function recordMemory(
+  params: {
+    userId: string;
+    kind: MemoryEntryKind;
+    topic: string;
+    content: string;
+    memoryClass?: MemoryClass;
+    tags?: string[];
+    metadata?: Record<string, any>;
+    source?: 'gpt_learned' | 'admin_seeded';
+    confidence?: number;
+    pinned?: boolean;
+  }
+): Promise<AgentMemoryEntry> {
+  const adapter = getStorageAdapter();
+  const supabase = getSupabaseClient();
+
+  if (!supabase) {
+    const existing = await adapter.query<any>('agent_memory', {
+      user_id: params.userId,
+      topic: params.topic,
+      kind: params.kind,
+      content: params.content,
+    });
+
+    if (existing.length > 0) {
+      const match = existing[0];
+      const updates = {
+        usage_count: (match.usage_count || 0) + 1,
+        confidence: Math.min(1.0, (Number(match.confidence) || 0) + 0.05),
+        last_used_at: new Date().toISOString(),
+      };
+      const updated = await adapter.updateItem<any>('agent_memory', match.id, updates);
+      return fromDB(updated);
+    }
+
+    const newItem = toDB({
+      id: generateId(),
+      userId: params.userId,
+      kind: params.kind,
+      topic: params.topic,
+      content: params.content,
+      memoryClass: params.memoryClass || 'semantic',
+      tags: params.tags || [],
+      confidence: params.confidence || 0.6,
+      usageCount: 1,
+      pinned: params.pinned || false,
+      source: params.source || 'gpt_learned',
+      metadata: params.metadata || {},
+    });
+    const saved = await adapter.saveItem<any>('agent_memory', newItem);
+    return fromDB(saved);
+  }
+
+  const { data: match, error: fetchError } = await supabase
+    .from('agent_memory')
+    .select('*')
+    .eq('user_id', params.userId)
+    .eq('topic', params.topic)
+    .eq('kind', params.kind)
+    .eq('content', params.content)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+
+  if (match) {
+    const { data: updated, error: updateError } = await supabase
+      .from('agent_memory')
+      .update({
+        usage_count: (match.usage_count || 0) + 1,
+        confidence: Math.min(1.0, (Number(match.confidence) || 0) + 0.05),
+        last_used_at: new Date().toISOString(),
+      })
+      .eq('id', match.id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    return fromDB(updated);
+  }
+
+  const newItem = toDB({
+    id: generateId(),
+    userId: params.userId,
+    kind: params.kind,
+    topic: params.topic,
+    content: params.content,
+    memoryClass: params.memoryClass || 'semantic',
+    tags: params.tags || [],
+    confidence: params.confidence || 0.6,
+    usageCount: 1,
+    pinned: params.pinned || false,
+    source: params.source || 'gpt_learned',
+    metadata: params.metadata || {},
+  });
+
+  const { data: saved, error: saveError } = await supabase
+    .from('agent_memory')
+    .insert(newItem)
+    .select()
+    .single();
+
+  if (saveError) throw saveError;
+  return fromDB(saved);
+}
+
+/**
+ * Retrieves memories for a user with optional filters.
+ */
+export async function getMemories(
+  userId: string,
+  filters?: {
+    topic?: string;
+    kind?: MemoryEntryKind;
+    source?: string;
+    pinned?: boolean;
+    limit?: number;
+  }
+): Promise<AgentMemoryEntry[]> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    const adapter = getStorageAdapter();
+    const queryParams: Record<string, any> = { user_id: userId };
+    if (filters?.topic) queryParams.topic = filters.topic;
+    if (filters?.kind) queryParams.kind = filters.kind;
+    if (filters?.pinned !== undefined) queryParams.pinned = filters.pinned;
+    
+    const raw = await adapter.query<any>('agent_memory', queryParams);
+    return raw.map(fromDB);
+  }
+
+  let query = supabase
+    .from('agent_memory')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (filters?.topic) query = query.eq('topic', filters.topic);
+  if (filters?.kind) query = query.eq('kind', filters.kind);
+  if (filters?.pinned !== undefined) query = query.eq('pinned', filters.pinned);
+  
+  query = query.order('pinned', { ascending: false })
+               .order('usage_count', { ascending: false })
+               .order('last_used_at', { ascending: false });
+
+  if (filters?.limit) query = query.limit(filters.limit);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.map(fromDB);
+}
+
+/**
+ * Gets a single memory by ID.
+ */
+export async function getMemoryById(id: string): Promise<AgentMemoryEntry | null> {
+  const adapter = getStorageAdapter();
+  const raw = await adapter.query<any>('agent_memory', { id });
+  return raw.length > 0 ? fromDB(raw[0]) : null;
+}
+
+/**
+ * Updates a memory entry (correction path).
+ */
+export async function updateMemory(id: string, updates: Partial<AgentMemoryEntry>): Promise<AgentMemoryEntry> {
+  const adapter = getStorageAdapter();
+  const updated = await adapter.updateItem<any>('agent_memory', id, toDB(updates));
+  return fromDB(updated);
+}
+
+/**
+ * Deletes a memory entry.
+ */
+export async function deleteMemory(id: string): Promise<void> {
+  const adapter = getStorageAdapter();
+  await adapter.deleteItem('agent_memory', id);
+}
+
+/**
+ * Assembles the operational context for the GPT state packet.
+ * Lock 1: Lightweight handle-based context.
+ */
+export async function getOperationalContext(userId: string): Promise<OperationalContext | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+
+  const [memoryStats, recentMemories, topics, boards] = await Promise.all([
+    supabase.from('agent_memory').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('agent_memory')
+      .select('id')
+      .eq('user_id', userId)
+      .order('pinned', { ascending: false })
+      .order('usage_count', { ascending: false })
+      .limit(10),
+    supabase.from('agent_memory').select('topic').eq('user_id', userId).order('last_used_at', { ascending: false }).limit(100),
+    supabase.from('think_boards')
+      .select('id, name, purpose')
+      .eq('is_archived', false)
+      .limit(20)
+  ]);
+
+  const activeTopics = Array.from(new Set((topics.data || []).map((t: any) => t.topic))).slice(0, 5);
+
+  const { data: nodeCounts } = await supabase
+    .from('think_nodes')
+    .select('board_id')
+    .in('board_id', (boards.data || []).map(b => b.id));
+
+  const countMap = (nodeCounts || []).reduce((acc: any, n) => {
+    acc[n.board_id] = (acc[n.board_id] || 0) + 1;
+    return acc;
+  }, {});
+
+  const boardSummaries = (boards.data || []).map(b => ({
+    id: b.id,
+    name: b.name,
+    purpose: b.purpose,
+    nodeCount: countMap[b.id] || 0
+  }));
+
+  const { data: lastRec } = await supabase
+    .from('agent_memory')
+    .select('created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if ((memoryStats.count || 0) === 0 && boardSummaries.length === 0) return null;
+
+  return {
+    memory_count: memoryStats.count || 0,
+    recent_memory_ids: (recentMemories.data || []).map((m: any) => m.id),
+    last_recorded_at: lastRec?.created_at || null,
+    active_topics: activeTopics,
+    boards: boardSummaries
+  };
+}
+
+/**
+ * W3: Automated Consolidation (Lock 3)
+ */
+export async function consolidateMemory(userId: string, lookbackHours: number = 24): Promise<{ extractedCount: number, message: string }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return { extractedCount: 0, message: "Consolidation requires a live database connection." };
+  }
+
+  const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+
+  // 1. Fetch recently completed experiences
+  const { data: experiences } = await supabase
+    .from('experience_instances')
+    .select('id, title, goal, synthesis')
+    .eq('user_id', userId)
+    .eq('status', 'completed')
+    .gte('updated_at', since);
+
+  let extractedCount = 0;
+
+  if (experiences && experiences.length > 0) {
+    for (const exp of experiences) {
+      if (exp.synthesis) {
+        await recordMemory({
+          userId,
+          kind: 'observation',
+          topic: exp.title,
+          content: `Completed experience "${exp.title}". Key takeaway: ${exp.synthesis.substring(0, 200)}...`,
+          source: 'gpt_learned',
+          metadata: { experienceId: exp.id, auto_extracted: true }
+        });
+        extractedCount++;
+      }
+    }
+  }
+
+  // 2. Fetch recent high-friction interactions
+  const { data: interactions } = await supabase
+    .from('interactions')
+    .select('id, event_type, payload')
+    .eq('user_id', userId)
+    .gte('created_at', since)
+    .gt('friction_score', 0.7);
+
+  if (interactions && interactions.length > 0) {
+    for (const intr of interactions) {
+      if (intr.payload?.content) {
+        await recordMemory({
+          userId,
+          kind: 'strategy',
+          topic: 'Learning Friction',
+          content: `Encountered friction in ${intr.event_type}. Note: ${intr.payload.content.substring(0, 100)}`,
+          source: 'gpt_learned',
+          metadata: { interactionId: intr.id, auto_extracted: true }
+        });
+        extractedCount++;
+      }
+    }
+  }
+
+  if (extractedCount === 0) {
+    return { extractedCount: 0, message: `No actionable memories found in the last ${lookbackHours} hours.` };
+  }
+
+  return { 
+    extractedCount, 
+    message: `Successfully consolidated ${extractedCount} new memories from recent activity.` 
+  };
+}
+
+/**
+ * Groups memories by topic for Explorer view (Lane 5).
+ */
+export async function getMemoriesGroupedByTopic(userId: string): Promise<Record<string, AgentMemoryEntry[]>> {
+  const memories = await getMemories(userId);
+  return memories.reduce((acc: Record<string, AgentMemoryEntry[]>, memory) => {
+    const topic = memory.topic || 'General';
+    if (!acc[topic]) acc[topic] = [];
+    acc[topic].push(memory);
+    return acc;
+  }, {});
+}
+
+/**
+ * W4: Seed default memory entries (Frozen list per sprint.md)
+ */
+export async function seedDefaultMemory(userId: string): Promise<void> {
+  const defaultMemories = [
+    {
+      kind: 'tactic' as const,
+      topic: 'curriculum',
+      content: 'Use create_outline before creating experiences for serious topics',
+      confidence: 0.9,
+      pinned: true
+    },
+    {
+      kind: 'tactic' as const,
+      topic: 'enrichment',
+      content: 'Check enrichment status in the state packet before creating new experiences on the same topic',
+      confidence: 0.9,
+      pinned: true
+    },
+    {
+      kind: 'strategy' as const,
+      topic: 'workflow',
+      content: 'For new domains: goal → outline → research dispatch → experience creation (not experience first)',
+      confidence: 0.9,
+      pinned: true
+    },
+    {
+      kind: 'observation' as const,
+      topic: 'pedagogy',
+      content: 'Checkpoint questions with free_text format produce stronger learning outcomes than multiple choice',
+      confidence: 0.85
+    },
+    {
+      kind: 'tactic' as const,
+      topic: 'maps',
+      content: 'Use board_from_text or expand_board_branch instead of creating nodes one at a time',
+      confidence: 0.85
+    },
+    {
+      kind: 'preference' as const,
+      topic: 'user learning style',
+      content: 'User prefers worked examples and concrete scenarios over abstract explanations',
+      confidence: 0.8
+    },
+    {
+      kind: 'strategy' as const,
+      topic: 'experience design',
+      content: 'Keep experiences to 3-6 steps covering one subtopic. Chain small experiences rather than building monoliths.',
+      confidence: 0.9,
+      pinned: true
+    }
+  ];
+
+  for (const mem of defaultMemories) {
+    try {
+      await recordMemory({
+        ...mem,
+        userId,
+        source: 'admin_seeded'
+      });
+    } catch (e) {
+      console.warn(`Failed to seed memory: ${mem.topic}`, e);
+    }
   }
 }
 
@@ -3294,8 +5205,8 @@ export async function extractFacetsWithAI(userId: string, instanceId: string, so
   const context = await buildFacetContext(instanceId, userId);
   
   const result = await runFlowSafe(
-    () => extractFacetsFlow(context),
-    { facets: [] }
+    extractFacetsFlow,
+    context
   );
 
   // If AI failed or returned nothing, fall back to historical mechanical behavior
@@ -4362,18 +6273,21 @@ export async function getAISuggestionsForCompletion(instanceId: string, userId: 
   }));
 
   // Run AI flow with safe wrapper
-  return await runFlowSafe(
-    async () => {
-      const result = await suggestNextExperienceFlow(context);
-      return result.suggestions.map(s => ({
+  const result = await runFlowSafe(
+    suggestNextExperienceFlow,
+    context,
+    async (output: any) => {
+      if (!output || output.error) return null;
+      return output.suggestions.map((s: any) => ({
         templateClass: s.templateClass,
         reason: s.reason,
         resolution: s.suggestedResolution,
         confidence: s.confidence
       }));
-    },
-    fallback
+    }
   );
+
+  return result || fallback;
 }
 
 /**
@@ -5196,12 +7110,11 @@ export async function runKnowledgeEnrichment(unitId: string, userId: string): Pr
   try {
     console.log(`[knowledge-service] Starting enrichment for unit: ${unitId}`);
     
-    // Break circular dependency: refine-knowledge-flow imports this service
     const { refineKnowledgeFlow } = await import('@/lib/ai/flows/refine-knowledge-flow');
 
     const result = await runFlowSafe(
-      () => refineKnowledgeFlow({ unitId, userId }),
-      null
+      refineKnowledgeFlow,
+      { unitId, userId }
     );
 
     if (result) {
@@ -5313,7 +7226,7 @@ export async function materializeIdea(idea: Idea, drill: DrillSession): Promise<
 ```typescript
 import { generateId } from '@/lib/utils';
 import { getStorageAdapter } from '@/lib/storage-adapter';
-import { ThinkBoard, ThinkNode, ThinkEdge } from '@/types/mind-map';
+import { ThinkBoard, ThinkNode, ThinkEdge, BoardPurpose, LayoutMode } from '@/types/mind-map';
 import { MapSummary } from '@/types/synthesis';
 
 // ---------------------------------------------------------------------------
@@ -5325,6 +7238,10 @@ function boardFromDB(row: any): ThinkBoard {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
+    purpose: row.purpose || 'general',
+    layoutMode: row.layout_mode || 'radial',
+    linkedEntityId: row.linked_entity_id,
+    linkedEntityType: row.linked_entity_type,
     isArchived: row.is_archived ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -5336,6 +7253,10 @@ function boardToDB(board: Partial<ThinkBoard>): Record<string, any> {
   if (board.id !== undefined) row.id = board.id;
   if (board.workspaceId !== undefined) row.workspace_id = board.workspaceId;
   if (board.name !== undefined) row.name = board.name;
+  if (board.purpose !== undefined) row.purpose = board.purpose;
+  if (board.layoutMode !== undefined) row.layout_mode = board.layoutMode;
+  if (board.linkedEntityId !== undefined) row.linked_entity_id = board.linkedEntityId;
+  if (board.linkedEntityType !== undefined) row.linked_entity_type = board.linkedEntityType;
   if (board.isArchived !== undefined) row.is_archived = board.isArchived;
   if (board.createdAt !== undefined) row.created_at = board.createdAt;
   if (board.updatedAt !== undefined) row.updated_at = board.updatedAt;
@@ -5446,13 +7367,22 @@ export async function getBoardSummaries(userId: string): Promise<MapSummary[]> {
       name: board.name,
       nodeCount: nodes.length,
       edgeCount: edges.length,
+      purpose: board.purpose || 'general',
+      layoutMode: board.layoutMode || 'radial',
+      linkedEntityType: board.linkedEntityType || null,
     };
   }));
 
   return summaries;
 }
 
-export async function createBoard(userId: string, name: string): Promise<ThinkBoard> {
+export async function createBoard(
+  userId: string, 
+  name: string, 
+  purpose: ThinkBoard['purpose'] = 'general',
+  linkedEntityId: string | null = null,
+  linkedEntityType: ThinkBoard['linkedEntityType'] = null
+): Promise<ThinkBoard> {
   const adapter = getStorageAdapter();
   const workspaceId = await getWorkspaceId(userId);
   
@@ -5465,6 +7395,10 @@ export async function createBoard(userId: string, name: string): Promise<ThinkBo
     id: generateId(),
     workspaceId,
     name,
+    purpose,
+    layoutMode: 'radial',
+    linkedEntityId,
+    linkedEntityType,
     isArchived: false,
     createdAt: now,
     updatedAt: now,
@@ -5472,7 +7406,51 @@ export async function createBoard(userId: string, name: string): Promise<ThinkBo
 
   const row = boardToDB(board);
   const saved = await adapter.saveItem<any>('think_boards', row);
-  return boardFromDB(saved);
+  const finalBoard = boardFromDB(saved);
+
+  // Apply template if purpose is not general
+  if (purpose !== 'general') {
+    await applyBoardTemplate(userId, finalBoard.id, name, purpose);
+  }
+
+  return finalBoard;
+}
+
+export async function updateBoard(boardId: string, updates: Partial<ThinkBoard>): Promise<ThinkBoard | null> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  
+  const dbUpdates = boardToDB({ ...updates, updatedAt: now });
+  const updated = await adapter.updateItem<any>('think_boards', boardId, dbUpdates);
+  return updated ? boardFromDB(updated) : null;
+}
+
+export async function deleteBoard(boardId: string): Promise<boolean> {
+  const adapter = getStorageAdapter();
+  
+  // Lock 6: Cascade delete removes edges -> nodes -> board
+  // 1. Delete edges
+  const edges = await adapter.query<any>('think_edges', { board_id: boardId });
+  for (const edge of edges) {
+    await adapter.deleteItem('think_edges', edge.id);
+  }
+  
+  // 2. Delete nodes
+  const nodes = await adapter.query<any>('think_nodes', { board_id: boardId });
+  for (const node of nodes) {
+    // Also delete node versions if they exist (best effort)
+    try {
+      const versions = await adapter.query<any>('think_node_versions', { node_id: node.id });
+      for (const version of versions) {
+        await adapter.deleteItem('think_node_versions', version.id);
+      }
+    } catch (e) {}
+    await adapter.deleteItem('think_nodes', node.id);
+  }
+  
+  // 3. Delete board
+  await adapter.deleteItem('think_boards', boardId);
+  return true;
 }
 
 export async function getBoardGraph(boardId: string): Promise<{ nodes: ThinkNode[]; edges: ThinkEdge[] }> {
@@ -5568,6 +7546,66 @@ export async function deleteNode(nodeId: string): Promise<boolean> {
   // We'll just delete the node and assume DB handles consistency or caller handles it.
   await adapter.deleteItem('think_nodes', nodeId);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Board Templates (Sprint 24)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns starter node labels for a given board purpose.
+ */
+export function getBoardTemplate(purpose: BoardPurpose): { children: string[] } | null {
+  switch (purpose) {
+    case 'idea_planning':
+      return { children: ['Market', 'Tech', 'UX', 'Risks'] };
+    case 'curriculum_review':
+      return { children: ['Foundations', 'Core Concepts', 'Advanced Applied', 'Case Studies'] };
+    case 'lesson_plan':
+      return { children: ['Primer', 'Practice', 'Checkpoint', 'Reflection'] };
+    case 'research_tracking':
+      return { children: ['Pending', 'In Progress', 'Complete'] };
+    case 'strategy':
+      return { children: ['Domain A', 'Domain B', 'Milestones', 'Risk Map'] };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Auto-populates a board with starter nodes based on its purpose.
+ * Nodes are arranged in a simple radial layout.
+ */
+async function applyBoardTemplate(userId: string, boardId: string, centerLabel: string, purpose: BoardPurpose) {
+  const template = getBoardTemplate(purpose);
+  if (!template) return;
+
+  // Create center/root node
+  const rootNode = await createNode(userId, boardId, {
+    label: centerLabel,
+    nodeType: 'root',
+    positionX: 0,
+    positionY: 0
+  });
+
+  const children = template.children;
+  const radius = 250;
+
+  for (let i = 0; i < children.length; i++) {
+    const angle = (i / children.length) * 2 * Math.PI;
+    const x = Math.round(radius * Math.cos(angle));
+    const y = Math.round(radius * Math.sin(angle));
+
+    const childNode = await createNode(userId, boardId, {
+      label: children[i],
+      nodeType: 'manual',
+      positionX: x,
+      positionY: y
+    });
+
+    // Connect child to root
+    await createEdge(boardId, rootNode.id, childNode.id);
+  }
 }
 
 ```
@@ -5930,6 +7968,7 @@ import { getBoardSummaries } from './mind-map-service'
 import { getSkillDomainsForUser } from './skill-domain-service'
 import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
 import { SkillMasteryLevel } from '@/lib/constants'
+import { getOperationalContext } from './agent-memory-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -5951,2050 +7990,11 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
 
   // W3 - Enrich with AI synthesis
   const aiResult = await runFlowSafe(
-    () => synthesizeExperienceFlow({ instanceId: sourceId, userId }),
-    null
+    synthesizeExperienceFlow,
+    { instanceId: sourceId, userId }
   )
 
   if (aiResult) {
     snapshot.summary = aiResult.narrative
     snapshot.key_signals = {
       ...snapshot.key_signals,
-      ...aiResult.keySignals.reduce((acc, sig, i) => ({ ...acc, [`signal_${i}`]: sig }), {}),
-      frictionAssessment: aiResult.frictionAssessment
-    }
-    snapshot.next_candidates = aiResult.nextCandidates
-  }
-  
-  // W2 - Compute Mastery Transitions for Lane 5
-  if (sourceType === 'experience') {
-    const allDomains = await getSkillDomainsForUser(userId)
-    const linkedDomains = allDomains.filter(d => d.linkedExperienceIds.includes(sourceId))
-    
-    if (linkedDomains.length > 0) {
-      const transitions: any[] = []
-      const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert']
-      const userInstances = await getExperienceInstances({ userId })
-      
-      for (const domain of linkedDomains) {
-        // 'After' state is current
-        const { masteryLevel: afterLevel, evidenceCount: afterEvidence } = await computeSkillMastery(domain, undefined, userInstances)
-        // 'Before' state skips this experience
-        const { masteryLevel: beforeLevel, evidenceCount: beforeEvidence } = await computeSkillMastery(domain, sourceId, userInstances)
-        
-        if (afterLevel !== beforeLevel || afterEvidence !== beforeEvidence) {
-          transitions.push({
-            domainId: domain.id,
-            domainName: domain.name,
-            before: { level: beforeLevel, evidence: beforeEvidence },
-            after: { level: afterLevel, evidence: afterEvidence },
-            isLevelUp: LEVELS.indexOf(afterLevel) > LEVELS.indexOf(beforeLevel)
-          })
-        }
-      }
-      
-      snapshot.key_signals.masteryTransitions = transitions
-    }
-  }
-  
-  // Lane 4: Persist computed friction as a key signal if not already present
-  if (sourceType === 'experience' && !snapshot.key_signals.frictionLevel) {
-    const instances = await adapter.query<ExperienceInstance>('experience_instances', { id: sourceId });
-    const instance = instances[0];
-    if (instance && instance.friction_level) {
-      snapshot.key_signals.frictionLevel = instance.friction_level;
-    }
-  }
-  
-  return adapter.saveItem<SynthesisSnapshot>('synthesis_snapshots', snapshot)
-}
-
-export async function getLatestSnapshot(userId: string): Promise<SynthesisSnapshot | null> {
-  const adapter = getStorageAdapter()
-  const snapshots = await adapter.query<SynthesisSnapshot>('synthesis_snapshots', { user_id: userId })
-  if (snapshots.length === 0) return null
-  return snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-}
-
-export async function getSynthesisForSource(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot | null> {
-  const adapter = getStorageAdapter()
-  const snapshots = await adapter.query<SynthesisSnapshot>('synthesis_snapshots', { 
-    user_id: userId,
-    source_type: sourceType,
-    source_id: sourceId
-  })
-  if (snapshots.length === 0) return null
-  // Return the most recent one for this specific source
-  const snapshot = snapshots.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-  
-  // Attach facets linked to this snapshot
-  snapshot.facets = await getFacetsBySnapshot(snapshot.id)
-  
-  return snapshot
-}
-
-import { evaluateReentryContracts } from '@/lib/experience/reentry-engine'
-
-export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacket> {
-  const experiences = await getExperienceInstances({ userId })
-
-  // SOP-39: Sort by most recent first — getExperienceInstances returns DB insertion order
-  experiences.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  
-  // Call re-entry engine
-  const activeReentryPrompts = await evaluateReentryContracts(userId)
-
-  // Get proposed experiences for context
-  const proposedExperiences = experiences.filter(exp => 
-    ['proposed', 'drafted', 'ready_for_review', 'approved'].includes(exp.status)
-  )
-
-  // Compute friction signals from experience status/metadata
-  const frictionSignals = experiences
-    .filter(exp => exp.friction_level)
-    .map(exp => ({
-      instanceId: exp.id,
-      level: exp.friction_level as FrictionLevel
-    }))
-
-  const snapshot = await getLatestSnapshot(userId)
-
-  // Create the base packet first
-  const packet: GPTStatePacket = {
-    latestExperiences: experiences.slice(0, 10).map(e => ({ ...e } as ExperienceInstance)),
-    activeReentryPrompts: activeReentryPrompts.map(p => ({
-      ...p,
-      priority: p.priority // Explicitly ensure priority is carried
-    })),
-    frictionSignals,
-    suggestedNext: experiences[0]?.next_suggested_ids || [],
-    synthesisSnapshot: snapshot,
-    proposedExperiences: proposedExperiences.slice(0, 5).map(e => ({ ...e } as ExperienceInstance)),
-    reentryCount: activeReentryPrompts.length
-  }
-
-  // W2 - Enrich with compressed state
-  // tokenBudget is optional in the flow but Genkit TS might need it if z.number().default(800) inferred it as mandatory in the type
-  const compressedResult = await runFlowSafe(
-    () => compressGPTStateFlow({ rawStateJSON: JSON.stringify(packet), tokenBudget: 800 }),
-    null
-  )
-
-  if (compressedResult) {
-    packet.compressedState = {
-      narrative: compressedResult.compressedNarrative,
-      prioritySignals: compressedResult.prioritySignals,
-      suggestedOpeningTopic: compressedResult.suggestedOpeningTopic
-    }
-  }
-
-  // Lane 5: Add knowledge summary
-  try {
-    (packet as any).knowledgeSummary = await getKnowledgeSummaryForGPT(userId)
-  } catch (error) {
-    (packet as any).knowledgeSummary = null
-  }
-
-  // W1: Injected for Lane 2 - Mind Map summaries
-  try {
-    packet.activeMaps = await getBoardSummaries(userId)
-  } catch (error) {
-    packet.activeMaps = []
-  }
-
-  return packet
-}
-
-```
-
-### lib/services/tasks-service.ts
-
-```typescript
-import type { Task } from '@/types/task'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-
-export async function getTasksForProject(projectId: string): Promise<Task[]> {
-  const adapter = getStorageAdapter()
-  const tasks = await adapter.getCollection<Task>('tasks')
-  return tasks.filter((t) => t.projectId === projectId)
-}
-
-export async function createTask(data: Omit<Task, 'id' | 'createdAt'>): Promise<Task> {
-  const adapter = getStorageAdapter()
-  const task: Task = {
-    ...data,
-    id: generateId(),
-    createdAt: new Date().toISOString(),
-  }
-  return adapter.saveItem<Task>('tasks', task)
-}
-
-export async function updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
-  const adapter = getStorageAdapter()
-  try {
-    return await adapter.updateItem<Task>('tasks', id, updates)
-  } catch {
-    return null
-  }
-}
-
-```
-
-### lib/services/timeline-service.ts
-
-```typescript
-import { TimelineEntry, TimelineFilter, TimelineStats, TimelineCategory } from '@/types/timeline'
-import { getInboxEvents } from './inbox-service'
-import { getExperienceInstances } from './experience-service'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { InteractionEvent } from '@/types/interaction'
-import { getKnowledgeUnits, getKnowledgeProgress } from './knowledge-service'
-
-/**
- * Aggregates events from multiple sources:
- * - timeline_events table (via getInboxEvents)
- * - experience_instances table (lifecycle events)
- * - interaction_events table (step completions)
- * - knowledge_units table (new arrivals)
- * - knowledge_progress table (mastery promotions)
- */
-export async function getTimelineEntries(userId: string, filter?: TimelineFilter): Promise<TimelineEntry[]> {
-  const [
-    inboxEvents, 
-    experienceEntries, 
-    interactionEntries,
-    knowledgeUnits,
-    knowledgeProgress
-  ] = await Promise.all([
-    getInboxEvents(), 
-    generateExperienceTimelineEntries(userId),
-    generateInteractionTimelineEntries(userId),
-    getKnowledgeUnits(userId),
-    getKnowledgeProgress(userId)
-  ])
-
-  // Aggregate all entries
-  let allEntries: TimelineEntry[] = [
-    ...inboxEvents.map(event => ({
-      id: event.id,
-      timestamp: event.timestamp,
-      category: mapInboxTypeToTimelineCategory(event.type),
-      title: event.title,
-      body: event.body,
-      entityId: event.projectId,
-      entityType: event.projectId ? 'project' : undefined,
-      actionUrl: event.actionUrl,
-      metadata: { severity: event.severity, read: event.read }
-    }) as TimelineEntry),
-    ...experienceEntries,
-    ...interactionEntries,
-    ...knowledgeUnits
-      .filter(unit => {
-        // Only show units created in the last 7 days
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-        return new Date(unit.created_at) >= sevenDaysAgo
-      })
-      .map(unit => ({
-        id: `ku-arrival-${unit.id}`,
-        timestamp: unit.created_at,
-        category: 'system',
-        title: `Research arrived: ${unit.title}`,
-        body: unit.thesis,
-        entityId: unit.id,
-        entityType: 'knowledge',
-        actionUrl: `/knowledge/${unit.id}`,
-      }) as TimelineEntry),
-    ...knowledgeProgress
-      .filter(p => p.mastery_status !== 'unseen')
-      .map(p => {
-        const unit = knowledgeUnits.find(u => u.id === p.unit_id)
-        return {
-          id: `kp-promotion-${p.id}`,
-          timestamp: p.created_at, // Using created_at of progress record for the promotion event
-          category: 'system',
-          title: `Mastery level increased: ${unit?.title || 'Unknown Topic'}`,
-          body: `Now at ${p.mastery_status} level.`,
-          entityId: p.unit_id,
-          entityType: 'knowledge',
-          actionUrl: `/knowledge/${p.unit_id}`,
-        } as TimelineEntry
-      })
-  ]
-
-  // Enrich completion timestamps: if we have a real experience_completed interaction event,
-  // use its timestamp instead of the proxy on the exp-completed entry.
-  for (const entry of allEntries) {
-    if (entry.id.startsWith('exp-completed-') && entry.entityId) {
-      const realEvent = interactionEntries.find(
-        ie => ie.entityId === entry.entityId && ie.title === 'Experience completed'
-      )
-      if (realEvent) {
-        entry.timestamp = realEvent.timestamp
-      }
-    }
-  }
-
-  // Filter if requested
-  if (filter?.category) {
-    allEntries = allEntries.filter(e => e.category === filter.category)
-  }
-
-  // Sort by timestamp descending
-  allEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-
-  // Limit results
-  const limit = filter?.limit ?? 50
-  return allEntries.slice(0, limit)
-}
-
-/**
- * Generates timeline entries from experience lifecycle timestamps.
- */
-export async function generateExperienceTimelineEntries(userId: string): Promise<TimelineEntry[]> {
-  const instances = await getExperienceInstances({ userId })
-  const entries: TimelineEntry[] = []
-
-  for (const instance of instances) {
-    const isEphemeral = instance.instance_type === 'ephemeral'
-    
-    // 1. Proposed / Injected
-    entries.push({
-      id: `exp-proposed-${instance.id}`,
-      timestamp: instance.created_at,
-      category: 'experience',
-      title: `${isEphemeral ? 'Ephemeral Moment' : 'Experience'} proposed: ${instance.title}`,
-      entityId: instance.id,
-      entityType: 'experience',
-      actionUrl: `/workspace/${instance.id}`,
-      metadata: { ephemeral: isEphemeral }
-    })
-
-    // 2. Published
-    if (instance.published_at) {
-      entries.push({
-        id: `exp-published-${instance.id}`,
-        timestamp: instance.published_at,
-        category: 'experience',
-        title: `${isEphemeral ? 'Ephemeral Moment' : 'Experience'} published: ${instance.title}`,
-        entityId: instance.id,
-        entityType: 'experience',
-        actionUrl: `/workspace/${instance.id}`,
-        metadata: { ephemeral: isEphemeral }
-      })
-    }
-
-    // 3. Completed — use real telemetry timestamp, not the proxy created_at
-    if (instance.status === 'completed') {
-      entries.push({
-        id: `exp-completed-${instance.id}`,
-        timestamp: instance.published_at || instance.created_at,
-        category: 'experience',
-        title: `${isEphemeral ? 'Ephemeral Moment' : 'Experience'} completed: ${instance.title}`,
-        entityId: instance.id,
-        entityType: 'experience',
-        actionUrl: `/workspace/${instance.id}`,
-        metadata: { ephemeral: isEphemeral }
-      })
-    }
-  }
-
-  return entries
-}
-
-/**
- * Aggregates interaction events into meaningful timeline entries.
- */
-export async function generateInteractionTimelineEntries(userId: string): Promise<TimelineEntry[]> {
-  const adapter = getStorageAdapter()
-  const interactions = await adapter.getCollection<InteractionEvent>('interaction_events')
-  
-  const entries: TimelineEntry[] = []
-  
-  const completionEvents = interactions.filter(i => 
-    i.event_type === 'task_completed' || 
-    i.event_type === 'experience_completed'
-  )
-
-  for (const event of completionEvents) {
-    if (!event.instance_id) continue;
-    
-    entries.push({
-      id: event.id,
-      timestamp: event.created_at,
-      category: 'experience',
-      title: event.event_type === 'experience_completed' 
-        ? 'Experience completed' 
-        : 'Step completed',
-      entityId: event.instance_id,
-      entityType: 'experience',
-      actionUrl: `/workspace/${event.instance_id}`,
-      metadata: { stepId: event.step_id }
-    })
-  }
-
-  return entries
-}
-
-export async function getTimelineStats(userId: string): Promise<TimelineStats> {
-  const entries = await getTimelineEntries(userId, { limit: 1000 })
-  const now = new Date()
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-
-  return {
-    totalEvents: entries.length,
-    experienceEvents: entries.filter(e => e.category === 'experience').length,
-    ideaEvents: entries.filter(e => e.category === 'idea').length,
-    systemEvents: entries.filter(e => e.category === 'system').length,
-    githubEvents: entries.filter(e => e.category === 'github').length,
-    thisWeek: entries.filter(e => new Date(e.timestamp) >= oneWeekAgo).length
-  }
-}
-
-function mapInboxTypeToTimelineCategory(type: string): TimelineCategory {
-  if (type.startsWith('github_')) return 'github'
-  if (type.startsWith('idea_') || type === 'drill_completed') return 'idea'
-  if (type.startsWith('project_') || type.startsWith('task_') || type.startsWith('pr_')) return 'experience'
-  return 'system'
-}
-
-
-```
-
-### lib/state-machine.ts
-
-```typescript
-import type { IdeaStatus } from '@/types/idea'
-import type { ProjectState } from '@/types/project'
-import type { ReviewStatus } from '@/types/pr'
-import type { ExperienceStatus } from '@/types/experience'
-import type { GoalStatus } from '@/types/goal'
-
-type IdeaTransition = {
-  from: IdeaStatus
-  to: IdeaStatus
-  action: string
-}
-
-type ProjectTransition = {
-  from: ProjectState
-  to: ProjectState
-  action: string
-}
-
-export const IDEA_TRANSITIONS: IdeaTransition[] = [
-  { from: 'captured', to: 'drilling', action: 'start_drill' },
-  { from: 'drilling', to: 'arena', action: 'commit_to_arena' },
-  { from: 'drilling', to: 'icebox', action: 'send_to_icebox' },
-  { from: 'drilling', to: 'killed', action: 'kill_from_drill' },
-  { from: 'captured', to: 'icebox', action: 'defer_from_send' },
-  { from: 'captured', to: 'killed', action: 'kill_from_send' },
-]
-
-export const PROJECT_TRANSITIONS: ProjectTransition[] = [
-  { from: 'arena', to: 'shipped', action: 'mark_shipped' },
-  { from: 'arena', to: 'killed', action: 'kill_project' },
-  { from: 'arena', to: 'icebox', action: 'move_to_icebox' },
-  { from: 'icebox', to: 'arena', action: 'promote_to_arena' },
-  { from: 'icebox', to: 'killed', action: 'kill_from_icebox' },
-  // GitHub-backed transitions (project stays in arena but gains linkage / execution state)
-  { from: 'arena', to: 'arena', action: 'github_issue_created' },
-  { from: 'arena', to: 'arena', action: 'workflow_dispatched' },
-  { from: 'arena', to: 'arena', action: 'pr_received' },
-  // Merge = ship (optional auto-ship path when real GitHub PR merges)
-  { from: 'arena', to: 'shipped', action: 'github_pr_merged' },
-]
-
-export function canTransitionIdea(from: IdeaStatus, action: string): boolean {
-  return IDEA_TRANSITIONS.some((t) => t.from === from && t.action === action)
-}
-
-export function canTransitionProject(from: ProjectState, action: string): boolean {
-  return PROJECT_TRANSITIONS.some((t) => t.from === from && t.action === action)
-}
-
-export function getNextIdeaState(from: IdeaStatus, action: string): IdeaStatus | null {
-  const transition = IDEA_TRANSITIONS.find(
-    (t) => t.from === from && t.action === action
-  )
-  return transition ? transition.to : null
-}
-
-export function getNextProjectState(from: ProjectState, action: string): ProjectState | null {
-  const transition = PROJECT_TRANSITIONS.find(
-    (t) => t.from === from && t.action === action
-  )
-  return transition ? transition.to : null
-}
-
-// ---------------------------------------------------------------------------
-// PR State Machine
-// ---------------------------------------------------------------------------
-
-export type PRTransitionAction =
-  | 'open'
-  | 'request_changes'
-  | 'approve'
-  | 'merge'
-  | 'close'
-  | 'reopen'
-
-export const PR_TRANSITIONS: Array<{
-  from: ReviewStatus
-  to: ReviewStatus
-  action: PRTransitionAction
-}> = [
-  { from: 'pending', to: 'changes_requested', action: 'request_changes' },
-  { from: 'pending', to: 'approved', action: 'approve' },
-  { from: 'pending', to: 'merged', action: 'merge' },
-  { from: 'changes_requested', to: 'approved', action: 'approve' },
-  { from: 'changes_requested', to: 'merged', action: 'merge' },
-  { from: 'approved', to: 'merged', action: 'merge' },
-  { from: 'approved', to: 'changes_requested', action: 'request_changes' },
-]
-
-export function canTransitionPR(from: ReviewStatus, action: PRTransitionAction): boolean {
-  return PR_TRANSITIONS.some((t) => t.from === from && t.action === action)
-}
-
-export function getNextPRState(from: ReviewStatus, action: PRTransitionAction): ReviewStatus | null {
-  const transition = PR_TRANSITIONS.find(
-    (t) => t.from === from && t.action === action
-  )
-  return transition ? transition.to : null
-}
-
-// ---------------------------------------------------------------------------
-// Experience State Machine
-// ---------------------------------------------------------------------------
-
-export type ExperienceTransitionAction =
-  | 'draft'
-  | 'submit_for_review'
-  | 'request_changes'
-  | 'approve'
-  | 'publish'
-  | 'activate'
-  | 'complete'
-  | 'archive'
-  | 'supersede'
-  | 'start'
-
-type ExperienceTransition = {
-  from: ExperienceStatus
-  to: ExperienceStatus
-  action: ExperienceTransitionAction
-}
-
-export const EXPERIENCE_TRANSITIONS: ExperienceTransition[] = [
-  // Persistent Flow
-  { from: 'proposed', to: 'drafted', action: 'draft' },
-  { from: 'drafted', to: 'ready_for_review', action: 'submit_for_review' },
-  { from: 'ready_for_review', to: 'drafted', action: 'request_changes' },
-  { from: 'ready_for_review', to: 'approved', action: 'approve' },
-  { from: 'approved', to: 'published', action: 'publish' },
-  { from: 'published', to: 'active', action: 'activate' },
-  { from: 'active', to: 'completed', action: 'complete' },
-  { from: 'completed', to: 'archived', action: 'archive' },
-
-  // Shortcut transitions for "Accept & Start" one-click flow
-  // UI sends approve→publish→activate from proposed status
-  { from: 'proposed', to: 'approved', action: 'approve' },
-
-  // Pre-completed supersede
-  { from: 'proposed', to: 'superseded', action: 'supersede' },
-  { from: 'drafted', to: 'superseded', action: 'supersede' },
-  { from: 'ready_for_review', to: 'superseded', action: 'supersede' },
-  { from: 'approved', to: 'superseded', action: 'supersede' },
-  { from: 'published', to: 'superseded', action: 'supersede' },
-  { from: 'active', to: 'superseded', action: 'supersede' },
-
-  // Ephemeral Flow
-  { from: 'injected', to: 'active', action: 'start' },
-  { from: 'active', to: 'completed', action: 'complete' },
-  { from: 'completed', to: 'archived', action: 'archive' },
-]
-
-export function canTransitionExperience(
-  from: ExperienceStatus,
-  action: ExperienceTransitionAction
-): boolean {
-  return EXPERIENCE_TRANSITIONS.some((t) => t.from === from && t.action === action)
-}
-
-export function getNextExperienceState(
-  from: ExperienceStatus,
-  action: ExperienceTransitionAction
-): ExperienceStatus | null {
-  const transition = EXPERIENCE_TRANSITIONS.find(
-    (t) => t.from === from && t.action === action
-  )
-  return transition ? transition.to : null
-}
-
-// ---------------------------------------------------------------------------
-// Goal State Machine (Sprint 13)
-// ---------------------------------------------------------------------------
-
-export type GoalTransitionAction =
-  | 'activate'
-  | 'pause'
-  | 'resume'
-  | 'complete'
-  | 'archive'
-
-type GoalTransition = {
-  from: GoalStatus
-  to: GoalStatus
-  action: GoalTransitionAction
-}
-
-export const GOAL_TRANSITIONS: GoalTransition[] = [
-  { from: 'intake', to: 'active', action: 'activate' },
-  { from: 'active', to: 'paused', action: 'pause' },
-  { from: 'paused', to: 'active', action: 'resume' },
-  { from: 'active', to: 'completed', action: 'complete' },
-  { from: 'completed', to: 'archived', action: 'archive' },
-]
-
-export function canTransitionGoal(from: GoalStatus, action: GoalTransitionAction): boolean {
-  return GOAL_TRANSITIONS.some((t) => t.from === from && t.action === action)
-}
-
-export function getNextGoalState(from: GoalStatus, action: GoalTransitionAction): GoalStatus | null {
-  const transition = GOAL_TRANSITIONS.find(
-    (t) => t.from === from && t.action === action
-  )
-  return transition ? transition.to : null
-}
-
-
-```
-
-### lib/storage.ts
-
-```typescript
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
-import type { Idea } from '@/types/idea'
-import type { Project } from '@/types/project'
-import type { Task } from '@/types/task'
-import type { PullRequest } from '@/types/pr'
-import type { InboxEvent } from '@/types/inbox'
-import type { DrillSession } from '@/types/drill'
-import type { AgentRun } from '@/types/agent-run'
-import type { ExternalRef } from '@/types/external-ref'
-import { STORAGE_DIR, STORAGE_PATH } from '@/lib/constants'
-import { getSeedData } from '@/lib/seed-data'
-
-export interface StudioStore {
-  ideas: Idea[]
-  drillSessions: DrillSession[]
-  projects: Project[]
-  tasks: Task[]
-  prs: PullRequest[]
-  inbox: InboxEvent[]
-  agentRuns: AgentRun[]
-  externalRefs: ExternalRef[]
-  
-  // Sprint 3: Experience Engine (JSON fallback collections)
-  experience_templates?: any[]
-  experience_instances?: any[]
-  experience_steps?: any[]
-  interaction_events?: any[]
-  artifacts?: any[]
-  synthesis_snapshots?: any[]
-  profile_facets?: any[]
-  conversations?: any[]
-  
-  // Sprint 10+ (Goal OS & Intelligence)
-  timeline_events?: any[]
-  goals?: any[]
-  skill_domains?: any[]
-  curriculum_outlines?: any[]
-  step_knowledge_links?: any[]
-  knowledge_units?: any[]
-  knowledge_progress?: any[]
-  
-  // Sprint 17 (Changes Tracker)
-  change_reports?: any[]
-}
-
-// Full paths for fs operations
-const FULL_STORAGE_DIR = path.join(process.cwd(), STORAGE_DIR)
-const FULL_STORAGE_PATH = path.join(process.cwd(), STORAGE_PATH)
-
-function ensureDir(): void {
-  if (!fs.existsSync(FULL_STORAGE_DIR)) {
-    fs.mkdirSync(FULL_STORAGE_DIR, { recursive: true })
-  }
-}
-
-/** Defaults for keys added in Sprint 2 & 3 — ensures old JSON files auto-migrate. */
-const STORE_DEFAULTS: Partial<StudioStore> = {
-  agentRuns: [],
-  externalRefs: [],
-  experience_templates: [],
-  experience_instances: [],
-  experience_steps: [],
-  interaction_events: [],
-  artifacts: [],
-  synthesis_snapshots: [],
-  profile_facets: [],
-  conversations: [],
-  timeline_events: [],
-  goals: [],
-  skill_domains: [],
-  curriculum_outlines: [],
-  step_knowledge_links: [],
-  knowledge_units: [],
-  knowledge_progress: [],
-  change_reports: [],
-}
-
-export function readStore(): StudioStore {
-  ensureDir()
-  if (!fs.existsSync(FULL_STORAGE_PATH)) {
-    const seed = getSeedData()
-    writeStore(seed)
-    return seed
-  }
-  const raw = fs.readFileSync(FULL_STORAGE_PATH, 'utf-8')
-  const parsed = JSON.parse(raw) as Partial<StudioStore>
-  // Auto-migrate: merge any missing keys introduced in later sprints
-  return { ...STORE_DEFAULTS, ...parsed } as StudioStore
-}
-
-export function writeStore(data: StudioStore): void {
-  ensureDir()
-  // Atomic write: write to a temp file then rename to avoid partial reads
-  const tmpPath = path.join(os.tmpdir(), `studio-${Date.now()}.tmp.json`)
-  fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2), 'utf-8')
-  fs.renameSync(tmpPath, FULL_STORAGE_PATH)
-}
-
-export function getCollection<K extends keyof StudioStore>(name: K): StudioStore[K] {
-  const store = readStore()
-  return store[name]
-}
-
-export function saveCollection<K extends keyof StudioStore>(name: K, data: StudioStore[K]): void {
-  const store = readStore()
-  store[name] = data
-  writeStore(store)
-}
-
-
-```
-
-### lib/storage-adapter.ts
-
-```typescript
-import { getSupabaseClient } from '@/lib/supabase/client'
-import * as jsonStorage from '@/lib/storage'
-import { generateId } from '@/lib/utils'
-
-export interface StorageAdapter {
-  getCollection<T>(name: string): Promise<T[]>
-  saveItem<T>(collection: string, item: T): Promise<T>
-  updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T>
-  deleteItem(collection: string, id: string): Promise<void>
-  query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]>
-  queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]>
-}
-
-/**
- * Maps local collection names to Supabase table names.
- *
- * QUARANTINED (removed in stabilization pass):
- *   projects → realizations    — camelCase TS type vs snake_case DB columns
- *   prs      → realization_reviews — same mismatch
- *   tasks    → experience_steps    — collision with direct experience_steps usage
- *   inbox    → timeline_events     — handled by inbox-service normalization layer
- */
-const TABLE_MAP: Record<string, string> = {
-  ideas: 'ideas',
-  drillSessions: 'drill_sessions',
-  inbox: 'timeline_events',
-  agentRuns: 'agent_runs',
-  externalRefs: 'external_refs',
-  experience_templates: 'experience_templates',
-  experience_instances: 'experience_instances',
-  experience_steps: 'experience_steps',
-  interaction_events: 'interaction_events',
-  artifacts: 'artifacts',
-  synthesis_snapshots: 'synthesis_snapshots',
-  profile_facets: 'profile_facets',
-  step_knowledge_links: 'step_knowledge_links',
-}
-
-let _adapterLogged = false
-
-export class SupabaseStorageAdapter implements StorageAdapter {
-  private client = getSupabaseClient()
-
-  private getTableName(collection: string): string {
-    return TABLE_MAP[collection] || collection
-  }
-
-  async getCollection<T>(name: string): Promise<T[]> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client.from(this.getTableName(name)).select('*')
-    if (error) throw error
-    return data as T[]
-  }
-
-  async saveItem<T>(collection: string, item: T): Promise<T> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client
-      .from(this.getTableName(collection))
-      .insert(item as any)
-      .select()
-      .single()
-    if (error) throw error
-    return data as T
-  }
-
-  async updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { data, error } = await this.client
-      .from(this.getTableName(collection))
-      .update(updates as any)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-    return data as T
-  }
-
-  async deleteItem(collection: string, id: string): Promise<void> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    const { error } = await this.client.from(this.getTableName(collection)).delete().eq('id', id)
-    if (error) throw error
-  }
-
-  async query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    let query = this.client.from(this.getTableName(collection)).select('*')
-    
-    for (const [key, value] of Object.entries(filters)) {
-      query = query.eq(key, value as string | number | boolean)
-    }
-    
-    const { data, error } = await query
-    if (error) throw error
-    return data as T[]
-  }
-
-  async queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]> {
-    if (!this.client) throw new Error('Supabase client not configured')
-    if (!values || values.length === 0) return []
-    
-    const { data, error } = await this.client
-      .from(this.getTableName(collection))
-      .select('*')
-      .in(column, values)
-      
-    if (error) throw error
-    return data as T[]
-  }
-}
-
-/**
- * Adapter for existing JSON file storage.
- * Only active when USE_JSON_FALLBACK=true is explicitly set.
- */
-export class JsonFileStorageAdapter implements StorageAdapter {
-  async getCollection<T>(name: string): Promise<T[]> {
-    return jsonStorage.getCollection(name as any) as unknown as T[]
-  }
-
-  async saveItem<T>(collection: string, item: any): Promise<T> {
-    const list = jsonStorage.getCollection(collection as any)
-    const newItem = { ...item, id: item.id || generateId() }
-    list.push(newItem)
-    jsonStorage.saveCollection(collection as any, list)
-    return newItem as T
-  }
-
-  async updateItem<T>(collection: string, id: string, updates: Partial<T>): Promise<T> {
-    const list = jsonStorage.getCollection(collection as any)
-    const index = list.findIndex((item: any) => item.id === id)
-    if (index === -1) throw new Error(`Item with id ${id} not found in ${collection}`)
-    
-    list[index] = { ...list[index], ...updates }
-    jsonStorage.saveCollection(collection as any, list)
-    return list[index] as any as T
-  }
-
-  async deleteItem(collection: string, id: string): Promise<void> {
-    const list = jsonStorage.getCollection(collection as any)
-    const newList = list.filter((item: any) => item.id !== id)
-    jsonStorage.saveCollection(collection as any, newList)
-  }
-
-  async query<T>(collection: string, filters: Record<string, unknown>): Promise<T[]> {
-    const list = jsonStorage.getCollection(collection as any) as unknown as any[]
-    return list.filter((item) => {
-      return Object.entries(filters).every(([key, value]) => item[key] === value)
-    }) as T[]
-  }
-
-  async queryIn<T>(collection: string, column: string, values: any[]): Promise<T[]> {
-    if (!values || values.length === 0) return []
-    const list = jsonStorage.getCollection(collection as any) as unknown as any[]
-    return list.filter((item) => values.includes(item[column])) as T[]
-  }
-}
-
-export function getStorageAdapter(): StorageAdapter {
-  // Explicit JSON fallback — only when explicitly opted in
-  if (process.env.USE_JSON_FALLBACK === 'true') {
-    if (!_adapterLogged) {
-      console.log('[StorageAdapter] ⚠️  JSON fallback explicitly enabled via USE_JSON_FALLBACK=true')
-      _adapterLogged = true
-    }
-    return new JsonFileStorageAdapter()
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (supabaseUrl && supabaseKey) {
-    if (!_adapterLogged) {
-      console.log('[StorageAdapter] ✅ Using SupabaseStorageAdapter')
-      _adapterLogged = true
-    }
-    return new SupabaseStorageAdapter()
-  }
-
-  // Fail fast — no more silent fallback
-  throw new Error(
-    '[StorageAdapter] FATAL: Supabase not configured. ' +
-    'Set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY in .env.local, ' +
-    'or set USE_JSON_FALLBACK=true for local JSON mode.'
-  )
-}
-
-```
-
-### lib/studio-copy.ts
-
-```typescript
-export const COPY = {
-  app: {
-    name: 'Mira',
-    tagline: 'Your ideas, shaped and shipped.',
-  },
-  home: {
-    heading: 'Studio',
-    subheading: 'Your attention cockpit.',
-    sections: {
-      attention: 'Needs attention',
-      inProgress: 'In progress',
-      activity: 'Recent activity',
-    },
-    attentionCaughtUp: "You're all caught up.",
-    activitySeeAll: 'See all →',
-    suggestedSection: 'Suggested for You',
-    activeSection: 'Active Journeys',
-    emptySuggested: 'No new suggestions from Mira.',
-    emptyActive: 'No active journeys.',
-    focusNarrative: "You're {percent}% through {title}. Next: {step}.",
-    reentry: {
-      heading: 'Pick Up Where You Left Off',
-      viewMore: 'View {count} other re-entry points ↓',
-      hideMore: 'Hide other re-entry points ↑',
-    },
-  },
-  send: {
-    heading: 'Ideas from GPT',
-    subheading: 'Review what arrived and decide what to do next.',
-    ctaPrimary: 'Define in Studio',
-    ctaIcebox: 'Put on hold',
-    ctaKill: 'Remove',
-  },
-  drill: {
-    heading: "Let's define this.",
-    progress: 'Step {current} of {total}',
-    steps: {
-      intent: {
-        question: 'What is this really?',
-        hint: 'Strip the excitement. What is the actual thing?',
-      },
-      success_metric: {
-        question: 'How do you know it worked?',
-        hint: "One metric. If you can't name it, the idea isn't ready.",
-      },
-      scope: {
-        question: 'How big is this?',
-        hint: 'Be honest. Scope creep starts here.',
-      },
-      path: {
-        question: 'How does this get built?',
-        hint: 'Solo, assisted, or fully delegated?',
-      },
-      priority: {
-        question: 'Does this belong now?',
-        hint: 'What would you not do if you commit to this?',
-      },
-      decision: {
-        question: "What's the call?",
-        hint: 'Commit, hold, or remove. Every idea gets a clear decision.',
-      },
-    },
-    cta: {
-      next: 'Next →',
-      back: '← Back',
-      commit: 'Start building',
-      icebox: 'Put on hold',
-      kill: 'Remove this idea',
-    },
-  },
-  arena: {
-    heading: 'In Progress',
-    empty: 'No active projects. Define an idea to get started.',
-    limitReached: "You're at capacity. Ship or remove something first.",
-    limitBanner: 'Active limit: {count}/{max}',
-  },
-  icebox: {
-    heading: 'On Hold',
-    subheading: 'Ideas and projects on pause',
-    empty: 'Nothing on hold right now.',
-    staleWarning: 'This idea has been here for {days} days. Time to decide.',
-  },
-  shipped: {
-    heading: 'Shipped',
-    empty: 'Nothing shipped yet.',
-  },
-  killed: {
-    heading: 'Removed',
-    empty: 'Nothing removed yet.',
-    resurrection: 'Restore',
-  },
-  inbox: {
-    heading: 'Inbox',
-    empty: 'No new events.',
-    filters: {
-      all: 'All',
-      unread: 'Unread',
-      errors: 'Errors',
-    },
-    markRead: 'Mark as read',
-  },
-  common: {
-    loading: 'Working...',
-    error: 'Something went wrong.',
-    confirm: 'Are you sure?',
-    cancel: 'Cancel',
-    save: 'Save',
-  },
-  github: {
-    heading: 'GitHub Integration',
-    connectionSuccess: 'Connected to GitHub',
-    connectionFailed: 'Could not connect to GitHub',
-    issueCreated: 'GitHub issue created',
-    workflowDispatched: 'Build started',
-    workflowFailed: 'Build failed',
-    prOpened: 'Pull request opened',
-    prMerged: 'Pull request merged',
-    copilotAssigned: 'Copilot is working on this',
-    syncFailed: 'GitHub sync failed',
-    mergeBlocked: 'Cannot merge — checks did not pass',
-    notLinked: 'Not linked to GitHub',
-  },
-  experience: {
-    heading: 'Experience',
-    workspace: 'Workspace',
-    timeline: 'Timeline',
-    profile: 'Profile',
-    approve: 'Approve Experience',
-    publish: 'Publish',
-    preview: 'Preview Experience',
-    requestChanges: 'Request Changes',
-    ephemeral: 'Moment',
-    persistent: 'Experience',
-    timelinePage: {
-      heading: 'Timeline',
-      subheading: 'Everything that happened, in order.',
-      emptyAll: 'No events yet.',
-      emptyExperiences: 'No experience events.',
-      emptyIdeas: 'No idea events.',
-      emptySystem: 'No system events.',
-      filterAll: 'All',
-      filterExperiences: 'Experiences',
-      filterIdeas: 'Ideas',
-      filterSystem: 'System',
-    }
-  },
-  library: {
-    heading: 'Library',
-    subheading: 'Your experiences.',
-    activeSection: 'Active Journeys',
-    completedSection: 'Completed',
-    momentsSection: 'Moments',
-    reviewSection: 'Suggested for You',
-    tracksSection: 'Current Tracks',
-    emptyActive: 'No active journeys.',
-    emptyCompleted: 'No completed experiences yet.',
-    emptyMoments: 'No moments yet.',
-    emptyReview: 'No new suggestions.',
-    emptyTracks: 'No planning tracks found.',
-    enter: 'Continue Journey',
-    acceptAndStart: 'Accept & Start',
-  },
-  completion: {
-    heading: 'Journey Complete',
-    body: 'Mira has synthesized your progress. Return to chat whenever you\'re ready for the next step.',
-    returnToLibrary: 'View Library',
-    returnToChat: 'Your next conversation with Mira will pick up from here.',
-  },
-  profilePage: {
-    heading: 'Profile',
-    subheading: 'Your direction, compiled from action.',
-    emptyState: 'Your profile builds as you complete experiences.',
-    sections: {
-      interests: 'Interests',
-      skills: 'Skills',
-      goals: 'Goals',
-      preferences: 'Preferences',
-    }
-  },
-  workspace: {
-    overview: 'Experience Overview',
-    resume: 'Resume Where You Left Off',
-    backToOverview: '← Overview',
-    backToLibrary: '← Library',
-    stepsCompleted: '{count} of {total} completed',
-    estimatedRemaining: 'Est. {time} remaining',
-    locked: 'Complete previous steps first',
-    stepTypes: { 
-      questionnaire: 'Questionnaire', 
-      lesson: 'Lesson', 
-      challenge: 'Challenge', 
-      reflection: 'Reflection', 
-      plan_builder: 'Plan Builder', 
-      essay_tasks: 'Essay + Tasks' 
-    }
-  },
-  knowledge: {
-    heading: 'Knowledge',
-    subheading: 'Your terrain, mapped from action.',
-    emptyState: 'Your knowledge base grows as you explore experiences.',
-    sections: {
-      domains: 'Domains',
-      companion: 'Related Knowledge',
-      recentlyAdded: 'Recently Added',
-    },
-    unitTypes: {
-      foundation: 'Foundation',
-      playbook: 'Playbook',
-      deep_dive: 'Deep Dive',
-      example: 'Example',
-      audio_script: 'Audio Script',
-      misconception: 'Misconception',
-    },
-    mastery: {
-      unseen: 'New',
-      read: 'Read',
-      practiced: 'Practiced',
-      confident: 'Confident',
-    },
-    actions: {
-      markRead: 'Mark as Read',
-      markPracticed: 'Mark as Practiced',
-      markConfident: 'Mark as Confident',
-      startExperience: 'Start Related Experience',
-      learnMore: '📖 Learn about this',
-      viewAll: 'View All →',
-    },
-  },
-  // --- Sprint 13: Goal OS + Skill Map ---
-  skills: {
-    heading: 'Skill Tree',
-    subheading: 'Your trajectory through the domain map.',
-    emptyState: 'Define a goal to map your skill terrain.',
-    masteryBadge: 'Level',
-    evidenceTitle: 'Evidence',
-    domainProgress: 'Domain Mastery',
-    neededForNext: '{count} more experiences to reach {level}',
-    maxLevel: 'Max level reached',
-    experiencesDone: '{completed} of {total} experiences done',
-    allCompleted: 'All experiences completed — explore more →',
-    actions: {
-      viewTree: 'View Skill Tree',
-      whatNext: 'What\'s next →',
-    },
-    detail: {
-      experiencesTitle: 'Experiences',
-      knowledgeTitle: 'Knowledge',
-      emptyExperiences: 'No experiences linked to this domain.',
-      emptyKnowledge: 'No knowledge units linked to this domain.',
-      backLink: '← Back to Skill Tree',
-    }
-  },
-  goals: {
-    heading: 'Active Goal',
-    emptyState: 'Set a goal to personalize your path →',
-    actions: {
-      createGoal: 'Set New Goal',
-      editGoal: 'Refine Goal',
-    },
-    summary: {
-      domains: '{count} domains mapped',
-      mastery: '{count} at {level}+',
-    },
-  },
-  // --- Sprint 17: Mind Map Station ---
-  mindMap: {
-    heading: 'Mind Map',
-    subheading: 'Your visual thinking board.',
-    emptyState: 'Create your first thinking board to start mapping.',
-    actions: {
-      createBoard: 'New Board',
-      switchBoard: 'Switch Board',
-    },
-    labels: {
-      activeBoard: 'Active Map',
-    }
-  },
-}
-
-```
-
-### lib/supabase/browser.ts
-
-```typescript
-import { createClient } from '@supabase/supabase-js'
-
-let browserClient: ReturnType<typeof createClient> | null = null
-
-export function getSupabaseBrowserClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Supabase: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY missing. Falling back to null.')
-    }
-    return null
-  }
-
-  if (!browserClient) {
-    browserClient = createClient(supabaseUrl, supabaseKey)
-  }
-
-  return browserClient
-}
-
-```
-
-### lib/supabase/client.ts
-
-```typescript
-import { createClient } from '@supabase/supabase-js'
-
-export function getSupabaseClient() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseKey) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('Supabase: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing. Falling back to null.')
-    }
-    return null
-  }
-
-  return createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      // Next.js 14 App Router caches ALL fetch() calls by default.
-      // The Supabase JS client uses fetch internally, so without this override,
-      // every Supabase query result gets cached indefinitely — causing stale UI data.
-      fetch: (url, options = {}) => {
-        return fetch(url, {
-          ...options,
-          cache: 'no-store',
-        })
-      },
-    },
-  })
-}
-
-```
-
-### lib/utils.ts
-
-```typescript
-export function cn(...inputs: (string | undefined | null | boolean)[]): string {
-  return inputs
-    .flat()
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-export function generateId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  // Fallback v4-like UUID
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    const v = c === 'x' ? r : (r & 0x3) | 0x8
-    return v.toString(16)
-  })
-}
-
-```
-
-### lib/validators/curriculum-validator.ts
-
-```typescript
-// lib/validators/curriculum-validator.ts
-import { CurriculumOutline } from '@/types/curriculum';
-import { CURRICULUM_STATUSES } from '@/lib/constants';
-
-/**
- * Validates the incoming curriculum outline data.
- * Used by the Planning API and CurriculumOutlineService.
- * Follows the Mira convention of supporting both camelCase and snake_case in input,
- * while returning a validated partial of the TS interface.
- */
-export function validateCurriculumOutline(data: any): { 
-  valid: boolean; 
-  error?: string; 
-  data?: Partial<CurriculumOutline> 
-} {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Curriculum outline must be an object' };
-  }
-
-  const topic = data.topic;
-  const subtopics = data.subtopics;
-  const status = data.status;
-  const pedagogicalIntent = data.pedagogicalIntent ?? data.pedagogical_intent;
-
-  if (!topic || typeof topic !== 'string' || topic.trim() === '') {
-    return { valid: false, error: 'Missing or invalid topic (non-empty string required)' };
-  }
-
-  if (subtopics && !Array.isArray(subtopics)) {
-    return { valid: false, error: 'subtopics must be an array' };
-  }
-
-  if (Array.isArray(subtopics)) {
-    for (let i = 0; i < subtopics.length; i++) {
-      const s = subtopics[i];
-      if (!s.title || typeof s.title !== 'string') {
-        return { valid: false, error: `Subtopic at index ${i} missing title` };
-      }
-      if (s.order !== undefined && typeof s.order !== 'number') {
-        return { valid: false, error: `Subtopic at index ${i} has invalid order (must be number)` };
-      }
-    }
-  }
-
-  if (status && !(CURRICULUM_STATUSES as readonly string[]).includes(status)) {
-    return { 
-      valid: false, 
-      error: `Invalid status: ${status}. Expected one of: ${CURRICULUM_STATUSES.join(', ')}` 
-    };
-  }
-
-  if (pedagogicalIntent && typeof pedagogicalIntent !== 'string') {
-    return { valid: false, error: 'pedagogicalIntent must be a string' };
-  }
-
-  return { valid: true, data: data as Partial<CurriculumOutline> };
-}
-
-/**
- * Validates a StepKnowledgeLink creation request.
- */
-export function validateStepKnowledgeLink(data: any): { 
-  valid: boolean; 
-  error?: string; 
-  data?: { stepId: string; knowledgeUnitId: string; linkType: any } 
-} {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Link data must be an object' };
-  }
-
-  const stepId = data.stepId ?? data.step_id;
-  const knowledgeUnitId = data.knowledgeUnitId ?? data.knowledge_unit_id;
-  const linkType = data.linkType ?? data.link_type;
-
-  if (!stepId || typeof stepId !== 'string') {
-    return { valid: false, error: 'Missing or invalid stepId' };
-  }
-  if (!knowledgeUnitId || typeof knowledgeUnitId !== 'string') {
-    return { valid: false, error: 'Missing or invalid knowledgeUnitId' };
-  }
-  
-  return { valid: true, data: { stepId, knowledgeUnitId, linkType } };
-}
-
-```
-
-### lib/validators/drill-validator.ts
-
-```typescript
-import type { DrillSession } from '@/types/drill'
-
-export function validateDrillPayload(data: unknown): { valid: boolean; errors?: string[] } {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, errors: ['Invalid payload'] }
-  }
-  const d = data as Partial<DrillSession>
-  const errors: string[] = []
-
-  if (!d.ideaId || typeof d.ideaId !== 'string') errors.push('ideaId is required and must be a string')
-  if (!d.intent || typeof d.intent !== 'string') errors.push('intent is required and must be a string')
-  if (!d.successMetric || typeof d.successMetric !== 'string') errors.push('successMetric is required and must be a string')
-  
-  const validScopes = ['small', 'medium', 'large']
-  if (!d.scope || !validScopes.includes(d.scope)) errors.push('scope must be small, medium, or large')
-
-  const validPaths = ['solo', 'assisted', 'delegated']
-  if (!d.executionPath || !validPaths.includes(d.executionPath)) errors.push('executionPath must be solo, assisted, or delegated')
-
-  const validUrgencies = ['now', 'later', 'never']
-  if (!d.urgencyDecision || !validUrgencies.includes(d.urgencyDecision)) errors.push('urgencyDecision must be now, later, or never')
-
-  const validDispositions = ['arena', 'icebox', 'killed']
-  if (!d.finalDisposition || !validDispositions.includes(d.finalDisposition)) errors.push('finalDisposition must be arena, icebox, or killed')
-
-  return {
-    valid: errors.length === 0,
-    errors: errors.length > 0 ? errors : undefined,
-  }
-}
-
-```
-
-### lib/validators/enrichment-validator.ts
-
-```typescript
-// lib/validators/enrichment-validator.ts
-import { NexusIngestPayload, NEXUS_ATOM_TYPES } from '@/types/enrichment';
-
-/**
- * Validates the ingest payload from Nexus.
- */
-export function validateNexusIngestPayload(body: any): { 
-  valid: boolean; 
-  error?: string; 
-  data?: NexusIngestPayload 
-} {
-  if (!body || typeof body !== 'object') {
-    return { valid: false, error: 'Payload must be an object' };
-  }
-
-  // 1. Required Top-level Fields
-  if (!body.delivery_id || typeof body.delivery_id !== 'string') {
-    return { valid: false, error: 'Missing or invalid delivery_id (idempotency key)' };
-  }
-
-  if (!Array.isArray(body.atoms) || body.atoms.length === 0) {
-    return { valid: false, error: 'Payload must contain a non-empty atoms array' };
-  }
-
-  // 2. Validate Atoms
-  for (let i = 0; i < body.atoms.length; i++) {
-    const atom = body.atoms[i];
-    
-    if (!atom || typeof atom !== 'object') {
-      return { valid: false, error: `Atom at index ${i} must be an object` };
-    }
-
-    if (!atom.atom_type || !NEXUS_ATOM_TYPES.includes(atom.atom_type)) {
-      return { valid: false, error: `Atom at index ${i} has missing or invalid atom_type: ${atom.atom_type}` };
-    }
-
-    if (!atom.title || typeof atom.title !== 'string') {
-      return { valid: false, error: `Atom at index ${i} missing or invalid title` };
-    }
-
-    if (!atom.content || typeof atom.content !== 'string') {
-      return { valid: false, error: `Atom at index ${i} missing or invalid content` };
-    }
-
-    // key_ideas must be an array if present (it's required by the NexusAtomPayload interface)
-    if (!Array.isArray(atom.key_ideas)) {
-      return { valid: false, error: `Atom at index ${i} key_ideas must be an array` };
-    }
-  }
-
-  // 3. Optional IDs validation
-  if (body.request_id && typeof body.request_id !== 'string') {
-    return { valid: false, error: 'Invalid request_id' };
-  }
-
-  if (body.target_experience_id && typeof body.target_experience_id !== 'string') {
-    return { valid: false, error: 'Invalid target_experience_id' };
-  }
-
-  if (body.target_step_id && typeof body.target_step_id !== 'string') {
-    return { valid: false, error: 'Invalid target_step_id' };
-  }
-
-  return { valid: true, data: body as NexusIngestPayload };
-}
-
-```
-
-### lib/validators/experience-validator.ts
-
-```typescript
-import { 
-  VALID_DEPTHS, 
-  VALID_MODES, 
-  VALID_TIME_SCOPES, 
-  VALID_INTENSITIES,
-  VALID_TRIGGERS,
-  VALID_CONTEXT_SCOPES
-} from '@/lib/contracts/resolution-contract'
-import { validateStepPayload, ValidationResult } from './step-payload-validator'
-
-/**
- * Validates a resolution object against the v1 canonical contract.
- */
-export function validateResolution(resolution: any): ValidationResult {
-  const errors: string[] = []
-
-  if (!resolution || typeof resolution !== 'object') {
-    return { valid: false, errors: ['resolution must be an object'] }
-  }
-
-  if (!VALID_DEPTHS.includes(resolution.depth)) {
-    errors.push(`invalid depth: "${resolution.depth}" (must be ${VALID_DEPTHS.join('|')})`)
-  }
-  if (!VALID_MODES.includes(resolution.mode)) {
-    errors.push(`invalid mode: "${resolution.mode}" (must be ${VALID_MODES.join('|')})`)
-  }
-  if (!VALID_TIME_SCOPES.includes(resolution.timeScope)) {
-    errors.push(`invalid timeScope: "${resolution.timeScope}" (must be ${VALID_TIME_SCOPES.join('|')})`)
-  }
-  if (!VALID_INTENSITIES.includes(resolution.intensity)) {
-    errors.push(`invalid intensity: "${resolution.intensity}" (must be ${VALID_INTENSITIES.join('|')})`)
-  }
-
-  return { valid: errors.length === 0, errors }
-}
-
-/**
- * Validates a reentry contract object against the v1 canonical contract.
- */
-export function validateReentry(reentry: any): ValidationResult {
-  const errors: string[] = []
-
-  if (!reentry) return { valid: true, errors: [] } // null/undefined is allowed
-  if (typeof reentry !== 'object') {
-    return { valid: false, errors: ['reentry must be an object'] }
-  }
-
-  if (!VALID_TRIGGERS.includes(reentry.trigger)) {
-    errors.push(`invalid reentry trigger: "${reentry.trigger}" (must be ${VALID_TRIGGERS.join('|')})`)
-  }
-  if (typeof reentry.prompt !== 'string' || reentry.prompt.length > 500) {
-    errors.push('reentry prompt must be a string (max 500 chars)')
-  }
-  if (!VALID_CONTEXT_SCOPES.includes(reentry.contextScope)) {
-    errors.push(`invalid reentry contextScope: "${reentry.contextScope}" (must be ${VALID_CONTEXT_SCOPES.join('|')})`)
-  }
-
-  return { valid: errors.length === 0, errors }
-}
-
-/**
- * Validates an experience creation payload against the v1 canonical contract.
- * Also performs structural normalization (e.g. step_type vs type).
- */
-export function validateExperiencePayload(body: any): { valid: boolean; errors: string[]; normalized?: any } {
-  const errors: string[] = []
-
-  // 1. Required fields
-  if (!body.templateId) errors.push('missing `templateId`')
-  if (!body.userId) errors.push('missing `userId`')
-  
-  // 2. Resolution (required object)
-  const resValid = validateResolution(body.resolution)
-  if (!resValid.valid) errors.push(...resValid.errors.map(e => `resolution: ${e}`))
-
-  // 3. Reentry (optional)
-  const reValid = validateReentry(body.reentry)
-  if (!reValid.valid) errors.push(...reValid.errors.map(e => `reentry: ${e}`))
-
-  // 4. Strings (max length validation)
-  if (body.title && (typeof body.title !== 'string' || body.title.length > 200)) {
-    errors.push('title must be a string (max 200 chars)')
-  }
-  if (body.goal && (typeof body.goal !== 'string' || body.goal.length > 1000)) {
-    errors.push('goal must be a string (max 1000 chars)')
-  }
-  if (body.urgency && !['low', 'medium', 'high'].includes(body.urgency)) {
-    errors.push('invalid urgency: (must be "low" | "medium" | "high")')
-  }
-
-  // 5. Steps (normalization + validation)
-  const normalizedSteps: any[] = []
-  if (body.steps && Array.isArray(body.steps)) {
-    body.steps.forEach((step: any, i: number) => {
-      // Normalization: GPT sends `type`, internal uses `step_type`
-      const stepType = step.step_type || step.type
-      if (!stepType) {
-        errors.push(`steps[${i}] missing \`step_type\` or \`type\``)
-        return
-      }
-
-      // Payload validation
-      const sValid = validateStepPayload(stepType, step.payload)
-      if (!sValid.valid) {
-        errors.push(...sValid.errors.map(e => `steps[${i}] (${stepType}): ${e}`))
-      }
-
-      normalizedSteps.push({
-        step_type: stepType,
-        title: step.title || '',
-        payload: step.payload || {},
-        completion_rule: step.completion_rule || null
-      })
-    })
-  } else if (body.steps && !Array.isArray(body.steps)) {
-    errors.push('`steps` must be an array')
-  }
-
-  if (errors.length > 0) {
-    return { valid: false, errors }
-  }
-
-  // Normalization for the rest of the object
-  const normalized = {
-    templateId: body.templateId,
-    userId: body.userId,
-    title: body.title || 'Untitled Experience',
-    goal: body.goal || '',
-    resolution: body.resolution,
-    reentry: body.reentry || null,
-    previousExperienceId: body.previousExperienceId || null,
-    steps: normalizedSteps,
-    urgency: body.urgency || 'low',
-    generated_by: body.generated_by || null,
-    source_conversation_id: body.source_conversation_id || null
-  }
-
-  return { valid: true, errors: [], normalized }
-}
-
-```
-
-### lib/validators/goal-validator.ts
-
-```typescript
-import { GoalStatus, GOAL_STATUSES } from '@/lib/constants';
-
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-}
-
-export function validateGoal(data: any): ValidationResult {
-  const errors: string[] = [];
-
-  if (!data || typeof data !== 'object') {
-    return { valid: false, errors: ['payload must be an object'] };
-  }
-
-  if (typeof data.title !== 'string' || data.title.trim() === '') {
-    errors.push('title must be a non-empty string');
-  }
-
-  if (data.status && !GOAL_STATUSES.includes(data.status)) {
-    errors.push(`invalid status: "${data.status}" (must be one of ${GOAL_STATUSES.join(', ')})`);
-  }
-
-  if (data.domains !== undefined) {
-    if (!Array.isArray(data.domains)) {
-      errors.push('domains must be an array of strings');
-    } else {
-      for (const d of data.domains) {
-        if (typeof d !== 'string') {
-          errors.push('domains array must contain only strings');
-          break;
-        }
-      }
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-}
-
-```
-
-### lib/validators/idea-validator.ts
-
-```typescript
-import type { Idea } from '@/types/idea'
-
-export function validateIdeaPayload(data: unknown): { valid: boolean; error?: string } {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Invalid payload' }
-  }
-  const d = data as Record<string, unknown>
-  if (!d.title || typeof d.title !== 'string') {
-    return { valid: false, error: 'Title is required' }
-  }
-  // Accept both camelCase (GPT sends) and snake_case (DB stores)
-  const rawPrompt = d.rawPrompt || d.raw_prompt
-  if (!rawPrompt || typeof rawPrompt !== 'string') {
-    return { valid: false, error: 'Raw prompt is required' }
-  }
-  return { valid: true }
-}
-
-/**
- * Normalize an incoming idea payload to camelCase for the TS types.
- * Accepts both camelCase (from GPT/API) and snake_case.
- */
-export function normalizeIdeaPayload(data: Record<string, unknown>): Omit<Idea, 'id' | 'created_at' | 'status'> {
-  return {
-    userId: (data.userId || data.user_id || '') as string,
-    title: data.title as string,
-    rawPrompt: (data.rawPrompt || data.raw_prompt || '') as string,
-    gptSummary: (data.gptSummary || data.gpt_summary || '') as string,
-    vibe: (data.vibe || 'unknown') as string,
-    audience: (data.audience || 'unknown') as string,
-    intent: (data.intent || '') as string,
-  }
-}
-
-```
-
-### lib/validators/knowledge-validator.ts
-
-```typescript
-import { MiraKWebhookPayload, MasteryStatus } from '@/types/knowledge';
-import { KNOWLEDGE_UNIT_TYPES, MASTERY_STATUSES } from '@/lib/constants';
-
-export function validateMiraKPayload(body: any): { valid: boolean; error?: string; data?: MiraKWebhookPayload } {
-  if (!body || typeof body !== 'object') {
-    return { valid: false, error: 'Payload must be an object' };
-  }
-
-  if (!body.topic || typeof body.topic !== 'string') {
-    return { valid: false, error: 'Missing or invalid topic' };
-  }
-
-  if (!body.domain || typeof body.domain !== 'string') {
-    return { valid: false, error: 'Missing or invalid domain' };
-  }
-
-  if (!Array.isArray(body.units) || body.units.length === 0) {
-    return { valid: false, error: 'Payload must contain a non-empty units array' };
-  }
-
-  for (const unit of body.units) {
-    if (!KNOWLEDGE_UNIT_TYPES.includes(unit.unit_type)) {
-      return { valid: false, error: `Invalid unit type: ${unit.unit_type}` };
-    }
-    if (!unit.title || typeof unit.title !== 'string') {
-      return { valid: false, error: 'Unit missing title' };
-    }
-    if (!unit.thesis || typeof unit.thesis !== 'string') {
-      return { valid: false, error: 'Unit missing thesis' };
-    }
-    if (!unit.content || typeof unit.content !== 'string') {
-      return { valid: false, error: 'Unit missing content' };
-    }
-    if (!Array.isArray(unit.key_ideas)) {
-      return { valid: false, error: 'Unit key_ideas must be an array' };
-    }
-  }
-
-  if (body.experience_proposal) {
-    const prop = body.experience_proposal;
-    if (!prop.title || !prop.goal || !prop.template_id || !prop.resolution || !Array.isArray(prop.steps)) {
-      // Don't reject the whole payload — strip the incomplete proposal and log
-      console.warn('[knowledge-validator] Incomplete experience_proposal — stripping it. Missing fields:', {
-        title: !!prop.title, goal: !!prop.goal, template_id: !!prop.template_id,
-        resolution: !!prop.resolution, steps: Array.isArray(prop.steps)
-      });
-      delete body.experience_proposal;
-    }
-  }
-
-  if (body.session_id && typeof body.session_id !== 'string') {
-    return { valid: false, error: 'Invalid session_id' };
-  }
-
-  return { valid: true, data: body as MiraKWebhookPayload };
-}
-
-export function validateMasteryUpdate(body: any): { valid: boolean; error?: string; data?: { mastery_status: MasteryStatus } } {
-  if (!body || typeof body !== 'object') {
-    return { valid: false, error: 'Payload must be an object' };
-  }
-
-  const { mastery_status } = body;
-  if (!MASTERY_STATUSES.includes(mastery_status)) {
-    return { valid: false, error: `Invalid mastery status: ${mastery_status}` };
-  }
-
-  return { valid: true, data: { mastery_status } };
-}
-
-```
-
-### lib/validators/project-validator.ts
-
-```typescript
-import type { Project } from '@/types/project'
-
-export function validateProjectPayload(data: unknown): { valid: boolean; error?: string } {
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Invalid payload' }
-  }
-  const d = data as Partial<Project>
-  if (!d.name) return { valid: false, error: 'name is required' }
-  if (!d.ideaId) return { valid: false, error: 'ideaId is required' }
-  return { valid: true }
-}
-
-```
-
-### lib/validators/step-payload-validator.ts
-
-```typescript
-import { 
-  CONTRACTED_STEP_TYPES, 
-  ContractedStepType,
-  isContractedStepType
-} from '@/lib/contracts/step-contracts'
-
-export interface ValidationResult {
-  valid: boolean
-  errors: string[]
-}
-
-/**
- * Validates a step payload against the v1 canonical contract.
- * Follows the "strict fields, additive allowed" and "unknown type pass-through" policies.
- */
-export function validateStepPayload(stepType: string, payload: any): ValidationResult {
-  const errors: string[] = []
-
-  // Unknown types pass validation (UNKNOWN_STEP_POLICY)
-  if (!isContractedStepType(stepType)) {
-    console.warn(`[Validator] Unknown step type "${stepType}" passed through.`)
-    return { valid: true, errors: [] }
-  }
-
-  // Version check (additive strategy)
-  const version = payload?.v || 1
-  if (version > 1) {
-    // Current validators only know v1. 
-    // If it's a future version, we pass it through to let future renderers handle it.
-    console.warn(`[Validator] Future payload version ${version} for "${stepType}" passed through.`)
-    return { valid: true, errors: [] }
-  }
-
-  // Contracted v1 validation
-  switch (stepType) {
-    case 'questionnaire':
-      if (!Array.isArray(payload?.questions)) {
-        errors.push('missing `questions` array')
-      } else {
-        payload.questions.forEach((q: any, i: number) => {
-          if (!q.id) errors.push(`questions[${i}] missing \`id\``)
-          if (!q.label) errors.push(`questions[${i}] missing \`label\` (renderer uses label, not text)`)
-          if (!['text', 'choice', 'scale'].includes(q.type)) {
-            errors.push(`questions[${i}] invalid \`type\` (must be text|choice|scale)`)
-          }
-          if (q.type === 'choice' && !Array.isArray(q.options)) {
-            errors.push(`questions[${i}] choice type requires \`options\` array`)
-          }
-        })
-      }
-      break
-
-    case 'lesson':
-      if (!Array.isArray(payload?.sections)) {
-        errors.push('missing `sections` array (renderer uses sections, not content)')
-      } else {
-        payload.sections.forEach((s: any, i: number) => {
-          if (!s.heading && !s.body) {
-            errors.push(`sections[${i}] needs at least \`heading\` or \`body\``)
-          }
-          if (s.type && !['text', 'callout', 'checkpoint'].includes(s.type)) {
-            errors.push(`sections[${i}] invalid \`type\` (must be text|callout|checkpoint)`)
-          }
-        })
-      }
-      break
-
-    case 'reflection':
-      if (!Array.isArray(payload?.prompts)) {
-        errors.push('missing `prompts` array (renderer uses prompts[], not prompt string)')
-      } else {
-        payload.prompts.forEach((p: any, i: number) => {
-          if (!p.id) errors.push(`prompts[${i}] missing \`id\``)
-          if (!p.text) errors.push(`prompts[${i}] missing \`text\``)
-        })
-      }
-      break
-
-    case 'challenge':
-      if (!Array.isArray(payload?.objectives)) {
-        errors.push('missing `objectives` array')
-      } else {
-        payload.objectives.forEach((o: any, i: number) => {
-          if (!o.id) errors.push(`objectives[${i}] missing \`id\``)
-          if (!o.description) errors.push(`objectives[${i}] missing \`description\``)
-        })
-      }
-      break
-
-    case 'plan_builder':
-      if (!Array.isArray(payload?.sections)) {
-        errors.push('missing `sections` array')
-      } else {
-        payload.sections.forEach((s: any, i: number) => {
-          if (!['goals', 'milestones', 'resources'].includes(s.type)) {
-            errors.push(`sections[${i}] invalid \`type\` (must be goals|milestones|resources)`)
-          }
-          if (!Array.isArray(s.items)) {
-            errors.push(`sections[${i}] missing \`items\` array`)
-          } else {
-            s.items.forEach((item: any, j: number) => {
-              if (!item.id) errors.push(`sections[${i}].items[${j}] missing \`id\``)
-              if (!item.text) errors.push(`sections[${i}].items[${j}] missing \`text\``)
-            })
-          }
-        })
-      }
-      break
-
-    case 'essay_tasks':
-      if (typeof payload?.content !== 'string') {
-        errors.push('missing `content` string')
-      }
-      if (!Array.isArray(payload?.tasks)) {
-        errors.push('missing `tasks` array')
-      } else {
-        payload.tasks.forEach((t: any, i: number) => {
-          if (!t.id) errors.push(`tasks[${i}] missing \`id\``)
-          if (!t.description) errors.push(`tasks[${i}] missing \`description\``)
-        })
-      }
-      break
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors
-  }
-}
-
-```
-
-### lib/validators/webhook-validator.ts
-
-```typescript
-import type { WebhookPayload } from '@/types/webhook'
-
-export function validateGitHubWebhookHeaders(headers: Headers): { valid: boolean; error?: string } {
-  const event = headers.get('x-github-event')
-  if (!event) return { valid: false, error: 'Missing x-github-event header' }
-  
-  // Signature is typically required in prod, but optional if SECRET not set in dev
-  // We'll let the route handle the actual check vs secret
-  return { valid: true }
-}
-
-export function validateWebhookPayload(data: unknown): { valid: boolean; error?: string } {
-
-  if (!data || typeof data !== 'object') {
-    return { valid: false, error: 'Invalid payload' }
-  }
-  const d = data as Partial<WebhookPayload>
-  if (!d.source) return { valid: false, error: 'source is required' }
-  if (!d.event) return { valid: false, error: 'event is required' }
-  return { valid: true }
-}
-
-```
-
-### lib/view-models/arena-view-model.ts
-
-```typescript
-import type { Project } from '@/types/project'
-import type { Task } from '@/types/task'
-import type { PullRequest } from '@/types/pr'
-
-export interface ArenaViewModel {
-  project: Project
-  tasks: Task[]
-  prs: PullRequest[]
-  openPRCount: number
-  blockedTaskCount: number
-  donePct: number
-}
-
-export function buildArenaViewModel(
-  project: Project,
-  tasks: Task[],
-  prs: PullRequest[]
-): ArenaViewModel {
-  const done = tasks.filter((t) => t.status === 'done').length
-  const blocked = tasks.filter((t) => t.status === 'blocked').length
-  const donePct = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0
-  const openPRs = prs.filter((pr) => pr.status === 'open').length
-
-  return {
-    project,
-    tasks,
-    prs,
-    openPRCount: openPRs,
-    blockedTaskCount: blocked,
-    donePct,
-  }
-}
-
-```
-
-### lib/view-models/icebox-view-model.ts
-
-```typescript
-import type { Idea } from '@/types/idea'
-import type { Project } from '@/types/project'
-import { daysSince } from '@/lib/date'
-import { STALE_ICEBOX_DAYS } from '@/lib/constants'
-
-export interface IceboxItem {
-  type: 'idea' | 'project'
-  id: string
-  title: string
-  summary: string
-  daysInIcebox: number
-  isStale: boolean
-  createdAt: string
-}
-
-export function buildIceboxViewModel(ideas: Idea[], projects: Project[]): IceboxItem[] {
-  const iceboxIdeas: IceboxItem[] = ideas
-    .filter((i) => i.status === 'icebox')
-    .map((i) => ({
-      type: 'idea',
-      id: i.id,
-      title: i.title,
-      summary: i.gptSummary,
-      daysInIcebox: daysSince(i.created_at),
-      isStale: daysSince(i.created_at) >= STALE_ICEBOX_DAYS,
-      createdAt: i.created_at,
-    }))

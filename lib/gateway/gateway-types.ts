@@ -32,7 +32,21 @@ export type DiscoverCapability =
   | 'link_knowledge'
   | 'update_knowledge'
   | 'update_skill_domain'
-  | 'transition_goal';
+  | 'transition_goal'
+  | 'memory_record'
+  | 'memory_read'
+  | 'memory_correct'
+  | 'consolidate_memory'
+  | 'create_board'
+  | 'board_from_text'
+  | 'list_boards'
+  | 'read_map'
+  | 'read_board'
+  | 'rename_board'
+  | 'archive_board'
+  | 'reparent_node'
+  | 'expand_board_branch'
+  | 'suggest_board_gaps';
 
 
 /**

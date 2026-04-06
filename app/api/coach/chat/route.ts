@@ -47,17 +47,16 @@ export async function POST(request: Request) {
     const { tutorChatFlow } = await import('@/lib/ai/flows/tutor-chat-flow');
 
     const result = await runFlowSafe(
-      () =>
-        tutorChatFlow({
-          stepId,
-          knowledgeUnitContent,
-          conversationHistory,
-          userMessage: message,
-        }),
-      fallback
+      tutorChatFlow,
+      {
+        stepId,
+        knowledgeUnitContent,
+        conversationHistory,
+        userMessage: message,
+      }
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(result || fallback);
   } catch (error) {
     console.error('[coach/chat] Error:', error);
     return NextResponse.json(

@@ -12,6 +12,9 @@ interface NodeContextMenuProps {
   onDelete: (nodeId: string) => void
   onColorChange: (nodeId: string, color: string) => void
   onExport: (node: any, type: 'idea' | 'goal' | 'knowledge') => void
+  onExpandBranch: (nodeId: string) => void
+  onSuggestGaps: () => void
+  onLinkMemory: (nodeId: string) => void
 }
 
 export function NodeContextMenu({
@@ -23,7 +26,10 @@ export function NodeContextMenu({
   onAddChild,
   onDelete,
   onColorChange,
-  onExport
+  onExport,
+  onExpandBranch,
+  onSuggestGaps,
+  onLinkMemory
 }: NodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -136,6 +142,38 @@ export function NodeContextMenu({
       >
         <span className="text-base">📖</span>
         Export as Knowledge
+      </button>
+
+      <div className="h-px bg-[#1e1e2e] my-1 mx-1" />
+
+      <div className="px-3 py-2">
+        <span className="text-[10px] font-bold text-[#4a4a6a] uppercase tracking-widest leading-none">
+          AI Macros
+        </span>
+      </div>
+
+      <button 
+        onClick={() => { onExpandBranch(node.id); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-indigo-400 hover:text-white hover:bg-indigo-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">🪄</span>
+        Expand Branch (AI)
+      </button>
+
+      <button 
+        onClick={() => { onSuggestGaps(); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-amber-400 hover:text-white hover:bg-amber-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">✨</span>
+        Suggest Gaps (AI)
+      </button>
+
+      <button 
+        onClick={() => { onLinkMemory(node.id); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-emerald-400 hover:text-white hover:bg-emerald-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">🧠</span>
+        Relink Memories
       </button>
 
       <div className="h-px bg-[#1e1e2e] my-1 mx-1" />

@@ -148,6 +148,10 @@ export async function POST() {
   const templateId = 'b0000000-0000-0000-0000-000000000001'
 
   try {
+    // --- Seed default memories ---
+    const { seedDefaultMemory } = await import('@/lib/services/agent-memory-service');
+    await seedDefaultMemory(userId);
+
     // --- Ephemeral experience ---
     const ephemeralData: Omit<ExperienceInstance, 'id' | 'created_at'> = {
       user_id: userId,

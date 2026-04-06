@@ -275,4 +275,27 @@ export const COPY = {
       activeBoard: 'Active Map',
     }
   },
+  // --- Sprint 24: Agent Memory ---
+  memory: {
+    heading: 'Memory',
+    subheading: 'What Mira has learned about you.',
+    emptyState: 'Mira builds a memory of your projects, preferences, and progress as you use the studio.',
+    topicBadge: '{count} entries',
+    actions: {
+      edit: 'Correct',
+      delete: 'Delete',
+      pin: 'Pin',
+      unpin: 'Unpin',
+    },
+    confirmDelete: 'Are you sure you want Mira to forget this?',
+    kinds: {
+      observation: 'Observation',
+      strategy: 'Strategy',
+      idea: 'Idea',
+      preference: 'Preference',
+      tactic: 'Tactic',
+      assessment: 'Assessment',
+      note: 'Note',
+    }
+  },
 }

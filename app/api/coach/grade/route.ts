@@ -45,20 +45,16 @@ export async function POST(request: Request) {
       fallback: true,
     };
 
-    const { result } = await (async () => {
-      const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
-      const result = await runFlowSafe(
-        () =>
-          gradeCheckpointFlow({
-            question,
-            expectedAnswer,
-            userAnswer: answer,
-            unitContext,
-          }),
-        fallback
-      );
-      return { result };
-    })();
+    const { gradeCheckpointFlow } = await import('@/lib/ai/flows/grade-checkpoint-flow');
+    const result = await runFlowSafe(
+      gradeCheckpointFlow,
+      {
+        question,
+        expectedAnswer,
+        userAnswer: answer,
+        unitContext,
+      }
+    ) || fallback;
 
     // Mastery strategy & Interactions: Lane 6
     // Fetch step to get instanceInfo for progress & interactions

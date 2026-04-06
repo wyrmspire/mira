@@ -61,15 +61,14 @@ export async function POST(request: Request) {
     // 3. Execute grading in parallel
     const gradingPromises = questions.map(async (q) => {
       const gradingResult = await runFlowSafe(
-        () =>
-          gradeCheckpointFlow({
-            question: q.question,
-            expectedAnswer: q.expectedAnswer,
-            userAnswer: q.answer,
-            unitContext,
-          }),
-        fallback(q.questionId)
-      );
+        gradeCheckpointFlow,
+        {
+          question: q.question,
+          expectedAnswer: q.expectedAnswer,
+          userAnswer: q.answer,
+          unitContext,
+        }
+      ) || (fallback(q.questionId) as any);
       return { ...gradingResult, questionId: q.questionId };
     });
 

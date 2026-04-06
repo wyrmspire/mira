@@ -1,3 +1,225 @@
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {currentQuestion.type === 'scale' && (
+              <div className={`flex justify-between items-center bg-[#12121a] border rounded-2xl p-6 transition-all ${
+                showError ? 'border-rose-500/30' : 'border-[#1e1e2e]'
+              }`}>
+                {(currentQuestion.options?.length ? currentQuestion.options.map((_, i) => i + 1) : [1, 2, 3, 4, 5]).map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleInputChange(currentQuestion.id, val.toString())}
+                    className={`w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all text-lg font-bold ${
+                      answers[currentQuestion.id] === val.toString()
+                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 scale-110 shadow-[0_0_20px_rgba(99,102,241,0.2)]'
+                        : 'bg-[#1a1a2e] border-[#33334d] text-[#475569] hover:border-indigo-500/30 hover:text-[#94a3b8]'
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between pt-8 border-t border-[#1e1e2e]">
+        <div className="flex gap-4">
+          <button
+            type="button"
+            onClick={handleBack}
+            disabled={currentIndex === 0}
+            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors disabled:opacity-0"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
+          >
+            Skip for now
+          </button>
+        </div>
+        
+        <button
+          type="button"
+          onClick={handleNext}
+          className="px-10 py-4 bg-indigo-500 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
+        >
+          {currentIndex < totalQuestions - 1 ? 'Next Question →' : 'Finish Questionnaire →'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+```
+
+### components/experience/steps/ReflectionStep.tsx
+
+```tsx
+'use client';
+
+import React, { useState } from 'react';
+import { ExperienceStep, ExperienceBlock } from '@/types/experience';
+import ReactMarkdown from 'react-markdown';
+import BlockRenderer from '../blocks/BlockRenderer';
+
+interface ReflectionPayload {
+  prompts?: Array<{
+    id: string;
+    text: string;
+    format?: 'free_text';
+  }>;
+  blocks?: ExperienceBlock[];
+}
+
+interface ReflectionStepProps {
+  step: ExperienceStep;
+  onComplete: (payload: { reflections: Record<string, string> }) => void;
+  onSkip: () => void;
+  onDraft?: (draft: Record<string, any>) => void;
+  readOnly?: boolean;
+  initialResponses?: Record<string, string>;
+}
+
+export default function ReflectionStep({ step, onComplete, onSkip, onDraft, readOnly, initialResponses }: ReflectionStepProps) {
+  const [responses, setResponses] = useState<Record<string, string>>(initialResponses || {});
+  const payload = step.payload as ReflectionPayload | null;
+  const prompts = payload?.prompts ?? [];
+  const blocks = payload?.blocks ?? [];
+  const hasBlocks = blocks.length > 0;
+
+  const handleChange = (promptId: string, value: string) => {
+    setResponses((prev) => ({ ...prev, [promptId]: value }));
+  };
+
+  const handleBlur = (promptId: string) => {
+    if (onDraft && responses[promptId]) {
+      onDraft({ [promptId]: responses[promptId] });
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onComplete({ reflections: responses });
+  };
+
+  const isComplete = prompts.length === 0 || prompts.every((p) => !!responses[p.id]?.trim());
+
+  if (readOnly) {
+    return (
+      <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">
+        <div className="border-l-4 border-violet-500 pl-6 mb-12">
+          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+          <p className="text-sm text-violet-400 uppercase tracking-[0.2em] font-bold">Past Perspective</p>
+        </div>
+        
+        <div className="space-y-16">
+          {hasBlocks ? (
+            <div className="space-y-10">
+              {blocks.map((block, idx) => (
+                <BlockRenderer key={block.id || idx} block={block} />
+              ))}
+            </div>
+          ) : (
+            prompts.map((p) => (
+              <div key={p.id} className="space-y-6">
+                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-bold prose-p:text-[#475569] prose-p:leading-relaxed">
+                  <ReactMarkdown>{p.text}</ReactMarkdown>
+                </div>
+                <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
+                  <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
+                    "{responses[p.id] || 'No reflection logged.'}"
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">
+      <div className="mb-8 border-l-4 border-violet-500 pl-6">
+        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
+        <p className="text-sm text-violet-400 uppercase tracking-[0.2em] font-bold">Reflection Process</p>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-16">
+        {hasBlocks ? (
+          <div className="space-y-10">
+            {blocks.map((block, idx) => (
+              <BlockRenderer 
+                key={block.id || idx} 
+                block={block} 
+                instanceId={step.instance_id}
+                stepId={step.id}
+              />
+            ))}
+          </div>
+        ) : (
+          <>
+            {prompts.length === 0 && (
+              <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
+                <p className="text-[#64748b] text-lg">Reflection prompts are being prepared.</p>
+              </div>
+            )}
+            {prompts.map((prompt, idx) => {
+              const wordCount = responses[prompt.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
+              return (
+                <div 
+                  key={prompt.id} 
+                  className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700"
+                  style={{ animationDelay: `${idx * 150}ms`, animationFillMode: 'both' }}
+                >
+                  <div className="flex justify-between items-end">
+                    <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-semibold prose-p:text-[#e2e8f0] prose-p:leading-relaxed max-w-[80%]">
+                      <ReactMarkdown>{prompt.text}</ReactMarkdown>
+                    </div>
+                    <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded transition-colors ${
+                      wordCount > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-[#475569] bg-[#1a1a2e]'
+                    }`}>
+                      {wordCount} WORDS
+                    </span>
+                  </div>
+                  
+                  <div className="relative">
+                    <textarea
+                      value={responses[prompt.id] || ''}
+                      onChange={(e) => handleChange(prompt.id, e.target.value)}
+                      onBlur={() => handleBlur(prompt.id)}
+                      placeholder="Share your thoughts honestly…"
+                      rows={5}
+                      className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-2xl px-6 py-5 text-lg text-[#f1f5f9] placeholder-[#94a3b8]/20 focus:outline-none focus:border-violet-500/40 focus:bg-[#161625] transition-all resize-none leading-relaxed shadow-inner"
+                    />
+                    <div className="absolute bottom-4 right-4 flex gap-2">
+                       {responses[prompt.id] && (
+                         <span className="text-[10px] text-emerald-400/50 font-mono animate-pulse">DRAFT SAVED</span>
+                       )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+
+        <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
+          >
+            Skip for now
+          </button>
           
           <div className="flex flex-col items-end gap-3">
             {!isComplete && (
@@ -1134,6 +1356,310 @@ export function openDrawer(content: DrawerContent) {
 export function closeDrawer() {
   const event = new CustomEvent('close-drawer')
   window.dispatchEvent(event)
+}
+
+```
+
+### components/memory/MemoryEntryCard.tsx
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { AgentMemoryEntry, MemoryEntryKind } from '@/types/agent-memory'
+import { COPY } from '@/lib/studio-copy'
+import { formatDistanceToNow } from 'date-fns'
+
+interface MemoryEntryCardProps {
+  entry: AgentMemoryEntry
+  onUpdate: (id: string, updates: Partial<AgentMemoryEntry>) => Promise<void>
+  onDelete: (id: string) => Promise<void>
+}
+
+const KIND_COLORS: Record<MemoryEntryKind, string> = {
+  observation: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  strategy: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  idea: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+  preference: 'bg-green-500/10 text-green-400 border-green-500/20',
+  tactic: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  assessment: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  note: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+}
+
+export function MemoryEntryCard({ entry, onUpdate, onDelete }: MemoryEntryCardProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(entry.content)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const handleSave = async () => {
+    if (editContent === entry.content) {
+      setIsEditing(false)
+      return
+    }
+    setIsSaving(true)
+    try {
+      await onUpdate(entry.id, { content: editContent })
+      setIsEditing(false)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleTogglePin = async () => {
+    await onUpdate(entry.id, { pinned: !entry.pinned })
+  }
+
+  return (
+    <div className={`group relative p-4 rounded-xl border bg-[#12121a] transition-all hover:border-[#1e1e2e] ${entry.pinned ? 'border-amber-500/30' : 'border-transparent'}`}>
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded border ${KIND_COLORS[entry.kind]}`}>
+            {COPY.memory.kinds[entry.kind]}
+          </span>
+          {entry.pinned && (
+            <span className="text-amber-500 text-xs">★</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={handleTogglePin}
+            className={`p-1.5 rounded hover:bg-[#1e1e2e] transition-colors ${entry.pinned ? 'text-amber-500' : 'text-[#94a3b8]'}`}
+            title={entry.pinned ? COPY.memory.actions.unpin : COPY.memory.actions.pin}
+          >
+            {entry.pinned ? '★' : '☆'}
+          </button>
+          {!isEditing && (
+            <button 
+              onClick={() => setIsEditing(true)}
+              className="p-1.5 rounded hover:bg-[#1e1e2e] text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+              title={COPY.memory.actions.edit}
+            >
+              ✎
+            </button>
+          )}
+          <button 
+            onClick={() => setIsDeleting(true)}
+            className="p-1.5 rounded hover:bg-red-500/10 text-[#94a3b8] hover:text-red-400 transition-colors"
+            title={COPY.memory.actions.delete}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-3">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            className="w-full bg-[#0a0a0f] border border-[#1e1e2e] rounded-lg p-3 text-sm text-[#e2e8f0] focus:ring-1 focus:ring-[#6366f1] focus:border-[#6366f1] outline-none min-h-[80px]"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setIsEditing(false); setEditContent(entry.content); }}
+              className="px-3 py-1.5 rounded text-xs text-[#94a3b8] hover:text-[#e2e8f0] transition-colors"
+              disabled={isSaving}
+            >
+              {COPY.common.cancel}
+            </button>
+            <button
+              onClick={handleSave}
+              className="px-3 py-1.5 rounded text-xs bg-[#6366f1] text-[#fff] hover:bg-[#4f46e5] disabled:opacity-50 transition-colors"
+              disabled={isSaving}
+            >
+              {isSaving ? COPY.common.loading : COPY.common.save}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-[#e2e8f0] leading-relaxed mb-4 whitespace-pre-wrap">
+          {entry.content}
+        </p>
+      )}
+
+      <div className="flex items-center gap-4 text-[10px] text-[#64748b]">
+        <div className="flex items-center gap-1">
+          <span className="font-semibold">Used:</span>
+          <span>{entry.usageCount}x</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="font-semibold">Confidence:</span>
+          <div className="w-12 h-1 bg-[#1e1e2e] rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-indigo-500 transition-all" 
+              style={{ width: `${(entry.confidence || 0.6) * 100}%` }}
+            />
+          </div>
+        </div>
+        <div className="ml-auto">
+          {entry.lastUsedAt && (
+            <span>Last used {formatDistanceToNow(new Date(entry.lastUsedAt))} ago</span>
+          )}
+        </div>
+      </div>
+
+      {isDeleting && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center p-4 rounded-xl bg-[#0a0a0f]/95 border border-red-500/50 backdrop-blur-sm">
+          <p className="text-sm font-medium text-[#e2e8f0] mb-4 text-center">
+            {COPY.memory.confirmDelete}
+          </p>
+          <div className="flex gap-2 w-full max-w-[200px]">
+            <button
+              onClick={() => setIsDeleting(false)}
+              className="flex-1 px-4 py-2 rounded-lg bg-[#1e1e2e] text-[#e2e8f0] text-xs hover:bg-[#2e2e3e] transition-colors"
+            >
+              {COPY.common.cancel}
+            </button>
+            <button
+              onClick={() => onDelete(entry.id)}
+              className="flex-1 px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-xs border border-red-500/30 hover:bg-red-500/30 transition-colors"
+            >
+              {COPY.memory.actions.delete}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+```
+
+### components/memory/MemoryExplorer.tsx
+
+```tsx
+'use client'
+
+import { useState } from 'react'
+import { AgentMemoryEntry } from '@/types/agent-memory'
+import { MemoryEntryCard } from './MemoryEntryCard'
+import { COPY } from '@/lib/studio-copy'
+
+interface MemoryExplorerProps {
+  initialGroupedMemories: Record<string, AgentMemoryEntry[]>
+  userId: string
+}
+
+export function MemoryExplorer({ initialGroupedMemories, userId }: MemoryExplorerProps) {
+  const [groupedMemories, setGroupedMemories] = useState(initialGroupedMemories)
+  const [expandedTopics, setExpandedTopics] = useState<string[]>(Object.keys(initialGroupedMemories))
+
+  const toggleTopic = (topic: string) => {
+    setExpandedTopics((prev) =>
+      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic]
+    )
+  }
+
+  const handleUpdate = async (id: string, updates: Partial<AgentMemoryEntry>) => {
+    // Optimistic update
+    const newGrouped = { ...groupedMemories }
+    let updatedEntry: AgentMemoryEntry | null = null
+    
+    for (const topic in newGrouped) {
+      const idx = newGrouped[topic].findIndex((e) => e.id === id)
+      if (idx !== -1) {
+        newGrouped[topic][idx] = { ...newGrouped[topic][idx], ...updates }
+        updatedEntry = newGrouped[topic][idx]
+        break
+      }
+    }
+    
+    setGroupedMemories({ ...newGrouped })
+
+    // Call API
+    try {
+      const res = await fetch(`/api/gpt/memory/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
+      if (!res.ok) throw new Error('Update failed')
+    } catch (err) {
+      console.error('[MemoryExplorer] Update failed:', err)
+      // Note: In production you'd want to rollback state here
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    const newGrouped = { ...groupedMemories }
+    for (const topic in newGrouped) {
+      const idx = newGrouped[topic].findIndex((e) => e.id === id)
+      if (idx !== -1) {
+        newGrouped[topic].splice(idx, 1)
+        if (newGrouped[topic].length === 0) delete newGrouped[topic]
+        break
+      }
+    }
+    setGroupedMemories({ ...newGrouped })
+
+    try {
+      const res = await fetch(`/api/gpt/memory/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Delete failed')
+    } catch (err) {
+      console.error('[MemoryExplorer] Delete failed:', err)
+    }
+  }
+
+  if (Object.keys(groupedMemories).length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-40 text-center animate-in fade-in duration-700">
+        <div className="w-16 h-16 rounded-full bg-[#12121a] flex items-center justify-center border border-[#1e1e2e] mb-6 text-2xl shadow-xl">
+          🧠
+        </div>
+        <h3 className="text-[#f1f5f9] font-medium mb-2">{COPY.memory.heading}</h3>
+        <p className="text-[#94a3b8] text-sm max-w-sm leading-relaxed">
+          {COPY.memory.emptyState}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {Object.entries(groupedMemories)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([topic, entries]) => (
+          <section key={topic} className="space-y-6">
+            <button
+              onClick={() => toggleTopic(topic)}
+              className="flex items-center gap-4 group w-full text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] text-[#475569] transition-transform duration-300 ${expandedTopics.includes(topic) ? 'rotate-90' : ''}`}>
+                  ▶
+                </span>
+                <h3 className="text-xs font-bold text-[#94a3b8] tracking-[0.2em] uppercase group-hover:text-[#e2e8f0] transition-colors">
+                  {topic}
+                </h3>
+              </div>
+              <div className="h-px flex-1 bg-[#1e1e2e]" />
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono text-[#64748b] bg-[#12121a] px-2 py-0.5 rounded border border-[#1e1e2e]">
+                  {entries.length} units
+                </span>
+              </div>
+            </button>
+
+            {expandedTopics.includes(topic) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-in fade-in slide-in-from-top-2 duration-500">
+                {entries
+                  .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0))
+                  .map((entry) => (
+                    <MemoryEntryCard
+                      key={entry.id}
+                      entry={entry}
+                      onUpdate={handleUpdate}
+                      onDelete={handleDelete}
+                    />
+                  ))}
+              </div>
+            )}
+          </section>
+        ))}
+    </div>
+  )
 }
 
 ```
@@ -2438,6 +2964,7 @@ const NAV_ITEMS = [
   { label: COPY.skills.heading, href: ROUTES.skills, icon: '⌬' },
   { label: COPY.mindMap.heading, href: ROUTES.mindMap, icon: '⊹' },
   { label: COPY.knowledge.heading, href: ROUTES.knowledge, icon: '📚' },
+  { label: COPY.memory.heading, href: ROUTES.memory, icon: '⦿' },
   { label: COPY.experience.timelinePage.heading, href: ROUTES.timeline, icon: '◷' },
   { label: COPY.profilePage.heading, href: ROUTES.profile, icon: '👤' },
   { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
@@ -2665,6 +3192,268 @@ export default function SkillTreeGrid({ domains }: SkillTreeGridProps) {
       ))}
     </div>
   );
+}
+
+```
+
+### components/think/map-sidebar.tsx
+
+```tsx
+'use client'
+
+import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { COPY } from '@/lib/studio-copy'
+import { ThinkBoard, BoardPurpose } from '@/types/mind-map'
+
+interface MapSidebarProps {
+  boards: (ThinkBoard & { nodeCount: number; edgeCount: number })[]
+  activeBoardId: string
+}
+
+const PURPOSE_CONFIG: Record<BoardPurpose, { label: string; color: string; preview: string }> = {
+  general: { 
+    label: 'General', 
+    color: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+    preview: 'A blank canvas for your thoughts.'
+  },
+  idea_planning: { 
+    label: 'Idea Planning', 
+    color: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+    preview: 'Auto-creates nodes for Market, Tech, UX, and Risks.'
+  },
+  curriculum_review: { 
+    label: 'Curriculum', 
+    color: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    preview: 'Auto-creates nodes for Foundations, Core, Advanced, and Cases.'
+  },
+  lesson_plan: { 
+    label: 'Lesson Plan', 
+    color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    preview: 'Auto-creates nodes for Primer, Practice, Checkpoint, and Reflection.'
+  },
+  research_tracking: { 
+    label: 'Research', 
+    color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+    preview: 'Auto-creates nodes for Pending, In Progress, and Complete.'
+  },
+  strategy: { 
+    label: 'Strategy', 
+    color: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    preview: 'Auto-creates domain-level strategic nodes.'
+  },
+}
+
+export function MapSidebar({ boards, activeBoardId }: MapSidebarProps) {
+  const router = useRouter()
+  const [search, setSearch] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newPurpose, setNewPurpose] = useState<BoardPurpose>('general')
+  const [loading, setLoading] = useState(false)
+
+  const filteredBoards = boards.filter(b => 
+    b.name.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleSwitch = (id: string) => {
+    router.push(`/map?boardId=${id}`)
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newName.trim() || loading) return
+    setLoading(true)
+
+    try {
+      const resp = await fetch('/api/mindmap/boards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          name: newName,
+          purpose: newPurpose
+        })
+      })
+      
+      if (resp.ok) {
+        const newBoard = await resp.json()
+        setNewName('')
+        setNewPurpose('general')
+        setIsCreating(false)
+        router.push(`/map?boardId=${newBoard.id}`)
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to create board:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (!confirm('Are you sure you want to delete this board? This cannot be undone.')) return
+
+    try {
+      const resp = await fetch(`/api/mindmap/boards/${id}`, { method: 'DELETE' })
+      if (resp.ok) {
+        if (id === activeBoardId) {
+          const next = boards.filter(b => b.id !== id)[0]
+          router.push(next ? `/map?boardId=${next.id}` : '/map')
+        }
+        router.refresh()
+      }
+    } catch (err) {
+      console.error('Failed to delete board:', err)
+    }
+  }
+
+  return (
+    <aside className="w-80 h-full flex flex-col bg-[#05050a] border-r border-[#1e1e2e] shadow-2xl relative z-20">
+      <div className="p-6 border-b border-[#1e1e2e]">
+        <h2 className="text-lg font-bold text-[#f1f5f9] mb-4 flex items-center gap-2">
+          <span className="text-[#6366f1] text-xl font-mono leading-none">⊹</span>
+          {COPY.mindMap.heading}
+        </h2>
+        
+        <div className="relative mb-4">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#475569] text-xs">⚲</span>
+          <input
+            type="text"
+            placeholder="Search boards..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg pl-8 pr-3 py-2 text-xs text-[#e2e8f0] focus:ring-1 focus:ring-[#6366f1] focus:border-[#6366f1] outline-none transition-all placeholder:text-[#475569]"
+          />
+        </div>
+
+        {!isCreating && (
+          <button
+            onClick={() => setIsCreating(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-indigo-500/10"
+          >
+            <span>+</span>
+            {COPY.mindMap.actions.createBoard}
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+        {filteredBoards.map(board => {
+          const active = board.id === activeBoardId
+          const config = PURPOSE_CONFIG[board.purpose || 'general']
+          
+          return (
+            <button
+              key={board.id}
+              onClick={() => handleSwitch(board.id)}
+              className={`group relative w-full p-4 rounded-xl text-left border transition-all duration-300 ${
+                active 
+                  ? 'bg-[#1e1e2e]/50 border-indigo-500/30' 
+                  : 'bg-[#12121a]/30 border-transparent hover:bg-[#12121a]/80 hover:border-[#1e1e2e]'
+              }`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${config.color}`}>
+                  {config.label}
+                </span>
+                <span 
+                  onClick={(e) => handleDelete(e, board.id)}
+                  className="opacity-0 group-hover:opacity-100 text-[#475569] hover:text-red-400 transition-all text-sm p-1 leading-none"
+                  title="Archive Board"
+                >
+                  ×
+                </span>
+              </div>
+              
+              <h4 className={`text-sm font-semibold truncate mb-3 ${active ? 'text-indigo-300' : 'text-[#e2e8f0]'}`}>
+                {board.name}
+              </h4>
+
+              <div className="flex items-center gap-4 text-[10px] text-[#64748b] font-mono">
+                <div className="flex items-center gap-1">
+                  <span className="text-[#475569]">N:</span>
+                  <span>{board.nodeCount}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[#475569]">E:</span>
+                  <span>{board.edgeCount}</span>
+                </div>
+              </div>
+
+              {active && (
+                <div className="absolute right-4 bottom-4 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+              )}
+            </button>
+          )
+        })}
+
+        {filteredBoards.length === 0 && search && (
+          <div className="text-center py-10">
+            <p className="text-xs text-[#64748b]">No boards matching "{search}"</p>
+          </div>
+        )}
+      </div>
+
+      {isCreating && (
+        <div className="p-6 border-t border-[#1e1e2e] bg-[#0a0a14] animate-in slide-in-from-bottom duration-300">
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest px-1">Board Name</label>
+              <input
+                autoFocus
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Name your map..."
+                className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] focus:ring-1 focus:ring-indigo-500 outline-none"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-[#475569] uppercase tracking-widest px-1">Purpose</label>
+              <div className="relative">
+                <select
+                  value={newPurpose}
+                  onChange={(e) => setNewPurpose(e.target.value as BoardPurpose)}
+                  className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-lg px-3 py-2 text-sm text-[#e2e8f0] outline-none appearance-none cursor-pointer"
+                  disabled={loading}
+                >
+                  {Object.entries(PURPOSE_CONFIG).map(([key, config]) => (
+                    <option key={key} value={key}>{config.label}</option>
+                  ))}
+                </select>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#475569] text-[10px]">▼</span>
+              </div>
+            </div>
+
+            <p className="px-1 text-[10px] italic text-[#64748b] leading-relaxed">
+              {PURPOSE_CONFIG[newPurpose].preview}
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsCreating(false)}
+                className="flex-1 px-4 py-2 rounded-lg text-xs font-bold text-[#94a3b8] hover:bg-[#1e1e2e] transition-colors"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-[2] px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500 disabled:opacity-50 transition-colors shadow-lg shadow-indigo-600/10"
+                disabled={!newName.trim() || loading}
+              >
+                {loading ? 'Creating...' : 'Create Board'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </aside>
+  )
 }
 
 ```
@@ -2967,6 +3756,9 @@ interface NodeContextMenuProps {
   onDelete: (nodeId: string) => void
   onColorChange: (nodeId: string, color: string) => void
   onExport: (node: any, type: 'idea' | 'goal' | 'knowledge') => void
+  onExpandBranch: (nodeId: string) => void
+  onSuggestGaps: () => void
+  onLinkMemory: (nodeId: string) => void
 }
 
 export function NodeContextMenu({
@@ -2978,7 +3770,10 @@ export function NodeContextMenu({
   onAddChild,
   onDelete,
   onColorChange,
-  onExport
+  onExport,
+  onExpandBranch,
+  onSuggestGaps,
+  onLinkMemory
 }: NodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -3091,6 +3886,38 @@ export function NodeContextMenu({
       >
         <span className="text-base">📖</span>
         Export as Knowledge
+      </button>
+
+      <div className="h-px bg-[#1e1e2e] my-1 mx-1" />
+
+      <div className="px-3 py-2">
+        <span className="text-[10px] font-bold text-[#4a4a6a] uppercase tracking-widest leading-none">
+          AI Macros
+        </span>
+      </div>
+
+      <button 
+        onClick={() => { onExpandBranch(node.id); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-indigo-400 hover:text-white hover:bg-indigo-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">🪄</span>
+        Expand Branch (AI)
+      </button>
+
+      <button 
+        onClick={() => { onSuggestGaps(); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-amber-400 hover:text-white hover:bg-amber-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">✨</span>
+        Suggest Gaps (AI)
+      </button>
+
+      <button 
+        onClick={() => { onLinkMemory(node.id); onClose(); }}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-xs text-emerald-400 hover:text-white hover:bg-emerald-600/20 rounded-xl transition-all font-semibold"
+      >
+        <span className="text-base">🧠</span>
+        Relink Memories
       </button>
 
       <div className="h-px bg-[#1e1e2e] my-1 mx-1" />
@@ -3296,6 +4123,8 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
   // UI State
   const [activeModalNode, setActiveModalNode] = useState<any>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, node: Node } | null>(null)
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({})
+  const [isAiLoading, setIsAiLoading] = useState(false)
 
   // Ref to break circular dependency: callbacks read current nodes without re-creating
   const nodesRef = useRef<Node[]>(nodes)
@@ -3311,6 +4140,25 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       })
     } catch (err) {
       console.error('Failed to persist node position:', err)
+    }
+  }, [])
+
+  const fetchMemoryCounts = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/gpt/memory')
+      if (resp.ok) {
+        const memories = await resp.json()
+        const counts: Record<string, number> = {}
+        memories.forEach((m: any) => {
+          const nodeId = m.metadata?.nodeId || m.metadata?.linkedNodeId
+          if (nodeId) {
+            counts[nodeId] = (counts[nodeId] || 0) + 1
+          }
+        })
+        setMemoryCounts(counts)
+      }
+    } catch (err) {
+      console.warn('Failed to fetch memory counts:', err)
     }
   }, [])
 
@@ -3408,7 +4256,84 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       console.error('Failed to create child node:', err)
       setNodes((nds) => nds.filter(n => n.id !== tempId))
     }
-  }, [boardId, userId, setNodes, setEdges, onDeleteNode])
+  }, [boardId, userId, setNodes, setEdges])
+
+  const onExpandBranch = useCallback(async (nodeId: string) => {
+    setIsAiLoading(true)
+    try {
+      const resp = await fetch('/api/gpt/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'expand_board_branch',
+          payload: { boardId, nodeId, userId }
+        })
+      })
+      if (resp.ok) {
+        // AI flow returns suggested nodes, but we might need to refresh 
+        // to see the real DB records. For simplicity, we reload.
+        window.location.reload()
+      }
+    } catch (err) {
+      console.error('AI Expansion failed:', err)
+    } finally {
+      setIsAiLoading(false)
+    }
+  }, [boardId, userId])
+
+  const onSuggestGaps = useCallback(async () => {
+    setIsAiLoading(true)
+    try {
+      const resp = await fetch('/api/gpt/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'suggest_board_gaps',
+          payload: { boardId, userId }
+        })
+      })
+      if (resp.ok) {
+        // Usually shows a toast or opens a drawer with suggestions
+        // For now, reload to see if AI auto-created any gaps (or just notify)
+        alert('AI is analyzing gaps. Check back in a moment.')
+      }
+    } catch (err) {
+      console.error('Gap analysis failed:', err)
+    } finally {
+      setIsAiLoading(false)
+    }
+  }, [boardId, userId])
+
+  const onLinkMemory = useCallback(async (nodeId: string) => {
+    alert(`Node ${nodeId} memory linking mode. (Select memories in Explorer to link)`)
+  }, [])
+
+  const onReparent = useCallback(async (nodeId: string, newParentId: string) => {
+    // Optimistically update edges (remove incoming, add new)
+    setEdges((eds) => {
+      const filtered = eds.filter(e => e.target !== nodeId);
+      return addEdge({ 
+        id: crypto.randomUUID(), 
+        source: newParentId, 
+        target: nodeId, 
+        style: { stroke: '#3F464E' } 
+      }, filtered);
+    });
+
+    try {
+      await fetch('/api/gpt/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reparent_node',
+          payload: { boardId, nodeId, sourceNodeId: newParentId }
+        })
+      });
+    } catch (err) {
+      console.error('Failed to reparent node:', err);
+      window.location.reload();
+    }
+  }, [boardId, setEdges]);
 
   // Map our service nodes to xyflow nodes
   const mapNodes = useCallback((nodesData: ThinkNodeData[]): Node[] => {
@@ -3423,13 +4348,14 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
         color: node.color,
         nodeType: node.nodeType,
         metadata: node.metadata,
+        memoryCount: memoryCounts[node.id] || 0,
         onAddChild,
         onDelete: onDeleteNode,
         onOpenModal: (n: any) => setActiveModalNode(n)
       },
       selected: false,
     }))
-  }, [onAddChild, onDeleteNode])
+  }, [onAddChild, onDeleteNode, memoryCounts])
 
   // Map our service edges to xyflow edges
   const mapEdges = useCallback((edgesData: ThinkEdgeData[]): Edge[] => {
@@ -3449,7 +4375,8 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     setEdges(mapEdges(initialEdges))
     setContextMenu(null)
     setActiveModalNode(null)
-  }, [boardId, initialNodes, initialEdges, setNodes, setEdges, mapNodes, mapEdges])
+    fetchMemoryCounts()
+  }, [boardId, initialNodes, initialEdges, setNodes, setEdges, mapNodes, mapEdges, fetchMemoryCounts])
 
   const onConnect: OnConnect = useCallback(
     async (params: Connection) => {
@@ -3490,7 +4417,8 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const intersections = getIntersectingNodes(node);
       if (intersections.length > 0) {
         const targetNode = intersections[0];
-        onConnect({ source: targetNode.id, target: node.id, sourceHandle: null, targetHandle: null });
+        // Edge-based reparenting (Lock 4)
+        onReparent(node.id, targetNode.id);
       }
     },
     [persistNodePosition, getIntersectingNodes, onConnect]
@@ -3536,8 +4464,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
   }, [])
 
   const onExportEntity = useCallback(async (node: any, type: string) => {
-    // Logic from drawer - we could extract this to a hook or helper if reused
-    // For now, simpler to just open modal which has these buttons.
     setActiveModalNode(node)
   }, [])
 
@@ -3562,40 +4488,27 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     }
   }, [])
 
-  // ---------------------------------------------------------------------------
-  // Explode: force-directed web layout (visual only — does NOT persist to DB)
-  //
-  // Multi-pass simulation:
-  //   Pass 1: Seed initial positions via BFS from the most-connected hub
-  //   Pass 2–N: Force simulation
-  //     - ATTRACTION: connected nodes pull toward their ideal distance
-  //     - REPULSION:  all node pairs push apart to prevent overlap
-  //     - Ideal distance scales with subtree weight (leaf=tight, hub=roomier)
-  //   Final: overlap sweep — nudge any remaining collisions
-  // ---------------------------------------------------------------------------
   const onExplode = useCallback(() => {
     const currentNodes = nodesRef.current
     const currentEdges = edges
 
     if (currentNodes.length === 0) return
 
-    // --- Tuning knobs ---
-    const NODE_W = 160          // collision box width
-    const NODE_H = 70           // collision box height
-    const PADDING = 20          // minimum gap between node edges
-    const IDEAL_DIST_BASE = 140 // ideal spring length for leaf-to-leaf
-    const IDEAL_DIST_PER_CHILD = 30  // extra ideal distance per subtree child
-    const ATTRACTION = 0.08     // spring pull strength
-    const REPULSION = 5000      // repulsion constant (higher = pushier)
-    const ITERATIONS = 120      // simulation passes
-    const DAMPING = 0.9         // velocity damping per tick 
-    const MAX_FORCE = 50        // cap per-tick displacement
-    const TEMP_START = 1.0      // initial temperature (movement scale)
-    const TEMP_END = 0.05       // final temperature
+    const NODE_W = 160
+    const NODE_H = 70
+    const PADDING = 20
+    const IDEAL_DIST_BASE = 140
+    const IDEAL_DIST_PER_CHILD = 30
+    const ATTRACTION = 0.08
+    const REPULSION = 5000
+    const ITERATIONS = 120
+    const DAMPING = 0.9
+    const MAX_FORCE = 50
+    const TEMP_START = 1.0
+    const TEMP_END = 0.05
 
-    // --- Build adjacency ---
     const adj = new Map<string, Set<string>>()
-    const edgeSet = new Set<string>() // "a|b" for quick connected check
+    const edgeSet = new Set<string>()
     for (const node of currentNodes) adj.set(node.id, new Set())
     for (const edge of currentEdges) {
       adj.get(edge.source)?.add(edge.target)
@@ -3603,13 +4516,9 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       edgeSet.add(`${edge.source}|${edge.target}`)
       edgeSet.add(`${edge.target}|${edge.source}`)
     }
-    const isConnected = (a: string, b: string) => edgeSet.has(`${a}|${b}`)
 
-    // --- Compute subtree weight (BFS descendant count) for each node ---
-    // More descendants = heavier = needs more space
     const weight = new Map<string, number>()
     for (const node of currentNodes) {
-      // Count reachable nodes from this node (excluding itself)
       const visited = new Set<string>()
       const q = [node.id]
       visited.add(node.id)
@@ -3619,18 +4528,15 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           if (!visited.has(nbr)) { visited.add(nbr); q.push(nbr) }
         }
       }
-      weight.set(node.id, visited.size) // includes self
+      weight.set(node.id, visited.size)
     }
 
-    // --- Ideal distance between two connected nodes ---
     const idealDist = (a: string, b: string) => {
       const wa = weight.get(a) ?? 1
       const wb = weight.get(b) ?? 1
-      // Heavier nodes get more room, but logarithmic so it doesn't blow up
       return IDEAL_DIST_BASE + Math.log2(wa + wb) * IDEAL_DIST_PER_CHILD
     }
 
-    // --- Seed positions: BFS from most-connected node ---
     const sorted = [...currentNodes].sort((a, b) => 
       (adj.get(b.id)?.size ?? 0) - (adj.get(a.id)?.size ?? 0)
     )
@@ -3639,7 +4545,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     const pos = new Map<string, Pt>()
     const vel = new Map<string, Pt>()
     
-    // Tight initial seeding — close together, let simulation push apart only where needed
     pos.set(sorted[0].id, { x: 0, y: 0 })
     vel.set(sorted[0].id, { x: 0, y: 0 })
     
@@ -3651,10 +4556,10 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const npos = pos.get(nid)!
       const nbrs = Array.from(adj.get(nid) ?? []).filter(n => !placed.has(n))
       
-      const angle0 = placed.size * 0.618 * 2 * Math.PI // golden angle offset
+      const angle0 = placed.size * 0.618 * 2 * Math.PI
       nbrs.forEach((nbr, i) => {
         const angle = angle0 + (2 * Math.PI * i) / Math.max(nbrs.length, 1)
-        const r = idealDist(nid, nbr) * 0.6 // start tighter than ideal, simulation will adjust
+        const r = idealDist(nid, nbr) * 0.6
         pos.set(nbr, { x: npos.x + r * Math.cos(angle), y: npos.y + r * Math.sin(angle) })
         vel.set(nbr, { x: 0, y: 0 })
         placed.add(nbr)
@@ -3662,17 +4567,13 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       })
     }
 
-    // Place any disconnected orphans nearby
-    let ox = 0
     for (const node of currentNodes) {
       if (!pos.has(node.id)) {
-        pos.set(node.id, { x: ox, y: 300 })
+        pos.set(node.id, { x: 0, y: 300 })
         vel.set(node.id, { x: 0, y: 0 })
-        ox += NODE_W + PADDING
       }
     }
 
-    // --- Force simulation ---
     const ids = currentNodes.map(n => n.id)
     const n = ids.length
 
@@ -3681,7 +4582,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const forces = new Map<string, Pt>()
       for (const id of ids) forces.set(id, { x: 0, y: 0 })
 
-      // Repulsion: every pair pushes apart (inverse-square, capped)
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
           const a = ids[i], b = ids[j]
@@ -3689,21 +4589,15 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           let dx = pb.x - pa.x
           let dy = pb.y - pa.y
           let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
-          
-          // Minimum distance based on node size
-          const minDist = Math.sqrt(NODE_W * NODE_W + NODE_H * NODE_H) / 2 + PADDING
-
           const force = REPULSION / (dist * dist)
           const fx = (dx / dist) * force
           const fy = (dy / dist) * force
-
           const fa = forces.get(a)!, fb = forces.get(b)!
           fa.x -= fx; fa.y -= fy
           fb.x += fx; fb.y += fy
         }
       }
 
-      // Attraction: connected pairs pull toward ideal distance
       for (const edge of currentEdges) {
         const a = edge.source, b = edge.target
         if (!pos.has(a) || !pos.has(b)) continue
@@ -3711,68 +4605,29 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
         let dx = pb.x - pa.x
         let dy = pb.y - pa.y
         let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
-        
         const target = idealDist(a, b)
-        const displacement = dist - target
-        const force = ATTRACTION * displacement
+        const force = ATTRACTION * (dist - target)
         const fx = (dx / dist) * force
         const fy = (dy / dist) * force
-
         const fa = forces.get(a)!, fb = forces.get(b)!
         fa.x += fx; fa.y += fy
         fb.x -= fx; fb.y -= fy
       }
 
-      // Apply forces with temperature and damping
       for (const id of ids) {
-        const f = forces.get(id)!
-        const v = vel.get(id)!
-        const p = pos.get(id)!
-
+        const f = forces.get(id)!, v = vel.get(id)!, p = pos.get(id)!
         v.x = (v.x + f.x) * DAMPING * temp
         v.y = (v.y + f.y) * DAMPING * temp
-
-        // Cap velocity
         const speed = Math.sqrt(v.x * v.x + v.y * v.y)
         if (speed > MAX_FORCE) {
           v.x = (v.x / speed) * MAX_FORCE
           v.y = (v.y / speed) * MAX_FORCE
         }
-
         p.x += v.x
         p.y += v.y
       }
     }
 
-    // --- Final overlap sweep: nudge any boxes that still collide ---
-    for (let pass = 0; pass < 10; pass++) {
-      let anyOverlap = false
-      for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-          const a = ids[i], b = ids[j]
-          const pa = pos.get(a)!, pb = pos.get(b)!
-          const overlapX = (NODE_W + PADDING) - Math.abs(pb.x - pa.x)
-          const overlapY = (NODE_H + PADDING) - Math.abs(pb.y - pa.y)
-
-          if (overlapX > 0 && overlapY > 0) {
-            anyOverlap = true
-            // Push apart along the axis of least overlap
-            if (overlapX < overlapY) {
-              const push = overlapX / 2 + 1
-              if (pb.x >= pa.x) { pa.x -= push; pb.x += push }
-              else { pa.x += push; pb.x -= push }
-            } else {
-              const push = overlapY / 2 + 1
-              if (pb.y >= pa.y) { pa.y -= push; pb.y += push }
-              else { pa.y += push; pb.y -= push }
-            }
-          }
-        }
-      }
-      if (!anyOverlap) break
-    }
-
-    // --- Apply final positions ---
     setNodes((nds) => nds.map(n => {
       const p = pos.get(n.id)
       return p ? { ...n, position: { x: Math.round(p.x), y: Math.round(p.y) } } : n
@@ -3813,7 +4668,13 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           maskColor="rgba(5, 5, 16, 0.7)"
           className="!bg-[#0a0a1a] !border-[#1e1e2e]" 
         />
-        <Panel position="top-right" className="flex gap-2">
+        <Panel position="top-right" className="flex items-center gap-2">
+            {isAiLoading && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/50 text-xs font-bold text-indigo-400 animate-pulse">
+                <span>🪄</span>
+                AI Thinking...
+              </div>
+            )}
             <button
               onClick={onExplode}
               className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/30 text-xs font-bold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
@@ -3844,6 +4705,9 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           onDelete={onDeleteNode}
           onColorChange={onColorChange}
           onExport={onExportEntity}
+          onExpandBranch={onExpandBranch}
+          onSuggestGaps={onSuggestGaps}
+          onLinkMemory={onLinkMemory}
         />
       )}
     </div>
@@ -3870,7 +4734,8 @@ import { Handle, Position, NodeProps } from '@xyflow/react'
 import type { ThinkNode as ThinkNodeData } from '@/types/mind-map'
 
 export const ThinkNode = memo(({ id, data, selected }: NodeProps) => {
-  const { label, color, description, content, metadata, onAddChild, onDelete, onOpenModal } = data as unknown as ThinkNodeData & { 
+  const { label, color, description, content, metadata, memoryCount, onAddChild, onDelete, onOpenModal } = data as unknown as ThinkNodeData & { 
+    memoryCount?: number,
     onAddChild?: (id: string) => void,
     onDelete?: (id: string) => void,
     onOpenModal?: (node: any) => void
@@ -3977,13 +4842,21 @@ export const ThinkNode = memo(({ id, data, selected }: NodeProps) => {
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center justify-between h-3">
           <div className="text-[9px] font-bold tracking-tight text-[#94a3b8] uppercase opacity-40">
-            {badge?.label || ''}
+            {badge?.label || (memoryCount ? 'MEMORIES' : '')}
           </div>
-          {badge && (
-            <div className={`text-[10px] ${badge.color} font-bold drop-shadow-sm`}>
-              {badge.icon}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5">
+            {memoryCount ? (
+              <div className="flex items-center gap-0.5 px-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-bold text-indigo-400">
+                <span>🧠</span>
+                {memoryCount}
+              </div>
+            ) : null}
+            {badge && (
+              <div className={`text-[10px] ${badge.color} font-bold drop-shadow-sm`}>
+                {badge.icon}
+              </div>
+            )}
+          </div>
         </div>
         
         {isEditing ? (
@@ -4944,6 +5817,139 @@ export async function buildSuggestionContext(userId: string, justCompletedInstan
 
 ```
 
+### lib/ai/flows/board-macros.ts
+
+```typescript
+import { ai } from '../genkit';
+import { z } from 'zod';
+import { 
+  BoardFromTextOutputSchema, 
+  ExpandBoardBranchOutputSchema, 
+  SuggestBoardGapsOutputSchema 
+} from '../schemas';
+import { getBoardGraph } from '@/lib/services/mind-map-service';
+
+/**
+ * boardFromTextFlow - Lane 4
+ * Generates a full mind map structure from a textual prompt.
+ */
+export const boardFromTextFlow = ai.defineFlow(
+  {
+    name: 'boardFromTextFlow',
+    inputSchema: z.object({ prompt: z.string(), userId: z.string() }),
+    outputSchema: BoardFromTextOutputSchema,
+  },
+  async (input) => {
+    const { prompt } = input;
+    
+    const systemPrompt = `
+      System: You are Mira Studio's Mind Map Architect. 
+      Task: Convert a user's goal or topic into a structured mind map.
+      Guidelines:
+      1. Create a root node.
+      2. Branch out into 4-6 primary categories.
+      3. For each category, add 2-3 supporting nodes.
+      4. Use coordinates (x, y) relative to root (0,0). Root is always type='root'.
+      5. Use parentLabel to indicate the hierarchy for edge creation.
+    `;
+    
+    const { output } = await ai.generate({
+      model: 'googleai/gemini-2.0-flash',
+      prompt: `${systemPrompt}\n\nUser Request: "${prompt}"`,
+      output: { schema: BoardFromTextOutputSchema }
+    });
+    
+    if (!output) throw new Error('AI failed to generate board structure');
+    return output;
+  }
+);
+
+/**
+ * expandBranchFlow - Lane 4
+ * Suggests new nodes to expand a specific branch in an existing mind map.
+ */
+export const expandBranchFlow = ai.defineFlow(
+  {
+    name: 'expandBranchFlow',
+    inputSchema: z.object({ boardId: z.string(), nodeId: z.string(), userId: z.string() }),
+    outputSchema: ExpandBoardBranchOutputSchema,
+  },
+  async (input) => {
+    const { boardId, nodeId } = input;
+    
+    // Fetch current graph for context
+    const { nodes } = await getBoardGraph(boardId);
+    const targetNode = nodes.find(n => n.id === nodeId);
+    if (!targetNode) throw new Error(`Node ${nodeId} not found`);
+
+    const context = nodes.map(n => `- ${n.label}${n.id === nodeId ? ' [TARGET]' : ''}`).join('\n');
+    
+    const systemPrompt = `
+      System: You are an Intellectual Expansion Agent.
+      Task: Suggest 3-5 new nodes to expand the specific branch starting at the [TARGET] node.
+      
+      EXISTING NODES:
+      ${context}
+      
+      Guidelines:
+      1. Ensure new nodes are logically downstream or related to "${targetNode.label}".
+      2. Suggest coordinates (x, y) that are physically near the target node but not overlapping.
+      3. Use parentNodeId="${nodeId}" for all new nodes.
+    `;
+    
+    const { output } = await ai.generate({
+      model: 'googleai/gemini-2.0-flash',
+      prompt: systemPrompt,
+      output: { schema: ExpandBoardBranchOutputSchema }
+    });
+    
+    if (!output) throw new Error('AI failed to expand branch');
+    return output;
+  }
+);
+
+/**
+ * suggestGapsFlow - Lane 4
+ * Identifies missing perspectives or logical gaps in an existing mind map.
+ */
+export const suggestGapsFlow = ai.defineFlow(
+  {
+    name: 'suggestGapsFlow',
+    inputSchema: z.object({ boardId: z.string(), userId: z.string() }),
+    outputSchema: SuggestBoardGapsOutputSchema,
+  },
+  async (input) => {
+    const { boardId } = input;
+    
+    const { nodes } = await getBoardGraph(boardId);
+    const context = nodes.map(n => `- ${n.label}: ${n.description}`).join('\n');
+    
+    const systemPrompt = `
+      System: You are a Cognitive Gap Analyst.
+      Task: Analyze the following mind map nodes and identify 3 missing logical gaps or perspectives.
+      
+      CURRENT MAP CONTENT:
+      ${context}
+      
+      Analysis Requirements:
+      1. What critical angle is being ignored?
+      2. Why is this gap important for the user's apparent goal?
+      3. Suggest a node label that would bridge this gap.
+    `;
+    
+    const { output } = await ai.generate({
+      model: 'googleai/gemini-2.0-flash',
+      prompt: systemPrompt,
+      output: { schema: SuggestBoardGapsOutputSchema }
+    });
+    
+    if (!output) throw new Error('AI failed to suggest gaps');
+    return output;
+  }
+);
+
+```
+
 ### lib/ai/flows/compress-gpt-state.ts
 
 ```typescript
@@ -5389,16 +6395,31 @@ export { googleAI };
 ### lib/ai/safe-flow.ts
 
 ```typescript
-export async function runFlowSafe<T>(flowFn: () => Promise<T>, fallback: T): Promise<T> {
+/**
+ * Wraps a Genkit flow execution with error handling and API key checks.
+ * Returns the flow result or a fallback if it fails.
+ */
+export async function runFlowSafe<TInput, TOutput>(
+  flow: { run: (input: TInput) => Promise<TOutput> },
+  input: TInput,
+  handler?: (output: TOutput) => Promise<any>
+): Promise<any> {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      console.warn('GEMINI_API_KEY is not set. Flow execution skipped.');
-      return fallback;
+    if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENAI_API_KEY) {
+      console.warn('AI API Key is not set. Flow execution skipped.');
+      return null;
     }
-    return await flowFn();
-  } catch (error) {
-    console.error('Flow execution failed:', error);
-    return fallback;
+    
+    const output = await flow.run(input);
+    
+    if (handler) {
+      return await handler(output);
+    }
+    
+    return output;
+  } catch (error: any) {
+    console.error(`[AI/safe-flow] Flow execution failed:`, error.message);
+    return { error: 'AI enhancement unavailable at this time', detail: error.message };
   }
 }
 
@@ -5490,6 +6511,43 @@ export const GradeCheckpointOutputSchema = z.object({
   feedback: z.string().describe('Brief, encouraging feedback explaining the grade'),
   misconception: z.string().optional().describe('The specific misconception if the answer is wrong'),
   confidence: z.number().min(0).max(1).describe('Grader\'s confidence in this verdict (0–1)'),
+});
+
+// --- Lane 4: Board Macro Actions Schemas ---
+
+export const BoardFromTextOutputSchema = z.object({
+  title: z.string().describe('Suggested name for the new board'),
+  nodes: z.array(z.object({
+    label: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    color: z.string().optional(),
+    x: z.number().describe('Horizontal position offset from root (0)'),
+    y: z.number().describe('Vertical position offset from root (0)'),
+    type: z.enum(['root', 'manual', 'ai_generated', 'exported']).default('ai_generated'),
+    parentLabel: z.string().optional().describe('Label of the logical parent node to create an edge')
+  }))
+});
+
+export const ExpandBoardBranchOutputSchema = z.object({
+  nodes: z.array(z.object({
+    label: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    color: z.string().optional(),
+    x: z.number().describe('Absolute horizontal position'),
+    y: z.number().describe('Absolute vertical position'),
+    type: z.enum(['root', 'manual', 'ai_generated', 'exported']).default('ai_generated'),
+    parentNodeId: z.string().optional().describe('ID of the node to link this expansion to')
+  }))
+});
+
+export const SuggestBoardGapsOutputSchema = z.object({
+  gaps: z.array(z.object({
+    title: z.string().describe('A title for the missing logical gap'),
+    missingPerspective: z.string().describe('Reasoning for why this part is missing'),
+    recommendedNodeLabel: z.string().describe('Suggested name for a node to fill this gap')
+  }))
 });
 
 ```
@@ -6940,1061 +7998,3 @@ export async function computeExperienceScore(instanceId: string): Promise<{ tota
 export function shouldProgessToNext(score: number, threshold = 60): boolean {
   return score >= threshold;
 }
-
-export async function computeFrictionLevel(instanceId: string): Promise<'low' | 'medium' | 'high' | null> {
-  const interactions = await getInteractionsByInstance(instanceId);
-  if (interactions.length === 0) return null;
-  
-  const stepIds = new Set(interactions.filter(i => !!i.step_id).map(i => i.step_id));
-  const totalStepsEngaged = stepIds.size;
-  const skipEvents = interactions.filter(i => i.event_type === 'step_skipped');
-  
-  // High skip rate (>50% step_skipped events)
-  if (totalStepsEngaged > 0 && skipEvents.length / totalStepsEngaged > 0.5) {
-    return 'high';
-  }
-  
-  // Mid-step abandonment (viewed but no completion after 48h)
-  const views = interactions.filter(i => i.event_type === 'step_viewed');
-  const completions = interactions.filter(i => i.event_type === 'task_completed');
-  const completedStepIds = new Set(completions.map(c => c.step_id));
-  
-  const abandoned = views.some(v => {
-    if (completedStepIds.has(v.step_id)) return false;
-    const viewTime = new Date(v.created_at).getTime();
-    const fortyEightHoursAgo = Date.now() - (48 * 60 * 60 * 1000);
-    return viewTime < fortyEightHoursAgo;
-  });
-  
-  if (abandoned) return 'medium';
-  
-  // Long dwell + eventual completion
-  const isExperienceCompleted = interactions.some(i => i.event_type === 'experience_completed');
-  if (isExperienceCompleted) {
-    const sorted = [...interactions].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    for (let i = 1; i < sorted.length; i++) {
-      const gap = new Date(sorted[i].created_at).getTime() - new Date(sorted[i-1].created_at).getTime();
-      if (gap > 5 * 60 * 1000) { // > 5 minutes dwell
-        return 'low'; // This actually means the user is taking their time, which we classify as low friction (high engagement)
-      }
-    }
-  }
-  
-  return 'low';
-}
-
-export async function updateInstanceFriction(instanceId: string): Promise<void> {
-  const frictionLevel = await computeFrictionLevel(instanceId);
-  if (frictionLevel) {
-    await updateExperienceInstance(instanceId, { friction_level: frictionLevel });
-  }
-}
-
-```
-
-### lib/experience/progression-rules.ts
-
-```typescript
-import { ProgressionRule } from '@/types/graph';
-import { ResolutionDepth } from '@/lib/constants';
-
-/**
- * PROGRESSION_RULES: The canonical chain map.
- * Defines how experiences lead to each other.
- */
-export const PROGRESSION_RULES: ProgressionRule[] = [
-  { 
-    fromClass: 'questionnaire', 
-    toClass: 'plan_builder', 
-    condition: 'always', 
-    resolutionEscalation: false, 
-    reason: 'Structure your answers into action' 
-  },
-  { 
-    fromClass: 'questionnaire', 
-    toClass: 'challenge', 
-    condition: 'always', 
-    resolutionEscalation: false, 
-    reason: 'Put your thinking into practice' 
-  },
-  { 
-    fromClass: 'lesson', 
-    toClass: 'challenge', 
-    condition: 'always', 
-    resolutionEscalation: false, 
-    reason: 'Apply what you learned' 
-  },
-  { 
-    fromClass: 'lesson', 
-    toClass: 'reflection', 
-    condition: 'completion', 
-    resolutionEscalation: false, 
-    reason: 'Reflect on what you absorbed' 
-  },
-  { 
-    fromClass: 'plan_builder', 
-    toClass: 'challenge', 
-    condition: 'always', 
-    resolutionEscalation: false, 
-    reason: 'Execute your plan' 
-  },
-  { 
-    fromClass: 'challenge', 
-    toClass: 'reflection', 
-    condition: 'completion', 
-    resolutionEscalation: false, 
-    reason: 'Process the challenge' 
-  },
-  { 
-    fromClass: 'reflection', 
-    toClass: 'questionnaire', 
-    condition: 'always', 
-    resolutionEscalation: false, 
-    reason: 'Weekly loop — check in again' 
-  },
-  { 
-    fromClass: 'essay_tasks', 
-    toClass: 'reflection', 
-    condition: 'completion', 
-    resolutionEscalation: false, 
-    reason: 'Synthesize your reading' 
-  },
-];
-
-/**
- * Returns suggested progression rules for a given experience class.
- */
-export function getProgressionSuggestions(fromClass: string): ProgressionRule[] {
-  return PROGRESSION_RULES.filter(rule => rule.fromClass === fromClass);
-}
-
-/**
- * Determines if the resolution should be escalated based on the rule.
- */
-export function shouldEscalateResolution(rule: ProgressionRule, currentDepth: ResolutionDepth): ResolutionDepth {
-  if (!rule.resolutionEscalation) return currentDepth;
-  
-  if (currentDepth === 'light') return 'medium';
-  if (currentDepth === 'medium') return 'heavy';
-  return 'heavy';
-}
-
-```
-
-### lib/experience/reentry-engine.ts
-
-```typescript
-import { getExperienceInstances } from '@/lib/services/experience-service'
-import { getInteractionsForInstances } from '@/lib/services/interaction-service'
-import { InteractionEvent } from '@/types/interaction'
-
-export interface ActiveReentryPrompt {
-  instanceId: string;
-  instanceTitle: string;
-  prompt: string;
-  trigger: 'time' | 'completion' | 'inactivity' | 'manual';
-  contextScope: string;
-  priority: 'high' | 'medium' | 'low';
-}
-
-function parseDuration(duration: string): number {
-  if (!duration) return 0;
-  const match = duration.match(/^(\d+)([hdm])$/);
-  if (!match) return 0;
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  switch (unit) {
-    case 'h': return value * 60 * 60 * 1000;
-    case 'd': return value * 24 * 60 * 60 * 1000;
-    case 'm': return value * 30 * 24 * 60 * 60 * 1000;
-    default: return 0;
-  }
-}
-
-export async function evaluateReentryContracts(userId: string): Promise<ActiveReentryPrompt[]> {
-  const experiences = await getExperienceInstances({ userId })
-  const prompts: ActiveReentryPrompt[] = []
-  
-  const now = new Date()
-  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000)
-
-  // Identify experiences that need interaction history (inactivity trigger)
-  const experiencesNeedingInteractions = experiences.filter(exp => 
-    exp.reentry?.trigger === 'inactivity' && exp.status === 'active'
-  )
-  
-  const instanceIds = experiencesNeedingInteractions.map(exp => exp.id)
-  const allInteractions = await getInteractionsForInstances(instanceIds)
-  
-  // Group interactions by instanceId
-  const interactionsByInstance = allInteractions.reduce((acc, interaction) => {
-    if (interaction.instance_id) {
-      if (!acc[interaction.instance_id]) acc[interaction.instance_id] = []
-      acc[interaction.instance_id].push(interaction)
-    }
-    return acc
-  }, {} as Record<string, InteractionEvent[]>)
-
-  for (const exp of experiences) {
-    if (!exp.reentry) continue
-
-    const trigger = exp.reentry.trigger
-    let shouldAdd = false
-    let priority: 'high' | 'medium' | 'low' = 'medium'
-
-    // Manual: Always returns
-    if (trigger === 'manual') {
-      shouldAdd = true
-      priority = 'high'
-    }
-
-    // Completion: status = 'completed'
-    if (trigger === 'completion' && exp.status === 'completed') {
-      shouldAdd = true
-      priority = 'medium'
-    }
-
-    // Time: check timeAfterCompletion against published_at or created_at
-    if (trigger === 'time' && (exp.status === 'completed' || exp.status === 'published' || exp.status === 'active')) {
-      const baseTimeStr = exp.published_at || exp.created_at
-      const baseTime = new Date(baseTimeStr)
-      const durationMs = parseDuration(exp.reentry.timeAfterCompletion || '24h')
-      
-      if (now.getTime() >= baseTime.getTime() + durationMs) {
-        shouldAdd = true
-        priority = 'high'
-      }
-    }
-
-    // Inactivity: status = 'active' and no interactions in 48h
-    if (trigger === 'inactivity' && exp.status === 'active') {
-      const interactions = interactionsByInstance[exp.id] || []
-      const lastInteraction = interactions.length > 0
-        ? interactions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
-        : null
-
-      const lastInteractionTime = lastInteraction ? new Date(lastInteraction.created_at) : new Date(exp.created_at)
-
-      if (lastInteractionTime < fortyEightHoursAgo) {
-        shouldAdd = true
-        priority = 'medium'
-      }
-    }
-
-    if (shouldAdd) {
-      prompts.push({
-        instanceId: exp.id,
-        instanceTitle: exp.title,
-        prompt: exp.reentry.prompt,
-        trigger: trigger as any,
-        contextScope: exp.reentry.contextScope,
-        priority
-      })
-    }
-  }
-
-  // Sort by priority (high first) and then by trigger type
-  const priorityOrder = { high: 0, medium: 1, low: 2 }
-  const triggerOrder = { completion: 0, inactivity: 1, time: 2, manual: -1 }
-  
-  return prompts.sort((a, b) => {
-    if (a.priority !== b.priority) {
-      return priorityOrder[a.priority] - priorityOrder[b.priority]
-    }
-    return triggerOrder[a.trigger] - triggerOrder[b.trigger]
-  })
-}
-
-```
-
-### lib/experience/renderer-registry.tsx
-
-```tsx
-import React from 'react';
-import type { ExperienceStep } from '@/types/experience';
-import CheckpointStep from '@/components/experience/steps/CheckpointStep';
-
-export type StepRenderer = React.ComponentType<{
-  step: ExperienceStep;
-  onComplete: (payload?: unknown) => void;
-  onSkip: () => void;
-  onDraft?: (draft: Record<string, any>) => void;
-}>;
-
-const registry: Record<string, StepRenderer> = {};
-
-export function registerRenderer(stepType: string, component: StepRenderer) {
-  registry[stepType] = component;
-}
-
-export function getRenderer(stepType: string): StepRenderer {
-  return registry[stepType] || FallbackStep;
-}
-
-function FallbackStep({ step }: { step: ExperienceStep }) {
-  return (
-    <div className="p-6 border border-[#1e1e2e] rounded-xl bg-[#12121a]">
-      <h3 className="text-xl font-bold text-red-400 mb-2">Unsupported Step Type</h3>
-      <p className="text-[#94a3b8]">The step type <code className="text-indigo-300">&quot;{step.step_type}&quot;</code> is not registered in the system.</p>
-    </div>
-  );
-}
-
-```
-
-### lib/experience/skill-mastery-engine.ts
-
-```typescript
-import { SkillDomain } from '@/types/skill';
-import { ExperienceInstance } from '@/types/experience';
-import { updateSkillDomain, getSkillDomain } from '@/lib/services/skill-domain-service';
-import { getKnowledgeUnitsByIds } from '@/lib/services/knowledge-service';
-import { getExperienceInstances } from '@/lib/services/experience-service';
-import { SkillMasteryLevel, MasteryStatus } from '@/lib/constants';
-import { getStorageAdapter } from '@/lib/storage-adapter';
-import { InteractionEvent } from '@/types/interaction';
-import { KnowledgeProgress } from '@/types/knowledge';
-import { promoteKnowledgeProgress } from '@/lib/services/knowledge-service';
-
-/**
- * Computes skill mastery level based on evidence count rules from goal-os-contract.md.
- * Evidence is the sum of completed experiences and confident knowledge units.
- * 
- * Mastery Levels:
- * - undiscovered: 0 evidence
- * - aware: 1+ linked knowledge unit OR experience (any status)
- * - beginner: 1+ completed experience
- * - practicing: 3+ completed experiences
- * - proficient: 5+ completed experiences AND 2+ knowledge units at 'confident'
- * - expert: 8+ completed experiences AND all linked knowledge units at 'confident'
- */
-export async function computeSkillMastery(domain: SkillDomain, skipExperienceId?: string, preFetchedInstances?: ExperienceInstance[]): Promise<{ 
-  masteryLevel: SkillMasteryLevel; 
-  evidenceCount: number;
-}> {
-  let completedExperiences = 0;
-  let confidentUnits = 0;
-  const hasAnyLink = domain.linkedUnitIds.length > 0 || domain.linkedExperienceIds.length > 0;
-  
-  // 1. Fetch ALL user instances once, then filter locally (SOP-30: no N+1)
-  if (domain.linkedExperienceIds.length > 0) {
-    const allInstances = preFetchedInstances || await getExperienceInstances({ userId: domain.userId });
-    const linkedSet = new Set(domain.linkedExperienceIds);
-    for (const inst of allInstances) {
-      if (skipExperienceId && inst.id === skipExperienceId) continue;
-      if (linkedSet.has(inst.id) && inst.status === 'completed') {
-        completedExperiences++;
-      }
-    }
-  }
-  
-  // 2. Batch-fetch linked knowledge units (SOP-30: one query, not N)
-  if (domain.linkedUnitIds.length > 0) {
-    const units = await getKnowledgeUnitsByIds(domain.linkedUnitIds);
-    confidentUnits = units.filter(u => u.mastery_status === 'confident').length;
-  }
-  
-  const evidenceCount = completedExperiences + confidentUnits;
-  let level: SkillMasteryLevel = 'undiscovered';
-  
-  // Apply rules (ordered by highest first)
-  // Vacuously true if no units are linked: all 0 units are confident.
-  const allUnitsConfident = domain.linkedUnitIds.length === 0 || confidentUnits === domain.linkedUnitIds.length;
-  
-  if (completedExperiences >= 8 && allUnitsConfident) {
-    level = 'expert';
-  } else if (completedExperiences >= 5 && confidentUnits >= 2) {
-    level = 'proficient';
-  } else if (completedExperiences >= 3) {
-    level = 'practicing';
-  } else if (completedExperiences >= 1) {
-    level = 'beginner';
-  } else if (hasAnyLink) {
-    level = 'aware';
-  }
-  
-  return { masteryLevel: level, evidenceCount };
-}
-
-/**
- * Recomputes and persists domain mastery.
- * Mastery is monotonically increasing within a goal lifecycle — it never decreases.
- */
-export async function updateDomainMastery(goalId: string, domainId: string): Promise<SkillDomain | null> {
-  const domain = await getSkillDomain(domainId);
-  if (!domain) return null;
-  
-  // Verify it belongs to the goal (safety check)
-  if (domain.goalId !== goalId) {
-    console.warn(`[skill-mastery-engine] Domain ${domainId} does not belong to goal ${goalId}`);
-    return null;
-  }
-  
-  const { masteryLevel, evidenceCount } = await computeSkillMastery(domain);
-  
-  const LEVELS: SkillMasteryLevel[] = ['undiscovered', 'aware', 'beginner', 'practicing', 'proficient', 'expert'];
-  const currentIndex = LEVELS.indexOf(domain.masteryLevel);
-  const nextIndex = LEVELS.indexOf(masteryLevel);
-  
-  // Mastery is monotonically increasing — only update if level advances 
-  // or if evidence count changed despite level staying same.
-  if (nextIndex > currentIndex || evidenceCount !== domain.evidenceCount) {
-    return updateSkillDomain(domainId, { 
-      masteryLevel: nextIndex > currentIndex ? masteryLevel : domain.masteryLevel, 
-      evidenceCount 
-    });
-  }
-  
-  return domain;
-}
-
-/**
- * Knowledge Mastery Evidence Logic (Lane 6 — Sprint 23)
- * Enforces thresholds for promotion to 'confident' and 'practiced'.
- * Rules:
- * - 'practiced': ≥ 1 practice attempt OR passed a checkpoint.
- * - 'confident': ≥ 3 practice attempts AND passed a checkpoint.
- */
-export async function syncKnowledgeMastery(
-  userId: string, 
-  unitId: string, 
-  trigger: { type: 'checkpoint_pass' | 'practice_attempt'; correct: boolean }
-): Promise<void> {
-  const adapter = getStorageAdapter();
-  
-  // 1. Fetch current status
-  const progresses = await adapter.query<KnowledgeProgress>('knowledge_progress', { 
-    user_id: userId, 
-    unit_id: unitId 
-  });
-  const currentStatus = (progresses[0]?.mastery_status as MasteryStatus) || 'unseen';
-
-  // 2. Fetch evidence from interactions
-  // SOP-30 optimization: Only fetch related events.
-  // Note: practice_attempt events store unit_id in event_payload.
-  // We fetch all interaction events for this user across instances if we can,
-  // but for now, we'll fetch all and filter (local-first dev env).
-  const interactions = await adapter.getCollection<InteractionEvent>('interaction_events');
-  
-  const practiceAttempts = interactions.filter(i => 
-    i.event_type === 'practice_attempt' && 
-    i.event_payload?.unit_id === unitId &&
-    i.event_payload?.correct === true
-  ).length;
-
-  const hasPassedCheckpoint = interactions.some(i => 
-    i.event_type === 'checkpoint_graded' && 
-    i.event_payload?.knowledgeUnitId === unitId && 
-    i.event_payload?.correct === true
-  ) || (trigger.type === 'checkpoint_pass' && trigger.correct);
-
-  // 3. Evaluate next status
-  let nextStatus: MasteryStatus = currentStatus;
-  
-  // Confident check (Threshold: ≥ 3 + checkpoint)
-  if (hasPassedCheckpoint && practiceAttempts >= 3) {
-    nextStatus = 'confident';
-  } 
-  // Practiced check (Threshold: ≥ 1 OR checkpoint)
-  else if (hasPassedCheckpoint || practiceAttempts >= 1) {
-    if (currentStatus === 'unseen' || currentStatus === 'read') {
-      nextStatus = 'practiced';
-    }
-  } 
-  // Read check
-  else if (currentStatus === 'unseen') {
-    nextStatus = 'read';
-  }
-
-  // 4. Update if advanced
-  const ORDER: MasteryStatus[] = ['unseen', 'read', 'practiced', 'confident'];
-  if (ORDER.indexOf(nextStatus) > ORDER.indexOf(currentStatus)) {
-    // We use the existing service to handle the update logic (monotonicity, unit sync)
-    // but we might need to call it multiple times if skipping levels.
-    // Actually, promoteKnowledgeProgress just bumps by 1.
-    // Let's call it until we reach nextStatus.
-    let tempStatus = currentStatus;
-    while (tempStatus !== nextStatus && ORDER.indexOf(tempStatus) < ORDER.indexOf(nextStatus)) {
-      await promoteKnowledgeProgress(userId, unitId);
-      tempStatus = ORDER[ORDER.indexOf(tempStatus) + 1] as MasteryStatus;
-    }
-  }
-}
-
-
-```
-
-### lib/experience/step-scheduling.ts
-
-```typescript
-import { ExperienceStep } from '@/types/experience';
-
-/**
- * Assigns a schedule to a list of steps based on a start date and pacing mode.
- * 
- * - daily: One step per day starting from startDate
- * - weekly: Monday-Friday scheduling, skipping weekends
- * - custom: Pack steps into ~60min sessions using estimated_minutes
- * 
- * Returns steps with scheduled_date and due_date populated.
- * (v1 implementation: due_date is set same as scheduled_date)
- * 
- * @evolving - v1.1
- */
-export function assignSchedule(
-  steps: ExperienceStep[],
-  startDate: string,
-  pacingMode: 'daily' | 'weekly' | 'custom'
-): ExperienceStep[] {
-  // Defensive copy to avoid mutating original objects if they are reused
-  const result: ExperienceStep[] = steps.map(s => ({ ...s }));
-  let currentDate = new Date(startDate);
-  
-  // Ensure we have a valid date
-  if (isNaN(currentDate.getTime())) {
-    currentDate = new Date();
-  }
-  
-  let sessionMinutes = 0;
-
-  for (let i = 0; i < result.length; i++) {
-    const step = result[i];
-
-    if (pacingMode === 'daily') {
-      step.scheduled_date = currentDate.toISOString().split('T')[0];
-      step.due_date = step.scheduled_date;
-      currentDate.setDate(currentDate.getDate() + 1);
-    } else if (pacingMode === 'weekly') {
-      // Skip weekends (0=Sun, 6=Sat)
-      while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-      step.scheduled_date = currentDate.toISOString().split('T')[0];
-      step.due_date = step.scheduled_date;
-      currentDate.setDate(currentDate.getDate() + 1);
-    } else if (pacingMode === 'custom') {
-      const est = step.estimated_minutes || 15; // default 15 if null
-      
-      // If adding this step exceeds 60 min session, move to next day
-      if (sessionMinutes > 0 && sessionMinutes + est > 60) {
-        currentDate.setDate(currentDate.getDate() + 1);
-        sessionMinutes = est;
-      } else {
-        sessionMinutes += est;
-      }
-      
-      step.scheduled_date = currentDate.toISOString().split('T')[0];
-      step.due_date = step.scheduled_date;
-    }
-  }
-
-  return result;
-}
-
-/**
- * Filters steps scheduled for a specific date (YYYY-MM-DD).
- */
-export function getStepsForDate(steps: ExperienceStep[], date: string): ExperienceStep[] {
-  return steps.filter((s) => s.scheduled_date === date);
-}
-
-/**
- * Filters steps past due_date that aren't completed or skipped.
- * Uses lexicographical string comparison for YYYY-MM-DD.
- */
-export function getOverdueSteps(steps: ExperienceStep[]): ExperienceStep[] {
-  const today = new Date().toISOString().split('T')[0];
-  return steps.filter((s) => {
-    if (!s.due_date || s.status === 'completed' || s.status === 'skipped') return false;
-    // Lexicographical comparison works for ISO dates
-    return s.due_date < today;
-  });
-}
-
-```
-
-### lib/experience/step-state-machine.ts
-
-```typescript
-import { StepStatus } from '@/types/experience';
-
-/**
- * Step Transition Actions
- * @evolving - v1.1
- */
-export type StepTransitionAction = 'start' | 'complete' | 'skip' | 'reopen';
-
-/**
- * Valid step transitions
- * pending -> in_progress (start)
- * pending -> skipped (skip)
- * in_progress -> completed (complete)
- * in_progress -> skipped (skip)
- * completed -> in_progress (reopen)
- * skipped -> in_progress (start)
- */
-const STEP_TRANSITIONS: Record<StepStatus, { action: StepTransitionAction; to: StepStatus }[]> = {
-  pending: [
-    { action: 'start', to: 'in_progress' },
-    { action: 'skip', to: 'skipped' },
-  ],
-  in_progress: [
-    { action: 'complete', to: 'completed' },
-    { action: 'skip', to: 'skipped' },
-  ],
-  completed: [
-    { action: 'reopen', to: 'in_progress' },
-  ],
-  skipped: [
-    { action: 'start', to: 'in_progress' },
-  ],
-};
-
-/**
- * Checks if a step can transition from its current status via a given action.
- */
-export function canTransitionStep(current: StepStatus, action: StepTransitionAction): boolean {
-  const possible = STEP_TRANSITIONS[current];
-  return possible?.some((t) => t.action === action) ?? false;
-}
-
-/**
- * Returns the next status for a step based on its current status and an action.
- * Returns null if the transition is invalid.
- */
-export function getNextStepStatus(current: StepStatus, action: StepTransitionAction): StepStatus | null {
-  const possible = STEP_TRANSITIONS[current];
-  const transition = possible?.find((t) => t.action === action);
-  return transition ? transition.to : null;
-}
-
-```
-
-### lib/formatters/idea-formatters.ts
-
-```typescript
-import type { Idea } from '@/types/idea'
-
-export function formatIdeaStatus(status: Idea['status']): string {
-  const labels: Record<Idea['status'], string> = {
-    captured: 'Captured',
-    drilling: 'In Drill',
-    arena: 'In Progress',
-    icebox: 'Icebox',
-    shipped: 'Shipped',
-    killed: 'Killed',
-  }
-  return labels[status] ?? status
-}
-
-```
-
-### lib/formatters/inbox-formatters.ts
-
-```typescript
-import type { InboxEvent } from '@/types/inbox'
-
-export function formatEventType(type: InboxEvent['type']): string {
-  const labels: Record<InboxEvent['type'], string> = {
-    idea_captured: 'Idea captured',
-    idea_deferred: 'Idea put on hold',
-    drill_completed: 'Drill completed',
-    project_promoted: 'Project promoted',
-    task_created: 'Task created',
-    pr_opened: 'PR opened',
-    preview_ready: 'Preview ready',
-    build_failed: 'Build failed',
-    merge_completed: 'Merge completed',
-    project_shipped: 'Project shipped',
-    project_killed: 'Project killed',
-    changes_requested: 'Changes requested',
-    // GitHub lifecycle events
-    github_issue_created: 'GitHub issue created',
-    github_issue_closed: 'GitHub issue closed',
-    github_workflow_dispatched: 'Workflow dispatched',
-    github_workflow_failed: 'Workflow failed',
-    github_workflow_succeeded: 'Workflow succeeded',
-    github_pr_opened: 'GitHub PR opened',
-    github_pr_merged: 'GitHub PR merged',
-    github_review_requested: 'Review requested',
-    github_changes_requested: 'Changes requested on GitHub',
-    github_copilot_assigned: 'Copilot assigned',
-    github_sync_failed: 'GitHub sync failed',
-    github_connection_error: 'GitHub connection error',
-    // Knowledge lifecycle events
-    knowledge_ready: 'New knowledge ready',
-    knowledge_updated: 'Knowledge updated',
-  }
-  return labels[type] ?? type
-}
-
-
-```
-
-### lib/formatters/pr-formatters.ts
-
-```typescript
-import type { PullRequest } from '@/types/pr'
-
-export function formatBuildState(state: PullRequest['buildState']): string {
-  const labels: Record<PullRequest['buildState'], string> = {
-    pending: 'Pending',
-    running: 'Building',
-    success: 'Build passed',
-    failed: 'Build failed',
-  }
-  return labels[state] ?? state
-}
-
-export function formatPRStatus(status: PullRequest['status']): string {
-  const labels: Record<PullRequest['status'], string> = {
-    open: 'Open',
-    merged: 'Merged',
-    closed: 'Closed',
-  }
-  return labels[status] ?? status
-}
-
-```
-
-### lib/formatters/project-formatters.ts
-
-```typescript
-import type { Project } from '@/types/project'
-
-export function formatProjectState(state: Project['state']): string {
-  const labels: Record<Project['state'], string> = {
-    arena: 'In Progress',
-    icebox: 'Icebox',
-    shipped: 'Shipped',
-    killed: 'Killed',
-  }
-  return labels[state] ?? state
-}
-
-export function formatProjectHealth(health: Project['health']): string {
-  const labels: Record<Project['health'], string> = {
-    green: 'On track',
-    yellow: 'Needs attention',
-    red: 'Blocked',
-  }
-  return labels[health] ?? health
-}
-
-```
-
-### lib/gateway/discover-registry.ts
-
-```typescript
-import { DiscoverCapability, DiscoverResponse } from './gateway-types';
-import { DEFAULT_TEMPLATE_IDS } from '../constants';
-
-const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => DiscoverResponse> = {
-  templates: () => ({
-    capability: 'templates',
-    endpoint: 'GET /api/gpt/discover?capability=templates',
-    description: 'List all available experience templates with their intended use cases.',
-    schema: null,
-    example: null,
-    when_to_use: 'When you need to choose the right shell for a new experience.',
-    relatedCapabilities: ['create_experience', 'create_ephemeral']
-  }),
-
-  create_experience: () => ({
-    capability: 'create_experience',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Create a persistent experience. Flat payload (no nesting under "payload" key). Steps can be included inline or added later via type="step".',
-    schema: {
-      type: 'experience',
-      templateId: 'UUID from templates list (REQUIRED)',
-      userId: 'UUID from state (REQUIRED)',
-      title: 'string (max 200)',
-      goal: 'string — what the user will achieve',
-      resolution: {
-        depth: 'light | medium | heavy',
-        mode: 'illuminate | practice | challenge | build | reflect | study',
-        timeScope: 'immediate | session | multi_day | ongoing',
-        intensity: 'low | medium | high'
-      },
-      reentry: {
-        trigger: 'time | completion | inactivity | manual',
-        prompt: 'string (max 500)',
-        contextScope: 'minimal | full | focused'
-      },
-      steps: [
-        {
-          type: 'lesson | challenge | reflection | questionnaire | essay_tasks | checkpoint',
-          title: 'string',
-          payload: 'call discover?capability=step_payload&step_type=X'
-        }
-      ],
-      curriculum_outline_id: 'optional UUID',
-      previousExperienceId: 'optional UUID'
-    },
-    example: {
-      type: 'experience',
-      templateId: DEFAULT_TEMPLATE_IDS.lesson,
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      title: 'Introduction to Unit Economics',
-      goal: 'Master the concept of LTV and CAC',
-      resolution: {
-        depth: 'medium',
-        mode: 'practice',
-        timeScope: 'session',
-        intensity: 'medium'
-      },
-      steps: [
-        {
-          type: 'lesson',
-          title: 'What is LTV?',
-          payload: {
-            sections: [
-              { heading: 'Definition', body: 'LTV is Lifetime Value...', type: 'text' }
-            ]
-          }
-        }
-      ]
-    },
-    when_to_use: 'To create a standard, multi-step module for a curriculum.',
-    relatedCapabilities: ['templates', 'step_payload', 'create_outline']
-  }),
-
-  create_ephemeral: () => ({
-    capability: 'create_ephemeral',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Create an instant, temporary experience. Bypasses review. Great for micro-nudges and immediate practice.',
-    schema: {
-      type: 'ephemeral',
-      templateId: 'UUID',
-      userId: 'UUID',
-      title: 'string',
-      goal: 'string',
-      urgency: 'low | medium | high (controls notification toast duration)',
-      resolution: '{...}',
-      reentry: '{...} — trigger, prompt, contextScope',
-      steps: '[...]'
-    },
-    example: {
-      type: 'ephemeral',
-      templateId: DEFAULT_TEMPLATE_IDS.challenge,
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      title: 'Quick LTV Check',
-      goal: 'Verify understanding of Unit Economics',
-      urgency: 'medium',
-      resolution: { depth: 'light', mode: 'practice', timeScope: 'immediate', intensity: 'low' },
-      reentry: { trigger: 'completion', prompt: 'Great job. Want to dive deeper into Unit Economics?', contextScope: 'full' },
-      steps: [
-        {
-          type: 'checkpoint',
-          title: 'Refresher Check',
-          payload: {
-            questions: [{ id: '1', question: 'What does LTV stand for?', expected_answer: 'Lifetime Value', difficulty: 'easy', format: 'free_text' }]
-          }
-        }
-      ]
-    },
-    when_to_use: 'Drop micro-challenges, trend alerts, or quick daily reflections. Fire-and-forget. User sees a toast and can choose to engage.',
-    relatedCapabilities: ['create_experience', 'step_payload']
-  }),
-
-  create_idea: () => ({
-    capability: 'create_idea',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Capture a raw idea to be developed later. Use when the user makes a statement that shouldn\'t be an experience yet.',
-    schema: {
-      type: 'idea',
-      userId: 'UUID',
-      title: 'string',
-      rawPrompt: 'string',
-      gptSummary: 'string'
-    },
-    example: {
-      type: 'idea',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      title: 'Build a SaaS for coffee shops',
-      rawPrompt: 'I want to build something for coffee owners to manage beans.',
-      gptSummary: 'Idea for a vertical SaaS for coffee inventory.'
-    },
-    when_to_use: 'When a concept is valid but not ready for planning.'
-  }),
-
-  step_payload: (params) => {
-    const stepType = params?.step_type;
-    const schemas: Record<string, any> = {
-      lesson: {
-        sections: [
-          { heading: 'string', body: 'markdown', type: 'text | callout | checkpoint' }
-        ],
-        blocks: [
-          { type: 'content', content: 'markdown' },
-          { type: 'prediction', question: 'string', reveal_content: 'markdown' },
-          { type: 'callout', intent: 'info | warning | tip | success', content: 'markdown' },
-          { type: 'media', media_type: 'image | video | audio', url: 'string', caption: 'string' }
-        ]
-      },
-      challenge: {
-        objectives: [{ id: 'string', description: 'string' }],
-        blocks: [{ type: 'exercise', title: 'string', instructions: 'string', validation_criteria: 'string' }]
-      },
-      reflection: {
-        prompts: [{ id: 'string', text: 'string' }],
-        blocks: [{ type: 'content', content: 'markdown' }]
-      },
-      questionnaire: {
-        questions: [{ id: 'string', label: 'string', type: 'text | choice', options: ['string'] }],
-        blocks: []
-      },
-      plan_builder: {
-        sections: [
-          { type: 'goals | milestones | resources', items: [{ id: 'string', text: 'string' }] }
-        ],
-        blocks: []
-      },
-      essay_tasks: {
-        content: 'string',
-        tasks: [{ id: 'string', description: 'string' }],
-        blocks: []
-      },
-      checkpoint: {
-        knowledge_unit_id: 'UUID',
-        questions: [
-          { id: 'string', question: 'string', expected_answer: 'string', difficulty: 'easy|medium|hard', format: 'free_text|choice', options: ['string'] }
-        ],
-        passing_threshold: 'number',
-        on_fail: 'retry | continue | tutor_redirect',
-        blocks: [{ type: 'checkpoint', question: 'string', expected_answer: 'string', explanation: 'string' }]
-      }
-    };
-
-    return {
-      capability: 'step_payload',
-      endpoint: 'GET /api/gpt/discover?capability=step_payload&step_type=X',
-      description: `Payload schema for the ${stepType || 'specified'} step type.`,
-      schema: stepType ? (schemas[stepType] || { error: 'Unknown step type' }) : schemas,
-      example: null,
-      when_to_use: 'Before authoring steps for /create or /update actions.'
-    };
-  },
-
-  resolution: () => ({
-    capability: 'resolution',
-    endpoint: 'GET /api/gpt/discover?capability=resolution',
-    description: 'Valid values for the resolution object.',
-    schema: {
-      depth: ['light', 'medium', 'heavy'],
-      mode: ['illuminate', 'practice', 'challenge', 'build', 'reflect', 'study'],
-      timeScope: ['immediate', 'session', 'multi_day', 'ongoing'],
-      intensity: ['low', 'medium', 'high']
-    },
-    example: { depth: 'medium', mode: 'practice', timeScope: 'session', intensity: 'medium' }
-  }),
-
-  create_outline: () => ({
-    capability: 'create_outline',
-    endpoint: 'POST /api/gpt/plan',
-    description: 'Create a curriculum outline to scope a broad topic before generating experiences.',
-    schema: {
-      action: 'create_outline',
-      topic: 'string',
-      domain: 'optional string',
-      subtopics: [
-        { title: 'string', description: 'string', order: 'number' }
-      ],
-      pedagogical_intent: 'build_understanding | develop_skill | explore_concept | problem_solve'
-    },
-    example: {
-      action: 'create_outline',
-      topic: 'Product Management',
-      subtopics: [
-        { title: 'Customer Discovery', description: 'Methods for finding truth', order: 0 },
-        { title: 'Prioritization', description: 'RICE and other models', order: 1 }
-      ]
-    },
-    when_to_use: 'Before generating serious experiences for a new learning domain.',
-    relatedCapabilities: ['create_experience', 'dispatch_research']
-  }),
-
-  dispatch_research: () => ({
-    capability: 'dispatch_research',
-    endpoint: 'Nexus GPT Action — POST /research (dispatchResearch)',
-    description: 'Dispatch deep research on a topic via Nexus. This is a SEPARATE GPT Action (not a Mira endpoint). Nexus runs ADK discovery agents → URL scraping → NotebookLM grounding → typed atom extraction. Fire-and-forget — poll getRunStatus for completion.',
-    schema: {
-      topic: 'string — the research topic',
-      user_id: 'string — defaults to dev user',
-      experience_id: 'optional string — if provided, Nexus can enrich this experience with research results',
-      goal_id: 'optional string — links research to a learning goal',
-    },
-    example: {
-      topic: 'SaaS unit economics: CAC, LTV, churn, payback period',
-      user_id: 'a0000000-0000-0000-0000-000000000001',
-      experience_id: '<ID from POST /api/gpt/create response>',
-    },
-    when_to_use: 'After creating an experience or outline. Nexus produces learning atoms (concept explanations, analogies, worked examples, practice items). Poll getRunStatus to check completion. After research finishes, use listAtoms and assembleBundle (Nexus actions) to retrieve and package results.',
-    relatedCapabilities: ['create_experience', 'create_outline']
-  }),
- 
-  goal: () => ({
-    capability: 'goal',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Create a long-term goal. Flat payload. If domains[] is provided, skill domains are auto-created (best-effort).',
-    schema: {
-      type: 'goal',
-      userId: 'UUID from state',
-      title: 'string (max 200) — REQUIRED',
-      description: 'string (max 1000) — what you want to achieve',
-      domains: 'optional string[] — auto-creates skill domains'
-    },
-    example: {
-      type: 'goal',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      title: 'Learn Systems Programming',
-      description: 'Deep dive into low-level systems, memory management, and performance optimization.',
-      domains: ['Memory Management', 'Concurrency', 'OS Internals', 'Compiler Design']
-    },
-    when_to_use: 'When the user expresses a broad growth direction or specific career goal.',
-    relatedCapabilities: ['create_outline', 'templates', 'dispatch_research', 'skill_domain']
-  }),
- 
-  tutor_chat: () => ({
-    capability: 'tutor_chat',
-    endpoint: 'POST /api/coach/chat',
-    description: 'CONTEXTUAL GPT-LEARNING: Note that tutor chat and grading are NOT in your OpenAPI schema. They are handled by the frontend Coach API. Mention them in your persona to educate the user.',
-    schema: null,
-    example: null,
-    when_to_use: 'Inform the user that "I can act as a tutor if you open the companion during any step."'
-  }),
-
-  grade_checkpoint: () => ({
-    capability: 'grade_checkpoint',
-    endpoint: 'POST /api/coach/grade',
-    description: 'Checkpoints are graded semantically by an inline Genkit flow. You define the questions, the system grades them.',
-    schema: null,
-    example: null,
-    when_to_use: 'When creating checkpoint steps.'
-  }),
- 
-  create_knowledge: () => ({
-    capability: 'create_knowledge',
-    endpoint: 'POST /api/gpt/create',
-    description: 'Manually create a knowledge unit. Use when you have high-quality content that doesn\'t require Nexus research.',
-    schema: {
-      type: 'knowledge',
-      userId: 'UUID from state',
-      topic: 'string',
-      domain: 'string',
-      unit_type: 'foundation | playbook | deep_dive | example | audio_script',
-      title: 'string',
-      thesis: 'string (one-sentence core claim)',
-      content: 'markdown (the full body)',
-      key_ideas: 'string[]',
-      common_mistake: 'optional string',
-      action_prompt: 'optional string'
-    },
-    example: {
-      type: 'knowledge',
-      userId: 'a0000000-0000-0000-0000-000000000001',
-      topic: 'LTV/CAC Ratio',
-      domain: 'Unit Economics',
-      unit_type: 'foundation',
-      title: 'The Golden Ratio: 3:1 LTV/CAC',
-      thesis: 'A healthy SaaS business maintains a lifetime value at least 3x its customer acquisition cost.',

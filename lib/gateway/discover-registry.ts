@@ -339,6 +339,44 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     relatedCapabilities: ['goal', 'link_knowledge']
   }),
 
+  create_board: () => ({
+    capability: 'create_board',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Create a new purpose-typed think board.',
+    schema: {
+      type: 'board',
+      userId: 'UUID from state (REQUIRED)',
+      name: 'string (REQUIRED)',
+      purpose: 'general | idea_planning | curriculum_review | lesson_plan | research_tracking | strategy',
+      linkedEntityId: 'optional UUID',
+      linkedEntityType: 'optional "goal" | "experience" | "knowledge"'
+    },
+    example: {
+      type: 'board',
+      userId: 'user-123',
+      name: 'SaaS Launch Roadmap',
+      purpose: 'strategy'
+    },
+    when_to_use: 'When you need a new spatial workspace for a specific topic or goal.'
+  }),
+
+  board_from_text: () => ({
+    capability: 'board_from_text',
+    endpoint: 'POST /api/gpt/create',
+    description: 'AI-GEN: Generate a full board structure (nodes + edges) from a text prompt or conversation context.',
+    schema: {
+      type: 'board_from_text',
+      userId: 'UUID from state (REQUIRED)',
+      prompt: 'string (REQUIRED) — instructions for what should be on the map'
+    },
+    example: {
+      type: 'board_from_text',
+      userId: 'user-123',
+      prompt: 'Map out the core concepts of Kubernetes for a beginner.'
+    },
+    when_to_use: 'When you want to bootstrap a large board quickly using AI instead of manual node creation.'
+  }),
+
   create_map_node: () => ({
     capability: 'create_map_node',
     endpoint: 'POST /api/gpt/create',
@@ -481,20 +519,118 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     when_to_use: 'When you want to expand a concept into multiple sub-topics at once. Highly efficient for building trees.'
   }),
  
-  read_map: () => ({
-    capability: 'read_map',
+  read_board: () => ({
+    capability: 'read_board',
     endpoint: 'POST /api/gpt/plan',
-    description: 'Fetch the full content (nodes and edges) of a mind map. Use this before updating or expanding a map if you dont have the full context.',
+    description: 'Fetch the full content (nodes and edges) of a think board (mind map). Use before updating or expanding a board.',
     schema: {
-      action: 'read_map',
+      action: 'read_board',
       boardId: 'UUID of the think board to read'
     },
     example: {
-      action: 'read_map',
+      action: 'read_board',
       boardId: 'board-uuid-123'
     },
-    when_to_use: 'When you need to see the current state of a mind map to decide where to add new nodes or how to restructure it.',
-    relatedCapabilities: ['create_map_node', 'create_map_cluster', 'update_map_node']
+    when_to_use: 'When you need to see the spatial arrangement of nodes and edges to decide where to add new branches.',
+    relatedCapabilities: ['create_map_node', 'expand_board_branch', 'suggest_board_gaps']
+  }),
+
+  read_map: () => ({
+    capability: 'read_map',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Legacy alias for read_board. Fetches full board content.',
+    schema: { action: 'read_map', boardId: 'UUID' },
+    example: { action: 'read_map', boardId: 'board-123' },
+    when_to_use: 'Same as read_board (legacy name).'
+  }),
+
+  list_boards: () => ({
+    capability: 'list_boards',
+    endpoint: 'GET /api/gpt/discover?capability=list_boards',
+    description: 'Fetch summaries of all active boards for the user.',
+    schema: null,
+    example: null,
+    when_to_use: 'When you need to see what boards exist before selecting one to read or modify.'
+  }),
+
+  rename_board: () => ({
+    capability: 'rename_board',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Rename an existing think board.',
+    schema: {
+      action: 'rename_board',
+      boardId: 'UUID (REQUIRED)',
+      name: 'string (REQUIRED)'
+    },
+    example: {
+      action: 'rename_board',
+      boardId: 'board-123',
+      name: 'Better Board Name'
+    }
+  }),
+
+  archive_board: () => ({
+    capability: 'archive_board',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Archive a board (hides it from standard views).',
+    schema: {
+      action: 'archive_board',
+      boardId: 'UUID (REQUIRED)'
+    },
+    example: {
+      action: 'archive_board',
+      boardId: 'board-123'
+    }
+  }),
+
+  reparent_node: () => ({
+    capability: 'reparent_node',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Change the parent of a node by moving its incoming edge.',
+    schema: {
+      action: 'reparent_node',
+      boardId: 'UUID (REQUIRED)',
+      nodeId: 'UUID of node to move (REQUIRED)',
+      sourceNodeId: 'UUID of the new parent (REQUIRED)'
+    },
+    example: {
+      action: 'reparent_node',
+      boardId: 'board-123',
+      nodeId: 'node-child',
+      sourceNodeId: 'node-new-parent'
+    }
+  }),
+
+  expand_board_branch: () => ({
+    capability: 'expand_board_branch',
+    endpoint: 'POST /api/gpt/update',
+    description: 'AI-GEN: Suggest and create additional nodes branching off a specific point.',
+    schema: {
+      action: 'expand_board_branch',
+      boardId: 'UUID (REQUIRED)',
+      nodeId: 'UUID of node to expand from (REQUIRED)',
+      count: 'optional number (default 3)',
+      depth: 'optional number (default 1)'
+    },
+    example: {
+      action: 'expand_board_branch',
+      boardId: 'board-123',
+      nodeId: 'node-pm'
+    }
+  }),
+
+  suggest_board_gaps: () => ({
+    capability: 'suggest_board_gaps',
+    endpoint: 'POST /api/gpt/plan',
+    description: 'AI-GEN: Analyze current board state and suggest missing concepts or connections.',
+    schema: {
+      action: 'suggest_board_gaps',
+      boardId: 'UUID (REQUIRED)'
+    },
+    example: {
+      action: 'suggest_board_gaps',
+      boardId: 'board-123'
+    }
   }),
 
   assess_gaps: () => ({
@@ -672,6 +808,91 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
     },
     when_to_use: 'When the user starts, pauses, or completes a broad goal.',
     relatedCapabilities: ['goal', 'skill_domain']
+  }),
+
+  memory_record: () => ({
+    capability: 'memory_record',
+    endpoint: 'POST /api/gpt/create',
+    description: 'Record a persistent agent memory. Match content + topic + kind to dedup and boost confidence.',
+    schema: {
+      type: 'memory',
+      userId: 'UUID from state (REQUIRED)',
+      kind: 'observation | strategy | idea | preference | tactic | assessment | note (REQUIRED)',
+      topic: 'string (REQUIRED)',
+      content: 'string (REQUIRED)',
+      tags: 'optional string[]',
+      pinned: 'optional boolean',
+      confidence: 'optional number (0-1)'
+    },
+    example: {
+      type: 'memory',
+      userId: 'a0000000-0000-0000-0000-000000000001',
+      kind: 'preference',
+      topic: 'Product Management',
+      content: 'User prefers "RICE" over "MoSCoW" for feature prioritization.',
+      tags: ['prioritization', 'frameworks'],
+      pinned: true
+    },
+    when_to_use: 'When you learn something about the user, their goals, or their world that should persist across all future conversations.',
+    relatedCapabilities: ['memory_read', 'memory_correct']
+  }),
+
+  memory_read: () => ({
+    capability: 'memory_read',
+    endpoint: 'GET /api/gpt/memory',
+    description: 'Query recorded memories with filters. Use substring match in query for keyword search.',
+    schema: {
+      userId: 'UUID from state',
+      kind: 'optional kind',
+      topic: 'optional topic',
+      query: 'optional search string',
+      limit: 'optional number'
+    },
+    example: {
+      userId: 'user-123',
+      query: 'prioritization'
+    },
+    when_to_use: 'When you need to recall specific past observations or strategies to inform the current task.',
+    relatedCapabilities: ['memory_record', 'memory_correct', 'consolidate_memory']
+  }),
+
+  memory_correct: () => ({
+    capability: 'memory_correct',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Update or delete a memory entry. Use action="delete_memory" for removal.',
+    schema: {
+      action: 'memory_update | memory_delete',
+      memoryId: 'UUID (REQUIRED)',
+      updates: {
+        content: 'optional string',
+        topic: 'optional string',
+        pinned: 'optional boolean',
+        tags: 'optional string[]'
+      }
+    },
+    example: {
+      action: 'memory_update',
+      memoryId: 'mem-123',
+      updates: { pinned: true }
+    },
+    when_to_use: 'When a memory is incorrect, outdated, or needs to be elevated (pinned).',
+    relatedCapabilities: ['memory_read']
+  }),
+
+  consolidate_memory: () => ({
+    capability: 'consolidate_memory',
+    endpoint: 'POST /api/gpt/update',
+    description: 'Automated background task to extract memories from recent interactions and experiences.',
+    schema: {
+      action: 'consolidate_memory',
+      userId: 'UUID from state (REQUIRED)',
+      lookbackHours: 'optional number (default 24)'
+    },
+    example: {
+      action: 'consolidate_memory',
+      userId: 'user-123'
+    },
+    when_to_use: 'Periodically or after a major milestone to ensure the "Notebook" memory layer is up to date.'
   })
 };
 

@@ -1,3 +1,225 @@
+
+  console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length} outlines=${outlines.length}`);
+  active.forEach(e => console.log(`  [ACTIVE] ${e.title}`));
+  proposed.forEach(e => console.log(`  [PROPOSED] ${e.title}`));
+
+  return (
+    <AppShell>
+      <div className="max-w-5xl mx-auto pb-20 px-4 md:px-8">
+        <header className="mb-20 space-y-2">
+          <h1 className="text-5xl font-extrabold text-[#f1f5f9] tracking-tighter leading-none">{COPY.library.heading}</h1>
+          <p className="text-[#94a3b8] tracking-tight">{COPY.library.subheading}</p>
+        </header>
+
+        <LibraryClient 
+          active={active}
+          completed={completed}
+          moments={moments}
+          proposed={proposed}
+          outlines={outlines}
+        />
+      </div>
+    </AppShell>
+  );
+}
+
+```
+
+### app/map/page.tsx
+
+```tsx
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { createBoard, getBoardGraph, getBoardSummaries } from '@/lib/services/mind-map-service'
+import { ThinkCanvas } from '@/components/think/think-canvas'
+import { MapSidebar } from '@/components/think/map-sidebar'
+import { AppShell } from '@/components/shell/app-shell'
+
+export const dynamic = 'force-dynamic'
+
+interface MapPageProps {
+  searchParams: { boardId?: string }
+}
+
+export default async function MapPage({ searchParams }: MapPageProps) {
+  const userId = DEFAULT_USER_ID
+  let summaries = await getBoardSummaries(userId)
+
+  if (summaries.length === 0) {
+    // Auto-create a strategic board if none exists
+    await createBoard(userId, 'Strategic Focus', 'strategy')
+    summaries = await getBoardSummaries(userId)
+  }
+
+  const activeBoardId = searchParams.boardId || summaries[0].id
+  const activeBoard = summaries.find(b => b.id === activeBoardId) || summaries[0]
+  
+  // Parallel fetch board graph
+  const { nodes, edges } = await getBoardGraph(activeBoard.id)
+
+  return (
+    <AppShell>
+      <div className="flex h-screen overflow-hidden bg-[#050510]">
+        <MapSidebar 
+          boards={summaries as any} 
+          activeBoardId={activeBoard.id} 
+        />
+        
+        <div className="flex-1 relative overflow-hidden h-full">
+          <ThinkCanvas 
+            boardId={activeBoard.id}
+            initialNodes={nodes}
+            initialEdges={edges}
+            userId={userId}
+          />
+          
+          {/* Board Context Overlay */}
+          <div className="absolute top-6 left-6 z-10 pointer-events-none select-none">
+            <div className="bg-[#0a0a14]/80 backdrop-blur-xl border border-[#1e1e2e] rounded-xl px-5 py-3 shadow-2xl animate-in fade-in slide-in-from-left-4 duration-700">
+              <h1 className="text-lg font-extrabold text-[#f1f5f9] tracking-tight">{activeBoard.name}</h1>
+              <div className="flex items-center gap-2 mt-1">
+                <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
+                <span className="text-[10px] font-bold text-[#6366f1] uppercase tracking-[0.2em]">Map Station</span>
+                <span className="text-[10px] font-bold text-white/30 border border-white/5 px-1.5 py-0.5 rounded uppercase tracking-[0.1em]">
+                  {activeBoard.purpose}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppShell>
+  )
+}
+
+```
+
+### app/memory/page.tsx
+
+```tsx
+import { Suspense } from 'react'
+import { getMemoriesGroupedByTopic } from '@/lib/services/agent-memory-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { MemoryExplorer } from '@/components/memory/MemoryExplorer'
+import { AppShell } from '@/components/shell/app-shell'
+import { COPY } from '@/lib/studio-copy'
+
+export const dynamic = 'force-dynamic'
+
+export default async function MemoryPage() {
+  const userId = DEFAULT_USER_ID
+  const groupedMemories = await getMemoriesGroupedByTopic(userId)
+
+  return (
+    <AppShell>
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pb-32">
+        <header className="mb-20 pt-10">
+          <div className="flex items-center gap-4 mb-3">
+            <span className="text-[#6366f1] text-2xl">🧠</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#6366f1]/80">Agent Intelligence Layer</span>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-[#f1f5f9] tracking-tight mb-4">
+            {COPY.memory.heading}
+          </h1>
+          <p className="text-[#94a3b8] text-lg max-w-2xl leading-relaxed">
+            {COPY.memory.subheading}
+          </p>
+        </header>
+
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-20 text-[#64748b] animate-pulse">
+            <div className="text-4xl mb-4">...</div>
+            <p className="text-sm uppercase tracking-widest font-bold">Synchronizing Memory Nodes</p>
+          </div>
+        }>
+          <MemoryExplorer initialGroupedMemories={groupedMemories} userId={userId} />
+        </Suspense>
+      </div>
+    </AppShell>
+  )
+}
+
+```
+
+### app/profile/page.tsx
+
+```tsx
+import { buildUserProfile } from '@/lib/services/facet-service'
+import { getGoalsForUser } from '@/lib/services/goal-service'
+import { getSkillDomainsForUser } from '@/lib/services/skill-domain-service'
+import { DEFAULT_USER_ID } from '@/lib/constants'
+import { AppShell } from '@/components/shell/app-shell'
+import { DirectionSummary } from '@/components/profile/DirectionSummary'
+import { SkillTrajectory } from '@/components/profile/SkillTrajectory'
+import { ProfileClient } from './ProfileClient'
+import { COPY } from '@/lib/studio-copy'
+
+export const dynamic = 'force-dynamic'
+
+export default async function ProfilePage() {
+  const [profile, goals, skillDomains] = await Promise.all([
+    buildUserProfile(DEFAULT_USER_ID),
+    getGoalsForUser(DEFAULT_USER_ID),
+    getSkillDomainsForUser(DEFAULT_USER_ID)
+  ])
+
+  // Get active goal for trajectory
+  const activeGoal = goals.find(g => g.status === 'active') || goals[0]
+  const goalDomains = activeGoal 
+    ? skillDomains.filter(d => d.goalId === activeGoal.id)
+    : []
+
+  return (
+    <AppShell>
+      <div className="max-w-6xl mx-auto px-4 py-8 space-y-12">
+        {/* Header */}
+        <header>
+          <h1 className="text-4xl font-bold text-white tracking-tight">
+            {COPY.profilePage.heading}
+          </h1>
+          <p className="text-slate-400 mt-2 text-lg">
+            {COPY.profilePage.subheading}
+          </p>
+        </header>
+
+        {/* Direction Summary */}
+        <section>
+          <DirectionSummary 
+            profile={profile} 
+            activeGoal={activeGoal} 
+            skillDomains={skillDomains}
+          />
+        </section>
+
+        {/* Skill Trajectory */}
+        {activeGoal && (
+          <section className="pt-8 border-t border-slate-800">
+            <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+              <span className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+              Active Trajectory: {activeGoal.title}
+            </h2>
+            <SkillTrajectory domains={goalDomains} />
+          </section>
+        )}
+
+        {/* Facet Engine */}
+        <section className="pt-12 border-t border-slate-800">
+          <ProfileClient profile={profile} />
+        </section>
+      </div>
+    </AppShell>
+  )
+}
+
+```
+
+### app/profile/ProfileClient.tsx
+
+```tsx
+// app/profile/ProfileClient.tsx
+'use client'
+
+import { useState } from 'react'
+import { UserProfile, FacetType } from '@/types/profile'
 import { FacetCard } from '@/components/profile/FacetCard'
 import { COPY } from '@/lib/studio-copy'
 
@@ -7776,225 +7998,3 @@ export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft, r
                     }`}
                   >
                     {option}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {currentQuestion.type === 'scale' && (
-              <div className={`flex justify-between items-center bg-[#12121a] border rounded-2xl p-6 transition-all ${
-                showError ? 'border-rose-500/30' : 'border-[#1e1e2e]'
-              }`}>
-                {(currentQuestion.options?.length ? currentQuestion.options.map((_, i) => i + 1) : [1, 2, 3, 4, 5]).map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => handleInputChange(currentQuestion.id, val.toString())}
-                    className={`w-14 h-14 rounded-full flex items-center justify-center border-2 transition-all text-lg font-bold ${
-                      answers[currentQuestion.id] === val.toString()
-                        ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300 scale-110 shadow-[0_0_20px_rgba(99,102,241,0.2)]'
-                        : 'bg-[#1a1a2e] border-[#33334d] text-[#475569] hover:border-indigo-500/30 hover:text-[#94a3b8]'
-                    }`}
-                  >
-                    {val}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between pt-8 border-t border-[#1e1e2e]">
-        <div className="flex gap-4">
-          <button
-            type="button"
-            onClick={handleBack}
-            disabled={currentIndex === 0}
-            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors disabled:opacity-0"
-          >
-            ← Back
-          </button>
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm text-[#475569] hover:text-[#94a3b8] transition-colors"
-          >
-            Skip for now
-          </button>
-        </div>
-        
-        <button
-          type="button"
-          onClick={handleNext}
-          className="px-10 py-4 bg-indigo-500 text-white rounded-xl text-sm font-bold hover:bg-indigo-600 transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-        >
-          {currentIndex < totalQuestions - 1 ? 'Next Question →' : 'Finish Questionnaire →'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-```
-
-### components/experience/steps/ReflectionStep.tsx
-
-```tsx
-'use client';
-
-import React, { useState } from 'react';
-import { ExperienceStep, ExperienceBlock } from '@/types/experience';
-import ReactMarkdown from 'react-markdown';
-import BlockRenderer from '../blocks/BlockRenderer';
-
-interface ReflectionPayload {
-  prompts?: Array<{
-    id: string;
-    text: string;
-    format?: 'free_text';
-  }>;
-  blocks?: ExperienceBlock[];
-}
-
-interface ReflectionStepProps {
-  step: ExperienceStep;
-  onComplete: (payload: { reflections: Record<string, string> }) => void;
-  onSkip: () => void;
-  onDraft?: (draft: Record<string, any>) => void;
-  readOnly?: boolean;
-  initialResponses?: Record<string, string>;
-}
-
-export default function ReflectionStep({ step, onComplete, onSkip, onDraft, readOnly, initialResponses }: ReflectionStepProps) {
-  const [responses, setResponses] = useState<Record<string, string>>(initialResponses || {});
-  const payload = step.payload as ReflectionPayload | null;
-  const prompts = payload?.prompts ?? [];
-  const blocks = payload?.blocks ?? [];
-  const hasBlocks = blocks.length > 0;
-
-  const handleChange = (promptId: string, value: string) => {
-    setResponses((prev) => ({ ...prev, [promptId]: value }));
-  };
-
-  const handleBlur = (promptId: string) => {
-    if (onDraft && responses[promptId]) {
-      onDraft({ [promptId]: responses[promptId] });
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onComplete({ reflections: responses });
-  };
-
-  const isComplete = prompts.length === 0 || prompts.every((p) => !!responses[p.id]?.trim());
-
-  if (readOnly) {
-    return (
-      <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">
-        <div className="border-l-4 border-violet-500 pl-6 mb-12">
-          <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
-          <p className="text-sm text-violet-400 uppercase tracking-[0.2em] font-bold">Past Perspective</p>
-        </div>
-        
-        <div className="space-y-16">
-          {hasBlocks ? (
-            <div className="space-y-10">
-              {blocks.map((block, idx) => (
-                <BlockRenderer key={block.id || idx} block={block} />
-              ))}
-            </div>
-          ) : (
-            prompts.map((p) => (
-              <div key={p.id} className="space-y-6">
-                <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-bold prose-p:text-[#475569] prose-p:leading-relaxed">
-                  <ReactMarkdown>{p.text}</ReactMarkdown>
-                </div>
-                <div className="p-8 bg-violet-500/5 border-l-2 border-violet-500/30 rounded-r-2xl italic">
-                  <p className="text-2xl text-[#e2e8f0] font-serif leading-[1.8] whitespace-pre-wrap">
-                    "{responses[p.id] || 'No reflection logged.'}"
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-12 animate-in fade-in duration-700 max-w-2xl mx-auto">
-      <div className="mb-8 border-l-4 border-violet-500 pl-6">
-        <h2 className="text-4xl font-extrabold text-[#f1f5f9] tracking-tight mb-2">{step.title}</h2>
-        <p className="text-sm text-violet-400 uppercase tracking-[0.2em] font-bold">Reflection Process</p>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-16">
-        {hasBlocks ? (
-          <div className="space-y-10">
-            {blocks.map((block, idx) => (
-              <BlockRenderer 
-                key={block.id || idx} 
-                block={block} 
-                instanceId={step.instance_id}
-                stepId={step.id}
-              />
-            ))}
-          </div>
-        ) : (
-          <>
-            {prompts.length === 0 && (
-              <div className="p-8 border border-dashed border-[#33334d] rounded-xl text-center">
-                <p className="text-[#64748b] text-lg">Reflection prompts are being prepared.</p>
-              </div>
-            )}
-            {prompts.map((prompt, idx) => {
-              const wordCount = responses[prompt.id]?.trim().split(/\s+/).filter(Boolean).length || 0;
-              return (
-                <div 
-                  key={prompt.id} 
-                  className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700"
-                  style={{ animationDelay: `${idx * 150}ms`, animationFillMode: 'both' }}
-                >
-                  <div className="flex justify-between items-end">
-                    <div className="prose prose-invert prose-indigo max-w-none prose-p:text-xl prose-p:font-semibold prose-p:text-[#e2e8f0] prose-p:leading-relaxed max-w-[80%]">
-                      <ReactMarkdown>{prompt.text}</ReactMarkdown>
-                    </div>
-                    <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded transition-colors ${
-                      wordCount > 0 ? 'text-violet-400 bg-violet-400/10' : 'text-[#475569] bg-[#1a1a2e]'
-                    }`}>
-                      {wordCount} WORDS
-                    </span>
-                  </div>
-                  
-                  <div className="relative">
-                    <textarea
-                      value={responses[prompt.id] || ''}
-                      onChange={(e) => handleChange(prompt.id, e.target.value)}
-                      onBlur={() => handleBlur(prompt.id)}
-                      placeholder="Share your thoughts honestly…"
-                      rows={5}
-                      className="w-full bg-[#12121a] border border-[#1e1e2e] rounded-2xl px-6 py-5 text-lg text-[#f1f5f9] placeholder-[#94a3b8]/20 focus:outline-none focus:border-violet-500/40 focus:bg-[#161625] transition-all resize-none leading-relaxed shadow-inner"
-                    />
-                    <div className="absolute bottom-4 right-4 flex gap-2">
-                       {responses[prompt.id] && (
-                         <span className="text-[10px] text-emerald-400/50 font-mono animate-pulse">DRAFT SAVED</span>
-                       )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </>
-        )}
-
-        <div className="flex items-center justify-between pt-10 border-t border-[#1e1e2e]">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm font-medium text-[#475569] hover:text-[#94a3b8] transition-colors"
-          >
-            Skip for now
-          </button>

@@ -1,6 +1,6 @@
 import { generateId } from '@/lib/utils';
 import { getStorageAdapter } from '@/lib/storage-adapter';
-import { ThinkBoard, ThinkNode, ThinkEdge } from '@/types/mind-map';
+import { ThinkBoard, ThinkNode, ThinkEdge, BoardPurpose, LayoutMode } from '@/types/mind-map';
 import { MapSummary } from '@/types/synthesis';
 
 // ---------------------------------------------------------------------------
@@ -12,6 +12,10 @@ function boardFromDB(row: any): ThinkBoard {
     id: row.id,
     workspaceId: row.workspace_id,
     name: row.name,
+    purpose: row.purpose || 'general',
+    layoutMode: row.layout_mode || 'radial',
+    linkedEntityId: row.linked_entity_id,
+    linkedEntityType: row.linked_entity_type,
     isArchived: row.is_archived ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -23,6 +27,10 @@ function boardToDB(board: Partial<ThinkBoard>): Record<string, any> {
   if (board.id !== undefined) row.id = board.id;
   if (board.workspaceId !== undefined) row.workspace_id = board.workspaceId;
   if (board.name !== undefined) row.name = board.name;
+  if (board.purpose !== undefined) row.purpose = board.purpose;
+  if (board.layoutMode !== undefined) row.layout_mode = board.layoutMode;
+  if (board.linkedEntityId !== undefined) row.linked_entity_id = board.linkedEntityId;
+  if (board.linkedEntityType !== undefined) row.linked_entity_type = board.linkedEntityType;
   if (board.isArchived !== undefined) row.is_archived = board.isArchived;
   if (board.createdAt !== undefined) row.created_at = board.createdAt;
   if (board.updatedAt !== undefined) row.updated_at = board.updatedAt;
@@ -133,13 +141,22 @@ export async function getBoardSummaries(userId: string): Promise<MapSummary[]> {
       name: board.name,
       nodeCount: nodes.length,
       edgeCount: edges.length,
+      purpose: board.purpose || 'general',
+      layoutMode: board.layoutMode || 'radial',
+      linkedEntityType: board.linkedEntityType || null,
     };
   }));
 
   return summaries;
 }
 
-export async function createBoard(userId: string, name: string): Promise<ThinkBoard> {
+export async function createBoard(
+  userId: string, 
+  name: string, 
+  purpose: ThinkBoard['purpose'] = 'general',
+  linkedEntityId: string | null = null,
+  linkedEntityType: ThinkBoard['linkedEntityType'] = null
+): Promise<ThinkBoard> {
   const adapter = getStorageAdapter();
   const workspaceId = await getWorkspaceId(userId);
   
@@ -152,6 +169,10 @@ export async function createBoard(userId: string, name: string): Promise<ThinkBo
     id: generateId(),
     workspaceId,
     name,
+    purpose,
+    layoutMode: 'radial',
+    linkedEntityId,
+    linkedEntityType,
     isArchived: false,
     createdAt: now,
     updatedAt: now,
@@ -159,7 +180,51 @@ export async function createBoard(userId: string, name: string): Promise<ThinkBo
 
   const row = boardToDB(board);
   const saved = await adapter.saveItem<any>('think_boards', row);
-  return boardFromDB(saved);
+  const finalBoard = boardFromDB(saved);
+
+  // Apply template if purpose is not general
+  if (purpose !== 'general') {
+    await applyBoardTemplate(userId, finalBoard.id, name, purpose);
+  }
+
+  return finalBoard;
+}
+
+export async function updateBoard(boardId: string, updates: Partial<ThinkBoard>): Promise<ThinkBoard | null> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  
+  const dbUpdates = boardToDB({ ...updates, updatedAt: now });
+  const updated = await adapter.updateItem<any>('think_boards', boardId, dbUpdates);
+  return updated ? boardFromDB(updated) : null;
+}
+
+export async function deleteBoard(boardId: string): Promise<boolean> {
+  const adapter = getStorageAdapter();
+  
+  // Lock 6: Cascade delete removes edges -> nodes -> board
+  // 1. Delete edges
+  const edges = await adapter.query<any>('think_edges', { board_id: boardId });
+  for (const edge of edges) {
+    await adapter.deleteItem('think_edges', edge.id);
+  }
+  
+  // 2. Delete nodes
+  const nodes = await adapter.query<any>('think_nodes', { board_id: boardId });
+  for (const node of nodes) {
+    // Also delete node versions if they exist (best effort)
+    try {
+      const versions = await adapter.query<any>('think_node_versions', { node_id: node.id });
+      for (const version of versions) {
+        await adapter.deleteItem('think_node_versions', version.id);
+      }
+    } catch (e) {}
+    await adapter.deleteItem('think_nodes', node.id);
+  }
+  
+  // 3. Delete board
+  await adapter.deleteItem('think_boards', boardId);
+  return true;
 }
 
 export async function getBoardGraph(boardId: string): Promise<{ nodes: ThinkNode[]; edges: ThinkEdge[] }> {
@@ -255,4 +320,64 @@ export async function deleteNode(nodeId: string): Promise<boolean> {
   // We'll just delete the node and assume DB handles consistency or caller handles it.
   await adapter.deleteItem('think_nodes', nodeId);
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Board Templates (Sprint 24)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns starter node labels for a given board purpose.
+ */
+export function getBoardTemplate(purpose: BoardPurpose): { children: string[] } | null {
+  switch (purpose) {
+    case 'idea_planning':
+      return { children: ['Market', 'Tech', 'UX', 'Risks'] };
+    case 'curriculum_review':
+      return { children: ['Foundations', 'Core Concepts', 'Advanced Applied', 'Case Studies'] };
+    case 'lesson_plan':
+      return { children: ['Primer', 'Practice', 'Checkpoint', 'Reflection'] };
+    case 'research_tracking':
+      return { children: ['Pending', 'In Progress', 'Complete'] };
+    case 'strategy':
+      return { children: ['Domain A', 'Domain B', 'Milestones', 'Risk Map'] };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Auto-populates a board with starter nodes based on its purpose.
+ * Nodes are arranged in a simple radial layout.
+ */
+async function applyBoardTemplate(userId: string, boardId: string, centerLabel: string, purpose: BoardPurpose) {
+  const template = getBoardTemplate(purpose);
+  if (!template) return;
+
+  // Create center/root node
+  const rootNode = await createNode(userId, boardId, {
+    label: centerLabel,
+    nodeType: 'root',
+    positionX: 0,
+    positionY: 0
+  });
+
+  const children = template.children;
+  const radius = 250;
+
+  for (let i = 0; i < children.length; i++) {
+    const angle = (i / children.length) * 2 * Math.PI;
+    const x = Math.round(radius * Math.cos(angle));
+    const y = Math.round(radius * Math.sin(angle));
+
+    const childNode = await createNode(userId, boardId, {
+      label: children[i],
+      nodeType: 'manual',
+      positionX: x,
+      positionY: y
+    });
+
+    // Connect child to root
+    await createEdge(boardId, rootNode.id, childNode.id);
+  }
 }

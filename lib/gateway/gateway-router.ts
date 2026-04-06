@@ -15,6 +15,9 @@ import { createSkillDomain } from '@/lib/services/skill-domain-service';
 // Note: Lane 4 builds this service. We import it to ensure we provide the link_knowledge capability.
 // If it fails to import (e.g. file doesn't exist yet), it will be a TSC error later which Lane 2 or 7 will fix.
 import { linkStepToKnowledge } from '@/lib/services/step-knowledge-link-service'; 
+import { recordMemory, updateMemory, deleteMemory, consolidateMemory } from '@/lib/services/agent-memory-service';
+import { runFlowSafe } from '@/lib/ai/safe-flow';
+import { boardFromTextFlow, expandBranchFlow, suggestGapsFlow } from '@/lib/ai/flows/board-macros';
 
 /**
  * Dispatches creation requests to the appropriate services.
@@ -311,6 +314,80 @@ export async function dispatchCreate(type: string, payload: any) {
         edges: createdEdges
       };
     }
+    case 'memory': {
+      return recordMemory({
+        userId: payload.userId ?? payload.user_id,
+        kind: payload.kind,
+        topic: payload.topic,
+        content: payload.content,
+        memoryClass: payload.memoryClass ?? payload.memory_class ?? 'semantic',
+        tags: payload.tags ?? [],
+        metadata: payload.metadata ?? {},
+        source: 'gpt_learned'
+      });
+    }
+    case 'board': {
+      const { createBoard } = await import('@/lib/services/mind-map-service');
+      return createBoard(
+        payload.userId ?? payload.user_id,
+        payload.name || 'New Board',
+        payload.purpose || 'general',
+        payload.linkedEntityId || null,
+        payload.linkedEntityType || null
+      );
+    }
+    case 'board_from_text': {
+      return runFlowSafe(boardFromTextFlow, {
+        prompt: payload.prompt,
+        userId: payload.userId ?? payload.user_id
+      }, async (output: any) => {
+        if (!output || output.error) return output;
+        const { createBoard, createNode, createEdge } = await import('@/lib/services/mind-map-service');
+        const board = await createBoard(payload.userId ?? payload.user_id, output.title, 'general');
+        
+        const nodeMap: Record<string, string> = {};
+        
+        // Create root node first if exists
+        const rootNodeData = (output.nodes as any[]).find((n: any) => n.type === 'root');
+        if (rootNodeData) {
+          const rootNode = await createNode(payload.userId ?? payload.user_id, board.id, {
+            label: rootNodeData.label,
+            description: rootNodeData.description,
+            content: rootNodeData.content,
+            color: rootNodeData.color,
+            positionX: rootNodeData.x,
+            positionY: rootNodeData.y,
+            nodeType: 'root'
+          });
+          nodeMap[rootNodeData.label] = rootNode.id;
+        }
+
+        // Create other nodes
+        for (const n of (output.nodes as any[]).filter(n => n.type !== 'root')) {
+          const node = await createNode(payload.userId ?? payload.user_id, board.id, {
+            label: n.label,
+            description: n.description,
+            content: n.content,
+            color: n.color,
+            positionX: n.x,
+            positionY: n.y,
+            nodeType: 'ai_generated'
+          });
+          nodeMap[n.label] = node.id;
+        }
+
+        // Create edges based on parentLabel
+        const edges: any[] = [];
+        for (const n of (output.nodes as any[])) {
+          if (n.parentLabel && nodeMap[n.parentLabel] && nodeMap[n.label]) {
+            const edge = await createEdge(board.id, nodeMap[n.parentLabel], nodeMap[n.label]);
+            edges.push(edge);
+          }
+        }
+
+        return { ...board, nodesCreated: output.nodes.length, edgesCreated: edges.length };
+      });
+    }
     default:
       throw new Error(`Unknown create type: "${type}"`);
   }
@@ -423,7 +500,99 @@ export async function dispatchUpdate(action: string, payload: any) {
       return transitionGoalStatus(payload.goalId, payload.transitionAction);
     }
 
+    case 'memory_update': {
+      if (!payload.memoryId) throw new Error('Missing memoryId');
+      return updateMemory(payload.memoryId, payload.updates);
+    }
+    case 'memory_delete': {
+      if (!payload.memoryId) throw new Error('Missing memoryId');
+      await deleteMemory(payload.memoryId);
+      return { success: true };
+    }
+    case 'consolidate_memory': {
+      return consolidateMemory(payload.userId ?? payload.user_id, payload.lookbackHours ?? 24);
+    }
+
+    case 'rename_board': {
+      if (!payload.boardId || !payload.name) throw new Error('Missing boardId or name');
+      const { updateBoard } = await import('@/lib/services/mind-map-service');
+      return updateBoard(payload.boardId, { name: payload.name });
+    }
+
+    case 'archive_board': {
+      if (!payload.boardId) throw new Error('Missing boardId');
+      const { updateBoard } = await import('@/lib/services/mind-map-service');
+      return updateBoard(payload.boardId, { isArchived: true });
+    }
+
+    case 'reparent_node': {
+      if (!payload.nodeId || !payload.sourceNodeId) throw new Error('Missing nodeId or sourceNodeId');
+      const { getBoardGraph, deleteEdge, createEdge } = await import('@/lib/services/mind-map-service');
+      
+      // Lock 4: reparent is EDGE-BASED
+      const boardId = payload.boardId;
+      if (!boardId) throw new Error('Missing boardId for reparenting');
+      
+      const { edges } = await getBoardGraph(boardId);
+      const incomingEdges = edges.filter(e => e.targetNodeId === payload.nodeId);
+      
+      for (const edge of incomingEdges) {
+        await deleteEdge(edge.id);
+      }
+      
+      return createEdge(boardId, payload.sourceNodeId, payload.nodeId);
+    }
+
+    case 'expand_board_branch': {
+      return runFlowSafe(expandBranchFlow, payload, async (output: any) => {
+        if (!output || output.error) return output;
+        const { createNode, createEdge } = await import('@/lib/services/mind-map-service');
+        const results = [];
+        for (const n of (output.nodes as any[])) {
+          const node = await createNode(payload.userId ?? payload.user_id, payload.boardId, {
+            ...n,
+            nodeType: 'ai_generated'
+          });
+          if (n.parentNodeId) {
+            await createEdge(payload.boardId, n.parentNodeId, node.id);
+          }
+          results.push(node);
+        }
+        return results;
+      });
+    }
+
+    case 'suggest_board_gaps': {
+      return runFlowSafe(suggestGapsFlow, payload);
+    }
+
     default:
       throw new Error(`Unknown update action: "${action}"`);
+  }
+}
+
+/**
+ * Dispatches planning and retrieval requests.
+ */
+export async function dispatchPlan(action: string, payload: any) {
+  switch (action) {
+    case 'list_boards': {
+      const { getBoardSummaries } = await import('@/lib/services/mind-map-service');
+      return getBoardSummaries(payload.userId ?? payload.user_id);
+    }
+    case 'read_board': {
+      const { getBoardGraph, getBoards } = await import('@/lib/services/mind-map-service');
+      const boards = await getBoards(payload.userId ?? payload.user_id);
+      const board = boards.find(b => b.id === payload.boardId);
+      if (!board) throw new Error(`Board ${payload.boardId} not found`);
+      
+      const graph = await getBoardGraph(payload.boardId);
+      return {
+        ...board,
+        ...graph
+      };
+    }
+    default:
+      throw new Error(`Unknown plan action: "${action}"`);
   }
 }

@@ -115,6 +115,8 @@ app/
     LibraryClient.tsx   ← Client component: "Accept & Start" actions
   memory/               ← Memory Explorer (agent memory viewer)
     page.tsx            ← Server component: fetches + groups memories by topic → kind
+  map/                  ← Map Station UI
+    page.tsx            ← Server component: sidebar + canvas layout for boards
   workspace/            ← Lived experience surface
     [instanceId]/
       page.tsx          ← Server component: fetch instance + steps
@@ -819,6 +821,17 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - **2026-03-30**: Sprint 16 completed (GPT Alignment). Fixed reentry trigger enum drift (`explicit` → `manual`, added `time`). Fixed contextScope enum drift. Added `study` to resolution mode contract. Wired knowledge write + skill domain CRUD through GPT gateway. Rewrote GPT instructions with 5-mode structure from Mira's self-audit. Added SOP-34 (GPT Contract Alignment).
 - **2026-03-30 (Sprint 17)**: Addressed critical persistence normalization issues (camelCase vs snake_case). Added SOP-35 (GPT Instructions Must Preserve Product Reality) meaning GPT must act as an Operating System orchestrator instead of functionally blindly creating items. Ported 'Think Tank' to Mira's 'Mind Map Station' for node-based visual orchestration.
 - **2026-03-30 (Sprint 18)**: Refined Mind Map logic to cluster large batch operations and minimize UI lag. Fixed double-click node creation (SOP-36). Fixed OpenAPI enum drift for mind map actions (SOP-37). Added two-way metadata binding on node export. Added entity badge rendering on exported nodes. Updated GPT instructions with spatial layout rails and `read_map` protocol. Added mind-map components to repo map.
+
+### SOP-44: Contract Naming Canonicalization
+**Learned from**: Sprint 24 (operationalContext vs operational_context mismatch)
+- ❌ Passing an object where properties are camelCase (`operationalContext`) when the expected schema contract (OpenAPI, GPT Instructions) expects snake_case (`operational_context`).
+- ✅ Always use the canonical naming defined in the OpenAPI schema and GPT state packet. Do not let TS interface casing leak into the final JSON output if it violates the contract.
+
+### SOP-45: Local Fallback Parity
+**Learned from**: Sprint 24 (Memory seeding omission in local mode)
+- ❌ Using `if (!supabase) return null;` directly in a service assuming Supabase is the only store.
+- ✅ Always query `getStorageAdapter()` when falling back for local dev if Supabase is unavailable, to ensure the JSON fallback accurately mimics the service behavior.
+
 - **2026-03-31 (Gateway Schema Fix)**: Fixed 3 critical GPT-to-runtime mismatches. (1) Experience creation completely broken — camelCase→snake_case normalization added to `gateway-router.ts` persistent create path, `instance_type`/`status` defaults added, inline `steps` creation supported. (2) Skill domain creation failing silently — pre-flight validation for `userId`/`goalId`/`name` added with actionable error messages. (3) Goal domain auto-create isolation — per-domain try/catch so one failure doesn't break the goal create. Error reporting improved: validation errors return 400 (not 500) with field-level messages. OpenAPI v2.2.0 aligned to flat payloads. Discover registry de-nested. GPT instructions rewritten with operational doctrine (7,942 chars, under 8k limit). Added **⚠️ PROTECTED FILES** section to `AGENTS.md` — these 4 files (`gpt-instructions.md`, `openapi.yaml`, `discover-registry.ts`, `gateway-router.ts`) must not be regressed without explicit user approval.
 - **2026-04-01 (Flowlink Execution Audit)**: Discovered 6 systemic issues preventing Flowlink system from operating. (1) `buildGPTStatePacket` returned oldest 5 experiences, hiding new Flowlink sprints (SOP-39). (2) `getActiveGoal` filtered for `active` only, hiding `intake` goals (SOP-40). (3) Skill domains orphaned — auto-created with phantom goal ID from a failed retry. (4) Standalone step creation leaking metadata into payloads (SOP-41). (5) Duplicate Sprint 01 shells from multiple creation attempts. (6) Board nodes at (0,0) with no nodeType. Sprint 20 created: 3 lanes — State Visibility, Data Integrity, Content Enrichment.
 - **2026-04-01 (Sprint 20 complete)**: All 3 lanes done. Fixed GPT state packet slicing (sorted by created_at desc, limit 10). Fixed goal intake fallback. Re-parented 5 orphaned skill domains. Superseded 6 duplicate experience shells. Fixed standalone step creation payload leak. Enriched 3 Flowlink sprints to 5 steps each. No new SOPs — existing SOPs 39-41 covered all issues.

@@ -293,12 +293,11 @@ export async function runKnowledgeEnrichment(unitId: string, userId: string): Pr
   try {
     console.log(`[knowledge-service] Starting enrichment for unit: ${unitId}`);
     
-    // Break circular dependency: refine-knowledge-flow imports this service
     const { refineKnowledgeFlow } = await import('@/lib/ai/flows/refine-knowledge-flow');
 
     const result = await runFlowSafe(
-      () => refineKnowledgeFlow({ unitId, userId }),
-      null
+      refineKnowledgeFlow,
+      { unitId, userId }
     );
 
     if (result) {

@@ -82,3 +82,40 @@ export const GradeCheckpointOutputSchema = z.object({
   misconception: z.string().optional().describe('The specific misconception if the answer is wrong'),
   confidence: z.number().min(0).max(1).describe('Grader\'s confidence in this verdict (0–1)'),
 });
+
+// --- Lane 4: Board Macro Actions Schemas ---
+
+export const BoardFromTextOutputSchema = z.object({
+  title: z.string().describe('Suggested name for the new board'),
+  nodes: z.array(z.object({
+    label: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    color: z.string().optional(),
+    x: z.number().describe('Horizontal position offset from root (0)'),
+    y: z.number().describe('Vertical position offset from root (0)'),
+    type: z.enum(['root', 'manual', 'ai_generated', 'exported']).default('ai_generated'),
+    parentLabel: z.string().optional().describe('Label of the logical parent node to create an edge')
+  }))
+});
+
+export const ExpandBoardBranchOutputSchema = z.object({
+  nodes: z.array(z.object({
+    label: z.string(),
+    description: z.string().optional(),
+    content: z.string().optional(),
+    color: z.string().optional(),
+    x: z.number().describe('Absolute horizontal position'),
+    y: z.number().describe('Absolute vertical position'),
+    type: z.enum(['root', 'manual', 'ai_generated', 'exported']).default('ai_generated'),
+    parentNodeId: z.string().optional().describe('ID of the node to link this expansion to')
+  }))
+});
+
+export const SuggestBoardGapsOutputSchema = z.object({
+  gaps: z.array(z.object({
+    title: z.string().describe('A title for the missing logical gap'),
+    missingPerspective: z.string().describe('Reasoning for why this part is missing'),
+    recommendedNodeLabel: z.string().describe('Suggested name for a node to fill this gap')
+  }))
+});

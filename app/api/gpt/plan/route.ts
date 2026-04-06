@@ -203,57 +203,16 @@ export async function POST(request: Request) {
     }
 
     // ------------------------------------------------------------------
-    // Action: read_map
+    // Consolidate Remaining Planning Actions to Gateway Router
+    // (list_boards, read_board/read_map)
     // ------------------------------------------------------------------
-    if (action === 'read_map') {
-      const { boardId } = payload;
-
-      if (!boardId || typeof boardId !== 'string') {
-        return NextResponse.json(
-          { error: 'read_map requires a valid `boardId` string in payload.' },
-          { status: 400 }
-        );
-      }
-
-      const { getBoardGraph, getBoards } = await import('@/lib/services/mind-map-service');
-      const boards = await getBoards(userId);
-      const board = boards.find(b => b.id === boardId);
-
-      if (!board) {
-        return NextResponse.json({ error: `Board ${boardId} not found.` }, { status: 404 });
-      }
-
-      const { nodes, edges } = await getBoardGraph(boardId);
-
-      // Compress graph into a readable format for GPT
-      const nodeMap = nodes.reduce((acc, n) => ({ ...acc, [n.id]: n }), {} as Record<string, any>);
-      
-      const compressedNodes = nodes.map(n => ({
-        id: n.id,
-        label: n.label,
-        type: n.nodeType,
-        description: n.description,
-        content: n.content,
-        metadata: n.metadata,
-        position: { x: Math.round(n.positionX), y: Math.round(n.positionY) }
-      }));
-
-      const compressedEdges = edges.map(e => ({
-        id: e.id,
-        source: e.sourceNodeId,
-        target: e.targetNodeId,
-        sourceLabel: nodeMap[e.sourceNodeId]?.label ?? 'unknown',
-        targetLabel: nodeMap[e.targetNodeId]?.label ?? 'unknown'
-      }));
-
-      return NextResponse.json({
-        action: 'read_map',
-        boardId,
-        name: board.name,
-        nodes: compressedNodes,
-        edges: compressedEdges,
-        summary: `Mind map "${board.name}" contains ${nodes.length} nodes and ${edges.length} edges.`
-      });
+    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map'];
+    if (ROUTER_ACTIONS.includes(action)) {
+      const { dispatchPlan } = await import('@/lib/gateway/gateway-router');
+      // Normalize read_map -> read_board for router consistency
+      const routerAction = action === 'read_map' ? 'read_board' : action;
+      const result = await dispatchPlan(routerAction, { ...payload, userId });
+      return NextResponse.json(result);
     }
 
     // ------------------------------------------------------------------
@@ -262,7 +221,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: `Unknown action: "${action}"`,
-        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'read_map'],
+        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board'],
       },
       { status: 400 }
     );

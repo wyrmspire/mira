@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dispatchCreate } from '@/lib/gateway/gateway-router';
+import { DEFAULT_USER_ID } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,7 +48,13 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const result = await dispatchCreate(type, payload);
+    // Support both camelCase and snake_case user ID from GPT payloads, with fallback to DEFAULT_USER_ID
+    const userId = payload.userId ?? payload.user_id ?? DEFAULT_USER_ID;
+    
+    // Ensure userId is in the payload for dispatchCreate
+    const finalPayload = { ...payload, userId };
+
+    const result = await dispatchCreate(type, finalPayload);
     return NextResponse.json(result, { status: 201 });
   } catch (error: any) {
     const msg = error.message || 'Failed to process creation request';

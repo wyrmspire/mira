@@ -5,7 +5,8 @@ import { Handle, Position, NodeProps } from '@xyflow/react'
 import type { ThinkNode as ThinkNodeData } from '@/types/mind-map'
 
 export const ThinkNode = memo(({ id, data, selected }: NodeProps) => {
-  const { label, color, description, content, metadata, onAddChild, onDelete, onOpenModal } = data as unknown as ThinkNodeData & { 
+  const { label, color, description, content, metadata, memoryCount, onAddChild, onDelete, onOpenModal } = data as unknown as ThinkNodeData & { 
+    memoryCount?: number,
     onAddChild?: (id: string) => void,
     onDelete?: (id: string) => void,
     onOpenModal?: (node: any) => void
@@ -112,13 +113,21 @@ export const ThinkNode = memo(({ id, data, selected }: NodeProps) => {
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center justify-between h-3">
           <div className="text-[9px] font-bold tracking-tight text-[#94a3b8] uppercase opacity-40">
-            {badge?.label || ''}
+            {badge?.label || (memoryCount ? 'MEMORIES' : '')}
           </div>
-          {badge && (
-            <div className={`text-[10px] ${badge.color} font-bold drop-shadow-sm`}>
-              {badge.icon}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5">
+            {memoryCount ? (
+              <div className="flex items-center gap-0.5 px-1 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9px] font-bold text-indigo-400">
+                <span>🧠</span>
+                {memoryCount}
+              </div>
+            ) : null}
+            {badge && (
+              <div className={`text-[10px] ${badge.color} font-bold drop-shadow-sm`}>
+                {badge.icon}
+              </div>
+            )}
+          </div>
         </div>
         
         {isEditing ? (

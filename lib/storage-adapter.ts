@@ -34,6 +34,7 @@ const TABLE_MAP: Record<string, string> = {
   synthesis_snapshots: 'synthesis_snapshots',
   profile_facets: 'profile_facets',
   step_knowledge_links: 'step_knowledge_links',
+  agent_memory: 'agent_memory',
 }
 
 let _adapterLogged = false

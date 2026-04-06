@@ -14,6 +14,7 @@ import { getBoardSummaries } from './mind-map-service'
 import { getSkillDomainsForUser } from './skill-domain-service'
 import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
 import { SkillMasteryLevel } from '@/lib/constants'
+import { getOperationalContext } from './agent-memory-service'
 
 export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
   const adapter = getStorageAdapter()
@@ -35,15 +36,15 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
 
   // W3 - Enrich with AI synthesis
   const aiResult = await runFlowSafe(
-    () => synthesizeExperienceFlow({ instanceId: sourceId, userId }),
-    null
+    synthesizeExperienceFlow,
+    { instanceId: sourceId, userId }
   )
 
   if (aiResult) {
     snapshot.summary = aiResult.narrative
     snapshot.key_signals = {
       ...snapshot.key_signals,
-      ...aiResult.keySignals.reduce((acc, sig, i) => ({ ...acc, [`signal_${i}`]: sig }), {}),
+      ...aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {}),
       frictionAssessment: aiResult.frictionAssessment
     }
     snapshot.next_candidates = aiResult.nextCandidates
@@ -159,8 +160,8 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
   // W2 - Enrich with compressed state
   // tokenBudget is optional in the flow but Genkit TS might need it if z.number().default(800) inferred it as mandatory in the type
   const compressedResult = await runFlowSafe(
-    () => compressGPTStateFlow({ rawStateJSON: JSON.stringify(packet), tokenBudget: 800 }),
-    null
+    compressGPTStateFlow,
+    { rawStateJSON: JSON.stringify(packet), tokenBudget: 800 }
   )
 
   if (compressedResult) {
@@ -183,6 +184,14 @@ export async function buildGPTStatePacket(userId: string): Promise<GPTStatePacke
     packet.activeMaps = await getBoardSummaries(userId)
   } catch (error) {
     packet.activeMaps = []
+  }
+
+  // Sprint 24 Lane 1: Operational Context (Memories + Board Handles)
+  try {
+    packet.operational_context = await getOperationalContext(userId)
+  } catch (error) {
+    console.error('[SynthesisService] OperationalContext error:', error)
+    packet.operational_context = null
   }
 
   return packet

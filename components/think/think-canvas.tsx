@@ -25,6 +25,8 @@ import '@xyflow/react/dist/style.css'
 import { ThinkNode } from './think-node'
 import { NodeContentModal } from './node-content-modal'
 import { NodeContextMenu } from './node-context-menu'
+import { MapSidebar } from './map-sidebar'
+import Link from 'next/link'
 import type { ThinkNode as ThinkNodeData, ThinkEdge as ThinkEdgeData } from '@/types/mind-map'
 
 const nodeTypes = {
@@ -36,17 +38,21 @@ interface ThinkCanvasProps {
   initialNodes: ThinkNodeData[]
   initialEdges: ThinkEdgeData[]
   userId: string
+  boards: any[]
 }
 
-function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: ThinkCanvasProps) {
+function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId, boards }: ThinkCanvasProps) {
   const { screenToFlowPosition, getIntersectingNodes, fitView } = useReactFlow()
   
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   // UI State
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [activeModalNode, setActiveModalNode] = useState<any>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, node: Node } | null>(null)
+  const [memoryCounts, setMemoryCounts] = useState<Record<string, number>>({})
+  const [isAiLoading, setIsAiLoading] = useState(false)
 
   // Ref to break circular dependency: callbacks read current nodes without re-creating
   const nodesRef = useRef<Node[]>(nodes)
@@ -62,6 +68,25 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       })
     } catch (err) {
       console.error('Failed to persist node position:', err)
+    }
+  }, [])
+
+  const fetchMemoryCounts = useCallback(async () => {
+    try {
+      const resp = await fetch('/api/gpt/memory')
+      if (resp.ok) {
+        const memories = await resp.json()
+        const counts: Record<string, number> = {}
+        memories.forEach((m: any) => {
+          const nodeId = m.metadata?.nodeId || m.metadata?.linkedNodeId
+          if (nodeId) {
+            counts[nodeId] = (counts[nodeId] || 0) + 1
+          }
+        })
+        setMemoryCounts(counts)
+      }
+    } catch (err) {
+      console.warn('Failed to fetch memory counts:', err)
     }
   }, [])
 
@@ -159,7 +184,84 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       console.error('Failed to create child node:', err)
       setNodes((nds) => nds.filter(n => n.id !== tempId))
     }
-  }, [boardId, userId, setNodes, setEdges, onDeleteNode])
+  }, [boardId, userId, setNodes, setEdges])
+
+  const onExpandBranch = useCallback(async (nodeId: string) => {
+    setIsAiLoading(true)
+    try {
+      const resp = await fetch('/api/gpt/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'expand_board_branch',
+          payload: { boardId, nodeId, userId }
+        })
+      })
+      if (resp.ok) {
+        // AI flow returns suggested nodes, but we might need to refresh 
+        // to see the real DB records. For simplicity, we reload.
+        window.location.reload()
+      }
+    } catch (err) {
+      console.error('AI Expansion failed:', err)
+    } finally {
+      setIsAiLoading(false)
+    }
+  }, [boardId, userId])
+
+  const onSuggestGaps = useCallback(async () => {
+    setIsAiLoading(true)
+    try {
+      const resp = await fetch('/api/gpt/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'suggest_board_gaps',
+          payload: { boardId, userId }
+        })
+      })
+      if (resp.ok) {
+        // Usually shows a toast or opens a drawer with suggestions
+        // For now, reload to see if AI auto-created any gaps (or just notify)
+        alert('AI is analyzing gaps. Check back in a moment.')
+      }
+    } catch (err) {
+      console.error('Gap analysis failed:', err)
+    } finally {
+      setIsAiLoading(false)
+    }
+  }, [boardId, userId])
+
+  const onLinkMemory = useCallback(async (nodeId: string) => {
+    alert(`Node ${nodeId} memory linking mode. (Select memories in Explorer to link)`)
+  }, [])
+
+  const onReparent = useCallback(async (nodeId: string, newParentId: string) => {
+    // Optimistically update edges (remove incoming, add new)
+    setEdges((eds) => {
+      const filtered = eds.filter(e => e.target !== nodeId);
+      return addEdge({ 
+        id: crypto.randomUUID(), 
+        source: newParentId, 
+        target: nodeId, 
+        style: { stroke: '#3F464E' } 
+      }, filtered);
+    });
+
+    try {
+      await fetch('/api/gpt/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reparent_node',
+          payload: { boardId, nodeId, sourceNodeId: newParentId }
+        })
+      });
+    } catch (err) {
+      console.error('Failed to reparent node:', err);
+      window.location.reload();
+    }
+  }, [boardId, setEdges]);
 
   // Map our service nodes to xyflow nodes
   const mapNodes = useCallback((nodesData: ThinkNodeData[]): Node[] => {
@@ -174,13 +276,17 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
         color: node.color,
         nodeType: node.nodeType,
         metadata: node.metadata,
+        memoryCount: memoryCounts[node.id] || 0,
         onAddChild,
         onDelete: onDeleteNode,
-        onOpenModal: (n: any) => setActiveModalNode(n)
+        onOpenModal: (n: any) => {
+          setActiveModalNode(n)
+          setIsSidebarOpen(true)
+        }
       },
       selected: false,
     }))
-  }, [onAddChild, onDeleteNode])
+  }, [onAddChild, onDeleteNode, memoryCounts])
 
   // Map our service edges to xyflow edges
   const mapEdges = useCallback((edgesData: ThinkEdgeData[]): Edge[] => {
@@ -200,7 +306,8 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     setEdges(mapEdges(initialEdges))
     setContextMenu(null)
     setActiveModalNode(null)
-  }, [boardId, initialNodes, initialEdges, setNodes, setEdges, mapNodes, mapEdges])
+    fetchMemoryCounts()
+  }, [boardId, initialNodes, initialEdges, setNodes, setEdges, mapNodes, mapEdges, fetchMemoryCounts])
 
   const onConnect: OnConnect = useCallback(
     async (params: Connection) => {
@@ -241,7 +348,8 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const intersections = getIntersectingNodes(node);
       if (intersections.length > 0) {
         const targetNode = intersections[0];
-        onConnect({ source: targetNode.id, target: node.id, sourceHandle: null, targetHandle: null });
+        // Edge-based reparenting (Lock 4)
+        onReparent(node.id, targetNode.id);
       }
     },
     [persistNodePosition, getIntersectingNodes, onConnect]
@@ -287,8 +395,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
   }, [])
 
   const onExportEntity = useCallback(async (node: any, type: string) => {
-    // Logic from drawer - we could extract this to a hook or helper if reused
-    // For now, simpler to just open modal which has these buttons.
     setActiveModalNode(node)
   }, [])
 
@@ -313,40 +419,27 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     }
   }, [])
 
-  // ---------------------------------------------------------------------------
-  // Explode: force-directed web layout (visual only — does NOT persist to DB)
-  //
-  // Multi-pass simulation:
-  //   Pass 1: Seed initial positions via BFS from the most-connected hub
-  //   Pass 2–N: Force simulation
-  //     - ATTRACTION: connected nodes pull toward their ideal distance
-  //     - REPULSION:  all node pairs push apart to prevent overlap
-  //     - Ideal distance scales with subtree weight (leaf=tight, hub=roomier)
-  //   Final: overlap sweep — nudge any remaining collisions
-  // ---------------------------------------------------------------------------
   const onExplode = useCallback(() => {
     const currentNodes = nodesRef.current
     const currentEdges = edges
 
     if (currentNodes.length === 0) return
 
-    // --- Tuning knobs ---
-    const NODE_W = 160          // collision box width
-    const NODE_H = 70           // collision box height
-    const PADDING = 20          // minimum gap between node edges
-    const IDEAL_DIST_BASE = 140 // ideal spring length for leaf-to-leaf
-    const IDEAL_DIST_PER_CHILD = 30  // extra ideal distance per subtree child
-    const ATTRACTION = 0.08     // spring pull strength
-    const REPULSION = 5000      // repulsion constant (higher = pushier)
-    const ITERATIONS = 120      // simulation passes
-    const DAMPING = 0.9         // velocity damping per tick 
-    const MAX_FORCE = 50        // cap per-tick displacement
-    const TEMP_START = 1.0      // initial temperature (movement scale)
-    const TEMP_END = 0.05       // final temperature
+    const NODE_W = 160
+    const NODE_H = 70
+    const PADDING = 20
+    const IDEAL_DIST_BASE = 140
+    const IDEAL_DIST_PER_CHILD = 30
+    const ATTRACTION = 0.08
+    const REPULSION = 5000
+    const ITERATIONS = 120
+    const DAMPING = 0.9
+    const MAX_FORCE = 50
+    const TEMP_START = 1.0
+    const TEMP_END = 0.05
 
-    // --- Build adjacency ---
     const adj = new Map<string, Set<string>>()
-    const edgeSet = new Set<string>() // "a|b" for quick connected check
+    const edgeSet = new Set<string>()
     for (const node of currentNodes) adj.set(node.id, new Set())
     for (const edge of currentEdges) {
       adj.get(edge.source)?.add(edge.target)
@@ -354,13 +447,9 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       edgeSet.add(`${edge.source}|${edge.target}`)
       edgeSet.add(`${edge.target}|${edge.source}`)
     }
-    const isConnected = (a: string, b: string) => edgeSet.has(`${a}|${b}`)
 
-    // --- Compute subtree weight (BFS descendant count) for each node ---
-    // More descendants = heavier = needs more space
     const weight = new Map<string, number>()
     for (const node of currentNodes) {
-      // Count reachable nodes from this node (excluding itself)
       const visited = new Set<string>()
       const q = [node.id]
       visited.add(node.id)
@@ -370,18 +459,15 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           if (!visited.has(nbr)) { visited.add(nbr); q.push(nbr) }
         }
       }
-      weight.set(node.id, visited.size) // includes self
+      weight.set(node.id, visited.size)
     }
 
-    // --- Ideal distance between two connected nodes ---
     const idealDist = (a: string, b: string) => {
       const wa = weight.get(a) ?? 1
       const wb = weight.get(b) ?? 1
-      // Heavier nodes get more room, but logarithmic so it doesn't blow up
       return IDEAL_DIST_BASE + Math.log2(wa + wb) * IDEAL_DIST_PER_CHILD
     }
 
-    // --- Seed positions: BFS from most-connected node ---
     const sorted = [...currentNodes].sort((a, b) => 
       (adj.get(b.id)?.size ?? 0) - (adj.get(a.id)?.size ?? 0)
     )
@@ -390,7 +476,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
     const pos = new Map<string, Pt>()
     const vel = new Map<string, Pt>()
     
-    // Tight initial seeding — close together, let simulation push apart only where needed
     pos.set(sorted[0].id, { x: 0, y: 0 })
     vel.set(sorted[0].id, { x: 0, y: 0 })
     
@@ -402,10 +487,10 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const npos = pos.get(nid)!
       const nbrs = Array.from(adj.get(nid) ?? []).filter(n => !placed.has(n))
       
-      const angle0 = placed.size * 0.618 * 2 * Math.PI // golden angle offset
+      const angle0 = placed.size * 0.618 * 2 * Math.PI
       nbrs.forEach((nbr, i) => {
         const angle = angle0 + (2 * Math.PI * i) / Math.max(nbrs.length, 1)
-        const r = idealDist(nid, nbr) * 0.6 // start tighter than ideal, simulation will adjust
+        const r = idealDist(nid, nbr) * 0.6
         pos.set(nbr, { x: npos.x + r * Math.cos(angle), y: npos.y + r * Math.sin(angle) })
         vel.set(nbr, { x: 0, y: 0 })
         placed.add(nbr)
@@ -413,17 +498,13 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       })
     }
 
-    // Place any disconnected orphans nearby
-    let ox = 0
     for (const node of currentNodes) {
       if (!pos.has(node.id)) {
-        pos.set(node.id, { x: ox, y: 300 })
+        pos.set(node.id, { x: 0, y: 300 })
         vel.set(node.id, { x: 0, y: 0 })
-        ox += NODE_W + PADDING
       }
     }
 
-    // --- Force simulation ---
     const ids = currentNodes.map(n => n.id)
     const n = ids.length
 
@@ -432,7 +513,6 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
       const forces = new Map<string, Pt>()
       for (const id of ids) forces.set(id, { x: 0, y: 0 })
 
-      // Repulsion: every pair pushes apart (inverse-square, capped)
       for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
           const a = ids[i], b = ids[j]
@@ -440,21 +520,15 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           let dx = pb.x - pa.x
           let dy = pb.y - pa.y
           let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
-          
-          // Minimum distance based on node size
-          const minDist = Math.sqrt(NODE_W * NODE_W + NODE_H * NODE_H) / 2 + PADDING
-
           const force = REPULSION / (dist * dist)
           const fx = (dx / dist) * force
           const fy = (dy / dist) * force
-
           const fa = forces.get(a)!, fb = forces.get(b)!
           fa.x -= fx; fa.y -= fy
           fb.x += fx; fb.y += fy
         }
       }
 
-      // Attraction: connected pairs pull toward ideal distance
       for (const edge of currentEdges) {
         const a = edge.source, b = edge.target
         if (!pos.has(a) || !pos.has(b)) continue
@@ -462,68 +536,29 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
         let dx = pb.x - pa.x
         let dy = pb.y - pa.y
         let dist = Math.sqrt(dx * dx + dy * dy) || 0.1
-        
         const target = idealDist(a, b)
-        const displacement = dist - target
-        const force = ATTRACTION * displacement
+        const force = ATTRACTION * (dist - target)
         const fx = (dx / dist) * force
         const fy = (dy / dist) * force
-
         const fa = forces.get(a)!, fb = forces.get(b)!
         fa.x += fx; fa.y += fy
         fb.x -= fx; fb.y -= fy
       }
 
-      // Apply forces with temperature and damping
       for (const id of ids) {
-        const f = forces.get(id)!
-        const v = vel.get(id)!
-        const p = pos.get(id)!
-
+        const f = forces.get(id)!, v = vel.get(id)!, p = pos.get(id)!
         v.x = (v.x + f.x) * DAMPING * temp
         v.y = (v.y + f.y) * DAMPING * temp
-
-        // Cap velocity
         const speed = Math.sqrt(v.x * v.x + v.y * v.y)
         if (speed > MAX_FORCE) {
           v.x = (v.x / speed) * MAX_FORCE
           v.y = (v.y / speed) * MAX_FORCE
         }
-
         p.x += v.x
         p.y += v.y
       }
     }
 
-    // --- Final overlap sweep: nudge any boxes that still collide ---
-    for (let pass = 0; pass < 10; pass++) {
-      let anyOverlap = false
-      for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) {
-          const a = ids[i], b = ids[j]
-          const pa = pos.get(a)!, pb = pos.get(b)!
-          const overlapX = (NODE_W + PADDING) - Math.abs(pb.x - pa.x)
-          const overlapY = (NODE_H + PADDING) - Math.abs(pb.y - pa.y)
-
-          if (overlapX > 0 && overlapY > 0) {
-            anyOverlap = true
-            // Push apart along the axis of least overlap
-            if (overlapX < overlapY) {
-              const push = overlapX / 2 + 1
-              if (pb.x >= pa.x) { pa.x -= push; pb.x += push }
-              else { pa.x += push; pb.x -= push }
-            } else {
-              const push = overlapY / 2 + 1
-              if (pb.y >= pa.y) { pa.y -= push; pb.y += push }
-              else { pa.y += push; pb.y -= push }
-            }
-          }
-        }
-      }
-      if (!anyOverlap) break
-    }
-
-    // --- Apply final positions ---
     setNodes((nds) => nds.map(n => {
       const p = pos.get(n.id)
       return p ? { ...n, position: { x: Math.round(p.x), y: Math.round(p.y) } } : n
@@ -535,28 +570,39 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
   }, [edges, setNodes, fitView])
 
   return (
-    <div 
-      style={{ width: '100%', height: '100%' }} 
-      className="bg-[#050510]"
-      onClick={() => setContextMenu(null)}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onDoubleClick={onPaneDoubleClick}
-        onNodeDragStop={onNodeDragStop}
-        nodeTypes={nodeTypes}
-        onNodeDoubleClick={(_: React.MouseEvent, node: Node) => setActiveModalNode(node)}
-        onNodeContextMenu={onNodeContextMenu}
-        onNodesDelete={onNodesDelete}
-        onEdgesDelete={onEdgesDelete}
-        deleteKeyCode={['Delete', 'Backspace']}
-        fitView
-        colorMode="dark"
+    <div className="flex w-full h-full">
+      <div 
+        style={{ width: '100%', height: '100%' }} 
+        className="flex-1 bg-[#050510] relative"
+        onClick={() => setContextMenu(null)}
       >
+        {/* Back Button */}
+        <div className="absolute top-6 left-6 z-20">
+          <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-full bg-[#1e1e2e]/80 border border-[#2e2e3e] text-[#f1f5f9] hover:bg-[#2e2e3e] hover:shadow-lg transition-all backdrop-blur-md" title="Back to Studio">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          </Link>
+        </div>
+
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onDoubleClick={onPaneDoubleClick}
+          onNodeDragStop={onNodeDragStop}
+          nodeTypes={nodeTypes}
+          onNodeDoubleClick={(_: React.MouseEvent, node: Node) => {
+            setActiveModalNode(node)
+            setIsSidebarOpen(true)
+          }}
+          onNodeContextMenu={onNodeContextMenu}
+          onNodesDelete={onNodesDelete}
+          onEdgesDelete={onEdgesDelete}
+          deleteKeyCode={['Delete', 'Backspace']}
+          fitView
+          colorMode="dark"
+        >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#1e293b" />
         <Controls showInteractive={false} className="!bg-[#1e1e2e] !border-[#2e2e3e] !fill-[#f1f5f9]" />
         <MiniMap 
@@ -564,7 +610,13 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           maskColor="rgba(5, 5, 16, 0.7)"
           className="!bg-[#0a0a1a] !border-[#1e1e2e]" 
         />
-        <Panel position="top-right" className="flex gap-2">
+        <Panel position="top-right" className="flex items-center gap-2">
+            {isAiLoading && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-500/20 border border-indigo-500/50 text-xs font-bold text-indigo-400 animate-pulse">
+                <span>🪄</span>
+                AI Thinking...
+              </div>
+            )}
             <button
               onClick={onExplode}
               className="px-3 py-1.5 rounded-lg bg-indigo-600/80 hover:bg-indigo-500 border border-indigo-400/30 text-xs font-bold text-white shadow-2xl transition-all hover:scale-105 active:scale-95"
@@ -577,13 +629,41 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
             </div>
         </Panel>
       </ReactFlow>
+      
+      {/* Sidebar Expand Handle */}
+      {!isSidebarOpen && (
+        <button
+          onClick={() => setIsSidebarOpen(true)}
+          className="absolute top-1/2 right-0 -translate-y-1/2 w-8 h-16 bg-[#1e1e2e] border-y border-l border-[#2e2e3e] rounded-l-xl z-30 flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#2e2e3e] shadow-lg transition-all"
+        >
+          <span className="text-xl">‹</span>
+        </button>
+      )}
+      </div>
 
-      {activeModalNode && (
-        <NodeContentModal 
-          isOpen={!!activeModalNode} 
-          node={activeModalNode} 
-          onClose={() => setActiveModalNode(null)} 
-        />
+      {isSidebarOpen && (
+        <div className="flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+          {/* Sidebar Collapse Handle */}
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute top-1/2 -left-8 -translate-y-1/2 w-8 h-16 bg-[#0a0a14] border-y border-l border-[#1e1e2e] rounded-l-xl z-50 flex items-center justify-center text-[#64748b] hover:text-white hover:bg-[#1e1e2e] transition-colors shadow-[-4px_0_8px_rgba(0,0,0,0.2)]"
+          >
+            <span className="text-xl">›</span>
+          </button>
+          
+          {activeModalNode ? (
+            <NodeContentModal 
+              isOpen={!!activeModalNode} 
+              node={activeModalNode} 
+              onClose={() => setActiveModalNode(null)} 
+            />
+          ) : (
+            <MapSidebar 
+              boards={boards} 
+              activeBoardId={boardId} 
+            />
+          )}
+        </div>
       )}
 
       {contextMenu && (
@@ -595,6 +675,9 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId }: Think
           onDelete={onDeleteNode}
           onColorChange={onColorChange}
           onExport={onExportEntity}
+          onExpandBranch={onExpandBranch}
+          onSuggestGaps={onSuggestGaps}
+          onLinkMemory={onLinkMemory}
         />
       )}
     </div>

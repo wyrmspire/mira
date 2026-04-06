@@ -232,8 +232,8 @@ export async function extractFacetsWithAI(userId: string, instanceId: string, so
   const context = await buildFacetContext(instanceId, userId);
   
   const result = await runFlowSafe(
-    () => extractFacetsFlow(context),
-    { facets: [] }
+    extractFacetsFlow,
+    context
   );
 
   // If AI failed or returned nothing, fall back to historical mechanical behavior

@@ -1,8 +1,8 @@
 // types/synthesis.ts
 import { ExperienceInstance } from './experience';
 import { ActiveReentryPrompt } from '@/lib/experience/reentry-engine';
-
-import { ProfileFacet, FacetType } from './profile';
+import { ProfileFacet } from './profile';
+import { OperationalContext } from './agent-memory';
 
 export type FrictionLevel = 'low' | 'medium' | 'high';
 
@@ -21,6 +21,9 @@ export interface SynthesisSnapshot {
 export interface MapSummary {
   id: string;
   name: string;
+  purpose: string;
+  layoutMode: string;
+  linkedEntityType: string | null;
   nodeCount: number;
   edgeCount: number;
 }
@@ -39,5 +42,6 @@ export interface GPTStatePacket {
   };
   reentryCount?: number;
   activeMaps?: MapSummary[];
+  operational_context?: OperationalContext | null;
 }
 

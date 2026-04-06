@@ -57,6 +57,34 @@ paths:
                     type: object
                     nullable: true
                     additionalProperties: true
+                  operational_context:
+                    type: object
+                    nullable: true
+                    description: "Sprint 24: Operational handles for memory and boards."
+                    properties:
+                      memory_count:
+                        type: integer
+                      recent_memory_ids:
+                        type: array
+                        items:
+                          type: string
+                      active_topics:
+                        type: array
+                        items:
+                          type: string
+                      boards:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            name:
+                              type: string
+                            purpose:
+                              type: string
+                            nodeCount:
+                              type: integer
                   pending_enrichments:
                     type: array
                     items:
@@ -90,6 +118,14 @@ paths:
                         items:
                           type: object
                           additionalProperties: true
+                  boards:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  graph:
+                    type: object
+                    additionalProperties: true
 
   /api/gpt/plan:
     post:
@@ -106,7 +142,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [create_outline, dispatch_research, assess_gaps, read_map]
+                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board, suggest_board_gaps]
                   description: The planning action to perform.
                 topic:
                   type: string
@@ -141,7 +177,7 @@ paths:
                   default: "a0000000-0000-0000-0000-000000000001"
                 boardId:
                   type: string
-                  description: For action=read_map — the board UUID to read.
+                  description: For action=read_map/read_board — the board UUID to read.
       responses:
         '200':
           description: Success
@@ -153,7 +189,7 @@ paths:
   /api/gpt/create:
     post:
       operationId: createEntity
-      summary: Create experiences, ideas, goals, steps, knowledge, skill domains, or map objects
+      summary: Create experiences, ideas, goals, steps, knowledge, skill domains, map objects, memories, or boards
       description: |
         FLAT payload — all fields alongside `type`. Do NOT nest under a `payload` key.
         Call GET /api/gpt/discover?capability=<type> for the exact schema.
@@ -167,7 +203,7 @@ paths:
               properties:
                 type:
                   type: string
-                  enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge, map_cluster]
+                  enum: [experience, ephemeral, idea, step, goal, knowledge, skill_domain, map_node, map_edge, map_cluster, memory, board, board_from_text]
                   description: The entity type to create.
                 templateId:
                   type: string
@@ -183,7 +219,7 @@ paths:
                   description: For experiences — what the user will achieve.
                 description:
                   type: string
-                  description: For goals — what you want to accomplish. For map nodes — short summary.
+                  description: For goals/memories/nodes — content or summary.
                 resolution:
                   type: object
                   properties:
@@ -223,202 +259,122 @@ paths:
                       payload:
                         type: object
                         additionalProperties: true
-                        description: Step-specific payload. Call discover?capability=step_payload&step_type=X for the exact shape.
                       blocks:
                         type: array
                         items:
                           type: object
                           additionalProperties: true
-                        description: Granular blocks for the step. If provided, blocks take precedence over sections or content.
                   description: Array of steps for the experience.
                 curriculum_outline_id:
                   type: string
-                  description: Optional. Links to a curriculum outline.
                 previousExperienceId:
                   type: string
-                  description: Optional. Links to a prior experience for chaining.
                 domains:
                   type: array
                   items:
                     type: string
-                  description: For goals — optional string array. Auto-creates skill domains (best-effort).
                 goalId:
                   type: string
-                  description: For skill_domain — REQUIRED existing goal UUID.
                 name:
                   type: string
-                  description: For skill_domain — REQUIRED domain name.
-                rawPrompt:
+                  description: REQUIRED for skill_domain or board.
+                purpose:
                   type: string
-                  description: For ideas — the raw user prompt.
-                gptSummary:
+                  enum: [general, idea_planning, curriculum_review, lesson_plan, research_tracking, strategy]
+                  description: For type=board.
+                linkedEntityId:
                   type: string
-                  description: For ideas — GPT's summary of the concept.
-                experienceId:
+                linkedEntityType:
                   type: string
-                  description: For steps — the experience instance to add the step to.
-                instanceId:
+                  enum: [goal, experience, knowledge]
+                kind:
                   type: string
-                  description: For steps — alias for experienceId.
-                boardId:
+                  enum: [observation, strategy, idea, preference, tactic, assessment, note]
+                  description: For type=memory.
+                memory_class:
                   type: string
-                  description: Optional UUID of the think board for map nodes/edges.
-                label:
+                  enum: [semantic, episodic, procedural]
+                  description: For type=memory.
+                topic:
                   type: string
-                  description: For map nodes — label text.
+                  description: REQUIRED for memory or outline.
                 content:
                   type: string
-                  description: For map nodes — long-form elaboration text (can be paragraphs).
+                  description: For type=memory/knowledge/map_node.
+                tags:
+                  type: array
+                  items:
+                    type: string
+                rawPrompt:
+                  type: string
+                gptSummary:
+                  type: string
+                prompt:
+                  type: string
+                  description: For type=board_from_text.
+                experienceId:
+                  type: string
+                boardId:
+                  type: string
+                label:
+                  type: string
                 color:
                   type: string
-                  description: For map nodes — color (hex or tailwind).
                 position_x:
                   type: number
-                  description: For map nodes — X coordinate.
                 position_y:
                   type: number
-                  description: For map nodes — Y coordinate.
                 sourceNodeId:
                   type: string
-                  description: For map edges — source node UUID.
                 targetNodeId:
                   type: string
-                  description: For map edges — target node UUID.
                 centerNode:
                   type: object
-                  description: For map clusters — central hub node.
-                  properties:
-                    label:
-                      type: string
-                    description:
-                      type: string
-                    content:
-                      type: string
-                    color:
-                      type: string
-                    position_x:
-                      type: number
-                    position_y:
-                      type: number
                 childNodes:
                   type: array
-                  description: For map clusters — children of the center node.
                   items:
                     type: object
-                    properties:
-                      label:
-                        type: string
-                      description:
-                        type: string
-                      content:
-                        type: string
-                      color:
-                        type: string
                 step_type:
                   type: string
                   enum: [lesson, challenge, reflection, questionnaire, essay_tasks, plan_builder, checkpoint]
-                  description: For steps — the type of step to create.
-                stepType:
-                  type: string
-                  description: Alias for step_type.
                 sections:
                   type: array
                   items:
                     type: object
-                  description: For lesson or plan_builder steps.
                 prompts:
                   type: array
                   items:
                     type: object
-                  description: For reflection steps.
                 questions:
                   type: array
                   items:
                     type: object
-                  description: For questionnaire or checkpoint steps.
                 tasks:
                   type: array
                   items:
                     type: object
-                  description: For essay_tasks steps.
                 knowledge_unit_id:
                   type: string
-                  description: For checkpoint steps — UUID of the knowledge unit.
                 passing_threshold:
                   type: integer
-                  description: For checkpoint steps.
                 on_fail:
                   type: string
-                  description: For checkpoint steps.
                 payload:
                   type: object
-                  additionalProperties: true
-                  description: Optional explicit wrapper for step payload if the agent prefers nested over flat.
                 blocks:
                   type: array
-                  description: "Granular blocks for the step (Sprint 22). If provided, blocks take precedence over sections or content. Each block must have a 'type' (content, prediction, exercise, checkpoint, hint_ladder, callout, media) and its corresponding fields."
                   items:
                     type: object
-                    required: [type]
-                    properties:
-                      id:
-                        type: string
-                      type:
-                        type: string
-                        enum: [content, prediction, exercise, checkpoint, hint_ladder, callout, media]
-                      content:
-                        type: string
-                        description: Markdown for 'content' or 'callout' blocks.
-                      question:
-                        type: string
-                        description: Question for 'prediction' or 'checkpoint' blocks.
-                      reveal_content:
-                        type: string
-                        description: Content to show after prediction for 'prediction' blocks.
-                      title:
-                        type: string
-                        description: Title for 'exercise' blocks.
-                      instructions:
-                        type: string
-                        description: Instructions for 'exercise' blocks.
-                      validation_criteria:
-                        type: string
-                        description: Criteria for 'exercise' blocks.
-                      expected_answer:
-                        type: string
-                        description: Answer key for 'checkpoint' blocks.
-                      explanation:
-                        type: string
-                        description: Explanation for 'checkpoint' blocks.
-                      hints:
-                        type: array
-                        items:
-                          type: string
-                        description: Array of hints for 'hint_ladder' blocks.
-                      intent:
-                        type: string
-                        enum: [info, warning, tip, success]
-                        description: Intent for 'callout' blocks.
-                      media_type:
-                        type: string
-                        enum: [image, video, audio]
-                        description: Media type for 'media' blocks.
-                      url:
-                        type: string
-                        description: Remote URL for 'media' blocks.
-                      caption:
-                        type: string
-                        description: Caption for 'media' blocks.
       responses:
         '201':
           description: Created
         '400':
-          description: Validation error — includes field-level details
+          description: Validation error
 
   /api/gpt/update:
     post:
       operationId: updateEntity
-      summary: Edit steps, transition status, link knowledge, update nodes
+      summary: Edit steps, transition status, link knowledge, update nodes, or manage memory/boards
       description: |
         FLAT payload — all fields alongside `action`. Do NOT nest under a "payload" key.
       requestBody:
@@ -431,80 +387,112 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal]
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal, memory_update, memory_delete, consolidate_memory, rename_board, archive_board, reparent_node, expand_board_branch]
                   description: The mutation action to perform.
                 experienceId:
                   type: string
-                  description: The experience instance ID (required for transition, reorder, delete).
                 transitionAction:
                   type: string
-                  enum: [approve, publish, activate, start, pause, complete, archive]
-                  description: "Lifecycle transition to apply. For action=transition (experience) use approve|publish|activate|start|complete|archive. For action=transition_goal use activate|pause|complete|archive."
+                  enum: [approve, publish, activate, start, pause, complete, archive, kill, revive, supersede]
                 stepId:
                   type: string
-                  description: For action=update_step or delete_step — the step to modify.
                 stepPayload:
                   type: object
-                  additionalProperties: true
-                  description: For action=update_step — the updated step payload.
                 stepOrder:
                   type: array
                   items:
                     type: string
-                  description: For action=reorder_steps — array of step IDs in desired order.
                 knowledgeUnitId:
                   type: string
-                  description: For action=link_knowledge — the knowledge unit to link.
                 linkType:
                   type: string
                   enum: [teaches, tests, deepens, pre_support, enrichment]
-                  description: For action=link_knowledge — the type of link.
                 unitId:
                   type: string
-                  description: For action=update_knowledge — the knowledge unit to update.
+                memoryId:
+                  type: string
+                  description: For memory_update or memory_delete.
+                lookbackHours:
+                  type: integer
+                  description: For consolidate_memory.
                 updates:
                   type: object
                   additionalProperties: true
-                  description: For action=update_knowledge or update_skill_domain — the patch updates.
                 domainId:
                   type: string
-                  description: For action=update_skill_domain — the domain ID to update or link to.
+                boardId:
+                  type: string
+                  description: REQUIRED for board actions.
                 nodeId:
                   type: string
-                  description: For action=update_map_node or delete_map_node — the node UUID.
+                sourceNodeId:
+                  type: string
+                  description: For reparent_node.
                 edgeId:
                   type: string
-                  description: For action=delete_map_edge — the edge UUID.
                 label:
                   type: string
-                  description: For action=update_map_node — optional new label.
                 description:
                   type: string
-                  description: For action=update_map_node — optional new hover summary.
                 content:
                   type: string
-                  description: For action=update_map_node — optional long-form content update.
                 metadata:
                   type: object
-                  additionalProperties: true
-                  description: For action=update_map_node — optional metadata (linkedEntityId, linkedEntityType).
                 nodeType:
                   type: string
-                  description: For action=update_map_node — optional nodeType override (e.g. 'exported').
                 goalId:
                   type: string
-                  description: For action=transition_goal — the goal UUID to transition.
+                name:
+                  type: string
+                  description: For rename_board.
+                count:
+                  type: integer
+                  description: For expand_board_branch.
+                depth:
+                  type: integer
+                  description: For expand_board_branch.
       responses:
         '200':
           description: Updated
         '400':
           description: Validation error
 
-  /api/gpt/changes:
+  /api/gpt/memory:
     get:
-      operationId: getChangeReports
-      summary: View user-reported UI/UX changes and bugs
-      description: Returns all open feedback, bugs, and change requests reported by the user via the Changes floater. Use this to help the user scope the next version, track UI issues, or answer questions about the app's current state. Includes the exact URL/page they were on when they reported it.
+      operationId: listMemories
+      summary: Query persistent agent memories
+      description: Query the "Notebook" layer of agent memory. Entries are filtered by kind, topic, or content.
+      parameters:
+        - name: userId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Optional User ID.
+        - name: kind
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by memory kind (observation, preference, etc).
+        - name: topic
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by topic string.
+        - name: query
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keyword search in memory content.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
       responses:
         '200':
           description: Success
@@ -513,94 +501,66 @@ paths:
               schema:
                 type: object
                 properties:
-                  changes:
+                  entries:
                     type: array
                     items:
                       type: object
-                      properties:
-                        id:
-                          type: string
-                        type:
-                          type: string
-                          enum: [bug, ux, idea, change, comment]
-                        url:
-                          type: string
-                        content:
-                          type: string
-                        status:
-                          type: string
-                          enum: [open, resolved]
-                        createdAt:
-                          type: string
-        '500':
-          description: Server Error
+                      additionalProperties: true
+                  totalCount:
+                    type: integer
+                  lastRecordedAt:
+                    type: string
+                    nullable: true
+
+  /api/gpt/changes:
+    get:
+      operationId: getChangeReports
+      summary: View user-reported UI/UX changes and bugs
+      description: Returns all open feedback reported via the Changes floater.
+      responses:
+        '200':
+          description: Success
 
   /api/gpt/discover:
     get:
       operationId: discoverCapability
       summary: Learn schemas and valid values at runtime
-      description: Progressive disclosure — ask how to perform any action and get the exact schema, examples, and related capabilities. ALWAYS call this before your first create or update of a given type.
+      description: Progressive disclosure — ALWAYS call this before your first create or update of a given type.
       parameters:
         - name: capability
           in: query
           required: true
           schema:
             type: string
-          description: "The capability to learn about. Examples: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge"
+          description: "Capabilities: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge, memory_record, memory_read, memory_correct, consolidate_memory, create_board, list_boards, read_map, read_board"
         - name: step_type
           in: query
           required: false
           schema:
             type: string
-          description: "Optional filter for step_payload (e.g. lesson, checkpoint, challenge)"
       responses:
         '200':
           description: Schema, examples, and usage guidance
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  capability:
-                    type: string
-                  endpoint:
-                    type: string
-                  description:
-                    type: string
-                  schema:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  example:
-                    type: object
-                    nullable: true
-                    additionalProperties: true
-                  when_to_use:
-                    type: string
-        '400':
-          description: Unknown capability (returns list of valid capabilities)
 
   /api/knowledge:
     get:
       operationId: readKnowledge
       summary: Read knowledge base content
-      description: Returns full knowledge units with content, thesis, key ideas, and metadata. Use this to read research results and reference them when building experiences.
+      description: Returns full knowledge units.
       parameters:
         - name: domain
           in: query
           required: false
           schema:
             type: string
-          description: Filter by domain (e.g. "AI Business Strategy", "SaaS Strategy")
         - name: topic
           in: query
           required: false
           schema:
             type: string
-          description: Filter by topic
       responses:
         '200':
-          description: Knowledge units grouped by domain
+          description: Knowledge units grouped by domain.
           content:
             application/json:
               schema:
@@ -608,32 +568,11 @@ paths:
                 properties:
                   units:
                     type: object
-                    description: Units grouped by domain
                     additionalProperties:
                       type: array
                       items:
                         type: object
-                        properties:
-                          id:
-                            type: string
-                          title:
-                            type: string
-                          thesis:
-                            type: string
-                          content:
-                            type: string
-                            description: Full research content — read this to understand the topic deeply
-                          key_ideas:
-                            type: array
-                            items:
-                              type: string
-                          unit_type:
-                            type: string
-                            enum: [foundation, playbook]
-                          topic:
-                            type: string
-                          domain:
-                            type: string
+                        additionalProperties: true
                   total:
                     type: integer
                   domains:
