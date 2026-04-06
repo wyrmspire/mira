@@ -1,0 +1,31 @@
+--- Running test-endpoints for Mira ---
+
+[1] GET /api/gpt/state
+[PASS] GET /api/gpt/state
+    Expected: 200 | Actual: 200
+
+[2] POST /api/gpt/create (type: goal)
+[PASS] POST /api/gpt/create (goal)
+    Expected: 201 | Actual: 201
+
+[3] POST /api/gpt/plan (action: create_outline)
+[PASS] POST /api/gpt/plan (create_outline)
+    Expected: 201 | Actual: 201
+
+[4] POST /api/gpt/create (type: memory)
+[PASS] POST /api/gpt/create (memory)
+    Expected: 201 | Actual: 201
+
+[5] POST /api/gpt/create (type: board)
+[PASS] POST /api/gpt/create (board)
+    Expected: 201 | Actual: 201
+
+[6] POST /api/gpt/update (action: suggest_board_gaps)
+[PASS] POST /api/gpt/update (suggest_board_gaps)
+    Expected: 200 | Actual: 200
+
+--- Cleaning Up DB Entries ---
+Killed goal 5409d3a9-58af-4e63-b122-c67bd28686da: 500
+Archived board 96192009-c8c8-4489-9ba5-e0abe7a431e4: 200
+Deleted memory 4bcd91d8-9917-4ce1-ba38-2fb2f47181f3: 200
+Cleanup commands dispatched.

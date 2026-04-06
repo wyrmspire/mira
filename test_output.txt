@@ -1,0 +1,20 @@
+--- Running test-endpoints for Mira ---
+
+[1] GET /api/gpt/state
+Traceback (most recent call last):
+  File "C:\mira\miracli.py", line 127, in <module>
+    main()
+    ~~~~^^
+  File "C:\mira\miracli.py", line 122, in main
+    test_endpoints()
+    ~~~~~~~~~~~~~~^^
+  File "C:\mira\miracli.py", line 27, in test_endpoints
+    print_result("GET /api/gpt/state", None, 200, r.status_code, r.text)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\mira\miracli.py", line 15, in print_result
+    print(f"[{pass_fail}] {endpoint}")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 1: character maps to <undefined>

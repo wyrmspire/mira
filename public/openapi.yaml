@@ -142,7 +142,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board, suggest_board_gaps]
+                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board]
                   description: The planning action to perform.
                 topic:
                   type: string
@@ -387,7 +387,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal, memory_update, memory_delete, consolidate_memory, rename_board, archive_board, reparent_node, expand_board_branch]
+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal, memory_update, memory_delete, consolidate_memory, rename_board, archive_board, reparent_node, expand_board_branch, suggest_board_gaps]
                   description: The mutation action to perform.
                 experienceId:
                   type: string

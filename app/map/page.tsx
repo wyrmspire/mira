@@ -18,9 +18,13 @@ export default async function MapPage({ searchParams }: MapPageProps) {
     summaries = await getBoardSummaries(userId)
   }
 
-  const activeBoardId = searchParams.boardId || summaries[0].id
+  const activeBoardId = searchParams.boardId || summaries[0]?.id
   const activeBoard = summaries.find(b => b.id === activeBoardId) || summaries[0]
   
+  if (!activeBoard) {
+    return <div className="text-white p-4">Error loading boards. Please try again.</div>
+  }
+
   // Parallel fetch board graph
   const { nodes, edges } = await getBoardGraph(activeBoard.id)
 
@@ -36,11 +40,17 @@ export default async function MapPage({ searchParams }: MapPageProps) {
         />
         
         {/* Board Context Overlay */}
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 pointer-events-none select-none flex flex-col items-center">
-          <h1 className="text-sm font-bold text-[#f1f5f9]/60 tracking-wide drop-shadow-md">{activeBoard.name}</h1>
-          <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-[0.2em] mt-0.5 drop-shadow-sm">
-            {activeBoard.purpose.replace('_', ' ')}
-          </span>
+        <div className="absolute top-6 left-0 right-0 z-10 pointer-events-none flex justify-center">
+          <div className="flex flex-col items-center opacity-40 hover:opacity-100 transition-opacity">
+            <h1 className="text-xs font-medium text-[#f1f5f9] tracking-widest uppercase">{activeBoard.name}</h1>
+          </div>
+        </div>
+
+        {/* Back Navigation */}
+        <div className="absolute top-6 left-6 z-20">
+          <a href="/" className="px-4 py-2 rounded-lg bg-[#1e1e2e]/80 hover:bg-[#2e2e3e] border border-[#2e2e3e] text-xs font-bold text-[#94a3b8] hover:text-white backdrop-blur-md transition-all shadow-lg flex items-center gap-2">
+            <span>←</span> Back to Studio
+          </a>
         </div>
       </div>
     </div>

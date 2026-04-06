@@ -1,0 +1,27 @@
+--- Running test-endpoints for Mira ---
+
+[1] GET /api/gpt/state
+[PASS] GET /api/gpt/state
+    Expected: 200 | Actual: 200
+
+[2] POST /api/gpt/create (type: goal)
+[FAIL] POST /api/gpt/create (goal)
+    Expected: 200 | Actual: 201
+    Body: {"id":"83cc98f8-7bc8-4be8-ac7e-1652b5b48906","userId":"a0000000-0000-0000-0000-000000000001","title":"CLI Test Goal 2c9180","description":"","status":"intake","domains":["CLI Domain 6c1a20"],"createdAt":"2026-04-06T03:37:36.257+00:00","updatedAt":"2026-04-06T03:37:36.257+00:00","_domainsCreated":["CLI Domain 6c1a20"]}
+
+[3] POST /api/gpt/plan (action: create_outline)
+[PASS] POST /api/gpt/plan (create_outline)
+    Expected: 201 | Actual: 201
+
+[4] POST /api/gpt/create (type: memory)
+[FAIL] POST /api/gpt/create (memory)
+    Expected: 200 | Actual: 201
+    Body: {"id":"4bcd91d8-9917-4ce1-ba38-2fb2f47181f3","userId":"a0000000-0000-0000-0000-000000000001","kind":"preference","memoryClass":"semantic","topic":"Testing","content":"User prefers CLI tools over GUIs for testing.","tags":[],"confidence":0.75,"usageCount":4,"pinned":false,"source":"gpt_learned","createdAt":"2026-04-06T03:32:16.798146+00:00","lastUsedAt":"2026-04-06T03:37:36.96+00:00","metadata":{}}
+
+[5] POST /api/gpt/create (type: board)
+[FAIL] POST /api/gpt/create (board)
+    Expected: 200 | Actual: 201
+    Body: {"id":"320717e8-d077-444f-89e3-f549f18b6e28","workspaceId":"a0000000-0000-0000-0000-000000000001","name":"CLI Test Board a44003","purpose":"general","layoutMode":"radial","linkedEntityId":null,"linkedEntityType":null,"isArchived":false,"createdAt":"2026-04-06T03:37:37.047+00:00","updatedAt":"2026-04-06T03:37:37.047+00:00"}
+
+--- Cleaning Up DB Entries ---
+Cleanup commands dispatched.

@@ -25,7 +25,6 @@ import '@xyflow/react/dist/style.css'
 import { ThinkNode } from './think-node'
 import { NodeContentModal } from './node-content-modal'
 import { NodeContextMenu } from './node-context-menu'
-import { MapSidebar } from './map-sidebar'
 import Link from 'next/link'
 import type { ThinkNode as ThinkNodeData, ThinkEdge as ThinkEdgeData } from '@/types/mind-map'
 
@@ -604,7 +603,7 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId, boards 
           colorMode="dark"
         >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#1e293b" />
-        <Controls showInteractive={false} className="!bg-[#1e1e2e] !border-[#2e2e3e] !fill-[#f1f5f9]" />
+        <Controls position="bottom-right" showInteractive={false} className="!bg-[#1e1e2e] !border-[#2e2e3e] !fill-[#f1f5f9]" />
         <MiniMap 
           nodeColor={(n: any) => n.data?.color || '#3F3F46'} 
           maskColor="rgba(5, 5, 16, 0.7)"
@@ -642,7 +641,7 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId, boards 
       </div>
 
       {isSidebarOpen && (
-        <div className="flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
+        <div className="flex-shrink-0 relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] h-full bg-[#0a0a14] border-l border-[#1e1e2e]">
           {/* Sidebar Collapse Handle */}
           <button
             onClick={() => setIsSidebarOpen(false)}
@@ -658,10 +657,15 @@ function ThinkCanvasInner({ boardId, initialNodes, initialEdges, userId, boards 
               onClose={() => setActiveModalNode(null)} 
             />
           ) : (
-            <MapSidebar 
-              boards={boards} 
-              activeBoardId={boardId} 
-            />
+            <div className="w-[360px] h-full flex flex-col items-center justify-center p-8 text-center text-[#64748b]">
+              <div className="w-16 h-16 rounded-full bg-[#1e1e2e] flex items-center justify-center mb-4 opacity-50">
+                <span className="text-2xl">⚡</span>
+              </div>
+              <h3 className="text-sm font-bold text-[#e2e8f0] mb-2">Select a Node</h3>
+              <p className="text-xs leading-relaxed">
+                Click on any node in the map to view its details, elaborate its content, or export it to the studio.
+              </p>
+            </div>
           )}
         </div>
       )}
