@@ -62,12 +62,13 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
     const storedStepId = sessionStorage.getItem(`mira_active_step_${instance.id}`);
     
     // Fetch enriched data to get resume step index
-    fetch(`/api/experiences/${instance.id}`)
+    fetch(`/api/experiences/${instance.id}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(data => {
         const resumeIndex = data.resumeStepIndex || 0;
+        const freshSteps = data.steps || steps;
         const initialStatuses: Record<string, StepStatus> = {};
-        steps.forEach((step, idx) => {
+        freshSteps.forEach((step: any, idx: number) => {
           if (step.status === 'completed') {
             initialStatuses[step.id] = 'completed';
           } else if (step.status === 'skipped') {

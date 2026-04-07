@@ -43,7 +43,7 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
           }
         });
       },
-      { threshold: 0.5 }
+      { threshold: 0.1 }
     );
 
     return () => observerRef.current?.disconnect();
@@ -243,14 +243,14 @@ export default function LessonStep({ step, onComplete, onSkip, onDraft }: Lesson
           </button>
           
           <div className="flex flex-col items-end gap-3">
-            {!isComplete && (
+            {!isComplete && !hasBlocks && (
               <p className="text-xs text-amber-500/70 font-mono">
                 {!allSectionsRead ? 'SCROLL TO BOTTOM' : 'CONFIRM ALL CHECKPOINTS'}
               </p>
             )}
             <button
               onClick={() => onComplete()}
-              disabled={!isComplete}
+              disabled={!hasBlocks && !isComplete}
               className="px-12 py-4 bg-indigo-500 text-white rounded-xl text-sm font-extrabold hover:bg-indigo-600 transition-all disabled:opacity-20 disabled:grayscale disabled:cursor-not-allowed shadow-xl shadow-indigo-500/20 active:scale-95"
             >
               Continue Journey →

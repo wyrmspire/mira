@@ -47,16 +47,16 @@ export function ChangesFloater() {
     }
   }
 
-  // A subtle pill at top-center.
+  // A subtle pill at bottom-left.
   return (
     <>
-      <div className="fixed bottom-6 left-6 z-[100] transition-transform">
+      <div className="fixed bottom-3 left-3 z-[100] transition-transform">
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-[#1a1a24]/90 hover:bg-[#252535] backdrop-blur-md border border-white/10 text-[#94a3b8] hover:text-white text-[10px] sm:text-xs px-4 py-2 rounded-xl font-bold tracking-tight shadow-2xl flex items-center gap-2 transition-all active:scale-95 group"
+          className="bg-[#1a1a24]/90 hover:bg-[#252535] backdrop-blur-md border border-white/10 text-[#94a3b8] hover:text-white text-[10px] px-3 py-1.5 rounded-xl font-bold tracking-tight shadow-2xl flex items-center gap-1.5 transition-all active:scale-95 group"
         >
-          <div className="w-5 h-5 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
-            <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className="w-4 h-4 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+            <svg className="w-2.5 h-2.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
           </div>

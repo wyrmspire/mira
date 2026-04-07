@@ -145,11 +145,11 @@ export default function LibraryClient({
               </Link>
 
               {(nextInfo || prevInfo) && (
-                <div className="mt-4 pt-4 border-t border-[#1e1e2e] flex flex-wrap gap-2">
+                <div className="mt-4 pt-4 border-t border-[#1e1e2e] flex flex-wrap gap-2 min-w-0 w-full overflow-hidden">
                   {prevInfo && (
                     <Link 
                       href={ROUTES.workspace(prevId!)}
-                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 truncate max-w-full"
+                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 truncate max-w-full inline-block min-w-0"
                     >
                       ← Previous: {prevInfo.title}
                     </Link>
@@ -157,7 +157,7 @@ export default function LibraryClient({
                   {nextInfo && (
                     <Link 
                       href={ROUTES.workspace(nextId!)}
-                      className={`px-2 py-1 rounded text-[10px] font-bold hover:bg-slate-800 transition-all border truncate max-w-full ${
+                      className={`px-2 py-1 rounded text-[10px] font-bold hover:text-[#f1f5f9] transition-all border truncate max-w-full inline-block min-w-0 ${
                         nextInfo.status === 'completed'
                           ? 'bg-slate-900/50 text-slate-500 border-slate-800'
                           : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
@@ -190,11 +190,11 @@ export default function LibraryClient({
           return (
             <ExperienceCard key={instance.id} instance={instance}>
               {(nextInfo || prevInfo) && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 min-w-0 w-full overflow-hidden">
                   {prevInfo && (
                     <Link 
                       href={ROUTES.workspace(prevId!)}
-                      className="px-2 py-1 rounded bg-[#0d0d14] text-[#4a4a6a] text-[10px] font-bold hover:text-indigo-400 transition-all border border-[#1e1e2e] truncate max-w-full"
+                      className="px-2 py-1 rounded bg-[#0d0d14] text-[#4a4a6a] text-[10px] font-bold hover:text-indigo-400 transition-all border border-[#1e1e2e] truncate max-w-full inline-block min-w-0"
                     >
                       ← Previous: {prevInfo.title}
                     </Link>
@@ -203,7 +203,7 @@ export default function LibraryClient({
                   {nextInfo && (
                     <Link 
                       href={ROUTES.workspace(nextId!)}
-                      className={`px-2 py-1 rounded text-[10px] font-bold transition-all border truncate max-w-full ${
+                      className={`px-2 py-1 rounded text-[10px] font-bold transition-all border truncate max-w-full inline-block min-w-0 ${
                         nextInfo.status === 'completed'
                           ? 'bg-slate-900/50 text-slate-600 border-slate-800 hover:text-slate-400'
                           : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:bg-slate-800'
