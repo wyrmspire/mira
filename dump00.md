@@ -1,5 +1,5 @@
 # Mira + Nexus Project Code Dump
-Generated: Mon, Apr  6, 2026  7:32:45 PM
+Generated: Mon, Apr  6, 2026  9:56:14 PM
 
 ## Selection Summary
 
@@ -2870,13 +2870,15 @@ export async function GET(
 ### app/api/experiences/[id]/route.ts
 
 ```typescript
-import { NextResponse } from 'next/server'
-import { getExperienceInstanceById, getResumeStepIndex } from '@/lib/services/experience-service'
+import { NextResponse, NextRequest } from 'next/server'
+import { getExperienceInstanceById, getResumeStepIndex, getExperienceSteps } from '@/lib/services/experience-service'
 import { getInteractionsByInstance } from '@/lib/services/interaction-service'
 import { getExperienceChain } from '@/lib/services/graph-service'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { id } = params
@@ -2888,15 +2890,16 @@ export async function GET(
       return NextResponse.json({ error: 'Experience not found' }, { status: 404 })
     }
 
-    // Lane 4 Enrichment:
-    // 1. Interaction count
-    const interactions = await getInteractionsByInstance(id)
-    const interactionCount = interactions.length
+    // Always include steps with payloads — this is basic CRUD
+    const steps = await getExperienceSteps(id)
 
-    // 2. Resume step index
+    // Always include interactions — this is what the user did
+    const interactions = await getInteractionsByInstance(id)
+
+    // Resume step index
     const resumeStepIndex = await getResumeStepIndex(id)
 
-    // 3. Graph context
+    // Graph context
     let graphContext = { previousTitle: null as string | null, suggestedNextCount: 0 }
     try {
       const chain = await getExperienceChain(id)
@@ -2910,7 +2913,9 @@ export async function GET(
 
     return NextResponse.json({
       ...instance,
-      interactionCount,
+      steps,
+      interactions,
+      interactionCount: interactions.length,
       resumeStepIndex,
       graph: graphContext
     })
@@ -4430,7 +4435,7 @@ export async function POST(req: NextRequest) {
       source,
     });
 
-    return NextResponse.json(memory);
+    return NextResponse.json(memory, { status: 201 });
   } catch (error: any) {
     console.error('[API Memory POST] Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -4650,7 +4655,7 @@ export async function POST(request: Request) {
     // Consolidate Remaining Planning Actions to Gateway Router
     // (list_boards, read_board/read_map)
     // ------------------------------------------------------------------
-    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map'];
+    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map', 'read_experience'];
     if (ROUTER_ACTIONS.includes(action)) {
       const { dispatchPlan } = await import('@/lib/gateway/gateway-router');
       // Normalize read_map -> read_board for router consistency
@@ -4665,7 +4670,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: `Unknown action: "${action}"`,
-        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board'],
+        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board', 'read_experience'],
       },
       { status: 400 }
     );
@@ -7993,8 +7998,3 @@ export default async function LibraryPage() {
   const userId = DEFAULT_USER_ID;
 
   // DEBUG: Check which storage adapter is being used
-  const { getStorageAdapter } = await import('@/lib/storage-adapter');
-  const adapter = getStorageAdapter();
-  console.log('[Library] Storage adapter:', adapter.constructor.name);
-
-  // Parallel fetch for all sections

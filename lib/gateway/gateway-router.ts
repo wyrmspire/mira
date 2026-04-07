@@ -81,6 +81,30 @@ export async function dispatchCreate(type: string, payload: any) {
         const { linkExperiences } = await import('@/lib/services/graph-service');
         await linkExperiences(instanceData.previous_experience_id, newInstance.id, 'chain');
       }
+
+      // W2: Link to skill domains if provided
+      const domainIds = payload.domainIds ?? payload.domain_ids ?? [];
+      if (domainIds.length > 0) {
+        const { linkExperience } = await import('@/lib/services/skill-domain-service');
+        for (const domainId of domainIds) {
+          try {
+            await linkExperience(domainId, newInstance.id);
+          } catch (err) {
+            console.warn(`[gateway/create] Failed to link experience to domain ${domainId}:`, err);
+          }
+        }
+      }
+
+      // W4: Create inbox event
+      const { createInboxEvent } = await import('@/lib/services/inbox-service');
+      await createInboxEvent({
+        type: 'experience_proposed',
+        title: 'New experience proposed',
+        body: `A new experience has been proposed: "${newInstance.title}"`,
+        severity: 'info',
+        actionUrl: `/workspace/${newInstance.id}`
+      });
+
       const stepsResponse = createdSteps.map(s => ({
         ...s,
         order_index: s.step_order

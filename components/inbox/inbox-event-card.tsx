@@ -25,6 +25,30 @@ const severityDot: Record<InboxEvent['severity'], string> = {
   success: 'bg-emerald-500',
 }
 
+const typeIcons: Record<string, string> = {
+  experience_proposed: '✉️',
+  experience_approved: '✅',
+  experience_completed: '🏆',
+  knowledge_ready: '📚',
+  idea_captured: '💡',
+  drill_completed: '🎯',
+  project_promoted: '🚀',
+  project_shipped: '✦',
+  project_killed: '†',
+}
+
+const typeLabels: Record<string, string> = {
+  experience_proposed: 'Proposed',
+  experience_approved: 'Approved',
+  experience_completed: 'Completed',
+  knowledge_ready: 'Knowledge',
+  idea_captured: 'Idea',
+  drill_completed: 'Drill',
+  project_promoted: 'Project',
+  project_shipped: 'Shipped',
+  project_killed: 'Removed',
+}
+
 export function InboxEventCard({ event }: InboxEventCardProps) {
   const router = useRouter()
   const [isMarking, setIsMarking] = useState(false)
@@ -56,10 +80,17 @@ export function InboxEventCard({ event }: InboxEventCardProps) {
       } hover:opacity-100 group`}
     >
       <div className="flex items-start gap-3">
-        <span className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${severityDot[event.severity]}`} />
+        <span className="text-base mt-0.5 flex-shrink-0">{typeIcons[event.type] || '◎'}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1">
-            <p className="text-sm font-medium text-[#e2e8f0]">{event.title}</p>
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-sm font-medium text-[#e2e8f0] truncate">{event.title}</p>
+              {typeLabels[event.type] && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#1e1e2e] text-[#94a3b8] font-medium uppercase tracking-wider flex-shrink-0">
+                  {typeLabels[event.type]}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2">
               {!event.read && (
                 <button

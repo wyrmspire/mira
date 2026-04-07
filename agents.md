@@ -792,6 +792,30 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - ✅ Expose macro actions: `board_from_text` (one text → full board), `expand_board_branch` (one node → N children), `suggest_board_gaps` (one board → suggestions). One action, many nodes.
 - Why: Brittle multi-step CRUD sequences are error-prone and slow. The GPT should express intent ("expand this branch") and let the backend handle the graph operations.
 
+### SOP-50: Step completion must persist to DB (never rely on client-only state)
+**Learned from**: Sprint 25 Dogfood Integrity
+- ❌ Calling `onComplete()` and assuming React state is enough.
+- ✅ Calling `PATCH /api/experiences/[id]/steps` to persist `status: 'completed'` to the DB.
+- Why: If the user refreshes, client-only state is lost. Progress in the learning OS must be durable.
+
+### SOP-51: Synthesis must be triggered server-side (never client fire-and-forget)
+**Learned from**: Sprint 25 Dogfood Integrity
+- ❌ Calling `fetch('/api/synthesis')` directly from `WorkspaceClient.tsx` alongside other completion actions.
+- ✅ Triggering synthesis inside the backend boundary (e.g., inside `transitionExperienceStatus` for `complete`).
+- Why: Client-side fire-and-forget requests get aborted if the user navigates away or closes the browser tab, losing critical insight generation.
+
+### SOP-52: AI context flows must distinguish data types (scale answers ≠ semantic text)
+**Learned from**: Sprint 25 Dogfood Integrity
+- ❌ Bundling 1-to-5 Likert scale answers with essay reflections into a single context string for `extract-facets`.
+- ✅ Mapping answers against their question texts and filtering out pure integer/scale payloads from semantic extraction pipelines.
+- Why: Feeding "very" or "5" to a semantic extraction flow results in poisoned interests (e.g., the user is interested in "very"). Only feed semantic output to semantic extractors.
+
+### SOP-53: State machine transitions for GPT must have shortcut macros
+**Learned from**: Sprint 25 Dogfood Integrity
+- ❌ Forcing GPT to issue `approve` followed by `activate` to start an experience.
+- ✅ Exposing a macro `start` transition that correctly handles the sequence or is valid from its current state.
+- Why: GPT struggles with multi-step imperative transitions. Provide intent-based macros.
+
 ---
 
 ## Lessons Learned (Changelog)
@@ -821,6 +845,8 @@ GPT instructions and discover registry MUST match TypeScript contracts. Always v
 - **2026-03-30**: Sprint 16 completed (GPT Alignment). Fixed reentry trigger enum drift (`explicit` → `manual`, added `time`). Fixed contextScope enum drift. Added `study` to resolution mode contract. Wired knowledge write + skill domain CRUD through GPT gateway. Rewrote GPT instructions with 5-mode structure from Mira's self-audit. Added SOP-34 (GPT Contract Alignment).
 - **2026-03-30 (Sprint 17)**: Addressed critical persistence normalization issues (camelCase vs snake_case). Added SOP-35 (GPT Instructions Must Preserve Product Reality) meaning GPT must act as an Operating System orchestrator instead of functionally blindly creating items. Ported 'Think Tank' to Mira's 'Mind Map Station' for node-based visual orchestration.
 - **2026-03-30 (Sprint 18)**: Refined Mind Map logic to cluster large batch operations and minimize UI lag. Fixed double-click node creation (SOP-36). Fixed OpenAPI enum drift for mind map actions (SOP-37). Added two-way metadata binding on node export. Added entity badge rendering on exported nodes. Updated GPT instructions with spatial layout rails and `read_map` protocol. Added mind-map components to repo map.
+
+- **2026-03-31 (Sprint 25)**: Dogfood Integrity. Cleaned up CLI test garbage, hid quarantined Arena view, fixed active goal fallback logic. Repaired backend completion authority (added step completion PATCH, server-side synthesis trigger). Aligned facet extraction to filter scale/integer data (SOP-52). Updated Gateway `start` transition macros (SOP-53) and completed workspace UI to be read-only. Added SOPs 50-53 for robust state transitions.
 
 ### SOP-44: Contract Naming Canonicalization
 **Learned from**: Sprint 24 (operationalContext vs operational_context mismatch)

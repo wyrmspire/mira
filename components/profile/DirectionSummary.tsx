@@ -74,7 +74,7 @@ export function DirectionSummary({ profile, activeGoal, skillDomains }: Directio
             </div>
           ) : (
             <div className="p-4 rounded-xl bg-slate-800/10 border border-slate-700/50 border-dashed text-center italic">
-              <span className="text-xs text-slate-500">Pick a goal to track trajectory</span>
+              <span className="text-xs text-slate-500">No active goal. Create one in Mira.</span>
             </div>
           )}
 

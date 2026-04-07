@@ -50,20 +50,22 @@ export function ChangesFloater() {
   // A subtle pill at top-center.
   return (
     <>
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 z-[100] transition-transform">
+      <div className="fixed bottom-6 left-6 z-[100] transition-transform">
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-purple-900/50 hover:bg-purple-800/60 backdrop-blur border border-purple-500/30 text-purple-100 text-xs px-4 py-1.5 rounded-b-lg font-medium tracking-wide shadow-lg flex items-center gap-2 transition-all hover:pt-2"
+          className="bg-[#1a1a24]/90 hover:bg-[#252535] backdrop-blur-md border border-white/10 text-[#94a3b8] hover:text-white text-[10px] sm:text-xs px-4 py-2 rounded-xl font-bold tracking-tight shadow-2xl flex items-center gap-2 transition-all active:scale-95 group"
         >
-          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Report Change / Issue
+          <div className="w-5 h-5 rounded-lg bg-purple-500/20 flex items-center justify-center group-hover:bg-purple-500/30 transition-colors">
+            <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          Report Issue
         </button>
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 z-[110] flex items-start justify-center pt-24 px-4 sm:px-0">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
           
           <div className="relative bg-[#111116] border border-white/10 p-6 rounded-2xl w-full max-w-lg shadow-2xl animate-in fade-in slide-in-from-top-10">

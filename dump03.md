@@ -1,3 +1,21 @@
+      const isViewed = stepInteractions.some(i => i.event_type === 'step_viewed');
+      const sections = (step.payload as any)?.sections || [];
+      const checkpoints = sections.filter((s: any) => s.type === 'checkpoint');
+      
+      if (checkpoints.length === 0) return isViewed ? 100 : 0;
+      
+      const isCompleted = stepInteractions.some(i => i.event_type === 'task_completed');
+      if (isCompleted) return 100;
+      return isViewed ? 50 : 0;
+    }
+    case 'challenge': {
+      const objectives = (step.payload as any)?.objectives || [];
+      if (objectives.length === 0) return 100;
+      const completionEvent = stepInteractions.find(i => i.event_type === 'task_completed');
+      if (!completionEvent) return 0;
+      const completedObjs = completionEvent.event_payload?.completedObjectives || {};
+      const percent = (Object.keys(completedObjs).length / objectives.length) * 100;
+      return Math.min(percent, 100);
     }
     case 'reflection': {
       const prompts = (step.payload as any)?.prompts || [];
@@ -1696,6 +1714,23 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       userId: 'user-123'
     },
     when_to_use: 'Periodically or after a major milestone to ensure the "Notebook" memory layer is up to date.'
+  }),
+
+  read_experience: () => ({
+    capability: 'read_experience' as const,
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Read the full context dump for an experience: metadata, steps, all user interactions (answers, reflections, time, completions), and synthesis narrative. Use this to review what the user actually did.',
+    schema: {
+      action: 'read_experience',
+      experienceId: 'UUID of the experience instance (REQUIRED)',
+      userId: 'optional UUID (auto-resolved from experience)'
+    },
+    example: {
+      action: 'read_experience',
+      experienceId: '1bbaf425-d465-4c1d-a2a8-83b6302540b8'
+    },
+    when_to_use: 'After a user completes an experience, before generating follow-up experiences, or when you need to reference specific user answers. Always call this before synthesizing or summarizing what the user said.',
+    relatedCapabilities: ['create_experience', 'memory_record', 'create_outline']
   })
 };
 
@@ -2081,11 +2116,11 @@ export async function dispatchCreate(type: string, payload: any) {
       );
     }
     case 'board_from_text': {
-      return runFlowSafe(boardFromTextFlow, {
+      const flowResult = await runFlowSafe(boardFromTextFlow, {
         prompt: payload.prompt,
         userId: payload.userId ?? payload.user_id
       }, async (output: any) => {
-        if (!output || output.error) return output;
+        if (!output || !Array.isArray(output.nodes)) return null;
         const { createBoard, createNode, createEdge } = await import('@/lib/services/mind-map-service');
         const board = await createBoard(payload.userId ?? payload.user_id, output.title, 'general');
         
@@ -2131,6 +2166,11 @@ export async function dispatchCreate(type: string, payload: any) {
 
         return { ...board, nodesCreated: output.nodes.length, edgesCreated: edges.length };
       });
+
+      if (!flowResult) {
+        throw new Error('AI board generation failed. Try again or create the board manually with type="board".');
+      }
+      return flowResult;
     }
     default:
       throw new Error(`Unknown create type: "${type}"`);
@@ -2288,8 +2328,8 @@ export async function dispatchUpdate(action: string, payload: any) {
     }
 
     case 'expand_board_branch': {
-      return runFlowSafe(expandBranchFlow, payload, async (output: any) => {
-        if (!output || output.error) return output;
+      const expandResult = await runFlowSafe(expandBranchFlow, payload, async (output: any) => {
+        if (!output || !Array.isArray(output.nodes)) return null;
         const { createNode, createEdge } = await import('@/lib/services/mind-map-service');
         const results = [];
         for (const n of (output.nodes as any[])) {
@@ -2304,10 +2344,19 @@ export async function dispatchUpdate(action: string, payload: any) {
         }
         return results;
       });
+
+      if (!expandResult) {
+        throw new Error('AI branch expansion failed. Try again or add nodes manually.');
+      }
+      return expandResult;
     }
 
     case 'suggest_board_gaps': {
-      return runFlowSafe(suggestGapsFlow, payload);
+      const gapResult = await runFlowSafe(suggestGapsFlow, payload);
+      if (!gapResult || !gapResult.gaps) {
+        return { gaps: [], message: 'AI gap analysis unavailable. Review the board manually.' };
+      }
+      return gapResult;
     }
 
     default:
@@ -2334,6 +2383,143 @@ export async function dispatchPlan(action: string, payload: any) {
       return {
         ...board,
         ...graph
+      };
+    }
+    case 'read_experience': {
+      if (!payload.experienceId) {
+        throw new Error('Missing experienceId for read_experience.');
+      }
+      const { getExperienceInstanceById, getExperienceSteps } = await import('@/lib/services/experience-service');
+      const { getInteractionsByInstance } = await import('@/lib/services/interaction-service');
+      const { getSynthesisForSource } = await import('@/lib/services/synthesis-service');
+
+      const instance = await getExperienceInstanceById(payload.experienceId);
+      if (!instance) throw new Error(`Experience ${payload.experienceId} not found.`);
+
+      const steps = await getExperienceSteps(payload.experienceId);
+      const interactions = await getInteractionsByInstance(payload.experienceId);
+      const userId = payload.userId ?? payload.user_id ?? instance.user_id;
+
+      // Group interactions by type for clean GPT consumption
+      const grouped: Record<string, any> = {};
+      let totalTimeMs = 0;
+      const rawTimeline: Array<{ type: string; stepId: string | null; at: string; payload_keys: string[] }> = [];
+
+      for (const event of interactions) {
+        const t = event.event_type;
+        
+        // Build raw timeline for debugging/inspection
+        rawTimeline.push({
+          type: t,
+          stepId: event.step_id,
+          at: event.created_at,
+          payload_keys: event.event_payload ? Object.keys(event.event_payload) : []
+        });
+
+        if (t === 'answer_submitted') {
+          // Handle varied payload shapes from different step types:
+          // Shape 1: { answers: { q001: "...", q002: "..." } } — questionnaires
+          // Shape 2: { reflections: { r001: "..." } } — reflection steps
+          // Shape 3: { content: "full text" } — essay/freeform steps
+          // Shape 4: flat payload without .answers key — catch-all
+          if (event.event_payload?.answers) {
+            grouped.answers = { ...(grouped.answers || {}), ...event.event_payload.answers };
+          }
+          if (event.event_payload?.reflections) {
+            grouped.reflections = { ...(grouped.reflections || {}), ...event.event_payload.reflections };
+          }
+          if (event.event_payload?.content && typeof event.event_payload.content === 'string') {
+            grouped.freeformResponses = grouped.freeformResponses || [];
+            grouped.freeformResponses.push({
+              stepId: event.step_id,
+              content: event.event_payload.content
+            });
+          }
+          // Catch-all: if payload has none of the known keys, store the whole thing
+          if (!event.event_payload?.answers && !event.event_payload?.reflections && !event.event_payload?.content) {
+            grouped.otherSubmissions = grouped.otherSubmissions || [];
+            grouped.otherSubmissions.push({
+              stepId: event.step_id,
+              payload: event.event_payload
+            });
+          }
+        } else if (t === 'time_on_step') {
+          totalTimeMs += event.event_payload?.durationMs || 0;
+        } else if (t === 'task_completed') {
+          grouped.completedStepIds = grouped.completedStepIds || [];
+          if (event.step_id) grouped.completedStepIds.push(event.step_id);
+        } else if (t === 'checkpoint_graded' || t === 'checkpoint_graded_batch') {
+          grouped.checkpointResults = grouped.checkpointResults || [];
+          grouped.checkpointResults.push(event.event_payload);
+        } else {
+          // Lifecycle events: experience_started, experience_completed, step_viewed, etc.
+          grouped.lifecycle = grouped.lifecycle || [];
+          grouped.lifecycle.push({ type: t, at: event.created_at });
+        }
+      }
+
+      grouped.totalTimeMs = totalTimeMs;
+      grouped.totalEvents = interactions.length;
+
+      // Fetch synthesis if it exists
+      let synthesis = null;
+      try {
+        synthesis = await getSynthesisForSource(userId, 'experience', payload.experienceId);
+      } catch (_) { /* synthesis may not exist yet */ }
+
+      return {
+        experience: {
+          id: instance.id,
+          title: instance.title,
+          goal: instance.goal,
+          status: instance.status,
+          instance_type: instance.instance_type,
+          resolution: instance.resolution,
+          created_at: instance.created_at,
+        },
+        steps: steps.map(s => {
+          const base: any = {
+            id: s.id,
+            title: s.title,
+            step_type: s.step_type,
+            step_order: s.step_order,
+            status: s.status,
+          };
+
+          // Include step content so GPT can interpret answers
+          if (s.payload) {
+            if ((s.step_type === 'questionnaire' || s.step_type === 'checkpoint') && Array.isArray(s.payload.questions)) {
+              // For questionnaires: build id → label map (compact, matches answer keys)
+              base.question_map = {};
+              for (const q of s.payload.questions) {
+                base.question_map[q.id] = q.label || q.question || q.text || q.id;
+              }
+              base.question_count = s.payload.questions.length;
+            } else if (s.step_type === 'lesson' && Array.isArray(s.payload.sections)) {
+              // For lessons: include section headings (body can be large, summarize)
+              base.sections = s.payload.sections.map((sec: any) => ({
+                heading: sec.heading,
+                type: sec.type,
+                body_length: sec.body?.length || 0,
+              }));
+            } else if (s.step_type === 'reflection' && Array.isArray(s.payload.prompts)) {
+              base.prompts = s.payload.prompts.map((p: any) => p.text || p.prompt || p);
+            } else if (s.step_type === 'challenge' && Array.isArray(s.payload.objectives)) {
+              base.objectives = s.payload.objectives.map((o: any) => o.description || o.id);
+            } else {
+              // For other types, include the payload directly (essay_tasks, plan_builder)
+              base.content = s.payload;
+            }
+          }
+
+          return base;
+        }),
+        interactions: grouped,
+        rawTimeline,
+        synthesis: synthesis ? {
+          narrative: synthesis.summary,
+          keySignals: synthesis.key_signals,
+        } : null,
       };
     }
     default:
@@ -2394,7 +2580,8 @@ export type DiscoverCapability =
   | 'archive_board'
   | 'reparent_node'
   | 'expand_board_branch'
-  | 'suggest_board_gaps';
+  | 'suggest_board_gaps'
+  | 'read_experience';
 
 
 /**
@@ -6334,7 +6521,7 @@ export async function getAISuggestionsForCompletion(instanceId: string, userId: 
     suggestNextExperienceFlow,
     context,
     async (output: any) => {
-      if (!output || output.error) return null;
+      if (!output || output.error || !Array.isArray(output.suggestions)) return null;
       return output.suggestions.map((s: any) => ({
         templateClass: s.templateClass,
         reason: s.reason,
@@ -7811,190 +7998,3 @@ function toDB(domain: Partial<SkillDomain>): Record<string, any> {
   if (domain.name !== undefined) row.name = domain.name;
   if (domain.description !== undefined) row.description = domain.description;
   if (domain.masteryLevel !== undefined) row.mastery_level = domain.masteryLevel;
-  if (domain.linkedUnitIds !== undefined) row.linked_unit_ids = domain.linkedUnitIds;
-  if (domain.linkedExperienceIds !== undefined) row.linked_experience_ids = domain.linkedExperienceIds;
-  if (domain.evidenceCount !== undefined) row.evidence_count = domain.evidenceCount;
-  if (domain.createdAt !== undefined) row.created_at = domain.createdAt;
-  if (domain.updatedAt !== undefined) row.updated_at = domain.updatedAt;
-  return row;
-}
-
-// ---------------------------------------------------------------------------
-// CRUD
-// ---------------------------------------------------------------------------
-
-/**
- * Create a new skill domain.
- */
-export async function createSkillDomain(
-  data: Omit<SkillDomain, 'id' | 'createdAt' | 'updatedAt' | 'masteryLevel' | 'evidenceCount'>
-): Promise<SkillDomain> {
-  const adapter = getStorageAdapter();
-  const now = new Date().toISOString();
-
-  const domain: SkillDomain = {
-    ...data,
-    id: generateId(),
-    masteryLevel: 'undiscovered',
-    evidenceCount: 0,
-    linkedUnitIds: data.linkedUnitIds ?? [],
-    linkedExperienceIds: data.linkedExperienceIds ?? [],
-    createdAt: now,
-    updatedAt: now,
-  } as SkillDomain;
-
-  const row = toDB(domain);
-  const saved = await adapter.saveItem<SkillDomainRow>('skill_domains', row as SkillDomainRow);
-  return fromDB(saved);
-}
-
-/**
- * Fetch a single skill domain by ID.
- */
-export async function getSkillDomain(id: string): Promise<SkillDomain | null> {
-  const adapter = getStorageAdapter();
-  const rows = await adapter.query<SkillDomainRow>('skill_domains', { id });
-  return rows.length > 0 ? fromDB(rows[0]) : null;
-}
-
-/**
- * List all skill domains for a specific goal.
- */
-export async function getSkillDomainsForGoal(goalId: string): Promise<SkillDomain[]> {
-  const adapter = getStorageAdapter();
-  const rows = await adapter.query<SkillDomainRow>('skill_domains', { goal_id: goalId });
-  return rows.map(fromDB);
-}
-
-/**
- * List all skill domains for a user.
- */
-export async function getSkillDomainsForUser(userId: string): Promise<SkillDomain[]> {
-  const adapter = getStorageAdapter();
-  const rows = await adapter.query<SkillDomainRow>('skill_domains', { user_id: userId });
-  return rows.map(fromDB);
-}
-
-/**
- * Partial update of a skill domain.
- */
-export async function updateSkillDomain(
-  id: string,
-  updates: Partial<Omit<SkillDomain, 'id' | 'createdAt'>>
-): Promise<SkillDomain | null> {
-  const adapter = getStorageAdapter();
-  const now = new Date().toISOString();
-  const dbUpdates = toDB({ ...updates, updatedAt: now });
-  const updated = await adapter.updateItem<any>('skill_domains', id, dbUpdates);
-  return updated ? fromDB(updated) : null;
-}
-
-/**
- * Link a knowledge unit to a skill domain.
- */
-export async function linkKnowledgeUnit(domainId: string, unitId: string): Promise<SkillDomain | null> {
-  const domain = await getSkillDomain(domainId);
-  if (!domain) return null;
-
-  const linkedUnitIds = Array.from(new Set([...domain.linkedUnitIds, unitId]));
-  return updateSkillDomain(domainId, { linkedUnitIds });
-}
-
-/**
- * Link an experience instance to a skill domain.
- */
-export async function linkExperience(domainId: string, instanceId: string): Promise<SkillDomain | null> {
-  const domain = await getSkillDomain(domainId);
-  if (!domain) return null;
-
-  const linkedExperienceIds = Array.from(new Set([...domain.linkedExperienceIds, instanceId]));
-  return updateSkillDomain(domainId, { linkedExperienceIds });
-}
-
-```
-
-### lib/services/step-knowledge-link-service.ts
-
-```typescript
-// lib/services/step-knowledge-link-service.ts
-import { StepKnowledgeLink, StepKnowledgeLinkRow } from '@/types/curriculum';
-import { getStorageAdapter } from '@/lib/storage-adapter';
-import { generateId } from '@/lib/utils';
-import { StepKnowledgeLinkType } from '@/lib/constants';
-
-/**
- * Normalization from DB to TS
- */
-function fromDB(row: StepKnowledgeLinkRow): StepKnowledgeLink {
-  return {
-    id: row.id,
-    stepId: row.step_id,
-    knowledgeUnitId: row.knowledge_unit_id,
-    linkType: row.link_type,
-    createdAt: row.created_at,
-  };
-}
-
-/**
- * Persists a link between an experience step and a knowledge unit.
- */
-export async function linkStepToKnowledge(
-  stepId: string, 
-  knowledgeUnitId: string, 
-  linkType: StepKnowledgeLinkType = 'teaches'
-): Promise<StepKnowledgeLink> {
-  const adapter = getStorageAdapter();
-  const now = new Date().toISOString();
-  
-  const row: StepKnowledgeLinkRow = {
-    id: generateId(),
-    step_id: stepId,
-    knowledge_unit_id: knowledgeUnitId,
-    link_type: linkType,
-    created_at: now,
-  };
-
-  const saved = await adapter.saveItem<StepKnowledgeLinkRow>('step_knowledge_links', row);
-  return fromDB(saved);
-}
-
-/**
- * Fetches all knowledge links for a specific experience step.
- */
-export async function getLinksForStep(stepId: string): Promise<StepKnowledgeLink[]> {
-  const adapter = getStorageAdapter();
-  // Ensure we use the correct snake_case column in the query
-  const rows = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { step_id: stepId });
-  return rows.map(fromDB);
-}
-/**
- * Fetches all knowledge links for all steps in an experience.
- */
-export async function getLinksForExperience(instanceId: string): Promise<StepKnowledgeLink[]> {
-  const adapter = getStorageAdapter();
-  // We need to find all steps first, then their links
-  const { getExperienceSteps } = await import('./experience-service');
-  const steps = await getExperienceSteps(instanceId);
-  const stepIds = steps.map(s => s.id);
-  
-  if (stepIds.length === 0) return [];
-  
-  const allLinks: StepKnowledgeLink[] = [];
-  for (const stepId of stepIds) {
-    const links = await getLinksForStep(stepId);
-    allLinks.push(...links);
-  }
-  
-  return allLinks;
-}
-
-/**
- * Removes a specific link between a step and a knowledge unit.
- */
-export async function unlinkStepFromKnowledge(stepId: string, knowledgeUnitId: string): Promise<void> {
-  const adapter = getStorageAdapter();
-  // Find the lid first
-  const links = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { 
-    step_id: stepId,
-    knowledge_unit_id: knowledgeUnitId 
-  });

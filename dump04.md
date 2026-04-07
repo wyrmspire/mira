@@ -1,3 +1,190 @@
+  if (domain.linkedUnitIds !== undefined) row.linked_unit_ids = domain.linkedUnitIds;
+  if (domain.linkedExperienceIds !== undefined) row.linked_experience_ids = domain.linkedExperienceIds;
+  if (domain.evidenceCount !== undefined) row.evidence_count = domain.evidenceCount;
+  if (domain.createdAt !== undefined) row.created_at = domain.createdAt;
+  if (domain.updatedAt !== undefined) row.updated_at = domain.updatedAt;
+  return row;
+}
+
+// ---------------------------------------------------------------------------
+// CRUD
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a new skill domain.
+ */
+export async function createSkillDomain(
+  data: Omit<SkillDomain, 'id' | 'createdAt' | 'updatedAt' | 'masteryLevel' | 'evidenceCount'>
+): Promise<SkillDomain> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+
+  const domain: SkillDomain = {
+    ...data,
+    id: generateId(),
+    masteryLevel: 'undiscovered',
+    evidenceCount: 0,
+    linkedUnitIds: data.linkedUnitIds ?? [],
+    linkedExperienceIds: data.linkedExperienceIds ?? [],
+    createdAt: now,
+    updatedAt: now,
+  } as SkillDomain;
+
+  const row = toDB(domain);
+  const saved = await adapter.saveItem<SkillDomainRow>('skill_domains', row as SkillDomainRow);
+  return fromDB(saved);
+}
+
+/**
+ * Fetch a single skill domain by ID.
+ */
+export async function getSkillDomain(id: string): Promise<SkillDomain | null> {
+  const adapter = getStorageAdapter();
+  const rows = await adapter.query<SkillDomainRow>('skill_domains', { id });
+  return rows.length > 0 ? fromDB(rows[0]) : null;
+}
+
+/**
+ * List all skill domains for a specific goal.
+ */
+export async function getSkillDomainsForGoal(goalId: string): Promise<SkillDomain[]> {
+  const adapter = getStorageAdapter();
+  const rows = await adapter.query<SkillDomainRow>('skill_domains', { goal_id: goalId });
+  return rows.map(fromDB);
+}
+
+/**
+ * List all skill domains for a user.
+ */
+export async function getSkillDomainsForUser(userId: string): Promise<SkillDomain[]> {
+  const adapter = getStorageAdapter();
+  const rows = await adapter.query<SkillDomainRow>('skill_domains', { user_id: userId });
+  return rows.map(fromDB);
+}
+
+/**
+ * Partial update of a skill domain.
+ */
+export async function updateSkillDomain(
+  id: string,
+  updates: Partial<Omit<SkillDomain, 'id' | 'createdAt'>>
+): Promise<SkillDomain | null> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  const dbUpdates = toDB({ ...updates, updatedAt: now });
+  const updated = await adapter.updateItem<any>('skill_domains', id, dbUpdates);
+  return updated ? fromDB(updated) : null;
+}
+
+/**
+ * Link a knowledge unit to a skill domain.
+ */
+export async function linkKnowledgeUnit(domainId: string, unitId: string): Promise<SkillDomain | null> {
+  const domain = await getSkillDomain(domainId);
+  if (!domain) return null;
+
+  const linkedUnitIds = Array.from(new Set([...domain.linkedUnitIds, unitId]));
+  return updateSkillDomain(domainId, { linkedUnitIds });
+}
+
+/**
+ * Link an experience instance to a skill domain.
+ */
+export async function linkExperience(domainId: string, instanceId: string): Promise<SkillDomain | null> {
+  const domain = await getSkillDomain(domainId);
+  if (!domain) return null;
+
+  const linkedExperienceIds = Array.from(new Set([...domain.linkedExperienceIds, instanceId]));
+  return updateSkillDomain(domainId, { linkedExperienceIds });
+}
+
+```
+
+### lib/services/step-knowledge-link-service.ts
+
+```typescript
+// lib/services/step-knowledge-link-service.ts
+import { StepKnowledgeLink, StepKnowledgeLinkRow } from '@/types/curriculum';
+import { getStorageAdapter } from '@/lib/storage-adapter';
+import { generateId } from '@/lib/utils';
+import { StepKnowledgeLinkType } from '@/lib/constants';
+
+/**
+ * Normalization from DB to TS
+ */
+function fromDB(row: StepKnowledgeLinkRow): StepKnowledgeLink {
+  return {
+    id: row.id,
+    stepId: row.step_id,
+    knowledgeUnitId: row.knowledge_unit_id,
+    linkType: row.link_type,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Persists a link between an experience step and a knowledge unit.
+ */
+export async function linkStepToKnowledge(
+  stepId: string, 
+  knowledgeUnitId: string, 
+  linkType: StepKnowledgeLinkType = 'teaches'
+): Promise<StepKnowledgeLink> {
+  const adapter = getStorageAdapter();
+  const now = new Date().toISOString();
+  
+  const row: StepKnowledgeLinkRow = {
+    id: generateId(),
+    step_id: stepId,
+    knowledge_unit_id: knowledgeUnitId,
+    link_type: linkType,
+    created_at: now,
+  };
+
+  const saved = await adapter.saveItem<StepKnowledgeLinkRow>('step_knowledge_links', row);
+  return fromDB(saved);
+}
+
+/**
+ * Fetches all knowledge links for a specific experience step.
+ */
+export async function getLinksForStep(stepId: string): Promise<StepKnowledgeLink[]> {
+  const adapter = getStorageAdapter();
+  // Ensure we use the correct snake_case column in the query
+  const rows = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { step_id: stepId });
+  return rows.map(fromDB);
+}
+/**
+ * Fetches all knowledge links for all steps in an experience.
+ */
+export async function getLinksForExperience(instanceId: string): Promise<StepKnowledgeLink[]> {
+  const adapter = getStorageAdapter();
+  // We need to find all steps first, then their links
+  const { getExperienceSteps } = await import('./experience-service');
+  const steps = await getExperienceSteps(instanceId);
+  const stepIds = steps.map(s => s.id);
+  
+  if (stepIds.length === 0) return [];
+  
+  const allLinks: StepKnowledgeLink[] = [];
+  for (const stepId of stepIds) {
+    const links = await getLinksForStep(stepId);
+    allLinks.push(...links);
+  }
+  
+  return allLinks;
+}
+
+/**
+ * Removes a specific link between a step and a knowledge unit.
+ */
+export async function unlinkStepFromKnowledge(stepId: string, knowledgeUnitId: string): Promise<void> {
+  const adapter = getStorageAdapter();
+  // Find the lid first
+  const links = await adapter.query<StepKnowledgeLinkRow>('step_knowledge_links', { 
+    step_id: stepId,
+    knowledge_unit_id: knowledgeUnitId 
+  });
   
   if (links.length > 0) {
     await adapter.deleteItem('step_knowledge_links', links[0].id);
@@ -51,14 +238,16 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
     { instanceId: sourceId, userId }
   )
 
-  if (aiResult) {
+  if (aiResult && aiResult.narrative) {
     snapshot.summary = aiResult.narrative
     snapshot.key_signals = {
       ...snapshot.key_signals,
-      ...aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {}),
+      ...(Array.isArray(aiResult.keySignals) 
+        ? aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {})
+        : {}),
       frictionAssessment: aiResult.frictionAssessment
     }
-    snapshot.next_candidates = aiResult.nextCandidates
+    snapshot.next_candidates = Array.isArray(aiResult.nextCandidates) ? aiResult.nextCandidates : []
   }
   
   // W2 - Compute Mastery Transitions for Lane 5
@@ -7809,192 +7998,3 @@ echo "Generating diff: local $BRANCH vs $REMOTE_BRANCH..."
     
     # Check if there are any uncommitted changes
     if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-        echo "### Uncommitted Diff"
-        echo ""
-        echo '```diff'
-        git diff -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
-        git diff --cached -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
-        echo '```'
-        echo ""
-    fi
-    
-    # NEW: Show contents of untracked files (new files not yet staged)
-    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
-    if [ -n "$UNTRACKED" ]; then
-        echo "### New Untracked Files"
-        echo ""
-        for file in $UNTRACKED; do
-            # Skip binary files and very large files
-            if [ -f "$file" ]; then
-                # Checking if it's a text file
-                if command -v file >/dev/null 2>&1; then
-                    if ! file "$file" | grep -q text; then
-                        continue
-                    fi
-                fi
-                
-                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
-                if [ "$LINES" -lt 500 ]; then
-                    echo "#### \`$file\`"
-                    echo ""
-                    echo '```'
-                    cat "$file" 2>/dev/null
-                    echo '```'
-                    echo ""
-                else
-                    echo "#### \`$file\` ($LINES lines - truncated)"
-                    echo ""
-                    echo '```'
-                    head -100 "$file" 2>/dev/null
-                    echo "... ($LINES total lines)"
-                    echo '```'
-                    echo ""
-                fi
-            fi
-        done
-    fi
-    
-    echo "---"
-    echo ""
-    
-    # NEW: Show changes from the last pull/merge if applicable
-    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
-        VAL_HEAD=$(git rev-parse HEAD)
-        VAL_ORIG=$(git rev-parse ORIG_HEAD)
-        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
-            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
-            echo ""
-            echo "These are the changes that recently came into your branch."
-            echo ""
-            echo '```diff'
-            git diff ORIG_HEAD HEAD --stat 2>/dev/null
-            echo '```'
-            echo ""
-            echo '```diff'
-            # Limit full diff to avoid massive files
-            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
-            echo "... (truncated to 1000 lines)"
-            echo '```'
-            echo ""
-            echo "---"
-            echo ""
-        fi
-    fi
-
-    # Show commits that are different
-    echo "## Commits Ahead (local changes not on remote)"
-    echo ""
-    echo '```'
-    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
-    echo '```'
-    echo ""
-    
-    echo "## Commits Behind (remote changes not pulled)"
-    echo ""
-    echo '```'
-    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
-    echo '```'
-    echo ""
-    
-    echo "---"
-    echo ""
-    
-    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
-    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
-    
-    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
-        echo "## Status: Up to Date"
-        echo ""
-        echo "Your local branch is even with **$REMOTE_BRANCH**."
-        echo "No unpushed commits."
-        echo ""
-    fi
-    echo "## File Changes (YOUR UNPUSHED CHANGES)"
-    echo ""
-    echo '```'
-    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
-    echo '```'
-    echo ""
-    
-    echo "---"
-    echo ""
-    echo "## Full Diff of Your Unpushed Changes"
-    echo ""
-    echo "Green (+) = lines you ADDED locally"
-    echo "Red (-) = lines you REMOVED locally"
-    echo ""
-    echo '```diff'
-    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null || echo "(no diff)"
-    echo '```'
-    
-} > "$OUTPUT"
-
-echo "Done! Created $OUTPUT"
-echo ""
-echo "Summary:"
-echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
-echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
-echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
-
-```
-
-### gitrdiff.md
-
-```markdown
-# Git Diff Report
-
-**Generated**: Sun, Apr  5, 2026 10:38:05 PM
-
-**Local Branch**: main
-
-**Comparing Against**: origin/main
-
----
-
-## Uncommitted Changes (working directory)
-
-### Modified/Staged Files
-
-```
- M gpt-instructions.md
- M public/openapi.yaml
-?? miracli.py
-?? seed_db.ts
-?? test_output.txt
-?? test_output2.txt
-?? test_output3.txt
-```
-
-### Uncommitted Diff
-
-```diff
-diff --git a/gpt-instructions.md b/gpt-instructions.md
-index 8d9c1c9..627b63e 100644
---- a/gpt-instructions.md
-+++ b/gpt-instructions.md
-@@ -74,7 +74,7 @@ Call `discover?capability=step_payload&step_type=X`. Key shapes:
- 
- ## Think Boards
- 
--Purpose-typed spatial canvases. Root at x:0,y:0. Children +200px horizontal, siblings +150px vertical. Three layers: label=title, description=hover, content=full depth. Always `read_board(boardId)` before expanding to prevent overlap. Use clusters for efficiency. Use `suggest_board_gaps` (via planCurriculum) to find missing concepts.
-+Purpose-typed spatial canvases. Root at x:0,y:0. Children +200px horizontal, siblings +150px vertical. Three layers: label=title, description=hover, content=full depth. Always `read_board(boardId)` before expanding to prevent overlap. Use clusters for efficiency. Use `suggest_board_gaps` (via update action) to find missing concepts.
- 
- ## Resolution (Experience Tuning)
- 
-diff --git a/public/openapi.yaml b/public/openapi.yaml
-index e2a31aa..ba7273a 100644
---- a/public/openapi.yaml
-+++ b/public/openapi.yaml
-@@ -142,7 +142,7 @@ paths:
-               properties:
-                 action:
-                   type: string
--                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board, suggest_board_gaps]
-+                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board]
-                   description: The planning action to perform.
-                 topic:
-                   type: string
-@@ -387,7 +387,7 @@ paths:
-               properties:
-                 action:
-                   type: string

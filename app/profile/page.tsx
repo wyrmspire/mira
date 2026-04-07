@@ -18,7 +18,7 @@ export default async function ProfilePage() {
   ])
 
   // Get active goal for trajectory
-  const activeGoal = goals.find(g => g.status === 'active') || goals[0]
+  const activeGoal = goals.find(g => g.status === 'active') || null
   const goalDomains = activeGoal 
     ? skillDomains.filter(d => d.goalId === activeGoal.id)
     : []
@@ -46,13 +46,17 @@ export default async function ProfilePage() {
         </section>
 
         {/* Skill Trajectory */}
-        {activeGoal && (
+        {activeGoal ? (
           <section className="pt-8 border-t border-slate-800">
             <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
               <span className="w-1.5 h-6 bg-indigo-500 rounded-full" />
               Active Trajectory: {activeGoal.title}
             </h2>
             <SkillTrajectory domains={goalDomains} />
+          </section>
+        ) : (
+          <section className="pt-8 border-t border-slate-800 text-center py-12">
+            <p className="text-slate-500 italic">No active goal. Create one in Mira.</p>
           </section>
         )}
 

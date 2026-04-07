@@ -30,6 +30,10 @@ export function formatEventType(type: InboxEvent['type']): string {
     // Knowledge lifecycle events
     knowledge_ready: 'New knowledge ready',
     knowledge_updated: 'Knowledge updated',
+    // Experience lifecycle events
+    experience_proposed: 'New experience proposed',
+    experience_approved: 'Experience approved',
+    experience_completed: 'Experience completed',
   }
   return labels[type] ?? type
 }

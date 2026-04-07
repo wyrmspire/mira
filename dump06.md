@@ -1,3 +1,440 @@
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns LearningAtom
+    delete:
+      operationId: deleteAtom
+      summary: Delete a learning atom
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  # ─── BUNDLES (Assembled content for delivery) ───────────────
+  /bundles/assemble:
+    post:
+      operationId: assembleBundle
+      summary: Assemble a content bundle from stored atoms
+      description: Fetches atoms by concept and type, filters by learner coverage, and packages into a typed bundle (primer, worked_example, checkpoint, deepen, misconception_repair).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bundle_type, concept_ids]
+              properties:
+                bundle_type:
+                  type: string
+                  enum: [primer_bundle, worked_example_bundle, checkpoint_bundle, deepen_after_step_bundle, misconception_repair_bundle]
+                concept_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: Concept IDs to include in the bundle
+                learner_id:
+                  type: string
+                coverage_state:
+                  type: object
+                  description: Per-concept coverage (level, recent_failures) to filter/prioritize
+      responses:
+        "200":
+          description: Returns assembled bundle with atoms
+
+  # ─── RUNS (Pipeline execution tracking) ─────────────────────
+  /runs:
+    get:
+      operationId: listRuns
+      summary: List pipeline execution runs
+      parameters:
+        - name: pipeline_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns array of PipelineRun
+
+  /runs/{id}:
+    get:
+      operationId: getRunStatus
+      summary: Get the status and output of a run
+      description: Use this to check if a research dispatch has completed and see atom counts.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns PipelineRun with status and output
+
+  # ─── AGENTS (Template design) ──────────────────────────────
+  /agents:
+    get:
+      operationId: listAgents
+      summary: List all agent templates
+      responses:
+        "200":
+          description: Returns array of AgentTemplate
+    post:
+      operationId: createAgent
+      summary: Create an agent template from structured data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentTemplateCreate"
+      responses:
+        "200":
+          description: Returns the created AgentTemplate
+
+  /agents/create-from-nl:
+    post:
+      operationId: createAgentFromNL
+      summary: Create an AgentTemplate from natural language description via Gemini
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Describe what the agent should do in natural language.
+              required: [description]
+      responses:
+        "200":
+          description: Returns the scaffolded AgentTemplate
+
+  /agents/{id}:
+    get:
+      operationId: getAgent
+      summary: Get a single agent template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Returns AgentTemplate
+    patch:
+      operationId: updateAgent
+      summary: Update agent template fields
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentTemplateUpdate"
+      responses:
+        "200":
+          description: Returns updated AgentTemplate
+    delete:
+      operationId: deleteAgent
+      summary: Delete an agent template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+
+  /agents/{id}/modify-from-nl:
+    patch:
+      operationId: modifyAgentFromNL
+      summary: Apply a natural language delta to an existing AgentTemplate
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                delta:
+                  type: string
+                  description: Natural language instruction for how to modify the agent.
+              required: [delta]
+      responses:
+        "200":
+          description: Returns the updated AgentTemplate
+
+  /agents/{id}/test:
+    post:
+      operationId: testAgent
+      summary: Dry-run an agent with sample input using real ADK
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sample_input:
+                  type: string
+              required: [sample_input]
+      responses:
+        "200":
+          description: Returns output, events, timing
+
+  /agents/{id}/export:
+    post:
+      operationId: exportAgent
+      summary: Export agent as Python (ADK) or TypeScript (Genkit) code
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum: [python, typescript]
+                pipeline_id:
+                  type: string
+      responses:
+        "200":
+          description: Returns generated code and filename
+
+  # ─── PIPELINES ─────────────────────────────────────────────
+  /pipelines:
+    get:
+      operationId: listPipelines
+      summary: List all pipelines
+      responses:
+        "200":
+          description: Returns array of Pipeline
+    post:
+      operationId: createPipeline
+      summary: Create a new pipeline
+      description: Create a pipeline shell. Note that pipelines without nodes cannot be dispatched.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                nodes:
+                  type: array
+                  items:
+                    type: object
+                edges:
+                  type: array
+                  items:
+                    type: object
+              required: [name]
+      responses:
+        "200":
+          description: Returns the created Pipeline
+
+  /pipelines/compose-from-nl:
+    post:
+      operationId: composePipelineFromNL
+      summary: Wire a new pipeline of agents via natural language
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                agent_ids:
+                  type: array
+                  items:
+                    type: string
+              required: [description]
+      responses:
+        "200":
+          description: Returns the composed Pipeline
+
+  /pipelines/{id}/dispatch:
+    post:
+      operationId: dispatchPipeline
+      summary: Start a pipeline execution run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  type: string
+                  description: Topic string or structured input object
+      responses:
+        "200":
+          description: Returns { run_id, status }
+
+  # ─── NOTEBOOKS (NotebookLM grounding) ──────────────────────
+  /notebooks:
+    get:
+      operationId: listNotebooks
+      summary: List all notebooks
+      responses:
+        "200":
+          description: Returns array of Notebook
+    post:
+      operationId: createNotebook
+      summary: Create a new NotebookLM workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+              required: [name]
+      responses:
+        "200":
+          description: Returns { id, name }
+
+  /notebooks/{id}/query:
+    post:
+      operationId: queryNotebook
+      summary: Query a notebook for grounded answers
+      description: Ask a question against an existing NotebookLM notebook. Returns grounded answers with citations.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query:
+                  type: string
+              required: [query]
+      responses:
+        "200":
+          description: Returns { answer, citations }
+
+  # ─── DELIVERY PROFILES ─────────────────────────────────────
+  /delivery-profiles:
+    get:
+      operationId: listDeliveryProfiles
+      summary: List all delivery profiles
+      responses:
+        "200":
+          description: Returns array of DeliveryProfile
+    post:
+      operationId: createDeliveryProfile
+      summary: Create a delivery profile (controls where atoms go)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryProfileCreate"
+      responses:
+        "200":
+          description: Returns the created DeliveryProfile
+
+  # ─── CHAT ──────────────────────────────────────────────────
+  /chat:
+    post:
+      operationId: nexusChat
+      summary: Pipeline-level conversational assistant powered by Gemini
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                pipeline_id:
+                  type: string
+              required: [message]
+      responses:
+        "200":
+          description: Returns { reply }
+
+  # ─── CACHE ─────────────────────────────────────────────────
+  /cache:
+    delete:
+      operationId: flushCache
+      summary: Flush cached data by type and/or age
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [research, synthesis, atom, delivery_idempotency]
+        - name: older_than_hours
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Returns { status, message }
+
+components:
+  schemas:
+    AgentTemplateCreate:
+      type: object
+      properties:
         name:
           type: string
         model:

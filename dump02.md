@@ -1,3 +1,8 @@
+                      answers[currentQuestion.id] === option
+                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
+                        : showError 
+                          ? 'bg-[#12121a] border-rose-500/20 text-[#64748b] hover:border-rose-500/40' 
+                          : 'bg-[#12121a] border-[#1e1e2e] text-[#94a3b8] hover:border-[#33334d]'
                     }`}
                   >
                     {option}
@@ -6338,9 +6343,22 @@ export const synthesizeExperienceFlow = ai.defineFlow(
     const stepSummary = steps.map(s => `${s.step_order + 1}. [${s.step_type}] ${s.title}`).join('\n');
     const interactionSummary = interactions.map(i => {
       const type = i.event_type;
+      // Truncate large payloads (e.g. 100-question answer blobs) to avoid prompt overflow
+      if (type === 'answer_submitted' && i.event_payload?.answers) {
+        const answers = i.event_payload.answers;
+        const keys = Object.keys(answers);
+        const sample = keys.slice(0, 10).map(k => `${k}: ${String(answers[k]).substring(0, 80)}`).join('; ');
+        return `- Event: ${type} | ${keys.length} answers submitted (sample: ${sample})`;
+      }
       const payload = JSON.stringify(i.event_payload);
-      return `- Event: ${type} | Payload: ${payload}`;
+      return `- Event: ${type} | Payload: ${payload.length > 200 ? payload.substring(0, 200) + '...' : payload}`;
     }).join('\n');
+    
+    // Cap total interaction context to prevent prompt overflow
+    const maxInteractionChars = 4000;
+    const trimmedInteractions = interactionSummary.length > maxInteractionChars
+      ? interactionSummary.substring(0, maxInteractionChars) + '\n... (truncated)'
+      : interactionSummary;
     
     const prompt = `
       System: You are an experience analyst for Mira Studio.
@@ -6355,7 +6373,7 @@ export const synthesizeExperienceFlow = ai.defineFlow(
       ${stepSummary}
       
       USER ACTIVITY:
-      ${interactionSummary}
+      ${trimmedInteractions}
       
       Analysis Requirements:
       1. Provide a narrative (2-3 sentences) on what actually happened.
@@ -6476,7 +6494,7 @@ export async function runFlowSafe<TInput, TOutput>(
     return output;
   } catch (error: any) {
     console.error(`[AI/safe-flow] Flow execution failed:`, error.message);
-    return { error: 'AI enhancement unavailable at this time', detail: error.message };
+    return null;
   }
 }
 
@@ -7980,21 +7998,3 @@ export function computeStepScore(step: ExperienceStep, interactions: Interaction
       return Math.min(percent, 100);
     }
     case 'lesson': {
-      const isViewed = stepInteractions.some(i => i.event_type === 'step_viewed');
-      const sections = (step.payload as any)?.sections || [];
-      const checkpoints = sections.filter((s: any) => s.type === 'checkpoint');
-      
-      if (checkpoints.length === 0) return isViewed ? 100 : 0;
-      
-      const isCompleted = stepInteractions.some(i => i.event_type === 'task_completed');
-      if (isCompleted) return 100;
-      return isViewed ? 50 : 0;
-    }
-    case 'challenge': {
-      const objectives = (step.payload as any)?.objectives || [];
-      if (objectives.length === 0) return 100;
-      const completionEvent = stepInteractions.find(i => i.event_type === 'task_completed');
-      if (!completionEvent) return 0;
-      const completedObjs = completionEvent.event_payload?.completedObjectives || {};
-      const percent = (Object.keys(completedObjs).length / objectives.length) * 100;
-      return Math.min(percent, 100);

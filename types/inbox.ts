@@ -27,6 +27,10 @@ export type InboxEventType =
   // Knowledge lifecycle events
   | 'knowledge_ready'
   | 'knowledge_updated'
+  // Experience lifecycle events
+  | 'experience_proposed'
+  | 'experience_approved'
+  | 'experience_completed'
 
 export interface InboxEvent {
   id: string

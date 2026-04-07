@@ -111,26 +111,19 @@ export async function getProposedExperiences(userId: string): Promise<Experience
 }
 
 export async function getResumeStepIndex(instanceId: string): Promise<number> {
-  const { getInteractionsByInstance } = await import('./interaction-service')
-  const interactions = await getInteractionsByInstance(instanceId)
-  
-  // Find highest step_id from task_completed events
-  const completions = interactions.filter(i => i.event_type === 'task_completed')
-  if (completions.length === 0) return 0
-
-  // Map back to step orders. step_id in interaction might be the UUID.
-  // We need to fetch steps to map UUID -> order.
+  // Use DB status authority (Sprint 25 Lane 1 W3)
   const steps = await getExperienceSteps(instanceId)
-  const completedStepIds = new Set(completions.map(c => c.step_id))
-  
-  let highestOrder = -1
-  for (const step of steps) {
-    if (completedStepIds.has(step.id)) {
-      highestOrder = Math.max(highestOrder, step.step_order)
-    }
-  }
+  if (steps.length === 0) return 0
 
-  return Math.min(highestOrder + 1, steps.length - 1)
+  // Find first step that is NOT completed
+  const firstIncompleteIndex = steps.findIndex(s => s.status !== 'completed')
+  
+  // If all are completed, return index of last step
+  if (firstIncompleteIndex === -1) {
+    return Math.max(0, steps.length - 1)
+  }
+  
+  return firstIncompleteIndex
 }
 
 /**

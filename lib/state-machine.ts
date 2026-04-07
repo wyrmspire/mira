@@ -128,6 +128,8 @@ export const EXPERIENCE_TRANSITIONS: ExperienceTransition[] = [
   { from: 'ready_for_review', to: 'approved', action: 'approve' },
   { from: 'approved', to: 'published', action: 'publish' },
   { from: 'published', to: 'active', action: 'activate' },
+  { from: 'approved', to: 'active', action: 'start' },
+  { from: 'proposed', to: 'active', action: 'start' },
   { from: 'active', to: 'completed', action: 'complete' },
   { from: 'completed', to: 'archived', action: 'archive' },
 

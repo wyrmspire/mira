@@ -28,12 +28,12 @@ export default function LibraryClient({
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  // Build a map of experience IDs to titles for chain links
-  const experienceMap = new Map<string, string>([
-    ...active.map(e => [e.id, e.title] as [string, string]),
-    ...completed.map(e => [e.id, e.title] as [string, string]),
-    ...moments.map(e => [e.id, e.title] as [string, string]),
-    ...proposed.map(e => [e.id, e.title] as [string, string]),
+  // Build a map of experience IDs to info for chain links
+  const experienceInfo = new Map<string, { title: string; status: string }>([
+    ...active.map(e => [e.id, { title: e.title, status: e.status }] as [string, { title: string; status: string }]),
+    ...completed.map(e => [e.id, { title: e.title, status: e.status }] as [string, { title: string; status: string }]),
+    ...moments.map(e => [e.id, { title: e.title, status: e.status }] as [string, { title: string; status: string }]),
+    ...proposed.map(e => [e.id, { title: e.title, status: e.status }] as [string, { title: string; status: string }]),
   ]);
 
   const handleAcceptAndStart = async (id: string) => {
@@ -130,10 +130,10 @@ export default function LibraryClient({
         items={active}
       >
         {(instance) => {
-          const nextId = instance.next_suggested_ids?.[0]; // Show the first suggestion for now
-          const nextTitle = nextId ? experienceMap.get(nextId) : null;
+          const nextId = instance.next_suggested_ids?.[0];
+          const nextInfo = nextId ? experienceInfo.get(nextId) : null;
           const prevId = instance.previous_experience_id;
-          const prevTitle = prevId ? experienceMap.get(prevId) : null;
+          const prevInfo = prevId ? experienceInfo.get(prevId) : null;
 
           return (
             <ExperienceCard key={instance.id} instance={instance}>
@@ -144,22 +144,28 @@ export default function LibraryClient({
                 {COPY.library.enter}
               </Link>
 
-              {(nextTitle || prevTitle) && (
+              {(nextInfo || prevInfo) && (
                 <div className="mt-4 pt-4 border-t border-[#1e1e2e] flex flex-wrap gap-2">
-                  {prevTitle && (
+                  {prevInfo && (
                     <Link 
                       href={ROUTES.workspace(prevId!)}
-                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 truncate max-w-full"
                     >
-                      ← Previous: {prevTitle}
+                      ← Previous: {prevInfo.title}
                     </Link>
                   )}
-                  {nextTitle && (
+                  {nextInfo && (
                     <Link 
                       href={ROUTES.workspace(nextId!)}
-                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                      className={`px-2 py-1 rounded text-[10px] font-bold hover:bg-slate-800 transition-all border truncate max-w-full ${
+                        nextInfo.status === 'completed'
+                          ? 'bg-slate-900/50 text-slate-500 border-slate-800'
+                          : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+                      }`}
                     >
-                      Continue: {nextTitle} →
+                      {nextInfo.status === 'completed' 
+                        ? `Next: ${nextInfo.title} ✓` 
+                        : `Continue: ${nextInfo.title} →`}
                     </Link>
                   )}
                 </div>
@@ -177,28 +183,35 @@ export default function LibraryClient({
       >
         {(instance) => {
           const nextId = instance.next_suggested_ids?.[0];
-          const nextTitle = nextId ? experienceMap.get(nextId) : null;
+          const nextInfo = nextId ? experienceInfo.get(nextId) : null;
           const prevId = instance.previous_experience_id;
-          const prevTitle = prevId ? experienceMap.get(prevId) : null;
+          const prevInfo = prevId ? experienceInfo.get(prevId) : null;
 
           return (
             <ExperienceCard key={instance.id} instance={instance}>
-              {(nextTitle || prevTitle) && (
+              {(nextInfo || prevInfo) && (
                 <div className="flex flex-wrap gap-2">
-                  {prevTitle && (
+                  {prevInfo && (
                     <Link 
                       href={ROUTES.workspace(prevId!)}
-                      className="px-2 py-1 rounded bg-[#0d0d14] text-[#4a4a6a] text-[10px] font-bold hover:text-indigo-400 transition-all border border-[#1e1e2e] whitespace-nowrap"
+                      className="px-2 py-1 rounded bg-[#0d0d14] text-[#4a4a6a] text-[10px] font-bold hover:text-indigo-400 transition-all border border-[#1e1e2e] truncate max-w-full"
                     >
-                      ← Previous: {prevTitle}
+                      ← Previous: {prevInfo.title}
                     </Link>
                   )}
-                  {nextTitle && (
+                  {/* For completed cards, only show next if it's NOT completed yet, or if it IS completed show muted */}
+                  {nextInfo && (
                     <Link 
                       href={ROUTES.workspace(nextId!)}
-                      className="px-2 py-1 rounded bg-indigo-500/10 text-indigo-400 text-[10px] font-bold hover:bg-slate-800 transition-all border border-indigo-500/20 whitespace-nowrap"
+                      className={`px-2 py-1 rounded text-[10px] font-bold transition-all border truncate max-w-full ${
+                        nextInfo.status === 'completed'
+                          ? 'bg-slate-900/50 text-slate-600 border-slate-800 hover:text-slate-400'
+                          : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 hover:bg-slate-800'
+                      }`}
                     >
-                      Continue: {nextTitle} →
+                      {nextInfo.status === 'completed' 
+                        ? `Next: ${nextInfo.title} ✓` 
+                        : `Next: ${nextInfo.title} →`}
                     </Link>
                   )}
                 </div>

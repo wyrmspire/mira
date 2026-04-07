@@ -21,6 +21,38 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid transition or instance not found' }, { status: 422 })
     }
 
+    // W3 & W4: Server-side automation on completion
+    if (action === 'complete') {
+      // 1. Fire synthesis + facet extraction asynchronously (SOP-17, SOP-23)
+      const { completeExperienceWithAI } = await import('@/lib/services/experience-service');
+      // Fire and forget
+      completeExperienceWithAI(id, updated.user_id).catch(err => 
+        console.error('[status/route] Server-side completeExperienceWithAI failed:', err)
+      );
+
+      // 2. Create inbox event
+      const { createInboxEvent } = await import('@/lib/services/inbox-service');
+      await createInboxEvent({
+        type: 'experience_completed',
+        title: 'Experience completed',
+        body: `You have successfully completed: "${updated.title}"`,
+        severity: 'success',
+        actionUrl: `/workspace/${updated.id}`
+      }).catch(err => console.error('[status/route] Failed to create completed inbox event:', err));
+    }
+
+    // W4: Inbox event on approval
+    if (action === 'approve') {
+      const { createInboxEvent } = await import('@/lib/services/inbox-service');
+      await createInboxEvent({
+        type: 'experience_approved',
+        title: 'Experience approved',
+        body: `New experience approved for your journey: "${updated.title}"`,
+        severity: 'info',
+        actionUrl: `/workspace/${updated.id}`
+      }).catch(err => console.error('[status/route] Failed to create approved inbox event:', err));
+    }
+
     return NextResponse.json(updated)
   } catch (error: any) {
     console.error('Failed to transition experience:', error)

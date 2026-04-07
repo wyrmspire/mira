@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getExperienceSteps, createExperienceStep, insertStepAfter } from '@/lib/services/experience-service'
+import { getExperienceSteps, createExperienceStep, insertStepAfter, updateExperienceStep } from '@/lib/services/experience-service'
 import { validateStepPayload } from '@/lib/validators/step-payload-validator'
 import { linkStepToKnowledge, getLinksForStep } from '@/lib/services/step-knowledge-link-service'
 
@@ -87,5 +87,44 @@ export async function POST(
   } catch (error: any) {
     console.error(`Failed to create step for experience ${id}:`, error)
     return NextResponse.json({ error: error.message || 'Failed to create step' }, { status: 500 })
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  const { id } = params
+
+  try {
+    const body = await request.json()
+    const { stepId, status, completedAt } = body
+
+    if (!stepId) {
+      return NextResponse.json({ error: 'Missing stepId' }, { status: 400 })
+    }
+
+    if (status !== 'completed') {
+      return NextResponse.json({ error: 'Only completed status is supported for now' }, { status: 400 })
+    }
+
+    // 1. Verify step belongs to instance
+    const steps = await getExperienceSteps(id)
+    const step = steps.find(s => s.id === stepId)
+    
+    if (!step) {
+      return NextResponse.json({ error: 'Step not found or does not belong to this experience' }, { status: 404 })
+    }
+
+    // 2. Update status and completed_at
+    const updatedStep = await updateExperienceStep(stepId, {
+      status: 'completed' as any, // Cast to any to avoid type mismatch with partial update if needed
+      completed_at: completedAt || new Date().toISOString()
+    } as any)
+    
+    return NextResponse.json(updatedStep)
+  } catch (error: any) {
+    console.error(`Failed to update step for experience ${id}:`, error)
+    return NextResponse.json({ error: error.message || 'Failed to update step' }, { status: 500 })
   }
 }

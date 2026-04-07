@@ -40,6 +40,12 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
 
   // Initialize statuses and active step
   useEffect(() => {
+    // Guard against re-starting completed experiences (Sprint 25 Lane 1 W4)
+    if (instance.status === 'completed') {
+      setIsLoading(false);
+      return;
+    }
+
     capture.trackExperienceStart();
     
     // Auto-transition from injected (ephemeral) or published (persistent) to active
@@ -61,10 +67,11 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
       .then(data => {
         const resumeIndex = data.resumeStepIndex || 0;
         const initialStatuses: Record<string, StepStatus> = {};
-        
         steps.forEach((step, idx) => {
-          if (idx < resumeIndex) {
+          if (step.status === 'completed') {
             initialStatuses[step.id] = 'completed';
+          } else if (step.status === 'skipped') {
+            initialStatuses[step.id] = 'skipped';
           } else if (idx === resumeIndex) {
             initialStatuses[step.id] = 'in_progress';
           } else {
@@ -129,6 +136,11 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
   };
 
   const handleResume = () => {
+    if (instance.status === 'completed') {
+      setIsCompleted(true);
+      setShowOverview(false);
+      return;
+    }
     const firstIncomplete = steps.find(s => stepStatuses[s.id] !== 'completed');
     if (firstIncomplete) {
       setCurrentStepId(firstIncomplete.id);
@@ -142,7 +154,7 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
     setShowOverview(true);
   };
 
-  const handleCompleteStep = (payload?: unknown) => {
+  const handleCompleteStep = async (payload?: unknown) => {
     if (!currentStepId) return;
 
     const safePayload = (payload && typeof payload === 'object' && !('nativeEvent' in (payload as any)))
@@ -159,6 +171,27 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
       capture.trackComplete(currentStep.id, safePayload);
     }
 
+    // Persist step completion to DB
+    try {
+      const response = await fetch(`/api/experiences/${instance.id}/steps`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          stepId: currentStepId, 
+          status: 'completed',
+          completedAt: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to persist step completion');
+      }
+    } catch (err) {
+      console.error('[WorkspaceClient] Step completion persist failed:', err);
+      alert('Failed to save progress. Please try again.');
+      return; // Do NOT advance
+    }
+
     setStepStatuses(prev => ({ ...prev, [currentStepId]: 'completed' }));
 
     const currentIndex = steps.findIndex(s => s.id === currentStepId);
@@ -172,15 +205,18 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
     } else {
       capture.endStepTimer(currentStepId);
       capture.trackExperienceComplete();
-      fetch(`/api/experiences/${instance.id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'complete' }),
-      }).then(() => fetch('/api/synthesis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: instance.user_id, sourceType: instance.instance_type, sourceId: instance.id }),
-      })).catch(err => console.warn(err));
+      
+      // Instance completion
+      try {
+        await fetch(`/api/experiences/${instance.id}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'complete' }),
+        });
+      } catch (err) {
+        console.warn('[WorkspaceClient] Final status transition failed:', err);
+      }
+      
       setIsCompleted(true);
     }
   };
@@ -251,10 +287,17 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
           </div>
           
           <div className="flex flex-col items-center">
-            <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-0.5">
-              {instance.title}
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none">
+                {instance.title}
+              </div>
+              {instance.status === 'completed' && (
+                <div className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[8px] font-bold uppercase tracking-tight">
+                  Completed
+                </div>
+              )}
             </div>
-            {!showOverview && !isCompleted && (
+            {!showOverview && !isCompleted && instance.status !== 'completed' && (
               <div className="flex items-center gap-3">
                 <div className="text-[10px] font-mono text-[#475569] leading-none uppercase tracking-tighter">
                   Step {steps.findIndex(s => s.id === currentStepId) + 1} of {steps.length}
@@ -264,9 +307,26 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
                 )}
               </div>
             )}
+            {(isCompleted || instance.status === 'completed') && !showOverview && (
+              <div className="text-[10px] font-mono text-emerald-400/60 leading-none uppercase tracking-tighter">
+                Reviewing results
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-4">
+            {instance.status === 'completed' && (
+              <button
+                onClick={() => setIsCompleted(!isCompleted)}
+                className={`text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all border ${
+                  isCompleted 
+                    ? 'bg-emerald-500 text-white border-emerald-400 shadow-md' 
+                    : 'text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10'
+                }`}
+              >
+                {isCompleted ? 'View Steps' : 'View Results'}
+              </button>
+            )}
             {!isCompleted && (
               <button 
                 onClick={handleBackToOverview}
@@ -348,7 +408,7 @@ function WorkspaceClientInner({ instance, steps, chainContext }: WorkspaceClient
             onCompleteStep={handleCompleteStep}
             onSkipStep={handleSkipStep}
             onDraftStep={handleDraftStep}
-            readOnly={isCurrentStepCompleted}
+            readOnly={instance.status === 'completed' || isCompleted}
             initialDraft={currentDraft}
           />
 

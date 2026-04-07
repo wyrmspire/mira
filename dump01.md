@@ -1,3 +1,8 @@
+  const { getStorageAdapter } = await import('@/lib/storage-adapter');
+  const adapter = getStorageAdapter();
+  console.log('[Library] Storage adapter:', adapter.constructor.name);
+
+  // Parallel fetch for all sections
   const [active, completed, moments, proposed, outlines] = await Promise.all([
     getActiveExperiences(userId),
     getCompletedExperiences(userId),
@@ -7993,8 +7998,3 @@ export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft, r
                     type="button"
                     onClick={() => handleInputChange(currentQuestion.id, option)}
                     className={`px-5 py-4 rounded-xl border text-left transition-all text-lg font-medium ${
-                      answers[currentQuestion.id] === option
-                        ? 'bg-indigo-500/10 border-indigo-500/50 text-indigo-300 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
-                        : showError 
-                          ? 'bg-[#12121a] border-rose-500/20 text-[#64748b] hover:border-rose-500/40' 
-                          : 'bg-[#12121a] border-[#1e1e2e] text-[#94a3b8] hover:border-[#33334d]'

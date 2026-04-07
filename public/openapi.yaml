@@ -168,6 +168,40 @@ paths:
         '404':
           description: Experience not found
 
+  /api/experiences/{id}/steps:
+    patch:
+      operationId: updateExperienceStepStatus
+      summary: Update experience step completion status
+      description: Sets a step to 'completed' status and updates the completion timestamp. Required for robust completion tracking.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The experience instance UUID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [stepId, status]
+              properties:
+                stepId:
+                  type: string
+                status:
+                  type: string
+                  enum: [completed]
+                completedAt:
+                  type: string
+                  format: date-time
+      responses:
+        '200':
+          description: OK
+        '400':
+          description: Bad Request
+
   /api/gpt/plan:
     post:
       operationId: planCurriculum
@@ -313,10 +347,11 @@ paths:
                   type: string
                 previousExperienceId:
                   type: string
-                domains:
+                domainIds:
                   type: array
                   items:
                     type: string
+                  description: Optional array of domain UUIDs. Auto-links the created experience to these domains.
                 goalId:
                   type: string
                 name:
@@ -438,6 +473,7 @@ paths:
                 transitionAction:
                   type: string
                   enum: [approve, publish, activate, start, pause, complete, archive, kill, revive, supersede]
+                  description: Use 'start' to activate any experience (both persistent and ephemeral). 'approve'/'complete' trigger lifecycle inbox events.
                 stepId:
                   type: string
                 stepPayload:

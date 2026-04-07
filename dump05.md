@@ -1,142 +1,506 @@
--                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal, memory_update, memory_delete, consolidate_memory, rename_board, archive_board, reparent_node, expand_board_branch]
-+                  enum: [update_step, reorder_steps, delete_step, transition, link_knowledge, update_knowledge, update_skill_domain, update_map_node, delete_map_node, delete_map_edge, transition_goal, memory_update, memory_delete, consolidate_memory, rename_board, archive_board, reparent_node, expand_board_branch, suggest_board_gaps]
-                   description: The mutation action to perform.
-                 experienceId:
+        echo "### Uncommitted Diff"
+        echo ""
+        echo '```diff'
+        git diff -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
+        git diff --cached -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null
+        echo '```'
+        echo ""
+    fi
+    
+    # NEW: Show contents of untracked files (new files not yet staged)
+    UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null)
+    if [ -n "$UNTRACKED" ]; then
+        echo "### New Untracked Files"
+        echo ""
+        for file in $UNTRACKED; do
+            # Skip binary files and very large files
+            if [ -f "$file" ]; then
+                # Checking if it's a text file
+                if command -v file >/dev/null 2>&1; then
+                    if ! file "$file" | grep -q text; then
+                        continue
+                    fi
+                fi
+                
+                LINES=$(wc -l < "$file" 2>/dev/null || echo "0")
+                if [ "$LINES" -lt 500 ]; then
+                    echo "#### \`$file\`"
+                    echo ""
+                    echo '```'
+                    cat "$file" 2>/dev/null
+                    echo '```'
+                    echo ""
+                else
+                    echo "#### \`$file\` ($LINES lines - truncated)"
+                    echo ""
+                    echo '```'
+                    head -100 "$file" 2>/dev/null
+                    echo "... ($LINES total lines)"
+                    echo '```'
+                    echo ""
+                fi
+            fi
+        done
+    fi
+    
+    echo "---"
+    echo ""
+    
+    # NEW: Show changes from the last pull/merge if applicable
+    if git rev-parse ORIG_HEAD >/dev/null 2>&1; then
+        VAL_HEAD=$(git rev-parse HEAD)
+        VAL_ORIG=$(git rev-parse ORIG_HEAD)
+        if [ "$VAL_HEAD" != "$VAL_ORIG" ]; then
+            echo "## Changes from Last Pull/Merge (ORIG_HEAD vs HEAD)"
+            echo ""
+            echo "These are the changes that recently came into your branch."
+            echo ""
+            echo '```diff'
+            git diff ORIG_HEAD HEAD --stat 2>/dev/null
+            echo '```'
+            echo ""
+            echo '```diff'
+            # Limit full diff to avoid massive files
+            git diff ORIG_HEAD HEAD 2>/dev/null | head -n 1000
+            echo "... (truncated to 1000 lines)"
+            echo '```'
+            echo ""
+            echo "---"
+            echo ""
+        fi
+    fi
+
+    # Show commits that are different
+    echo "## Commits Ahead (local changes not on remote)"
+    echo ""
+    echo '```'
+    git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "## Commits Behind (remote changes not pulled)"
+    echo ""
+    echo '```'
+    git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null || echo "(none)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    
+    CHANGES_BEHIND=$(git rev-list HEAD..$REMOTE_BRANCH --count 2>/dev/null || echo "0")
+    CHANGES_AHEAD=$(git rev-list $REMOTE_BRANCH..HEAD --count 2>/dev/null || echo "0")
+    
+    if [ "$CHANGES_BEHIND" -eq 0 ] && [ "$CHANGES_AHEAD" -eq 0 ]; then
+        echo "## Status: Up to Date"
+        echo ""
+        echo "Your local branch is even with **$REMOTE_BRANCH**."
+        echo "No unpushed commits."
+        echo ""
+    fi
+    echo "## File Changes (YOUR UNPUSHED CHANGES)"
+    echo ""
+    echo '```'
+    git diff --stat "$REMOTE_BRANCH" HEAD 2>/dev/null || echo "(no changes)"
+    echo '```'
+    echo ""
+    
+    echo "---"
+    echo ""
+    echo "## Full Diff of Your Unpushed Changes"
+    echo ""
+    echo "Green (+) = lines you ADDED locally"
+    echo "Red (-) = lines you REMOVED locally"
+    echo ""
+    echo '```diff'
+    git diff "$REMOTE_BRANCH" HEAD -- ':!gitrdiff.md' ':!dump*.md' 2>/dev/null || echo "(no diff)"
+    echo '```'
+    
+} > "$OUTPUT"
+
+echo "Done! Created $OUTPUT"
+echo ""
+echo "Summary:"
+echo "  Uncommitted files: $(git status --short 2>/dev/null | wc -l | tr -d ' ')"
+echo "  YOUR unpushed commits: $(git log --oneline "$REMOTE_BRANCH..HEAD" 2>/dev/null | wc -l | tr -d ' ')"
+echo "  Remote commits to pull: $(git log --oneline "HEAD..$REMOTE_BRANCH" 2>/dev/null | wc -l | tr -d ' ')"
+
+```
+
+### gitrdiff.md
+
+```markdown
+# Git Diff Report
+
+**Generated**: Mon, Apr  6, 2026  7:52:41 PM
+
+**Local Branch**: main
+
+**Comparing Against**: origin/main
+
+---
+
+## Uncommitted Changes (working directory)
+
+### Modified/Staged Files
+
+```
+ M app/api/gpt/memory/route.ts
+ M app/api/gpt/plan/route.ts
+ M dump00.md
+ M dump01.md
+ M dump02.md
+ M dump03.md
+ M dump04.md
+ M dump05.md
+ M dump06.md
+ D dump07.md
+ M lib/ai/flows/synthesize-experience.ts
+ M lib/ai/safe-flow.ts
+ M lib/gateway/discover-registry.ts
+ M lib/gateway/gateway-router.ts
+ M lib/gateway/gateway-types.ts
+ M lib/services/graph-service.ts
+ M lib/services/synthesis-service.ts
+ M public/openapi.yaml
+```
+
+### Uncommitted Diff
+
+```diff
+diff --git a/app/api/gpt/memory/route.ts b/app/api/gpt/memory/route.ts
+index b6c8c4c..71d9af7 100644
+--- a/app/api/gpt/memory/route.ts
++++ b/app/api/gpt/memory/route.ts
+@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
+       source,
+     });
+ 
+-    return NextResponse.json(memory);
++    return NextResponse.json(memory, { status: 201 });
+   } catch (error: any) {
+     console.error('[API Memory POST] Error:', error);
+     return NextResponse.json({ error: error.message }, { status: 500 });
+diff --git a/app/api/gpt/plan/route.ts b/app/api/gpt/plan/route.ts
+index b32ea64..014c656 100644
+--- a/app/api/gpt/plan/route.ts
++++ b/app/api/gpt/plan/route.ts
+@@ -206,7 +206,7 @@ export async function POST(request: Request) {
+     // Consolidate Remaining Planning Actions to Gateway Router
+     // (list_boards, read_board/read_map)
+     // ------------------------------------------------------------------
+-    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map'];
++    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map', 'read_experience'];
+     if (ROUTER_ACTIONS.includes(action)) {
+       const { dispatchPlan } = await import('@/lib/gateway/gateway-router');
+       // Normalize read_map -> read_board for router consistency
+@@ -221,7 +221,7 @@ export async function POST(request: Request) {
+     return NextResponse.json(
+       {
+         error: `Unknown action: "${action}"`,
+-        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board'],
++        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board', 'read_experience'],
+       },
+       { status: 400 }
+     );
+diff --git a/lib/ai/flows/synthesize-experience.ts b/lib/ai/flows/synthesize-experience.ts
+index a379f5b..4dd9934 100644
+--- a/lib/ai/flows/synthesize-experience.ts
++++ b/lib/ai/flows/synthesize-experience.ts
+@@ -28,10 +28,23 @@ export const synthesizeExperienceFlow = ai.defineFlow(
+     const stepSummary = steps.map(s => `${s.step_order + 1}. [${s.step_type}] ${s.title}`).join('\n');
+     const interactionSummary = interactions.map(i => {
+       const type = i.event_type;
++      // Truncate large payloads (e.g. 100-question answer blobs) to avoid prompt overflow
++      if (type === 'answer_submitted' && i.event_payload?.answers) {
++        const answers = i.event_payload.answers;
++        const keys = Object.keys(answers);
++        const sample = keys.slice(0, 10).map(k => `${k}: ${String(answers[k]).substring(0, 80)}`).join('; ');
++        return `- Event: ${type} | ${keys.length} answers submitted (sample: ${sample})`;
++      }
+       const payload = JSON.stringify(i.event_payload);
+-      return `- Event: ${type} | Payload: ${payload}`;
++      return `- Event: ${type} | Payload: ${payload.length > 200 ? payload.substring(0, 200) + '...' : payload}`;
+     }).join('\n');
+     
++    // Cap total interaction context to prevent prompt overflow
++    const maxInteractionChars = 4000;
++    const trimmedInteractions = interactionSummary.length > maxInteractionChars
++      ? interactionSummary.substring(0, maxInteractionChars) + '\n... (truncated)'
++      : interactionSummary;
++    
+     const prompt = `
+       System: You are an experience analyst for Mira Studio.
+       Task: Synthesize a user's journey through a structured experience.
+@@ -45,7 +58,7 @@ export const synthesizeExperienceFlow = ai.defineFlow(
+       ${stepSummary}
+       
+       USER ACTIVITY:
+-      ${interactionSummary}
++      ${trimmedInteractions}
+       
+       Analysis Requirements:
+       1. Provide a narrative (2-3 sentences) on what actually happened.
+diff --git a/lib/ai/safe-flow.ts b/lib/ai/safe-flow.ts
+index b37f371..2259c67 100644
+--- a/lib/ai/safe-flow.ts
++++ b/lib/ai/safe-flow.ts
+@@ -22,6 +22,6 @@ export async function runFlowSafe<TInput, TOutput>(
+     return output;
+   } catch (error: any) {
+     console.error(`[AI/safe-flow] Flow execution failed:`, error.message);
+-    return { error: 'AI enhancement unavailable at this time', detail: error.message };
++    return null;
+   }
+ }
+diff --git a/lib/gateway/discover-registry.ts b/lib/gateway/discover-registry.ts
+index 3b895fd..21695c5 100644
+--- a/lib/gateway/discover-registry.ts
++++ b/lib/gateway/discover-registry.ts
+@@ -893,6 +893,23 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
+       userId: 'user-123'
+     },
+     when_to_use: 'Periodically or after a major milestone to ensure the "Notebook" memory layer is up to date.'
++  }),
++
++  read_experience: () => ({
++    capability: 'read_experience' as const,
++    endpoint: 'POST /api/gpt/plan',
++    description: 'Read the full context dump for an experience: metadata, steps, all user interactions (answers, reflections, time, completions), and synthesis narrative. Use this to review what the user actually did.',
++    schema: {
++      action: 'read_experience',
++      experienceId: 'UUID of the experience instance (REQUIRED)',
++      userId: 'optional UUID (auto-resolved from experience)'
++    },
++    example: {
++      action: 'read_experience',
++      experienceId: '1bbaf425-d465-4c1d-a2a8-83b6302540b8'
++    },
++    when_to_use: 'After a user completes an experience, before generating follow-up experiences, or when you need to reference specific user answers. Always call this before synthesizing or summarizing what the user said.',
++    relatedCapabilities: ['create_experience', 'memory_record', 'create_outline']
+   })
+ };
+ 
+diff --git a/lib/gateway/gateway-router.ts b/lib/gateway/gateway-router.ts
+index cad6146..7f5431f 100644
+--- a/lib/gateway/gateway-router.ts
++++ b/lib/gateway/gateway-router.ts
+@@ -337,11 +337,11 @@ export async function dispatchCreate(type: string, payload: any) {
+       );
+     }
+     case 'board_from_text': {
+-      return runFlowSafe(boardFromTextFlow, {
++      const flowResult = await runFlowSafe(boardFromTextFlow, {
+         prompt: payload.prompt,
+         userId: payload.userId ?? payload.user_id
+       }, async (output: any) => {
+-        if (!output || output.error) return output;
++        if (!output || !Array.isArray(output.nodes)) return null;
+         const { createBoard, createNode, createEdge } = await import('@/lib/services/mind-map-service');
+         const board = await createBoard(payload.userId ?? payload.user_id, output.title, 'general');
+         
+@@ -387,6 +387,11 @@ export async function dispatchCreate(type: string, payload: any) {
+ 
+         return { ...board, nodesCreated: output.nodes.length, edgesCreated: edges.length };
+       });
++
++      if (!flowResult) {
++        throw new Error('AI board generation failed. Try again or create the board manually with type="board".');
++      }
++      return flowResult;
+     }
+     default:
+       throw new Error(`Unknown create type: "${type}"`);
+@@ -544,8 +549,8 @@ export async function dispatchUpdate(action: string, payload: any) {
+     }
+ 
+     case 'expand_board_branch': {
+-      return runFlowSafe(expandBranchFlow, payload, async (output: any) => {
+-        if (!output || output.error) return output;
++      const expandResult = await runFlowSafe(expandBranchFlow, payload, async (output: any) => {
++        if (!output || !Array.isArray(output.nodes)) return null;
+         const { createNode, createEdge } = await import('@/lib/services/mind-map-service');
+         const results = [];
+         for (const n of (output.nodes as any[])) {
+@@ -560,6 +565,11 @@ export async function dispatchUpdate(action: string, payload: any) {
+         }
+         return results;
+       });
++
++      if (!expandResult) {
++        throw new Error('AI branch expansion failed. Try again or add nodes manually.');
++      }
++      return expandResult;
+     }
+ 
+     case 'suggest_board_gaps': {
+@@ -592,6 +602,81 @@ export async function dispatchPlan(action: string, payload: any) {
+         ...graph
+       };
+     }
++    case 'read_experience': {
++      if (!payload.experienceId) {
++        throw new Error('Missing experienceId for read_experience.');
++      }
++      const { getExperienceInstanceById, getExperienceSteps } = await import('@/lib/services/experience-service');
++      const { getInteractionsByInstance } = await import('@/lib/services/interaction-service');
++      const { getSynthesisForSource } = await import('@/lib/services/synthesis-service');
++
++      const instance = await getExperienceInstanceById(payload.experienceId);
++      if (!instance) throw new Error(`Experience ${payload.experienceId} not found.`);
++
++      const steps = await getExperienceSteps(payload.experienceId);
++      const interactions = await getInteractionsByInstance(payload.experienceId);
++      const userId = payload.userId ?? payload.user_id ?? instance.user_id;
++
++      // Group interactions by type for clean GPT consumption
++      const grouped: Record<string, any> = {};
++      let totalTimeMs = 0;
++
++      for (const event of interactions) {
++        const t = event.event_type;
++        if (t === 'answer_submitted') {
++          // Merge all answer payloads (questionnaires, reflections)
++          grouped.answers = { ...(grouped.answers || {}), ...(event.event_payload?.answers || {}) };
++          if (event.event_payload?.reflections) {
++            grouped.reflections = { ...(grouped.reflections || {}), ...event.event_payload.reflections };
++          }
++        } else if (t === 'time_on_step') {
++          totalTimeMs += event.event_payload?.durationMs || 0;
++        } else if (t === 'task_completed') {
++          grouped.completedStepIds = grouped.completedStepIds || [];
++          if (event.step_id) grouped.completedStepIds.push(event.step_id);
++        } else if (t === 'checkpoint_graded') {
++          grouped.checkpointResults = grouped.checkpointResults || [];
++          grouped.checkpointResults.push(event.event_payload);
++        } else {
++          // Lifecycle events: experience_started, experience_completed, step_viewed, etc.
++          grouped.lifecycle = grouped.lifecycle || [];
++          grouped.lifecycle.push({ type: t, at: event.created_at });
++        }
++      }
++
++      grouped.totalTimeMs = totalTimeMs;
++      grouped.totalEvents = interactions.length;
++
++      // Fetch synthesis if it exists
++      let synthesis = null;
++      try {
++        synthesis = await getSynthesisForSource(userId, 'experience', payload.experienceId);
++      } catch (_) { /* synthesis may not exist yet */ }
++
++      return {
++        experience: {
++          id: instance.id,
++          title: instance.title,
++          goal: instance.goal,
++          status: instance.status,
++          instance_type: instance.instance_type,
++          resolution: instance.resolution,
++          created_at: instance.created_at,
++        },
++        steps: steps.map(s => ({
++          id: s.id,
++          title: s.title,
++          step_type: s.step_type,
++          step_order: s.step_order,
++          status: s.status,
++        })),
++        interactions: grouped,
++        synthesis: synthesis ? {
++          narrative: synthesis.summary,
++          keySignals: synthesis.key_signals,
++        } : null,
++      };
++    }
+     default:
+       throw new Error(`Unknown plan action: "${action}"`);
+   }
+diff --git a/lib/gateway/gateway-types.ts b/lib/gateway/gateway-types.ts
+index 6dbbaf3..3d22b98 100644
+--- a/lib/gateway/gateway-types.ts
++++ b/lib/gateway/gateway-types.ts
+@@ -46,7 +46,8 @@ export type DiscoverCapability =
+   | 'archive_board'
+   | 'reparent_node'
+   | 'expand_board_branch'
+-  | 'suggest_board_gaps';
++  | 'suggest_board_gaps'
++  | 'read_experience';
+ 
+ 
+ /**
+diff --git a/lib/services/graph-service.ts b/lib/services/graph-service.ts
+index 227e271..42eb2e9 100644
+--- a/lib/services/graph-service.ts
++++ b/lib/services/graph-service.ts
+@@ -264,7 +264,7 @@ export async function getAISuggestionsForCompletion(instanceId: string, userId:
+     suggestNextExperienceFlow,
+     context,
+     async (output: any) => {
+-      if (!output || output.error) return null;
++      if (!output || output.error || !Array.isArray(output.suggestions)) return null;
+       return output.suggestions.map((s: any) => ({
+         templateClass: s.templateClass,
+         reason: s.reason,
+diff --git a/lib/services/synthesis-service.ts b/lib/services/synthesis-service.ts
+index 8cff88a..0373900 100644
+--- a/lib/services/synthesis-service.ts
++++ b/lib/services/synthesis-service.ts
+@@ -40,14 +40,16 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
+     { instanceId: sourceId, userId }
+   )
+ 
+-  if (aiResult) {
++  if (aiResult && aiResult.narrative) {
+     snapshot.summary = aiResult.narrative
+     snapshot.key_signals = {
+       ...snapshot.key_signals,
+-      ...aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {}),
++      ...(Array.isArray(aiResult.keySignals) 
++        ? aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {})
++        : {}),
+       frictionAssessment: aiResult.frictionAssessment
+     }
+-    snapshot.next_candidates = aiResult.nextCandidates
++    snapshot.next_candidates = Array.isArray(aiResult.nextCandidates) ? aiResult.nextCandidates : []
+   }
+   
+   // W2 - Compute Mastery Transitions for Lane 5
+diff --git a/public/openapi.yaml b/public/openapi.yaml
+index ba7273a..2ccc399 100644
+--- a/public/openapi.yaml
++++ b/public/openapi.yaml
+@@ -130,8 +130,8 @@ paths:
+   /api/gpt/plan:
+     post:
+       operationId: planCurriculum
+-      summary: Scoping and planning operations
+-      description: Create curriculum outlines, dispatch research, assess gaps, or read mind maps. Flat payload — all fields alongside action.
++      summary: Scoping, planning, and reading operations
++      description: Create curriculum outlines, dispatch research, assess gaps, read mind maps, or read full experience data. Flat payload — all fields alongside action.
+       requestBody:
+         required: true
+         content:
+@@ -142,7 +142,7 @@ paths:
+               properties:
+                 action:
                    type: string
-```
-
-### New Untracked Files
-
-#### `seed_db.ts`
-
-```
-import { getSupabaseClient } from './lib/supabase/client';
-import { DEFAULT_USER_ID, DEFAULT_TEMPLATE_IDS } from './lib/constants';
-
-async function seed() {
-  const supabase = getSupabaseClient();
-  
-  // 1. Insert default user
-  const { error: userError } = await supabase.from('users').upsert({
-    id: DEFAULT_USER_ID,
-    email: 'dev@maddyup.com'
-  });
-  if (userError) console.error('User seed error:', userError);
-  else console.log('User seeded');
-
-  // 2. Insert default workspace
-  const { data: wsData, error: wsError } = await supabase.from('workspaces').upsert({
-    id: DEFAULT_USER_ID,
-    name: 'Default Workspace'
-  }).select().single();
-  if (wsError) console.error('Workspace seed error:', wsError);
-  else console.log('Workspace seeded:', wsData);
-
-  // 3. Insert default templates
-  for (const [key, id] of Object.entries(DEFAULT_TEMPLATE_IDS)) {
-    const { error: tmplError } = await supabase.from('experience_templates').upsert({
-      id: id,
-      slug: key,
-      name: key,
-      class: key,
-      renderer_type: key
-    });
-    if (tmplError) console.error(`Template ${key} seed error:`, tmplError);
-  }
-  console.log('Templates seeded');
-}
-
-seed().catch(console.error);
-```
-
-#### `test_output.txt`
-
-```
---- Running test-endpoints for Mira ---
-
-[1] GET /api/gpt/state
-Traceback (most recent call last):
-  File "C:\mira\miracli.py", line 127, in <module>
-    main()
-    ~~~~^^
-  File "C:\mira\miracli.py", line 122, in main
-    test_endpoints()
-    ~~~~~~~~~~~~~~^^
-  File "C:\mira\miracli.py", line 27, in test_endpoints
-    print_result("GET /api/gpt/state", None, 200, r.status_code, r.text)
-    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\mira\miracli.py", line 15, in print_result
-    print(f"[{pass_fail}] {endpoint}")
-    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "C:\Python313\Lib\encodings\cp1252.py", line 19, in encode
-    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
-           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 1: character maps to <undefined>
-```
-
-#### `test_output2.txt`
-
-```
---- Running test-endpoints for Mira ---
-
-[1] GET /api/gpt/state
-[PASS] GET /api/gpt/state
-    Expected: 200 | Actual: 200
-
-[2] POST /api/gpt/create (type: goal)
-[FAIL] POST /api/gpt/create (goal)
-    Expected: 200 | Actual: 201
-    Body: {"id":"64d8353b-bd53-4d84-9742-efeeec7706cd","userId":"a0000000-0000-0000-0000-000000000001","title":"CLI Test Goal d8850a","description":"","status":"intake","domains":["CLI Domain c3ab05"],"createdAt":"2026-04-06T03:33:13.515+00:00","updatedAt":"2026-04-06T03:33:13.515+00:00","_domainsCreated":["CLI Domain c3ab05"]}
-
-[3] POST /api/gpt/plan (action: create_outline)
-[FAIL] POST /api/gpt/plan (create_outline)
-    Expected: 201 | Actual: 500
-    Body: {"error":"Internal server error","detail":"insert or update on table \"curriculum_outlines\" violates foreign key constraint \"curriculum_outlines_user_id_fkey\""}
-
-[4] POST /api/gpt/create (type: memory)
-[FAIL] POST /api/gpt/create (memory)
-    Expected: 200 | Actual: 201
-    Body: {"id":"4bcd91d8-9917-4ce1-ba38-2fb2f47181f3","userId":"a0000000-0000-0000-0000-000000000001","kind":"preference","memoryClass":"semantic","topic":"Testing","content":"User prefers CLI tools over GUIs for testing.","tags":[],"confidence":0.7,"usageCount":3,"pinned":false,"source":"gpt_learned","createdAt":"2026-04-06T03:32:16.798146+00:00","lastUsedAt":"2026-04-06T03:33:13.883+00:00","metadata":{}}
-
-[5] POST /api/gpt/create (type: board)
-[FAIL] POST /api/gpt/create (board)
-    Expected: 200 | Actual: 500
-    Body: {"error":"insert or update on table \"think_boards\" violates foreign key constraint \"think_boards_workspace_id_fkey\"","type":"board","hint":"Call GET /api/gpt/discover?capability=<type> for the correct schema."}
-
---- Cleaning Up DB Entries ---
-Cleanup commands dispatched.
-```
-
-#### `test_output3.txt`
-
-```
---- Running test-endpoints for Mira ---
-
-[1] GET /api/gpt/state
-[PASS] GET /api/gpt/state
-    Expected: 200 | Actual: 200
-
-[2] POST /api/gpt/create (type: goal)
-[FAIL] POST /api/gpt/create (goal)
-    Expected: 200 | Actual: 201
-    Body: {"id":"83cc98f8-7bc8-4be8-ac7e-1652b5b48906","userId":"a0000000-0000-0000-0000-000000000001","title":"CLI Test Goal 2c9180","description":"","status":"intake","domains":["CLI Domain 6c1a20"],"createdAt":"2026-04-06T03:37:36.257+00:00","updatedAt":"2026-04-06T03:37:36.257+00:00","_domainsCreated":["CLI Domain 6c1a20"]}
-
-[3] POST /api/gpt/plan (action: create_outline)
-[PASS] POST /api/gpt/plan (create_outline)
-    Expected: 201 | Actual: 201
-
-[4] POST /api/gpt/create (type: memory)
-[FAIL] POST /api/gpt/create (memory)
-    Expected: 200 | Actual: 201
-    Body: {"id":"4bcd91d8-9917-4ce1-ba38-2fb2f47181f3","userId":"a0000000-0000-0000-0000-000000000001","kind":"preference","memoryClass":"semantic","topic":"Testing","content":"User prefers CLI tools over GUIs for testing.","tags":[],"confidence":0.75,"usageCount":4,"pinned":false,"source":"gpt_learned","createdAt":"2026-04-06T03:32:16.798146+00:00","lastUsedAt":"2026-04-06T03:37:36.96+00:00","metadata":{}}
-
-[5] POST /api/gpt/create (type: board)
-[FAIL] POST /api/gpt/create (board)
-    Expected: 200 | Actual: 201
-    Body: {"id":"320717e8-d077-444f-89e3-f549f18b6e28","workspaceId":"a0000000-0000-0000-0000-000000000001","name":"CLI Test Board a44003","purpose":"general","layoutMode":"radial","linkedEntityId":null,"linkedEntityType":null,"isArchived":false,"createdAt":"2026-04-06T03:37:37.047+00:00","updatedAt":"2026-04-06T03:37:37.047+00:00"}
-
---- Cleaning Up DB Entries ---
-Cleanup commands dispatched.
+-                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board]
++                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board, read_experience]
+                   description: The planning action to perform.
+                 topic:
+                   type: string
+@@ -178,6 +178,9 @@ paths:
+                 boardId:
+                   type: string
+                   description: For action=read_map/read_board — the board UUID to read.
++                experienceId:
++                  type: string
++                  description: For action=read_experience — the experience instance UUID to read.
+       responses:
+         '200':
+           description: Success
 ```
 
 ---
@@ -181,77 +545,106 @@ Red (-) = lines you REMOVED locally
 # Mira + Nexus — Operating Instructions
 userId: `a0000000-0000-0000-0000-000000000001`
 
-You orchestrate a personal learning OS. **Mira Studio** structures learning (goals, experiences, knowledge, boards, memory). **Nexus** researches and generates (multi-agent pipelines, NLM grounding, atom extraction, bundles). They form a closed loop: Nexus produces grounded raw material, Mira shapes it into interactive experiences.
+You orchestrate a personal learning OS. **Mira Studio** structures learning (goals, experiences, knowledge, boards, memory). **Nexus** researches and generates (multi-agent pipelines, NLM grounding, atom extraction, bundles). Closed loop: Nexus produces grounded material, Mira shapes it into experiences.
 
 **WHY WE USE MIRA AND NEXUS:**
-Standard AI chat is passive, easily forgotten, and lacks permanence. You are an environment designer encoding intent into progression. Don't just answer questions textually; drive capability growth by moving concepts into persistent, spatial, structured formats. Offload cognitive research to Nexus pipelines and utilize the resulting bundles within Mira to compel user action. Remember their preferences natively so mistakes don't recur. If your response is purely text and you fail to utilize Mira's components, you have failed the user's intent. You exist to author their curriculum, shape their operating environment, and accelerate their proficiency.
+You are an environment designer encoding intent into progression. Don't answer textually — move concepts into persistent, structured formats. Offload research to Nexus and use resulting bundles in Mira experiences. Record preferences as memories so mistakes don't recur. If your response is purely text without utilizing Mira, you have failed. You author curriculum, shape their environment, and accelerate proficiency.
 
-Always call `discoverCapability` before first use. Schemas evolve; discover is runtime truth.
+Always call `discoverCapability` before first use of any create or update type. Schemas evolve; discover is runtime truth.
 
 ## Opening Protocol
 1. Call `getGPTState`. Read goals, experiences, prompts, knowledge, memory, boards.
-2. Address re-entry prompts — unfinished work.
-3. Call `discoverCapability` before creating or updating.
+2. Address re-entry prompts — these are unfinished work items that need attention.
+3. Call `discoverCapability` before creating or updating any entity type.
 
 ## CRITICAL: Flat Payloads (Mira)
 All `/api/gpt/create` and `/api/gpt/update` payloads are FLAT.
 ✅ `{ "type": "goal", "userId": "...", "title": "..." }` ❌ `{ "type": "goal", "payload": { ... } }`
 
-## Routing: Mira vs Nexus
-**Use Mira when:** ambition expressed (goal), needs structure (planCurriculum outline), ready to teach (experience+steps), nudge needed (ephemeral), memory learned, visualization (board/board_from_text), check state (getGPTState).
-**Use Nexus when:** sourced research needed (dispatchResearch), need results (listAtoms), packaged content (assembleBundle), grounded Q&A (queryNotebook with NLM auth), custom agents (createAgent), pipeline running (dispatchPipeline).
-**Golden path:** Goal -> dispatchResearch -> poll -> listAtoms -> assembleBundle -> create Mira experience. Skip Nexus if content is already deeply known.
+## Endpoint Reference
 
-## Templates & Step payload contracts
-`discover?capability=templates`. Examples: `b0..01` (questionnaire), `b0..02` (lesson), `b0..03` (challenge), `b0..04` (plan_builder), `b0..05` (reflection), `b0..06` (essay_tasks).
-UUIDs: `b0000000-0000-0000-0000-00000000000X`.
-`discover?capability=step_payload&step_type=X`:
-- **lesson**: `sections[]` of `{ heading, body, type }`. NO raw string.
-- **checkpoint**: `questions[]` with `expected_answer`, `format` (free_text/choice).
-- **challenge**: `objectives[]` of `{ id, description }`.
+### Read Endpoints (GET)
+- **`getGPTState`** — Compressed state: active experiences, re-entry prompts, friction signals, knowledge summary, curriculum progress. Call first every conversation.
+- **`getExperience(id)`** — Full experience with steps (including payloads/questions), all user interactions (answers, reflections, completions, time), and graph context. Call this to see what the user actually did in any experience. This is your primary read-back tool.
+- **`readKnowledge(?domain,?topic)`** — Knowledge units grouped by domain. Full content including thesis, key ideas.
+- **`listMemories(?kind,?topic,?query)`** — Query your persistent memory notebook. Filter by kind (observation, preference, milestone, etc), topic, or keyword search.
+- **`discoverCapability(?capability,?step_type)`** — Runtime schema discovery. Call before first create/update of any type.
+- **`getChangeReports`** — User-reported UI feedback and bugs.
 
-## Create Types (POST /api/gpt/create)
-- **goal**: title.
-- **skill_domain**: userId, goalId, name.
-- **experience**: templateId, userId, resolution.
-- **ephemeral**: fire-and-forget experience.
-- **step**: experienceId, step_type, title, payload.
-- **knowledge**: userId, topic, domain, title, content.
-- **memory**: userId, kind, topic, content. Auto-deduplicates. Vital for learning tactics.
+### Create Endpoint (POST /api/gpt/create)
+All types use flat payload. Call `discoverCapability` for exact schema.
+- **experience**: templateId, userId, title, goal, resolution, reentry, steps[]. Persistent, goes through review pipeline.
+- **ephemeral**: Same as experience but injected instantly, no review. Fire-and-forget.
+- **step**: experienceId, step_type, title, payload. Added to existing experience.
+- **idea**: title, rawPrompt. Lightweight capture.
+- **goal**: title. User ambition tracking.
+- **skill_domain**: userId, goalId, name. Links skills to goals.
+- **knowledge**: userId, topic, domain, title, content. Persistent learning material.
+- **memory**: userId, kind, topic, content. Auto-deduplicates. Your persistent notebook.
 - **board**: name, purpose (general|idea_planning|curriculum_review|lesson_plan|research_tracking|strategy).
-- **board_from_text**: AI-generates full board from a prompt. Best when context is complex.
-- **map_node**: label, x, y.
-- **map_cluster**: centerNode + childNodes[].
+- **board_from_text**: prompt. AI generates full board from natural language.
+- **map_node**: boardId, label, position_x, position_y.
+- **map_cluster**: centerNode + childNodes[]. Batch node creation.
 - **map_edge**: sourceNodeId, targetNodeId.
 
-## Update Actions (POST /api/gpt/update)
-- `transition`: activate|complete|archive|kill|revive.
-- `transition_goal`: activate|pause|complete|kill.
-- `update_step`/`reorder_steps`/`delete_step`: experience mutators.
-- `link_knowledge`: unitId + domain/experience/step.
-- `update_knowledge`/`update_map_node`/`update_skill_domain`: edits.
-- `consolidate_memory`: Extracts insights from recent activity.
-- `rename_board`/`archive_board`.
-- `reparent_node`/`expand_board_branch`/`suggest_board_gaps`: Board AI tooling.
+### Update Endpoint (POST /api/gpt/update)
+All actions use flat payload with `action` discriminator.
+- `transition`: experienceId, transitionAction (approve|activate|start|complete|archive|kill|revive|supersede).
+- `transition_goal`: goalId, transitionAction (activate|pause|complete|kill).
+- `update_step` / `reorder_steps` / `delete_step`: Step mutations on experiences.
+- `link_knowledge`: Connect knowledge units to domains, experiences, or steps.
+- `update_knowledge` / `update_map_node` / `update_skill_domain`: Field-level edits.
+- `memory_update` / `memory_delete`: Correct or remove memories. memoryId required.
+- `consolidate_memory`: Extracts insights from recent activity into memory. Background task.
+- `rename_board` / `archive_board`: Board lifecycle.
+- `reparent_node`: Move a node to a different parent. sourceNodeId, nodeId.
+- `expand_board_branch` / `suggest_board_gaps`: AI-driven board enrichment.
+
+### Plan Endpoint (POST /api/gpt/plan)
+All actions use flat payload with `action` discriminator.
+- `create_outline`: topic, subtopics[], goalId. Creates a curriculum outline.
+- `dispatch_research`: topic, outlineId. Triggers Nexus research pipeline.
+- `assess_gaps`: outlineId. Returns structural coverage analysis.
+- `read_experience`: experienceId. Returns full context dump: experience metadata, steps with content (question maps for questionnaires, section headings for lessons, prompts for reflections), all user interactions grouped by type, chronological event timeline, and synthesis narrative. **Always call this before summarizing or building on completed work.**
+- `read_board` / `read_map`: boardId. Returns board with full node/edge graph.
+- `list_boards`: Returns all user boards.
+
+## Reading Back User Work
+After a user completes an experience, you MUST read back what they did before generating follow-ups. Two paths:
+1. **Quick**: `getExperience(id)` — returns steps with payloads and raw interaction events.
+2. **Rich**: `planCurriculum(action: "read_experience", experienceId)` — returns interactions grouped by type (answers, reflections, checkpoints, freeform), question→label maps, time spent, and synthesis.
+Never guess at user answers from state alone. State gives you titles and statuses. The read endpoints give you content.
+
+## Templates & Step Payload Contracts
+`discover?capability=templates`. UUIDs: `b0000000-0000-0000-0000-00000000000X`.
+Templates: `b0..01` (questionnaire), `b0..02` (lesson), `b0..03` (challenge), `b0..04` (plan_builder), `b0..05` (reflection), `b0..06` (essay_tasks).
+
+`discover?capability=step_payload&step_type=X` for exact payload shape:
+- **lesson**: `sections[]` of `{ heading, body, type }`. NEVER use a raw content string.
+- **questionnaire**: `questions[]` of `{ id, label, type, options[] }`.
+- **checkpoint**: `questions[]` with `expected_answer`, `format` (free_text/choice).
+- **challenge**: `objectives[]` of `{ id, description }`.
+- **reflection**: `prompts[]` of `{ id, text }`.
+
+## Routing: Mira vs Nexus
+**Mira:** goals, outlines, experiences, steps, ephemerals, memory, boards, state reads, experience reads.
+**Nexus:** sourced research (dispatchResearch), atoms (listAtoms), bundles (assembleBundle), grounded Q&A (queryNotebook), agents (createAgent), pipelines.
+**Golden path:** Goal → dispatchResearch → listAtoms → assembleBundle → Mira experience. Skip Nexus if content is deeply known.
 
 ## Think Boards
-Purpose-typed spatial canvases. Children +200px horizontal, siblings +150px vertical. Always `read_board(boardId)` before expanding. Maps are critical for aligning mental models. When someone is confused, build them a map so they can see the whole picture natively.
+Purpose-typed spatial canvases. Children +200px horizontal, siblings +150px vertical. Always `read_board(boardId)` before modifying. Use `board_from_text` for complex ideas. When confused, build a map — spatial understanding beats text.
 
 ## Resolution & Bundles
-Experiences specify depth (light|medium|heavy), mode (illuminate|practice|challenge), timeScope (immediate|session), intensity (low|medium|high).
-**Nexus Bundles**: After atoms exist: `primer_bundle` (lessons), `worked_example_bundle` (challenges), `checkpoint_bundle` (checkpoints), `misconception_repair_bundle` (repairs). Make rigorous use of bundles so content isn't generically hallucinated.
-
-## Nexus Agents & Pipelines
-Structured CRUD is primary. NL endpoints are just convenience. Pipelines MUST have nodes. Use exportAgent for code. queryNotebook requires NLM browser auth.
+Resolution: depth (light|medium|heavy), mode (illuminate|practice|challenge|build|reflect|study), timeScope (immediate|session|multi_day|ongoing), intensity (low|medium|high).
+Bundles: `primer_bundle` (lessons), `worked_example_bundle` (challenges), `checkpoint_bundle` (checkpoints), `misconception_repair_bundle` (repairs). Use bundles for grounded content.
 
 ## Operational Maxims
 1. Structure before content. Goal → outline → experiences beats ad-hoc answers.
-2. Verify writes. Stop building once execution is supported. Ship small and iterate.
-3. Bottlenecks are structural. Update workflows, don't just answer in text. Let the system manage cognitive load.
-4. Record memories proactively so future sessions depend on this semantic memory.
-5. Growth comes from interaction, not just reading messages.
-
-This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. This padding sentence serves to satisfy the precise character count requirement, reinforcing the gravity of structuring environmental variables. 
+2. Read before you write. Check state and existing work before creating.
+3. Record memories proactively. Future sessions depend on semantic memory.
+4. Ship small. 3 focused steps beat 10 unfocused ones.
+5. Bottlenecks are structural. Let the system carry cognitive load.
+6. Growth comes from interaction. Push users into experiences.
 ```
 
 ### gptrun.md
@@ -2774,11 +3167,52 @@ paths:
                     type: object
                     additionalProperties: true
 
+  /api/experiences/{id}:
+    get:
+      operationId: getExperience
+      summary: Read a full experience with steps, payloads, and user interactions
+      description: Returns the complete experience including step content (questions, sections, prompts), all user interaction data (answers, reflections, completions, time), and graph context. Use this after completion to see what the user actually did.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The experience instance UUID.
+      responses:
+        '200':
+          description: Full experience with steps and interactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: string
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  interactions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  interactionCount:
+                    type: integer
+        '404':
+          description: Experience not found
+
   /api/gpt/plan:
     post:
       operationId: planCurriculum
-      summary: Scoping and planning operations
-      description: Create curriculum outlines, dispatch research, assess gaps, or read mind maps. Flat payload — all fields alongside action.
+      summary: Scoping, planning, and reading operations
+      description: Create curriculum outlines, dispatch research, assess gaps, read mind maps, or read full experience data. Flat payload — all fields alongside action.
       requestBody:
         required: true
         content:
@@ -2789,7 +3223,7 @@ paths:
               properties:
                 action:
                   type: string
-                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board]
+                  enum: [create_outline, dispatch_research, assess_gaps, read_map, list_boards, read_board, read_experience]
                   description: The planning action to perform.
                 topic:
                   type: string
@@ -2825,6 +3259,9 @@ paths:
                 boardId:
                   type: string
                   description: For action=read_map/read_board — the board UUID to read.
+                experienceId:
+                  type: string
+                  description: For action=read_experience — the experience instance UUID to read.
       responses:
         '200':
           description: Success
@@ -3179,7 +3616,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "Capabilities: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge, memory_record, memory_read, memory_correct, consolidate_memory, create_board, list_boards, read_map, read_board"
+          description: "Capabilities: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge, memory_record, memory_read, memory_correct, consolidate_memory, create_board, list_boards, read_map, read_board, read_experience"
         - name: step_type
           in: query
           required: false
@@ -7561,440 +7998,3 @@ paths:
       parameters:
         - name: id
           in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns LearningAtom
-    delete:
-      operationId: deleteAtom
-      summary: Delete a learning atom
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  # ─── BUNDLES (Assembled content for delivery) ───────────────
-  /bundles/assemble:
-    post:
-      operationId: assembleBundle
-      summary: Assemble a content bundle from stored atoms
-      description: Fetches atoms by concept and type, filters by learner coverage, and packages into a typed bundle (primer, worked_example, checkpoint, deepen, misconception_repair).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [bundle_type, concept_ids]
-              properties:
-                bundle_type:
-                  type: string
-                  enum: [primer_bundle, worked_example_bundle, checkpoint_bundle, deepen_after_step_bundle, misconception_repair_bundle]
-                concept_ids:
-                  type: array
-                  items:
-                    type: string
-                  description: Concept IDs to include in the bundle
-                learner_id:
-                  type: string
-                coverage_state:
-                  type: object
-                  description: Per-concept coverage (level, recent_failures) to filter/prioritize
-      responses:
-        "200":
-          description: Returns assembled bundle with atoms
-
-  # ─── RUNS (Pipeline execution tracking) ─────────────────────
-  /runs:
-    get:
-      operationId: listRuns
-      summary: List pipeline execution runs
-      parameters:
-        - name: pipeline_id
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns array of PipelineRun
-
-  /runs/{id}:
-    get:
-      operationId: getRunStatus
-      summary: Get the status and output of a run
-      description: Use this to check if a research dispatch has completed and see atom counts.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns PipelineRun with status and output
-
-  # ─── AGENTS (Template design) ──────────────────────────────
-  /agents:
-    get:
-      operationId: listAgents
-      summary: List all agent templates
-      responses:
-        "200":
-          description: Returns array of AgentTemplate
-    post:
-      operationId: createAgent
-      summary: Create an agent template from structured data
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AgentTemplateCreate"
-      responses:
-        "200":
-          description: Returns the created AgentTemplate
-
-  /agents/create-from-nl:
-    post:
-      operationId: createAgentFromNL
-      summary: Create an AgentTemplate from natural language description via Gemini
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                description:
-                  type: string
-                  description: Describe what the agent should do in natural language.
-              required: [description]
-      responses:
-        "200":
-          description: Returns the scaffolded AgentTemplate
-
-  /agents/{id}:
-    get:
-      operationId: getAgent
-      summary: Get a single agent template
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Returns AgentTemplate
-    patch:
-      operationId: updateAgent
-      summary: Update agent template fields
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AgentTemplateUpdate"
-      responses:
-        "200":
-          description: Returns updated AgentTemplate
-    delete:
-      operationId: deleteAgent
-      summary: Delete an agent template
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
-
-  /agents/{id}/modify-from-nl:
-    patch:
-      operationId: modifyAgentFromNL
-      summary: Apply a natural language delta to an existing AgentTemplate
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                delta:
-                  type: string
-                  description: Natural language instruction for how to modify the agent.
-              required: [delta]
-      responses:
-        "200":
-          description: Returns the updated AgentTemplate
-
-  /agents/{id}/test:
-    post:
-      operationId: testAgent
-      summary: Dry-run an agent with sample input using real ADK
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sample_input:
-                  type: string
-              required: [sample_input]
-      responses:
-        "200":
-          description: Returns output, events, timing
-
-  /agents/{id}/export:
-    post:
-      operationId: exportAgent
-      summary: Export agent as Python (ADK) or TypeScript (Genkit) code
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                format:
-                  type: string
-                  enum: [python, typescript]
-                pipeline_id:
-                  type: string
-      responses:
-        "200":
-          description: Returns generated code and filename
-
-  # ─── PIPELINES ─────────────────────────────────────────────
-  /pipelines:
-    get:
-      operationId: listPipelines
-      summary: List all pipelines
-      responses:
-        "200":
-          description: Returns array of Pipeline
-    post:
-      operationId: createPipeline
-      summary: Create a new pipeline
-      description: Create a pipeline shell. Note that pipelines without nodes cannot be dispatched.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                nodes:
-                  type: array
-                  items:
-                    type: object
-                edges:
-                  type: array
-                  items:
-                    type: object
-              required: [name]
-      responses:
-        "200":
-          description: Returns the created Pipeline
-
-  /pipelines/compose-from-nl:
-    post:
-      operationId: composePipelineFromNL
-      summary: Wire a new pipeline of agents via natural language
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                description:
-                  type: string
-                agent_ids:
-                  type: array
-                  items:
-                    type: string
-              required: [description]
-      responses:
-        "200":
-          description: Returns the composed Pipeline
-
-  /pipelines/{id}/dispatch:
-    post:
-      operationId: dispatchPipeline
-      summary: Start a pipeline execution run
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                input:
-                  type: string
-                  description: Topic string or structured input object
-      responses:
-        "200":
-          description: Returns { run_id, status }
-
-  # ─── NOTEBOOKS (NotebookLM grounding) ──────────────────────
-  /notebooks:
-    get:
-      operationId: listNotebooks
-      summary: List all notebooks
-      responses:
-        "200":
-          description: Returns array of Notebook
-    post:
-      operationId: createNotebook
-      summary: Create a new NotebookLM workspace
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-              required: [name]
-      responses:
-        "200":
-          description: Returns { id, name }
-
-  /notebooks/{id}/query:
-    post:
-      operationId: queryNotebook
-      summary: Query a notebook for grounded answers
-      description: Ask a question against an existing NotebookLM notebook. Returns grounded answers with citations.
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                query:
-                  type: string
-              required: [query]
-      responses:
-        "200":
-          description: Returns { answer, citations }
-
-  # ─── DELIVERY PROFILES ─────────────────────────────────────
-  /delivery-profiles:
-    get:
-      operationId: listDeliveryProfiles
-      summary: List all delivery profiles
-      responses:
-        "200":
-          description: Returns array of DeliveryProfile
-    post:
-      operationId: createDeliveryProfile
-      summary: Create a delivery profile (controls where atoms go)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/DeliveryProfileCreate"
-      responses:
-        "200":
-          description: Returns the created DeliveryProfile
-
-  # ─── CHAT ──────────────────────────────────────────────────
-  /chat:
-    post:
-      operationId: nexusChat
-      summary: Pipeline-level conversational assistant powered by Gemini
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                message:
-                  type: string
-                pipeline_id:
-                  type: string
-              required: [message]
-      responses:
-        "200":
-          description: Returns { reply }
-
-  # ─── CACHE ─────────────────────────────────────────────────
-  /cache:
-    delete:
-      operationId: flushCache
-      summary: Flush cached data by type and/or age
-      parameters:
-        - name: type
-          in: query
-          required: false
-          schema:
-            type: string
-            enum: [research, synthesis, atom, delivery_idempotency]
-        - name: older_than_hours
-          in: query
-          required: false
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Returns { status, message }
-
-components:
-  schemas:
-    AgentTemplateCreate:
-      type: object
-      properties:

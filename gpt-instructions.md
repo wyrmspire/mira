@@ -29,7 +29,7 @@ All `/api/gpt/create` and `/api/gpt/update` payloads are FLAT.
 
 ### Create Endpoint (POST /api/gpt/create)
 All types use flat payload. Call `discoverCapability` for exact schema.
-- **experience**: templateId, userId, title, goal, resolution, reentry, steps[]. Persistent, goes through review pipeline.
+- **experience**: templateId, userId, title, goal, resolution, reentry, steps[]. Optional: goalId, domainIds (auto-links to skill domains). Persistent, goes to review.
 - **ephemeral**: Same as experience but injected instantly, no review. Fire-and-forget.
 - **step**: experienceId, step_type, title, payload. Added to existing experience.
 - **idea**: title, rawPrompt. Lightweight capture.
@@ -45,7 +45,7 @@ All types use flat payload. Call `discoverCapability` for exact schema.
 
 ### Update Endpoint (POST /api/gpt/update)
 All actions use flat payload with `action` discriminator.
-- `transition`: experienceId, transitionAction (approve|activate|start|complete|archive|kill|revive|supersede).
+- `transition`: experienceId, transitionAction (approve|activate|start|complete|archive|kill|revive|supersede). Use `start` to activate any experience (persistent or ephemeral).
 - `transition_goal`: goalId, transitionAction (activate|pause|complete|kill).
 - `update_step` / `reorder_steps` / `delete_step`: Step mutations on experiences.
 - `link_knowledge`: Connect knowledge units to domains, experiences, or steps.

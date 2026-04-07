@@ -17,7 +17,7 @@ export async function buildFacetContext(instanceId: string, userId: string) {
   ]);
 
   if (!instance) {
-    throw new Error(`Experience instance not found: \${instanceId}`);
+    throw new Error(`Experience instance not found: ${instanceId}`);
   }
 
   // Group interactions by stepId
@@ -41,12 +41,32 @@ export async function buildFacetContext(instanceId: string, userId: string) {
       const payload = event.event_payload;
       if (!payload) return;
 
-      // standard answer_submitted payload (answers map or reflections map)
-      const answerMap = payload.answers || payload.reflections;
+      // standard answer_submitted payload (answers map, reflections map, or responses map)
+      const answerMap = (payload.answers || payload.reflections || payload.responses) as Record<string, any>;
       if (answerMap && typeof answerMap === 'object') {
-        Object.values(answerMap).forEach((val) => {
+        const stepPayload = step.payload as any;
+
+        Object.entries(answerMap).forEach(([id, val]) => {
           if (typeof val === 'string' && val.trim().length > 0) {
-            responses.push(val);
+            let questionText = '';
+
+            // W4 Fix: Include question text alongside answers for specific step types
+            if (step.step_type === 'questionnaire' && stepPayload?.questions) {
+              const q = stepPayload.questions.find((q: any) => q.id === id);
+              questionText = q?.label || q?.text || '';
+            } else if (step.step_type === 'reflection' && stepPayload?.prompts) {
+              const p = stepPayload.prompts.find((p: any) => p.id === id);
+              questionText = p?.text || '';
+            } else if (step.step_type === 'checkpoint' && stepPayload?.questions) {
+              const q = stepPayload.questions.find((q: any) => q.id === id);
+              questionText = q?.question || '';
+            }
+
+            if (questionText) {
+              responses.push(`Q: ${questionText} → A: ${val}`);
+            } else {
+              responses.push(val);
+            }
           }
         });
       }

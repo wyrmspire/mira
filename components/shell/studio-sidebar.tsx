@@ -15,7 +15,8 @@ const NAV_ITEMS = [
   { label: COPY.memory.heading, href: ROUTES.memory, icon: '⦿' },
   { label: COPY.experience.timelinePage.heading, href: ROUTES.timeline, icon: '◷' },
   { label: COPY.profilePage.heading, href: ROUTES.profile, icon: '👤' },
-  { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
+  // TODO: re-enable when realizations are un-quarantined
+  // { label: COPY.arena.heading, href: ROUTES.arena, icon: '▶' },
   { label: COPY.icebox.heading, href: ROUTES.icebox, icon: '❄' },
   { label: COPY.shipped.heading, href: ROUTES.shipped, icon: '✦' },
   { label: COPY.killed.heading, href: ROUTES.killed, icon: '†' },

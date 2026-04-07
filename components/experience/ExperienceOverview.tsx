@@ -42,9 +42,13 @@ export default function ExperienceOverview({
           </div>
           <button
             onClick={onResume}
-            className="flex-shrink-0 px-8 py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-500/20 active:scale-95 text-center"
+            className={`flex-shrink-0 px-8 py-4 rounded-xl font-bold transition-all shadow-lg active:scale-95 text-center ${
+              instance.status === 'completed' 
+                ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20' 
+                : 'bg-indigo-500 hover:bg-indigo-600 text-white shadow-indigo-500/20'
+            }`}
           >
-            {COPY.workspace.resume}
+            {instance.status === 'completed' ? 'View Results' : COPY.workspace.resume}
           </button>
         </div>
 
