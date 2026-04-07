@@ -573,7 +573,11 @@ export async function dispatchUpdate(action: string, payload: any) {
     }
 
     case 'suggest_board_gaps': {
-      return runFlowSafe(suggestGapsFlow, payload);
+      const gapResult = await runFlowSafe(suggestGapsFlow, payload);
+      if (!gapResult || !gapResult.gaps) {
+        return { gaps: [], message: 'AI gap analysis unavailable. Review the board manually.' };
+      }
+      return gapResult;
     }
 
     default:
@@ -620,21 +624,52 @@ export async function dispatchPlan(action: string, payload: any) {
       // Group interactions by type for clean GPT consumption
       const grouped: Record<string, any> = {};
       let totalTimeMs = 0;
+      const rawTimeline: Array<{ type: string; stepId: string | null; at: string; payload_keys: string[] }> = [];
 
       for (const event of interactions) {
         const t = event.event_type;
+        
+        // Build raw timeline for debugging/inspection
+        rawTimeline.push({
+          type: t,
+          stepId: event.step_id,
+          at: event.created_at,
+          payload_keys: event.event_payload ? Object.keys(event.event_payload) : []
+        });
+
         if (t === 'answer_submitted') {
-          // Merge all answer payloads (questionnaires, reflections)
-          grouped.answers = { ...(grouped.answers || {}), ...(event.event_payload?.answers || {}) };
+          // Handle varied payload shapes from different step types:
+          // Shape 1: { answers: { q001: "...", q002: "..." } } — questionnaires
+          // Shape 2: { reflections: { r001: "..." } } — reflection steps
+          // Shape 3: { content: "full text" } — essay/freeform steps
+          // Shape 4: flat payload without .answers key — catch-all
+          if (event.event_payload?.answers) {
+            grouped.answers = { ...(grouped.answers || {}), ...event.event_payload.answers };
+          }
           if (event.event_payload?.reflections) {
             grouped.reflections = { ...(grouped.reflections || {}), ...event.event_payload.reflections };
+          }
+          if (event.event_payload?.content && typeof event.event_payload.content === 'string') {
+            grouped.freeformResponses = grouped.freeformResponses || [];
+            grouped.freeformResponses.push({
+              stepId: event.step_id,
+              content: event.event_payload.content
+            });
+          }
+          // Catch-all: if payload has none of the known keys, store the whole thing
+          if (!event.event_payload?.answers && !event.event_payload?.reflections && !event.event_payload?.content) {
+            grouped.otherSubmissions = grouped.otherSubmissions || [];
+            grouped.otherSubmissions.push({
+              stepId: event.step_id,
+              payload: event.event_payload
+            });
           }
         } else if (t === 'time_on_step') {
           totalTimeMs += event.event_payload?.durationMs || 0;
         } else if (t === 'task_completed') {
           grouped.completedStepIds = grouped.completedStepIds || [];
           if (event.step_id) grouped.completedStepIds.push(event.step_id);
-        } else if (t === 'checkpoint_graded') {
+        } else if (t === 'checkpoint_graded' || t === 'checkpoint_graded_batch') {
           grouped.checkpointResults = grouped.checkpointResults || [];
           grouped.checkpointResults.push(event.event_payload);
         } else {
@@ -671,6 +706,7 @@ export async function dispatchPlan(action: string, payload: any) {
           status: s.status,
         })),
         interactions: grouped,
+        rawTimeline,
         synthesis: synthesis ? {
           narrative: synthesis.summary,
           keySignals: synthesis.key_signals,
