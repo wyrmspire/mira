@@ -127,6 +127,47 @@ paths:
                     type: object
                     additionalProperties: true
 
+  /api/experiences/{id}:
+    get:
+      operationId: getExperience
+      summary: Read a full experience with steps, payloads, and user interactions
+      description: Returns the complete experience including step content (questions, sections, prompts), all user interaction data (answers, reflections, completions, time), and graph context. Use this after completion to see what the user actually did.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The experience instance UUID.
+      responses:
+        '200':
+          description: Full experience with steps and interactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  title:
+                    type: string
+                  status:
+                    type: string
+                  steps:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  interactions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  interactionCount:
+                    type: integer
+        '404':
+          description: Experience not found
+
   /api/gpt/plan:
     post:
       operationId: planCurriculum
@@ -535,7 +576,7 @@ paths:
           required: true
           schema:
             type: string
-          description: "Capabilities: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge, memory_record, memory_read, memory_correct, consolidate_memory, create_board, list_boards, read_map, read_board"
+          description: "Capabilities: templates, create_experience, step_payload, resolution, create_outline, dispatch_research, goal, create_knowledge, skill_domain, create_map_node, create_map_edge, create_map_cluster, update_map_node, delete_map_node, delete_map_edge, memory_record, memory_read, memory_correct, consolidate_memory, create_board, list_boards, read_map, read_board, read_experience"
         - name: step_type
           in: query
           required: false

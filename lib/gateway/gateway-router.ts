@@ -698,13 +698,43 @@ export async function dispatchPlan(action: string, payload: any) {
           resolution: instance.resolution,
           created_at: instance.created_at,
         },
-        steps: steps.map(s => ({
-          id: s.id,
-          title: s.title,
-          step_type: s.step_type,
-          step_order: s.step_order,
-          status: s.status,
-        })),
+        steps: steps.map(s => {
+          const base: any = {
+            id: s.id,
+            title: s.title,
+            step_type: s.step_type,
+            step_order: s.step_order,
+            status: s.status,
+          };
+
+          // Include step content so GPT can interpret answers
+          if (s.payload) {
+            if ((s.step_type === 'questionnaire' || s.step_type === 'checkpoint') && Array.isArray(s.payload.questions)) {
+              // For questionnaires: build id → label map (compact, matches answer keys)
+              base.question_map = {};
+              for (const q of s.payload.questions) {
+                base.question_map[q.id] = q.label || q.question || q.text || q.id;
+              }
+              base.question_count = s.payload.questions.length;
+            } else if (s.step_type === 'lesson' && Array.isArray(s.payload.sections)) {
+              // For lessons: include section headings (body can be large, summarize)
+              base.sections = s.payload.sections.map((sec: any) => ({
+                heading: sec.heading,
+                type: sec.type,
+                body_length: sec.body?.length || 0,
+              }));
+            } else if (s.step_type === 'reflection' && Array.isArray(s.payload.prompts)) {
+              base.prompts = s.payload.prompts.map((p: any) => p.text || p.prompt || p);
+            } else if (s.step_type === 'challenge' && Array.isArray(s.payload.objectives)) {
+              base.objectives = s.payload.objectives.map((o: any) => o.description || o.id);
+            } else {
+              // For other types, include the payload directly (essay_tasks, plan_builder)
+              base.content = s.payload;
+            }
+          }
+
+          return base;
+        }),
         interactions: grouped,
         rawTimeline,
         synthesis: synthesis ? {
