@@ -206,7 +206,7 @@ export async function POST(request: Request) {
     // Consolidate Remaining Planning Actions to Gateway Router
     // (list_boards, read_board/read_map)
     // ------------------------------------------------------------------
-    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map'];
+    const ROUTER_ACTIONS = ['list_boards', 'read_board', 'read_map', 'read_experience'];
     if (ROUTER_ACTIONS.includes(action)) {
       const { dispatchPlan } = await import('@/lib/gateway/gateway-router');
       // Normalize read_map -> read_board for router consistency
@@ -221,7 +221,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: `Unknown action: "${action}"`,
-        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board'],
+        valid_actions: ['create_outline', 'dispatch_research', 'assess_gaps', 'list_boards', 'read_board', 'read_experience'],
       },
       { status: 400 }
     );

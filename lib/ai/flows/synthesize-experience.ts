@@ -28,9 +28,22 @@ export const synthesizeExperienceFlow = ai.defineFlow(
     const stepSummary = steps.map(s => `${s.step_order + 1}. [${s.step_type}] ${s.title}`).join('\n');
     const interactionSummary = interactions.map(i => {
       const type = i.event_type;
+      // Truncate large payloads (e.g. 100-question answer blobs) to avoid prompt overflow
+      if (type === 'answer_submitted' && i.event_payload?.answers) {
+        const answers = i.event_payload.answers;
+        const keys = Object.keys(answers);
+        const sample = keys.slice(0, 10).map(k => `${k}: ${String(answers[k]).substring(0, 80)}`).join('; ');
+        return `- Event: ${type} | ${keys.length} answers submitted (sample: ${sample})`;
+      }
       const payload = JSON.stringify(i.event_payload);
-      return `- Event: ${type} | Payload: ${payload}`;
+      return `- Event: ${type} | Payload: ${payload.length > 200 ? payload.substring(0, 200) + '...' : payload}`;
     }).join('\n');
+    
+    // Cap total interaction context to prevent prompt overflow
+    const maxInteractionChars = 4000;
+    const trimmedInteractions = interactionSummary.length > maxInteractionChars
+      ? interactionSummary.substring(0, maxInteractionChars) + '\n... (truncated)'
+      : interactionSummary;
     
     const prompt = `
       System: You are an experience analyst for Mira Studio.
@@ -45,7 +58,7 @@ export const synthesizeExperienceFlow = ai.defineFlow(
       ${stepSummary}
       
       USER ACTIVITY:
-      ${interactionSummary}
+      ${trimmedInteractions}
       
       Analysis Requirements:
       1. Provide a narrative (2-3 sentences) on what actually happened.

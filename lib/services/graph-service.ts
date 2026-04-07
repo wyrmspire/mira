@@ -264,7 +264,7 @@ export async function getAISuggestionsForCompletion(instanceId: string, userId: 
     suggestNextExperienceFlow,
     context,
     async (output: any) => {
-      if (!output || output.error) return null;
+      if (!output || output.error || !Array.isArray(output.suggestions)) return null;
       return output.suggestions.map((s: any) => ({
         templateClass: s.templateClass,
         reason: s.reason,

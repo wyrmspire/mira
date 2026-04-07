@@ -22,6 +22,6 @@ export async function runFlowSafe<TInput, TOutput>(
     return output;
   } catch (error: any) {
     console.error(`[AI/safe-flow] Flow execution failed:`, error.message);
-    return { error: 'AI enhancement unavailable at this time', detail: error.message };
+    return null;
   }
 }

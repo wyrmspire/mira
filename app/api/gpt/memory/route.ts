@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       source,
     });
 
-    return NextResponse.json(memory);
+    return NextResponse.json(memory, { status: 201 });
   } catch (error: any) {
     console.error('[API Memory POST] Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

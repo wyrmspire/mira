@@ -1,12 +1,12 @@
 # Mira + Nexus Project Code Dump
-Generated: Sun, Apr  5, 2026  9:43:31 PM
+Generated: Mon, Apr  6, 2026  7:32:45 PM
 
 ## Selection Summary
 
 - **Areas:** (all)
 - **Extensions:** py sh md yaml yml ts tsx css toml json ini (defaults)
 - **Slicing:** full files
-- **Files selected:** 368
+- **Files selected:** 371
 
 ## Project Overview
 
@@ -261,6 +261,7 @@ docs/sprint_22_lane_7_qa.md
 docs/state-model.md
 docs/ui-principles.md
 enrichment.md
+generate_instructions.py
 gitr.sh
 gitrdif.sh
 gitrdiff.md
@@ -384,6 +385,7 @@ lib/view-models/icebox-view-model.ts
 lib/view-models/inbox-view-model.ts
 lib/view-models/review-view-model.ts
 mira2.md
+miracli.py
 next.config.mjs
 next-env.d.ts
 package.json
@@ -394,11 +396,16 @@ public/prompt.html
 README.md
 roadmap.md
 run_api_tests.mjs
+seed_db.ts
 sprint.md
 start.sh
 tailwind.config.ts
 test.md
 test_knowledge_norm.sh
+test_output.txt
+test_output2.txt
+test_output3.txt
+test_output4.txt
 test_synthesis.js
 tsc_output.txt
 tsconfig.json
@@ -7991,10 +7998,3 @@ export default async function LibraryPage() {
   console.log('[Library] Storage adapter:', adapter.constructor.name);
 
   // Parallel fetch for all sections
-  const [active, completed, moments, proposed, outlines] = await Promise.all([
-    getActiveExperiences(userId),
-    getCompletedExperiences(userId),
-    getEphemeralExperiences(userId),
-    getProposedExperiences(userId),
-    getCurriculumOutlinesForUser(userId),
-  ]);

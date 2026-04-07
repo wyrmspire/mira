@@ -337,11 +337,11 @@ export async function dispatchCreate(type: string, payload: any) {
       );
     }
     case 'board_from_text': {
-      return runFlowSafe(boardFromTextFlow, {
+      const flowResult = await runFlowSafe(boardFromTextFlow, {
         prompt: payload.prompt,
         userId: payload.userId ?? payload.user_id
       }, async (output: any) => {
-        if (!output || output.error) return output;
+        if (!output || !Array.isArray(output.nodes)) return null;
         const { createBoard, createNode, createEdge } = await import('@/lib/services/mind-map-service');
         const board = await createBoard(payload.userId ?? payload.user_id, output.title, 'general');
         
@@ -387,6 +387,11 @@ export async function dispatchCreate(type: string, payload: any) {
 
         return { ...board, nodesCreated: output.nodes.length, edgesCreated: edges.length };
       });
+
+      if (!flowResult) {
+        throw new Error('AI board generation failed. Try again or create the board manually with type="board".');
+      }
+      return flowResult;
     }
     default:
       throw new Error(`Unknown create type: "${type}"`);
@@ -544,8 +549,8 @@ export async function dispatchUpdate(action: string, payload: any) {
     }
 
     case 'expand_board_branch': {
-      return runFlowSafe(expandBranchFlow, payload, async (output: any) => {
-        if (!output || output.error) return output;
+      const expandResult = await runFlowSafe(expandBranchFlow, payload, async (output: any) => {
+        if (!output || !Array.isArray(output.nodes)) return null;
         const { createNode, createEdge } = await import('@/lib/services/mind-map-service');
         const results = [];
         for (const n of (output.nodes as any[])) {
@@ -560,6 +565,11 @@ export async function dispatchUpdate(action: string, payload: any) {
         }
         return results;
       });
+
+      if (!expandResult) {
+        throw new Error('AI branch expansion failed. Try again or add nodes manually.');
+      }
+      return expandResult;
     }
 
     case 'suggest_board_gaps': {
@@ -590,6 +600,81 @@ export async function dispatchPlan(action: string, payload: any) {
       return {
         ...board,
         ...graph
+      };
+    }
+    case 'read_experience': {
+      if (!payload.experienceId) {
+        throw new Error('Missing experienceId for read_experience.');
+      }
+      const { getExperienceInstanceById, getExperienceSteps } = await import('@/lib/services/experience-service');
+      const { getInteractionsByInstance } = await import('@/lib/services/interaction-service');
+      const { getSynthesisForSource } = await import('@/lib/services/synthesis-service');
+
+      const instance = await getExperienceInstanceById(payload.experienceId);
+      if (!instance) throw new Error(`Experience ${payload.experienceId} not found.`);
+
+      const steps = await getExperienceSteps(payload.experienceId);
+      const interactions = await getInteractionsByInstance(payload.experienceId);
+      const userId = payload.userId ?? payload.user_id ?? instance.user_id;
+
+      // Group interactions by type for clean GPT consumption
+      const grouped: Record<string, any> = {};
+      let totalTimeMs = 0;
+
+      for (const event of interactions) {
+        const t = event.event_type;
+        if (t === 'answer_submitted') {
+          // Merge all answer payloads (questionnaires, reflections)
+          grouped.answers = { ...(grouped.answers || {}), ...(event.event_payload?.answers || {}) };
+          if (event.event_payload?.reflections) {
+            grouped.reflections = { ...(grouped.reflections || {}), ...event.event_payload.reflections };
+          }
+        } else if (t === 'time_on_step') {
+          totalTimeMs += event.event_payload?.durationMs || 0;
+        } else if (t === 'task_completed') {
+          grouped.completedStepIds = grouped.completedStepIds || [];
+          if (event.step_id) grouped.completedStepIds.push(event.step_id);
+        } else if (t === 'checkpoint_graded') {
+          grouped.checkpointResults = grouped.checkpointResults || [];
+          grouped.checkpointResults.push(event.event_payload);
+        } else {
+          // Lifecycle events: experience_started, experience_completed, step_viewed, etc.
+          grouped.lifecycle = grouped.lifecycle || [];
+          grouped.lifecycle.push({ type: t, at: event.created_at });
+        }
+      }
+
+      grouped.totalTimeMs = totalTimeMs;
+      grouped.totalEvents = interactions.length;
+
+      // Fetch synthesis if it exists
+      let synthesis = null;
+      try {
+        synthesis = await getSynthesisForSource(userId, 'experience', payload.experienceId);
+      } catch (_) { /* synthesis may not exist yet */ }
+
+      return {
+        experience: {
+          id: instance.id,
+          title: instance.title,
+          goal: instance.goal,
+          status: instance.status,
+          instance_type: instance.instance_type,
+          resolution: instance.resolution,
+          created_at: instance.created_at,
+        },
+        steps: steps.map(s => ({
+          id: s.id,
+          title: s.title,
+          step_type: s.step_type,
+          step_order: s.step_order,
+          status: s.status,
+        })),
+        interactions: grouped,
+        synthesis: synthesis ? {
+          narrative: synthesis.summary,
+          keySignals: synthesis.key_signals,
+        } : null,
       };
     }
     default:

@@ -46,7 +46,8 @@ export type DiscoverCapability =
   | 'archive_board'
   | 'reparent_node'
   | 'expand_board_branch'
-  | 'suggest_board_gaps';
+  | 'suggest_board_gaps'
+  | 'read_experience';
 
 
 /**

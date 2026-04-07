@@ -1,3 +1,60 @@
+    }
+    case 'reflection': {
+      const prompts = (step.payload as any)?.prompts || [];
+      if (prompts.length === 0) return 100;
+      // Reflection now emits answer_submitted with { reflections: { promptId: value } }
+      const completionEvent = stepInteractions.find(i => i.event_type === 'answer_submitted') 
+        || stepInteractions.find(i => i.event_type === 'task_completed'); // fallback for legacy data
+      if (!completionEvent) return 0;
+      const reflections = completionEvent.event_payload?.reflections || completionEvent.event_payload || {};
+      const answeredCount = Object.values(reflections).filter(v => !!(v as string)?.trim()).length;
+      if (answeredCount === prompts.length) return 100;
+      if (answeredCount > 0) return 80;
+      return 0;
+    }
+    case 'plan_builder': {
+      const sections = (step.payload as any)?.sections || [];
+      if (sections.length === 0) return 100;
+      // In PlanBuilderStep.tsx, onComplete only sends { acknowledged: true }
+      const isCompleted = stepInteractions.some(i => i.event_type === 'task_completed');
+      if (isCompleted) return 100;
+      return stepInteractions.some(i => i.event_type === 'step_viewed') ? 50 : 0;
+    }
+    case 'essay_tasks': {
+      const isViewed = stepInteractions.some(i => i.event_type === 'step_viewed');
+      const tasks = (step.payload as any)?.tasks || [];
+      if (tasks.length === 0) return isViewed ? 100 : 0;
+      const completionEvent = stepInteractions.find(i => i.event_type === 'task_completed');
+      const completedTasks = completionEvent?.event_payload?.completedTasks || {};
+      const taskCount = Object.values(completedTasks).filter(v => !!v).length;
+      const taskPercent = (taskCount / tasks.length) * 60;
+      const readScore = isViewed ? 40 : 0;
+      return readScore + taskPercent;
+    }
+    default:
+      return stepInteractions.some(i => i.event_type === 'task_completed') ? 100 : 0;
+  }
+}
+
+export async function computeExperienceScore(instanceId: string): Promise<{ totalScore: number; stepScores: { stepId: string; score: number }[] }> {
+  const interactions = await getInteractionsByInstance(instanceId);
+  const steps = await getExperienceSteps(instanceId);
+  
+  const stepScores = steps.map(step => ({
+    stepId: step.id,
+    score: computeStepScore(step, interactions)
+  }));
+  
+  const totalScore = steps.length > 0 
+    ? stepScores.reduce((acc, s) => acc + s.score, 0) / steps.length 
+    : 0;
+    
+  return { totalScore, stepScores };
+}
+
+export function shouldProgessToNext(score: number, threshold = 60): boolean {
+  return score >= threshold;
+}
 
 export async function computeFrictionLevel(instanceId: string): Promise<'low' | 'medium' | 'high' | null> {
   const interactions = await getInteractionsByInstance(instanceId);
@@ -7941,60 +7998,3 @@ export async function unlinkStepFromKnowledge(stepId: string, knowledgeUnitId: s
     step_id: stepId,
     knowledge_unit_id: knowledgeUnitId 
   });
-  
-  if (links.length > 0) {
-    await adapter.deleteItem('step_knowledge_links', links[0].id);
-  }
-}
-
-```
-
-### lib/services/synthesis-service.ts
-
-```typescript
-import { SynthesisSnapshot, GPTStatePacket, FrictionLevel } from '@/types/synthesis'
-import { ProfileFacet } from '@/types/profile'
-import { ExperienceInstance, ReentryContract } from '@/types/experience'
-import { getStorageAdapter } from '@/lib/storage-adapter'
-import { generateId } from '@/lib/utils'
-import { getExperienceInstances } from './experience-service'
-import { getInteractionsByInstance } from './interaction-service'
-import { compressGPTStateFlow } from '@/lib/ai/flows/compress-gpt-state'
-import { runFlowSafe } from '@/lib/ai/safe-flow'
-import { synthesizeExperienceFlow } from '@/lib/ai/flows/synthesize-experience'
-import { getKnowledgeSummaryForGPT } from './knowledge-service'
-import { getFacetsBySnapshot } from './facet-service'
-import { getBoardSummaries } from './mind-map-service'
-import { getSkillDomainsForUser } from './skill-domain-service'
-import { computeSkillMastery } from '@/lib/experience/skill-mastery-engine'
-import { SkillMasteryLevel } from '@/lib/constants'
-import { getOperationalContext } from './agent-memory-service'
-
-export async function createSynthesisSnapshot(userId: string, sourceType: string, sourceId: string): Promise<SynthesisSnapshot> {
-  const adapter = getStorageAdapter()
-  
-  // Basic summary computation for foundation pivot
-  const interactions = await getInteractionsByInstance(sourceId)
-  const summary = `Synthesized context from ${interactions.length} interactions in ${sourceType} ${sourceId}.`
-  
-  const snapshot: SynthesisSnapshot = {
-    id: generateId(),
-    user_id: userId,
-    source_type: sourceType,
-    source_id: sourceId,
-    summary,
-    key_signals: { interactionCount: interactions.length },
-    next_candidates: [],
-    created_at: new Date().toISOString()
-  }
-
-  // W3 - Enrich with AI synthesis
-  const aiResult = await runFlowSafe(
-    synthesizeExperienceFlow,
-    { instanceId: sourceId, userId }
-  )
-
-  if (aiResult) {
-    snapshot.summary = aiResult.narrative
-    snapshot.key_signals = {
-      ...snapshot.key_signals,

@@ -893,6 +893,23 @@ const REGISTRY: Record<DiscoverCapability, (params?: Record<string, any>) => Dis
       userId: 'user-123'
     },
     when_to_use: 'Periodically or after a major milestone to ensure the "Notebook" memory layer is up to date.'
+  }),
+
+  read_experience: () => ({
+    capability: 'read_experience' as const,
+    endpoint: 'POST /api/gpt/plan',
+    description: 'Read the full context dump for an experience: metadata, steps, all user interactions (answers, reflections, time, completions), and synthesis narrative. Use this to review what the user actually did.',
+    schema: {
+      action: 'read_experience',
+      experienceId: 'UUID of the experience instance (REQUIRED)',
+      userId: 'optional UUID (auto-resolved from experience)'
+    },
+    example: {
+      action: 'read_experience',
+      experienceId: '1bbaf425-d465-4c1d-a2a8-83b6302540b8'
+    },
+    when_to_use: 'After a user completes an experience, before generating follow-up experiences, or when you need to reference specific user answers. Always call this before synthesizing or summarizing what the user said.',
+    relatedCapabilities: ['create_experience', 'memory_record', 'create_outline']
   })
 };
 

@@ -40,14 +40,16 @@ export async function createSynthesisSnapshot(userId: string, sourceType: string
     { instanceId: sourceId, userId }
   )
 
-  if (aiResult) {
+  if (aiResult && aiResult.narrative) {
     snapshot.summary = aiResult.narrative
     snapshot.key_signals = {
       ...snapshot.key_signals,
-      ...aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {}),
+      ...(Array.isArray(aiResult.keySignals) 
+        ? aiResult.keySignals.reduce((acc: any, sig: string, i: number) => ({ ...acc, [`signal_${i}`]: sig }), {})
+        : {}),
       frictionAssessment: aiResult.frictionAssessment
     }
-    snapshot.next_candidates = aiResult.nextCandidates
+    snapshot.next_candidates = Array.isArray(aiResult.nextCandidates) ? aiResult.nextCandidates : []
   }
   
   // W2 - Compute Mastery Transitions for Lane 5

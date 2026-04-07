@@ -1,3 +1,10 @@
+  const [active, completed, moments, proposed, outlines] = await Promise.all([
+    getActiveExperiences(userId),
+    getCompletedExperiences(userId),
+    getEphemeralExperiences(userId),
+    getProposedExperiences(userId),
+    getCurriculumOutlinesForUser(userId),
+  ]);
 
   console.log(`[Library] adapter=${adapter.constructor.name} active=${active.length} completed=${completed.length} moments=${moments.length} proposed=${proposed.length} outlines=${outlines.length}`);
   active.forEach(e => console.log(`  [ACTIVE] ${e.title}`));
@@ -31,8 +38,6 @@
 import { DEFAULT_USER_ID } from '@/lib/constants'
 import { createBoard, getBoardGraph, getBoardSummaries } from '@/lib/services/mind-map-service'
 import { ThinkCanvas } from '@/components/think/think-canvas'
-import { MapSidebar } from '@/components/think/map-sidebar'
-import { AppShell } from '@/components/shell/app-shell'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,44 +55,42 @@ export default async function MapPage({ searchParams }: MapPageProps) {
     summaries = await getBoardSummaries(userId)
   }
 
-  const activeBoardId = searchParams.boardId || summaries[0].id
+  const activeBoardId = searchParams.boardId || summaries[0]?.id
   const activeBoard = summaries.find(b => b.id === activeBoardId) || summaries[0]
   
+  if (!activeBoard) {
+    return <div className="text-white p-4">Error loading boards. Please try again.</div>
+  }
+
   // Parallel fetch board graph
   const { nodes, edges } = await getBoardGraph(activeBoard.id)
 
   return (
-    <AppShell>
-      <div className="flex h-screen overflow-hidden bg-[#050510]">
-        <MapSidebar 
-          boards={summaries as any} 
-          activeBoardId={activeBoard.id} 
+    <div className="flex h-screen w-screen overflow-hidden bg-[#050510]">
+      <div className="flex-1 relative overflow-hidden h-full">
+        <ThinkCanvas 
+          boardId={activeBoard.id}
+          initialNodes={nodes}
+          initialEdges={edges}
+          userId={userId}
+          boards={summaries as any}
         />
         
-        <div className="flex-1 relative overflow-hidden h-full">
-          <ThinkCanvas 
-            boardId={activeBoard.id}
-            initialNodes={nodes}
-            initialEdges={edges}
-            userId={userId}
-          />
-          
-          {/* Board Context Overlay */}
-          <div className="absolute top-6 left-6 z-10 pointer-events-none select-none">
-            <div className="bg-[#0a0a14]/80 backdrop-blur-xl border border-[#1e1e2e] rounded-xl px-5 py-3 shadow-2xl animate-in fade-in slide-in-from-left-4 duration-700">
-              <h1 className="text-lg font-extrabold text-[#f1f5f9] tracking-tight">{activeBoard.name}</h1>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-1 h-1 rounded-full bg-indigo-500 animate-pulse" />
-                <span className="text-[10px] font-bold text-[#6366f1] uppercase tracking-[0.2em]">Map Station</span>
-                <span className="text-[10px] font-bold text-white/30 border border-white/5 px-1.5 py-0.5 rounded uppercase tracking-[0.1em]">
-                  {activeBoard.purpose}
-                </span>
-              </div>
-            </div>
+        {/* Board Context Overlay */}
+        <div className="absolute top-6 left-0 right-0 z-10 pointer-events-none flex justify-center">
+          <div className="flex flex-col items-center opacity-40 hover:opacity-100 transition-opacity">
+            <h1 className="text-xs font-medium text-[#f1f5f9] tracking-widest uppercase">{activeBoard.name}</h1>
           </div>
         </div>
+
+        {/* Back Navigation */}
+        <div className="absolute top-6 left-6 z-20">
+          <a href="/" className="px-4 py-2 rounded-lg bg-[#1e1e2e]/80 hover:bg-[#2e2e3e] border border-[#2e2e3e] text-xs font-bold text-[#94a3b8] hover:text-white backdrop-blur-md transition-all shadow-lg flex items-center gap-2">
+            <span>←</span> Back to Studio
+          </a>
+        </div>
       </div>
-    </AppShell>
+    </div>
   )
 }
 
@@ -7995,6 +7998,3 @@ export default function QuestionnaireStep({ step, onComplete, onSkip, onDraft, r
                         : showError 
                           ? 'bg-[#12121a] border-rose-500/20 text-[#64748b] hover:border-rose-500/40' 
                           : 'bg-[#12121a] border-[#1e1e2e] text-[#94a3b8] hover:border-[#33334d]'
-                    }`}
-                  >
-                    {option}
